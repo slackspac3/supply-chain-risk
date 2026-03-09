@@ -348,17 +348,97 @@ function truncateText(value, max = 180) {
   return text.length > max ? text.slice(0, max - 1) + '…' : text;
 }
 
+function sanitiseHeaderCell(value, index) {
+  const text = String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+  if (!text || /^__empty/i.test(text)) return `column_${index + 1}`;
+  return text;
+}
+
+function scoreHeaderRow(cells) {
+  const joined = cells.join(' ').toLowerCase();
+  let score = 0;
+  if (/risk title|risk name|risk description|risk category|risk id/.test(joined)) score += 8;
+  if (/entity|business area|operating role|owner|function/.test(joined)) score += 3;
+  if (/if .* then|template|provide a short|drop down/.test(joined)) score -= 6;
+  return score;
+}
+
+function normaliseWorksheetRows(matrix) {
+  const rows = (matrix || [])
+    .map(row => Array.isArray(row) ? row.map(cell => String(cell == null ? '' : cell).trim()) : [])
+    .filter(row => row.some(cell => cell));
+  if (!rows.length) return [];
+
+  let headerIndex = 0;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  rows.slice(0, 12).forEach((row, idx) => {
+    const score = scoreHeaderRow(row);
+    if (score > bestScore) {
+      bestScore = score;
+      headerIndex = idx;
+    }
+  });
+
+  const headers = rows[headerIndex].map((cell, idx) => sanitiseHeaderCell(cell, idx));
+  return rows.slice(headerIndex + 1).map(row => {
+    const record = {};
+    headers.forEach((header, idx) => {
+      record[header] = row[idx] != null ? row[idx] : '';
+    });
+    return record;
+  });
+}
+
+function isLikelyTemplateRow(row) {
+  const values = Object.entries(row || {})
+    .map(([key, value]) => [String(key || '').trim().toLowerCase(), String(value || '').trim()])
+    .filter(([, value]) => value);
+  if (!values.length) return true;
+  const joined = values.map(([, value]) => value).join(' ').toLowerCase();
+  if (/risk register template|provide a short|drop down selection|automatic unique identifier|use the following structure/.test(joined)) return true;
+  if (values.every(([key]) => /^column_\d+$/.test(key))) return true;
+  return false;
+}
+
+function extractRiskFields(row) {
+  const entries = Object.entries(row || {})
+    .map(([key, value]) => [String(key || '').trim(), String(value == null ? '' : value).trim()])
+    .filter(([, value]) => value);
+  if (!entries.length || isLikelyTemplateRow(row)) return null;
+
+  const titleEntry = entries.find(([key]) => /risk title|title|name/i.test(key));
+  const descriptionEntry = entries.find(([key]) => /risk description|description|statement|summary/i.test(key));
+  const categoryEntry = entries.find(([key]) => /risk category|category|taxonomy/i.test(key));
+  const contextEntries = entries.filter(([key]) => /entity|business area|operating role|owner|function|affiliate/i.test(key));
+
+  const title = titleEntry?.[1];
+  const description = descriptionEntry?.[1];
+  if (!title && !description) return null;
+  if (title && /risk register template|entity \/ affiliate|business area|risk title/i.test(title.toLowerCase())) return null;
+
+  const context = contextEntries.map(([key, value]) => `${key}: ${truncateText(value, 60)}`).slice(0, 3).join(' | ');
+  return {
+    title: title || truncateText(description, 90),
+    category: categoryEntry?.[1] || 'Register',
+    description: [description, context].filter(Boolean).join(' | ')
+  };
+}
+
 function rowsToStructuredRegisterText(sheetName, rows) {
-  const trimmedRows = rows
+  const cleanedRows = rows
+    .map(row => extractRiskFields(row))
+    .filter(Boolean)
+    .slice(0, 120);
+  const trimmedRows = cleanedRows.length ? cleanedRows : rows
     .filter(row => row && Object.values(row).some(v => String(v ?? '').trim()))
     .slice(0, 120);
   if (!trimmedRows.length) return `Sheet: ${sheetName}\nNo non-empty rows found.`;
-  const headers = Array.from(new Set(trimmedRows.flatMap(row => Object.keys(row).filter(Boolean)))).slice(0, 25);
+  const headers = Array.from(new Set(trimmedRows.flatMap(row => Object.keys(row).filter(Boolean)))).slice(0, 12);
   const renderedRows = trimmedRows.map((row, idx) => {
     const cols = headers
       .map(key => `${key}: ${truncateText(row[key])}`)
       .filter(entry => !entry.endsWith(':'))
-      .slice(0, 8);
+      .slice(0, 6);
     return `${idx + 1}. ${cols.join(' | ')}`;
   });
   return [
@@ -390,7 +470,8 @@ async function parseRegisterFile(file) {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
     const sheetSummaries = workbook.SheetNames.map(sheetName => {
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '', raw: false });
+      const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: false });
+      const rows = normaliseWorksheetRows(rawRows);
       return {
         sheetName,
         rowCount: rows.length,
