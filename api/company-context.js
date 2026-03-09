@@ -169,6 +169,42 @@ function buildFallbackProfile(canonicalUrl, pages, newsItems = []) {
   };
 }
 
+function tryParseStructuredJson(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  const candidates = [
+    text,
+    text.replace(/```json\n?|```/g, '').trim()
+  ];
+  const braceMatch = text.match(/\{[\s\S]*\}/);
+  if (braceMatch) candidates.push(braceMatch[0]);
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {}
+  }
+  return null;
+}
+
+function normaliseContextPayload(parsed, canonicalUrl, pages, newsItems) {
+  const fallback = buildFallbackProfile(canonicalUrl, pages, newsItems);
+  if (!parsed || typeof parsed !== 'object') return fallback;
+  return {
+    companySummary: String(parsed.companySummary || fallback.companySummary),
+    businessProfile: String(parsed.businessProfile || fallback.businessProfile),
+    riskSignals: Array.isArray(parsed.riskSignals) && parsed.riskSignals.length ? parsed.riskSignals.map(String) : fallback.riskSignals,
+    regulatorySignals: Array.isArray(parsed.regulatorySignals) ? parsed.regulatorySignals.map(String) : fallback.regulatorySignals,
+    aiGuidance: String(parsed.aiGuidance || fallback.aiGuidance),
+    suggestedGeography: String(parsed.suggestedGeography || fallback.suggestedGeography || ''),
+    sources: Array.isArray(parsed.sources) && parsed.sources.length
+      ? parsed.sources.map(source => ({
+          url: String(source.url || ''),
+          note: String(source.note || '')
+        })).filter(source => source.url)
+      : fallback.sources
+  };
+}
+
 module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const compassApiUrl = process.env.COMPASS_API_URL || 'https://api.core42.ai/v1/chat/completions';
@@ -298,14 +334,9 @@ Instructions:
 
     const payload = await upstream.json();
     const raw = payload.choices?.[0]?.message?.content || '';
-    const cleaned = String(raw).replace(/```json\n?|```/g, '').trim();
-    const parsed = cleaned ? JSON.parse(cleaned) : buildFallbackProfile(canonicalUrl, pages, newsItems);
-    res.status(200).json(parsed);
+    const parsed = tryParseStructuredJson(raw);
+    res.status(200).json(normaliseContextPayload(parsed, canonicalUrl, pages, newsItems));
   } catch (error) {
-    if (error instanceof SyntaxError) {
-      res.status(200).json(buildFallbackProfile(canonicalUrl, pages, newsItems));
-      return;
-    }
     res.status(502).json({
       error: 'Company context builder could not fetch or analyse the website.',
       detail: error instanceof Error ? error.message : String(error)

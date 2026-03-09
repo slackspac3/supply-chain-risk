@@ -393,6 +393,19 @@ function buildOrganisationContextSummary(settings = getAdminSettings()) {
   return [structureText, layerText ? `Entity context layers:\n${layerText}` : ''].filter(Boolean).join('\n');
 }
 
+function formatCompanyContextProfile(result) {
+  const sourceNotes = (result.sources || [])
+    .slice(0, 8)
+    .map(source => source.note || source.url)
+    .filter(Boolean);
+  return [
+    result.companySummary,
+    result.businessProfile,
+    result.riskSignals?.length ? `Key public risk signals:\n- ${result.riskSignals.join('\n- ')}` : '',
+    sourceNotes.length ? `Sources reviewed:\n- ${sourceNotes.join('\n- ')}` : ''
+  ].filter(Boolean).join('\n\n');
+}
+
 function getRelationshipOptions(structure = [], type = '', excludeId = '') {
   const nodes = structure.filter(node => node.id !== excludeId);
   if (isDepartmentEntityType(type)) {
@@ -2771,12 +2784,7 @@ function renderAdminSettings() {
         try {
           LLMService.setCompassConfig(llmConfig);
           const result = await LLMService.buildCompanyContext(targetUrl);
-          const profileText = [
-            result.companySummary,
-            result.businessProfile,
-            result.riskSignals?.length ? `Key public risk signals: ${result.riskSignals.join('; ')}` : '',
-            result.sources?.length ? `Sources reviewed: ${result.sources.map(source => source.url).join(', ')}` : ''
-          ].filter(Boolean).join('\n\n');
+          const profileText = formatCompanyContextProfile(result);
           editor.setProfile(profileText);
           if (!document.getElementById('org-entity-name').value.trim()) {
             editor.setName(inferCompanyNameFromUrl(targetUrl));
@@ -2916,12 +2924,7 @@ function renderAdminSettings() {
     try {
       LLMService.setCompassConfig(llmConfig);
       const result = await LLMService.buildCompanyContext(websiteUrl);
-      const profileText = [
-        result.companySummary,
-        result.businessProfile,
-        result.riskSignals?.length ? `Key public risk signals: ${result.riskSignals.join('; ')}` : '',
-        result.sources?.length ? `Sources reviewed: ${result.sources.map(source => source.url).join(', ')}` : ''
-      ].filter(Boolean).join('\n\n');
+      const profileText = formatCompanyContextProfile(result);
       profileEl.value = profileText;
       if (!document.getElementById('admin-context-summary').value.trim()) {
         document.getElementById('admin-context-summary').value = result.companySummary || '';
