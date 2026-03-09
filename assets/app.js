@@ -11,6 +11,7 @@ const DEFAULT_ADMIN_SETTINGS = {
   geography: 'United Arab Emirates',
   companyWebsiteUrl: '',
   companyContextProfile: '',
+  companyStructure: [],
   riskAppetiteStatement: 'Moderate. Escalate risks that threaten regulated operations, cross-border data movement, or strategic platforms.',
   applicableRegulations: ['UAE PDPL', 'BIS Export Controls', 'OFAC Sanctions', 'UAE Cybersecurity Council Guidance'],
   aiInstructions: 'Prioritise operational, regulatory, and strategic impact. Use British English.',
@@ -243,7 +244,8 @@ function saveAdminSettings(settings) {
   const merged = {
     ...DEFAULT_ADMIN_SETTINGS,
     ...settings,
-    applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [...DEFAULT_ADMIN_SETTINGS.applicableRegulations]
+    applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [...DEFAULT_ADMIN_SETTINGS.applicableRegulations],
+    companyStructure: Array.isArray(settings.companyStructure) ? settings.companyStructure : []
   };
   localStorage.setItem('rq_admin_settings', JSON.stringify(merged));
 }
@@ -261,6 +263,44 @@ function getWarningThreshold() {
 function getAnnualReviewThreshold() {
   const value = Number(getAdminSettings().annualReviewThresholdUsd);
   return Number.isFinite(value) && value > 0 ? value : 12_000_000;
+}
+
+function inferCompanyNameFromUrl(url) {
+  try {
+    const hostname = new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^www\./, '');
+    const root = hostname.split('.')[0] || hostname;
+    return root
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  } catch {
+    return '';
+  }
+}
+
+function renderCompanyStructureSummary(structure = []) {
+  if (!structure.length) {
+    return `<div class="form-help">No company structure saved yet. Use the AI company context builder to add a holding company, operating company, or department.</div>`;
+  }
+  const byParent = new Map();
+  structure.forEach(node => {
+    const key = node.parentId || 'root';
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key).push(node);
+  });
+  function renderNodes(parentId, depth = 0) {
+    return (byParent.get(parentId || 'root') || []).map(node => `
+      <div style="padding-left:${depth * 18}px;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="badge badge--gold">${node.type}</span>
+          <strong style="color:var(--text-primary)">${node.name}</strong>
+          ${node.websiteUrl ? `<span class="form-help" style="margin-top:0">${node.websiteUrl}</span>` : ''}
+        </div>
+        ${renderNodes(node.id, depth + 1)}
+      </div>`).join('');
+  }
+  return `<div>${renderNodes('root')}</div>`;
 }
 
 function getSessionLLMConfig() {
@@ -2115,6 +2155,7 @@ function adminLayout(active, content) {
 function renderAdminSettings() {
   if (!requireAdmin()) return;
   const settings = getAdminSettings();
+  const companyStructure = Array.isArray(settings.companyStructure) ? [...settings.companyStructure] : [];
   const sessionLLM = getSessionLLMConfig();
   const directCompass = !sessionLLM.apiUrl || sessionLLM.apiUrl.includes('api.core42.ai');
   const buCount = getBUList().length;
@@ -2223,6 +2264,11 @@ function renderAdminSettings() {
           <span class="form-help">The result can be reviewed and edited before you save settings.</span>
         </div>
       </div>
+      <div class="card mt-4" style="padding:var(--sp-5);background:var(--bg-elevated)">
+        <div class="context-panel-title">Company Structure Map</div>
+        <p class="context-panel-copy">Built entities can be classified into your organisation structure and reused later.</p>
+        <div id="admin-company-structure-summary" class="mt-3">${renderCompanyStructureSummary(companyStructure)}</div>
+      </div>
       <div class="form-group mt-4">
         <label class="form-label">Applicable Regulations</label>
         <div class="tag-input-wrap" id="ti-admin-regulations"></div>
@@ -2290,6 +2336,7 @@ function renderAdminSettings() {
       geography: document.getElementById('admin-geo').value.trim() || DEFAULT_ADMIN_SETTINGS.geography,
       companyWebsiteUrl: document.getElementById('admin-company-url').value.trim(),
       companyContextProfile: document.getElementById('admin-company-profile').value.trim(),
+      companyStructure,
       defaultLinkMode: document.getElementById('admin-link-mode').value === 'yes',
       toleranceThresholdUsd,
       warningThresholdUsd,
@@ -2341,7 +2388,62 @@ function renderAdminSettings() {
       if (Array.isArray(result.regulatorySignals) && result.regulatorySignals.length) {
         regsInput.setTags(Array.from(new Set([...regsInput.getTags(), ...result.regulatorySignals])));
       }
-      UI.toast('Company context built from the public website.', 'success', 5000);
+      const suggestedName = inferCompanyNameFromUrl(websiteUrl);
+      const parentOptions = [{ id: '', name: 'No parent / top level' }, ...companyStructure.map(node => ({ id: node.id, name: `${node.name} (${node.type})` }))];
+      const modal = UI.modal({
+        title: 'Review Company Context',
+        body: `
+          <div class="context-panel-copy" style="margin-bottom:12px">${result.companySummary || 'AI built a public company context profile.'}</div>
+          <div class="grid-2" style="gap:12px">
+            <div class="form-group">
+              <label class="form-label" for="ctx-entity-name">Entity Name</label>
+              <input class="form-input" id="ctx-entity-name" value="${suggestedName}">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ctx-entity-type">Entity Type</label>
+              <select class="form-select" id="ctx-entity-type">
+                <option value="Holding Company">Holding Company</option>
+                <option value="Operating Company">Operating Company</option>
+                <option value="Department">Department</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ctx-parent">Parent Entity</label>
+              <select class="form-select" id="ctx-parent">
+                ${parentOptions.map(option => `<option value="${option.id}">${option.name}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="ctx-url">Website</label>
+              <input class="form-input" id="ctx-url" value="${websiteUrl}">
+            </div>
+          </div>
+          <div class="form-group mt-4">
+            <label class="form-label" for="ctx-profile-preview">AI Context Summary</label>
+            <textarea class="form-textarea" id="ctx-profile-preview" rows="8">${profileText}</textarea>
+          </div>`,
+        footer: `<button class="btn btn--ghost" id="ctx-cancel">Cancel</button><button class="btn btn--primary" id="ctx-save">Save Entity Context</button>`
+      });
+      document.getElementById('ctx-cancel').addEventListener('click', () => modal.close());
+      document.getElementById('ctx-save').addEventListener('click', () => {
+        const entityName = document.getElementById('ctx-entity-name').value.trim() || suggestedName || 'New Entity';
+        const entityType = document.getElementById('ctx-entity-type').value;
+        const parentId = document.getElementById('ctx-parent').value;
+        const profile = document.getElementById('ctx-profile-preview').value.trim();
+        companyStructure.push({
+          id: `org_${Date.now()}`,
+          name: entityName,
+          type: entityType,
+          parentId: parentId || null,
+          websiteUrl: document.getElementById('ctx-url').value.trim(),
+          profile
+        });
+        document.getElementById('admin-company-profile').value = profile;
+        document.getElementById('admin-company-structure-summary').innerHTML = renderCompanyStructureSummary(companyStructure);
+        modal.close();
+        UI.toast(`Saved ${entityType.toLowerCase()} context for ${entityName}.`, 'success', 5000);
+      });
+      UI.toast('Company context built from the public website. Review and classify it in the next step.', 'success', 5000);
     } catch (error) {
       UI.toast('Company context build failed: ' + error.message, 'danger', 6000);
     } finally {
