@@ -100,7 +100,7 @@ const LLMService = (() => {
         headers,
         body: JSON.stringify({
           model: _compassModel,
-          max_tokens: 1200,
+          max_completion_tokens: 1200,
           temperature: 0.3,
           messages: [
             { role: 'system', content: systemPrompt },
