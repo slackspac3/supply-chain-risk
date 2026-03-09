@@ -68,6 +68,19 @@ function extractCompanySearchTerm(canonicalUrl) {
   return root.replace(/[-_]+/g, ' ').trim();
 }
 
+function extractCompanyAliases(canonicalUrl, rootHtml) {
+  const aliases = new Set();
+  aliases.add(extractCompanySearchTerm(canonicalUrl));
+  const title = stripHtml((String(rootHtml).match(/<title>([\s\S]*?)<\/title>/i) || [])[1] || '');
+  const ogSite = stripHtml((String(rootHtml).match(/property=["']og:site_name["']\s+content=["']([^"']+)["']/i) || [])[1] || '');
+  const h1 = stripHtml((String(rootHtml).match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || '');
+  [title, ogSite, h1]
+    .map(value => value.split(/[|\-–:]/)[0].trim())
+    .filter(value => value && value.length > 2 && value.length < 80)
+    .forEach(value => aliases.add(value));
+  return Array.from(aliases).slice(0, 4);
+}
+
 function decodeXml(text) {
   return String(text || '')
     .replace(/&amp;/g, '&')
@@ -92,30 +105,41 @@ function parseRssItems(xml) {
   return items;
 }
 
-async function fetchNewsContext(canonicalUrl) {
-  const term = encodeURIComponent(`"${extractCompanySearchTerm(canonicalUrl)}"`);
+async function fetchNewsContext(canonicalUrl, rootHtml = '') {
+  const aliases = extractCompanyAliases(canonicalUrl, rootHtml);
+  const quotedAlias = encodeURIComponent(`"${aliases[0] || extractCompanySearchTerm(canonicalUrl)}"`);
+  const aliasQuery = aliases.map(alias => `"${alias}"`).join(' OR ');
+  const encodedAliasQuery = encodeURIComponent(aliasQuery);
   const feeds = [
     {
-      label: 'Local UAE/GCC news',
-      url: `https://news.google.com/rss/search?q=${term}%20(site%3Athenationalnews.com%20OR%20site%3Agulfnews.com%20OR%20site%3Akhaleejtimes.com)&hl=en-AE&gl=AE&ceid=AE:en`
+      label: 'Local UAE/GCC business news',
+      url: `https://news.google.com/rss/search?q=${encodedAliasQuery}%20(site%3Athenationalnews.com%20OR%20site%3Agulfnews.com%20OR%20site%3Akhaleejtimes.com%20OR%20site%3Azawya.com%20OR%20site%3Aarabianbusiness.com)&hl=en-AE&gl=AE&ceid=AE:en`
     },
     {
       label: 'Global business news',
-      url: `https://news.google.com/rss/search?q=${term}%20(site%3Areuters.com%20OR%20site%3Abloomberg.com%20OR%20site%3Acnbc.com%20OR%20site%3Aft.com)&hl=en-US&gl=US&ceid=US:en`
+      url: `https://news.google.com/rss/search?q=${encodedAliasQuery}%20(site%3Areuters.com%20OR%20site%3Abloomberg.com%20OR%20site%3Acnbc.com%20OR%20site%3Aft.com%20OR%20site%3Awsj.com)&hl=en-US&gl=US&ceid=US:en`
+    },
+    {
+      label: 'Risk and incident news',
+      url: `https://news.google.com/rss/search?q=${quotedAlias}%20(cyber%20OR%20breach%20OR%20outage%20OR%20incident%20OR%20fine%20OR%20sanctions)&hl=en-US&gl=US&ceid=US:en`
+    },
+    {
+      label: 'Strategy and regulatory news',
+      url: `https://news.google.com/rss/search?q=${quotedAlias}%20(regulation%20OR%20compliance%20OR%20licence%20OR%20partnership%20OR%20acquisition%20OR%20expansion)&hl=en-US&gl=US&ceid=US:en`
     }
   ];
   const results = [];
   for (const feed of feeds) {
     try {
       const xml = await fetchText(feed.url);
-      const items = parseRssItems(xml).slice(0, 4).map(item => ({
+      const items = parseRssItems(xml).slice(0, 5).map(item => ({
         ...item,
         feed: feed.label
       }));
       results.push(...items);
     } catch {}
   }
-  return results.slice(0, 6);
+  return Array.from(new Map(results.map(item => [item.link, item])).values()).slice(0, 12);
 }
 
 function buildFallbackProfile(canonicalUrl, pages, newsItems = []) {
@@ -206,7 +230,8 @@ module.exports = async function handler(req, res) {
       throw new Error('No usable public website content could be extracted from the supplied URL.');
     }
 
-    newsItems = await fetchNewsContext(canonicalUrl);
+    const aliases = extractCompanyAliases(canonicalUrl, rootHtml);
+    newsItems = await fetchNewsContext(canonicalUrl, rootHtml);
 
     const systemPrompt = `You are a senior enterprise risk advisor. Given public company website material and public news context, produce a concise business-risk context profile.
 Respond ONLY with valid JSON matching this schema:
@@ -225,12 +250,16 @@ Respond ONLY with valid JSON matching this schema:
 Public website extracts:
 ${pages.map((page, idx) => `Source ${idx + 1}: ${page.url}\n${page.content}`).join('\n\n')}
 
+Known company aliases:
+${aliases.join(', ')}
+
 Public news context:
 ${newsItems.length ? newsItems.map((item, idx) => `News ${idx + 1}: ${item.feed} | ${item.title} | ${item.pubDate}\n${item.description}\n${item.link}`).join('\n\n') : '(no public news items were retrieved)'}
 
 Instructions:
 - infer the company's business model, operating profile, technology reliance, data exposure, and likely regulatory posture
 - focus on technology, cyber, operational resilience, third-party, compliance, and data risks
+- use the aliases and the mix of local and global news to widen the context beyond the company website
 - keep the output useful for setting admin context for a risk quantification platform
 - mention that this is based on public website and public news context only
 - use British English`;
@@ -243,8 +272,8 @@ Instructions:
       },
       body: JSON.stringify({
         model: compassModel,
-        max_completion_tokens: 1400,
-        temperature: 0.2,
+        max_completion_tokens: 2200,
+        temperature: 0.15,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
