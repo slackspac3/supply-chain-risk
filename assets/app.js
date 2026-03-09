@@ -1477,6 +1477,7 @@ function renderAdminSettings() {
         </div>
         <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
           <button class="btn btn--secondary" id="btn-save-session-llm">Save Session Key</button>
+          <button class="btn btn--secondary" id="btn-test-session-llm">Test Connection</button>
           <button class="btn btn--ghost" id="btn-clear-session-llm">Clear Session Key</button>
           <span class="form-help">This does not persist across browser sessions.</span>
         </div>
@@ -1514,6 +1515,30 @@ function renderAdminSettings() {
     saveSessionLLMConfig(config);
     LLMService.setCompassConfig(config);
     UI.toast('Compass session key loaded for this session.', 'success');
+  });
+  document.getElementById('btn-test-session-llm').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-test-session-llm');
+    const config = {
+      apiUrl: document.getElementById('admin-compass-url').value.trim() || 'https://api.core42.ai/v1/chat/completions',
+      model: document.getElementById('admin-compass-model').value.trim() || 'gpt-5.1',
+      apiKey: document.getElementById('admin-compass-key').value.trim()
+    };
+    if (!config.apiKey) {
+      UI.toast('Paste a Compass API key first.', 'warning');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Testing…';
+    try {
+      LLMService.setCompassConfig(config);
+      const result = await LLMService.testCompassConnection();
+      UI.toast(result.message || 'Compass connection successful.', 'success', 5000);
+    } catch (e) {
+      UI.toast('Compass test failed: ' + e.message, 'danger', 6000);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Test Connection';
+    }
   });
   document.getElementById('btn-clear-session-llm').addEventListener('click', () => {
     sessionStorage.removeItem('rq_llm_session');

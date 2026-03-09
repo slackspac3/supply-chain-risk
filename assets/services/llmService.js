@@ -350,10 +350,29 @@ ${(input.citations || []).map(c => `- ${c.title}: ${c.excerpt}`).join('\n')}`;
     return stub;
   }
 
+  async function testCompassConnection() {
+    if (!_compassApiKey) {
+      throw new Error('No Compass API key configured for this session.');
+    }
+    const raw = await _callLLM(
+      'You are a connectivity check. Reply with valid JSON only.',
+      'Return exactly this JSON and nothing else: {"status":"ok","provider":"core42","message":"connection successful"}'
+    );
+    if (!raw) {
+      throw new Error('Compass returned an empty response.');
+    }
+    try {
+      return JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+    } catch {
+      return { status: 'ok', provider: 'core42', message: 'Connection succeeded, but the response was not strict JSON.' };
+    }
+  }
+
   return {
     generateScenarioAndInputs,
     enhanceRiskContext,
     analyseRiskRegister,
+    testCompassConnection,
     setCompassAPIKey,
     setCompassConfig,
     clearCompassConfig,
