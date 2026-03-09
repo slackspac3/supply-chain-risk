@@ -2364,7 +2364,7 @@ function renderAdminLogin() {
   const login = () => {
     const pw = document.getElementById('admin-pass').value;
     const result = AuthService.adminLogin(pw);
-    if (result.success) { UI.toast('Logged in.','success'); Router.navigate('/admin/bu'); }
+    if (result.success) { UI.toast('Logged in.','success'); Router.navigate('/admin/settings'); }
     else {
       document.getElementById('admin-err').classList.remove('hidden');
       document.getElementById('admin-pass').classList.add('error');
@@ -2384,7 +2384,7 @@ function adminLayout(active, content) {
     <nav class="admin-sidebar">
       <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:var(--sp-3)">Admin</div>
       <a href="#/admin/settings" class="admin-nav-link ${active==='settings'?'active':''}">🌐 Organisation Setup</a>
-      <a href="#/admin/bu" class="admin-nav-link ${active==='bu'?'active':''}">🏢 BU Library</a>
+      <a href="#/admin/bu" class="admin-nav-link ${active==='bu'?'active':''}">🏢 Org Customisation</a>
       <a href="#/admin/docs" class="admin-nav-link ${active==='docs'?'active':''}">📚 Document Library</a>
       <div style="flex:1"></div>
       <div style="border-top:1px solid var(--border-subtle);padding-top:var(--sp-3)">
@@ -2450,9 +2450,9 @@ function renderAdminSettings() {
         <div class="admin-overview-foot">Entity-specific overlays for regulations, appetite, and AI behaviour</div>
       </div>
       <div class="admin-overview-card">
-        <div class="admin-overview-label">BU Library</div>
+        <div class="admin-overview-label">Org Customisation</div>
         <div class="admin-overview-value">${buCount}</div>
-        <div class="admin-overview-foot">Assessment-specific BU defaults managed in the BU Library</div>
+        <div class="admin-overview-foot">Assessment-specific BU and department context managed in Org Customisation</div>
       </div>
       <div class="admin-overview-card">
         <div class="admin-overview-label">Document Library</div>
@@ -2609,7 +2609,7 @@ function renderAdminSettings() {
         <span class="form-help">Explain whether the AI should prefer GCC or UAE references first, and how it should justify any global fallback.</span>
       </div>
       <div class="admin-inline-actions mt-4">
-        <a class="btn btn--secondary" href="#/admin/bu">Open BU Library</a>
+        <a class="btn btn--secondary" href="#/admin/bu">Open Org Customisation</a>
         <a class="btn btn--secondary" href="#/admin/docs">Open Document Library</a>
       </div>
       <div class="card mt-5" style="padding:var(--sp-5);background:var(--bg-elevated)">
@@ -2997,11 +2997,15 @@ function renderAdminSettings() {
 function renderAdminBU() {
   if (!requireAdmin()) return;
   const buList = getBUList();
+  const settings = getAdminSettings();
+  const companyStructure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
+  const structureMap = new Map(companyStructure.map(node => [node.id, node]));
+  const linkedCount = buList.filter(bu => bu.orgEntityId && structureMap.has(bu.orgEntityId)).length;
   setPage(adminLayout('bu', `
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2>Business Units</h2>
-        <p style="margin-top:6px">Maintain the business context used by the risk builder and FAIR defaults. Keep services, systems, and regulatory tags current so AI suggestions stay relevant.</p>
+        <h2>Organisation Customisation</h2>
+        <p style="margin-top:6px">Link assessment business units to the organisation tree and refine context per business or department. This is where users tailor what each BU represents in practice.</p>
       </div>
       <div class="flex gap-3">
         <button class="btn btn--ghost btn--sm" id="btn-reset-bu">Reset Defaults</button>
@@ -3015,6 +3019,11 @@ function renderAdminBU() {
         <div class="admin-overview-foot">Used to pre-fill the first step of the assessment</div>
       </div>
       <div class="admin-overview-card">
+        <div class="admin-overview-label">Linked to Org Tree</div>
+        <div class="admin-overview-value">${linkedCount}</div>
+        <div class="admin-overview-foot">BUs already mapped to a saved business or department</div>
+      </div>
+      <div class="admin-overview-card">
         <div class="admin-overview-label">Average Regulatory Tags</div>
         <div class="admin-overview-value">${buList.length ? (buList.reduce((sum, bu) => sum + (bu.regulatoryTags?.length || 0), 0) / buList.length).toFixed(1) : '0.0'}</div>
         <div class="admin-overview-foot">Signals how much context each BU carries</div>
@@ -3022,9 +3031,10 @@ function renderAdminBU() {
     </div>
     <div style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>Name</th><th>Critical Services</th><th>Regulatory</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Mapped Business / Department</th><th>Critical Services</th><th>Regulatory</th><th>Actions</th></tr></thead>
         <tbody>${buList.map(bu=>`<tr>
           <td><strong style="color:var(--text-primary)">${bu.name}</strong><br><span style="font-size:.68rem;color:var(--text-muted)">${bu.id}</span></td>
+          <td style="font-size:.8rem">${bu.orgEntityId && structureMap.has(bu.orgEntityId) ? `${structureMap.get(bu.orgEntityId).name} (${structureMap.get(bu.orgEntityId).type})` : '<span style="color:var(--text-muted)">Not linked yet</span>'}</td>
           <td style="font-size:.8rem">${bu.criticalServices.slice(0,2).join(', ')}${bu.criticalServices.length>2?'…':''}</td>
           <td>${bu.regulatoryTags.map(t=>`<span class="badge badge--gold" style="font-size:.6rem;margin:2px">${t}</span>`).join('')}</td>
           <td><button class="btn btn--ghost btn--sm" data-id="${bu.id}" id="edit-bu-${bu.id}">Edit</button> <button class="btn btn--ghost btn--sm" data-id="${bu.id}" id="del-bu-${bu.id}" style="color:var(--color-danger-400)">Delete</button></td>
@@ -3055,17 +3065,34 @@ function renderAdminBU() {
 
 function openBUEditor(bu) {
   const isNew = !bu;
+  const companyStructure = Array.isArray(getAdminSettings().companyStructure) ? getAdminSettings().companyStructure : [];
   let ti = {};
   const m = UI.modal({
-    title: isNew ? 'Add Business Unit' : `Edit: ${bu.name}`,
+    title: isNew ? 'Add BU / Department Context' : `Edit: ${bu.name}`,
     body: `<form id="bu-form"><div class="grid-2" style="gap:12px">
       <div class="form-group"><label class="form-label">ID</label><input class="form-input" id="bu-id" value="${bu?.id||''}" placeholder="bu-example" ${!isNew?'readonly':''}></div>
       <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="bu-name" value="${bu?.name||''}"></div>
+    </div>
+    <div class="grid-2 mt-4" style="gap:12px">
+      <div class="form-group">
+        <label class="form-label">Mapped Business / Department</label>
+        <select class="form-select" id="bu-org-entity">
+          <option value="">Not linked yet</option>
+          ${companyStructure.map(node => `<option value="${node.id}" ${bu?.orgEntityId === node.id ? 'selected' : ''}>${node.name} (${node.type})</option>`).join('')}
+        </select>
+        <span class="form-help">Link this BU to a saved business or department from Organisation Setup.</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">BU Geography Override</label>
+        <input class="form-input" id="bu-geo" value="${bu?.geography || ''}" placeholder="Optional geography override">
+      </div>
     </div>
     <div class="form-group mt-4"><label class="form-label">Critical Services</label><div class="tag-input-wrap" id="ti-services"></div></div>
     <div class="form-group mt-4"><label class="form-label">Key Systems</label><div class="tag-input-wrap" id="ti-systems"></div></div>
     <div class="form-group mt-4"><label class="form-label">Data Types</label><div class="tag-input-wrap" id="ti-datatypes"></div></div>
     <div class="form-group mt-4"><label class="form-label">Regulatory Tags</label><div class="tag-input-wrap" id="ti-regtags"></div></div>
+    <div class="form-group mt-4"><label class="form-label">BU Context Summary</label><textarea class="form-textarea" id="bu-context" rows="3">${bu?.contextSummary||''}</textarea></div>
+    <div class="form-group mt-4"><label class="form-label">BU AI Guidance</label><textarea class="form-textarea" id="bu-ai-guidance" rows="3">${bu?.aiGuidance||''}</textarea></div>
     <div class="form-group mt-4"><label class="form-label">Notes</label><textarea class="form-textarea" id="bu-notes" rows="2">${bu?.notes||''}</textarea></div>
     </form>`,
     footer: `<button class="btn btn--ghost" id="bu-cancel">Cancel</button><button class="btn btn--primary" id="bu-save">Save</button>`
@@ -3081,12 +3108,26 @@ function openBUEditor(bu) {
     const id = document.getElementById('bu-id').value.trim();
     const name = document.getElementById('bu-name').value.trim();
     if (!id||!name) { UI.toast('ID and Name required.','warning'); return; }
-    const updated = { id, name, criticalServices: ti.services.getTags(), keySystems: ti.systems.getTags(), dataTypes: ti.datatypes.getTags(), regulatoryTags: ti.regtags.getTags(), notes: document.getElementById('bu-notes').value, defaultAssumptions: bu?.defaultAssumptions||{}, docIds: bu?.docIds||[] };
+    const updated = {
+      id,
+      name,
+      orgEntityId: document.getElementById('bu-org-entity').value || '',
+      geography: document.getElementById('bu-geo').value.trim(),
+      criticalServices: ti.services.getTags(),
+      keySystems: ti.systems.getTags(),
+      dataTypes: ti.datatypes.getTags(),
+      regulatoryTags: ti.regtags.getTags(),
+      contextSummary: document.getElementById('bu-context').value.trim(),
+      aiGuidance: document.getElementById('bu-ai-guidance').value.trim(),
+      notes: document.getElementById('bu-notes').value,
+      defaultAssumptions: bu?.defaultAssumptions||{},
+      docIds: bu?.docIds||[]
+    };
     const list = getBUList();
     const idx = list.findIndex(b=>b.id===id);
     if (idx>-1) list[idx]=updated; else list.push(updated);
     saveBUList(list); m.close(); Router.resolve();
-    UI.toast(`BU "${name}" ${isNew?'added':'updated'}.`,'success');
+    UI.toast(`Context for "${name}" ${isNew?'added':'updated'}.`,'success');
   });
 }
 

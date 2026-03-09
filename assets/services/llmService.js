@@ -348,6 +348,8 @@ Data types: ${(buContext?.dataTypes || []).join(', ')}
 Regulatory tags: ${(buContext?.regulatoryTags || []).join(', ')}
 Critical services: ${(buContext?.criticalServices || []).join(', ')}
 Geography: ${buContext?.geography || 'Unknown'}
+BU context summary: ${buContext?.contextSummary || buContext?.notes || '(none)'}
+BU-specific AI guidance: ${buContext?.aiGuidance || '(none)'}
 Benchmark strategy: ${buContext?.benchmarkStrategy || 'Prefer GCC and UAE references, then fall back to best global data with clear explanation.'}
 Company context profile: ${buContext?.companyContextProfile || '(none)'}
 Organisation structure context:
@@ -391,6 +393,8 @@ ${retrievedDocs.map(d => `- ${d.title}: ${d.excerpt}`).join('\
 }`;
         const userPrompt = `Business unit: ${input.businessUnit?.name || 'Unknown'}
 Geography: ${input.geography || 'Unknown'}
+BU context summary: ${input.businessUnit?.contextSummary || input.businessUnit?.notes || '(none)'}
+BU-specific AI guidance: ${input.businessUnit?.aiGuidance || '(none)'}
 Applicable regulations: ${(input.applicableRegulations || []).join(', ')}
 AI guidance: ${input.adminSettings?.aiInstructions || ''}
 Benchmark strategy: ${input.adminSettings?.benchmarkStrategy || ''}
@@ -441,6 +445,8 @@ ${(input.citations || []).map(c => `- ${c.title}: ${c.excerpt}`).join('\n')}`;
 }`;
         const userPrompt = `Business unit: ${input.businessUnit?.name || 'Unknown'}
 Geography: ${input.geography || 'Unknown'}
+BU context summary: ${input.businessUnit?.contextSummary || input.businessUnit?.notes || '(none)'}
+BU-specific AI guidance: ${input.businessUnit?.aiGuidance || '(none)'}
 Applicable regulations: ${(input.applicableRegulations || []).join(', ')}
 Register metadata: ${input.registerMeta ? JSON.stringify(input.registerMeta) : '(none)'}
 Benchmark strategy: ${input.adminSettings?.benchmarkStrategy || 'Prefer GCC and UAE references where possible, then use best global data with clear explanation.'}
