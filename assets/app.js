@@ -2308,6 +2308,11 @@ function renderAdminSettings() {
   document.getElementById('btn-build-company-context').addEventListener('click', async () => {
     const btn = document.getElementById('btn-build-company-context');
     const websiteUrl = document.getElementById('admin-company-url').value.trim();
+    const llmConfig = {
+      apiUrl: document.getElementById('admin-compass-url').value.trim() || 'https://api.core42.ai/v1/chat/completions',
+      model: document.getElementById('admin-compass-model').value.trim() || 'gpt-5.1',
+      apiKey: document.getElementById('admin-compass-key').value.trim()
+    };
     if (!websiteUrl) {
       UI.toast('Enter a company website URL first.', 'warning');
       return;
@@ -2315,6 +2320,7 @@ function renderAdminSettings() {
     btn.disabled = true;
     btn.textContent = 'Building context…';
     try {
+      LLMService.setCompassConfig(llmConfig);
       const result = await LLMService.buildCompanyContext(websiteUrl);
       const profileText = [
         result.companySummary,
