@@ -1508,13 +1508,9 @@ function renderAdminSettings() {
       model: document.getElementById('admin-compass-model').value.trim() || 'gpt-5.1',
       apiKey: document.getElementById('admin-compass-key').value.trim()
     };
-    if (!config.apiKey) {
-      UI.toast('Paste a Compass API key first.', 'warning');
-      return;
-    }
     saveSessionLLMConfig(config);
     LLMService.setCompassConfig(config);
-    UI.toast('Compass session key loaded for this session.', 'success');
+    UI.toast(config.apiKey ? 'Compass session key loaded for this session.' : 'Compass proxy/session settings loaded for this session.', 'success');
   });
   document.getElementById('btn-test-session-llm').addEventListener('click', async () => {
     const btn = document.getElementById('btn-test-session-llm');
@@ -1523,10 +1519,6 @@ function renderAdminSettings() {
       model: document.getElementById('admin-compass-model').value.trim() || 'gpt-5.1',
       apiKey: document.getElementById('admin-compass-key').value.trim()
     };
-    if (!config.apiKey) {
-      UI.toast('Paste a Compass API key first.', 'warning');
-      return;
-    }
     btn.disabled = true;
     btn.textContent = 'Testing…';
     try {
