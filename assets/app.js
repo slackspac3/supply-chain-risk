@@ -222,14 +222,44 @@ function slugify(value) {
     .slice(0, 50);
 }
 
+function prettifyRiskText(value) {
+  return String(value || '')
+    .replace(/\btitle:\s*/i, '')
+    .replace(/\bcategory:\s*/i, '')
+    .replace(/\bdescription:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseStructuredRiskLine(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  const pieces = text.split('|').map(part => part.trim()).filter(Boolean);
+  if (!pieces.some(part => /title:|category:|description:/i.test(part))) return null;
+  const fields = {};
+  pieces.forEach(part => {
+    const match = part.match(/^([^:]+):\s*(.+)$/);
+    if (!match) return;
+    fields[match[1].trim().toLowerCase()] = match[2].trim();
+  });
+  return {
+    title: prettifyRiskText(fields.title || ''),
+    category: prettifyRiskText(fields.category || 'Register'),
+    description: prettifyRiskText(fields.description || '')
+  };
+}
+
 function normaliseRisk(risk, source = 'manual') {
-  const title = String(risk?.title || risk?.name || risk || '').trim();
+  const parsedLine = typeof risk === 'string' ? parseStructuredRiskLine(risk) : parseStructuredRiskLine(risk?.title);
+  const title = prettifyRiskText(parsedLine?.title || risk?.title || risk?.name || risk || '');
   if (!title) return null;
+  const description = prettifyRiskText(parsedLine?.description || risk?.description || '');
+  const category = prettifyRiskText(parsedLine?.category || risk?.category || 'General');
   return {
     id: risk?.id || ('risk-' + slugify(title) + '-' + Math.random().toString(36).slice(2, 7)),
     title,
-    category: risk?.category || 'General',
-    description: risk?.description || '',
+    category,
+    description,
     source: risk?.source || source,
     regulations: Array.isArray(risk?.regulations) ? risk.regulations : [],
     linkedTo: Array.isArray(risk?.linkedTo) ? risk.linkedTo : []
@@ -260,6 +290,29 @@ function mergeRisks(existing, incoming) {
 
 function getSelectedRisks() {
   return (AppState.draft.selectedRisks || []).filter(Boolean);
+}
+
+function getLinkedRiskRecommendations(selectedRisks) {
+  const groups = [
+    {
+      label: 'Technology control weakness -> service disruption',
+      test: risk => /patch|monitor|control|documentation|issue tracking|assessment/i.test(`${risk.title} ${risk.description}`)
+    },
+    {
+      label: 'Third-party governance -> operational disruption',
+      test: risk => /vendor|supplier|third-party|supplier assurance|due diligence/i.test(`${risk.title} ${risk.description}`)
+    },
+    {
+      label: 'Compliance lapse -> regulatory exposure',
+      test: risk => /compliance|certification|policy|attestation/i.test(`${risk.title} ${risk.description}`)
+    }
+  ];
+  return groups
+    .map(group => ({
+      label: group.label,
+      risks: selectedRisks.filter(group.test).map(risk => risk.title)
+    }))
+    .filter(group => group.risks.length > 1);
 }
 
 function getScenarioMultipliers() {
@@ -1006,7 +1059,9 @@ function renderSelectedRiskCards(selectedRisks, regulations) {
   if (!selectedRisks.length) {
     return `<div class="empty-state">No risks selected yet. Use AI extraction, upload a register, or add risks manually.</div>`;
   }
-  return `<div class="risk-selection-grid">
+  const linkedRecommendations = getLinkedRiskRecommendations(selectedRisks);
+  return `${linkedRecommendations.length ? `<div class="card mb-4" style="background:var(--bg-elevated)"><div class="context-panel-title">Suggested linked-risk groupings</div><div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">${linkedRecommendations.map(group => `<div><div style="font-size:.78rem;font-weight:600;color:var(--text-primary)">${group.label}</div><div class="context-panel-copy" style="margin-top:4px">${group.risks.join(', ')}</div></div>`).join('')}</div><div class="context-panel-foot">${AppState.draft.linkAnalysis || 'Treat these as linked where one control or event could trigger the others in the same scenario.'}</div></div>` : ''}
+  <div class="risk-selection-grid">
     ${selectedRisks.map(risk => `
       <div class="risk-pick-card">
         <div class="risk-pick-head">
