@@ -3966,7 +3966,8 @@ function renderAdminSettings() {
       <p class="context-panel-copy">Use industry-standard relationship types for the wider group. Departments must always sit under a business entity. Company entities can be enriched from public website context before saving.</p>
       <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
         <button class="btn btn--secondary" id="btn-add-org-entity">Add Entity</button>
-        <span class="form-help">Context is stored locally in this browser and reused by the AI-assisted intake, register analysis, and scenario drafting steps.</span>
+        <button class="btn btn--secondary" id="btn-add-org-function">Add Function / Department</button>
+        <span class="form-help">Choose explicitly whether you are adding a business entity or a function beneath an existing business.</span>
       </div>
       <div id="admin-company-structure-summary" class="mt-4">${renderCompanyStructureSummary(companyStructure)}</div>
     </div>
@@ -4403,6 +4404,7 @@ function renderAdminSettings() {
   }
 
   document.getElementById('btn-add-org-entity').addEventListener('click', () => openEntityEditor());
+  document.getElementById('btn-add-org-function')?.addEventListener('click', () => openEntityEditor(null, { type: 'Department / function' }));
   bindStructureActionHandlers();
   renderEntityLayerSummary();
   document.getElementById('btn-save-settings').addEventListener('click', () => {
