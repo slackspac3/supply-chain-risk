@@ -82,12 +82,19 @@ const AuthService = (() => {
     return ACCOUNTS.map(account => ({ ...sanitiseAccount(account), password: account.password }));
   }
 
+  function getManagedAccounts() {
+    return ACCOUNTS
+      .filter(account => account.role !== 'admin')
+      .map(account => sanitiseAccount(account));
+  }
+
   return {
     login,
     logout,
     isAuthenticated,
     isAdminAuthenticated,
     getCurrentUser,
-    getSeededAccounts
+    getSeededAccounts,
+    getManagedAccounts
   };
 })();

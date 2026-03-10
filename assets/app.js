@@ -81,6 +81,16 @@ function buildUserStorageKey(prefix, username = getCurrentUserOrThrow().username
   return `${prefix}__${username}`;
 }
 
+function clearUserPersistentState(username) {
+  const safeUsername = String(username || '').trim().toLowerCase();
+  if (!safeUsername) return;
+  localStorage.removeItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername));
+  localStorage.removeItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX, safeUsername));
+  localStorage.removeItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX, safeUsername));
+  sessionStorage.removeItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername));
+  sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX, safeUsername));
+}
+
 function getUserSettingsDefaults(globalSettings = getAdminSettings()) {
   return {
     geography: globalSettings.geography,
@@ -3333,6 +3343,7 @@ function renderAdminSettings() {
   const directCompass = !sessionLLM.apiUrl || sessionLLM.apiUrl.includes('api.core42.ai');
   const buCount = getBUList().length;
   const docCount = getDocList().length;
+  const managedAccounts = AuthService.getManagedAccounts();
   const companyEntities = companyStructure.filter(node => isCompanyEntityType(node.type));
   const departmentEntities = companyStructure.filter(node => isDepartmentEntityType(node.type));
   const orgContextTargetOptions = companyStructure.map(node => `<option value="${node.id}">${node.name} (${node.type})</option>`).join('');
@@ -3596,6 +3607,34 @@ function renderAdminSettings() {
           <button class="btn btn--ghost" id="btn-clear-session-llm">Clear Session Key</button>
           <span class="form-help">This does not persist across browser sessions.</span>
         </div>
+      </div>
+      <div class="card mt-5" style="padding:var(--sp-5);background:var(--bg-elevated)">
+        <div class="context-panel-title">User Account Control</div>
+        <p class="context-panel-copy">Reset any standard user account back to a first-time state in this browser. This wipes their onboarding, personal context, saved assessments, learning history, draft, and session-level Compass settings.</p>
+        <div class="table-wrap mt-4">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Username</th>
+                <th>Role</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${managedAccounts.map(account => `
+                <tr>
+                  <td>${account.displayName}</td>
+                  <td><code>${account.username}</code></td>
+                  <td>${account.role}</td>
+                  <td style="text-align:right">
+                    <button class="btn btn--ghost btn--sm btn-reset-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset User</button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="form-help mt-3">This only affects data stored in the current browser profile.</div>
       </div>
       <div class="flex items-center gap-3 mt-5">
         <button class="btn btn--primary" id="btn-save-settings">Save Settings</button>
@@ -3964,6 +4003,16 @@ function renderAdminSettings() {
     LLMService.clearCompassConfig();
     renderAdminSettings();
     UI.toast('Compass session key cleared.', 'success');
+  });
+  document.querySelectorAll('.btn-reset-user-account').forEach(button => {
+    button.addEventListener('click', async () => {
+      const username = button.dataset.username || '';
+      const displayName = button.dataset.displayName || username;
+      if (!await UI.confirm(`Reset ${displayName} to a first-time user state? This will clear their stored context, memory, assessments, and session settings in this browser.`)) return;
+      clearUserPersistentState(username);
+      UI.toast(`${displayName} was reset.`, 'success');
+      renderAdminSettings();
+    });
   });
   document.getElementById('btn-reset-settings').addEventListener('click', async () => {
     if (await UI.confirm('Reset platform settings to defaults?')) {
