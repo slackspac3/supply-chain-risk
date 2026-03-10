@@ -29,6 +29,20 @@ function normaliseAccount(account = {}) {
   };
 }
 
+function sanitiseAccount(account = {}) {
+  return {
+    username: String(account.username || '').trim().toLowerCase(),
+    displayName: String(account.displayName || '').trim() || 'User',
+    role: account.role === 'admin' ? 'admin' : 'user',
+    businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
+    departmentEntityId: String(account.departmentEntityId || '').trim()
+  };
+}
+
+function generatePassword() {
+  return `RiskUser@${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
 async function runKvCommand(command) {
   const url = getKvUrl();
   const token = getKvToken();
@@ -104,41 +118,29 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       const accounts = await readAccounts();
       res.status(200).json({
-        accounts,
+        accounts: accounts.map(sanitiseAccount),
         storage: {
           writable: hasWritableKv(),
-          mode: hasWritableKv() ? 'shared-kv' : 'fallback-defaults',
-          diagnostics: {
-            vercelEnv: process.env.VERCEL_ENV || '',
-            vercelTargetEnv: process.env.VERCEL_TARGET_ENV || '',
-            vercelUrl: process.env.VERCEL_URL || '',
-            vercelBranchUrl: process.env.VERCEL_BRANCH_URL || '',
-            vercelProjectProductionUrl: process.env.VERCEL_PROJECT_PRODUCTION_URL || '',
-            fooTestPresent: !!process.env.FOO_TEST,
-            fooTestValue: process.env.FOO_TEST || '',
-            barTestPresent: !!process.env.BAR_TEST,
-            barTestValue: process.env.BAR_TEST || '',
-            appleCatPresent: !!process.env.APPLE_CAT,
-            bananaDogPresent: !!process.env.BANANA_DOG,
-            fooUrlTestPresent: !!process.env.FOO_URL_TEST,
-            fooTokenTestPresent: !!process.env.FOO_TOKEN_TEST,
-            rcUserStoreUrlPresent: !!process.env.RC_USER_STORE_URL,
-            rcUserStoreTokenPresent: !!process.env.RC_USER_STORE_TOKEN,
-            kvUrlPresent: !!process.env.KV_REST_API_URL,
-            kvTokenPresent: !!process.env.KV_REST_API_TOKEN,
-            userStoreKvUrlPresent: !!process.env.USER_STORE_KV_URL,
-            userStoreKvTokenPresent: !!process.env.USER_STORE_KV_TOKEN,
-            userStoreKey: USERS_KEY,
-            allowedOrigin,
-            debugPresent: !!process.env.USER_STORE_DEBUG,
-            debugValue: process.env.USER_STORE_DEBUG || ''
-          }
+          mode: hasWritableKv() ? 'shared-kv' : 'fallback-defaults'
         }
       });
       return;
     }
 
     if (req.method === 'POST') {
+      if (body.action === 'login') {
+        const username = String(body.username || '').trim().toLowerCase();
+        const password = String(body.password || '');
+        const accounts = await readAccounts();
+        const matched = accounts.find(account => account.username === username && account.password === password);
+        if (!matched) {
+          res.status(401).json({ error: 'Invalid username or password.' });
+          return;
+        }
+        res.status(200).json({ user: sanitiseAccount(matched) });
+        return;
+      }
+
       const accounts = await readAccounts();
       const account = normaliseAccount(body.account || {});
       if (!account.username || !account.password) {
@@ -151,7 +153,11 @@ module.exports = async function handler(req, res) {
       }
       accounts.push(account);
       await writeAccounts(accounts);
-      res.status(201).json({ accounts });
+      res.status(201).json({
+        account: sanitiseAccount(account),
+        password: account.password,
+        accounts: accounts.map(sanitiseAccount)
+      });
       return;
     }
 
@@ -164,6 +170,20 @@ module.exports = async function handler(req, res) {
         res.status(404).json({ error: 'User not found.' });
         return;
       }
+      if (body.action === 'reset-password') {
+        const nextPassword = generatePassword();
+        accounts[index] = normaliseAccount({
+          ...accounts[index],
+          password: nextPassword
+        });
+        await writeAccounts(accounts);
+        res.status(200).json({
+          account: sanitiseAccount(accounts[index]),
+          password: nextPassword,
+          accounts: accounts.map(sanitiseAccount)
+        });
+        return;
+      }
       accounts[index] = normaliseAccount({
         ...accounts[index],
         displayName: typeof updates.displayName === 'string' && updates.displayName.trim() ? updates.displayName.trim() : accounts[index].displayName,
@@ -171,7 +191,7 @@ module.exports = async function handler(req, res) {
         departmentEntityId: typeof updates.departmentEntityId === 'string' ? updates.departmentEntityId : accounts[index].departmentEntityId
       });
       await writeAccounts(accounts);
-      res.status(200).json({ accounts });
+      res.status(200).json({ accounts: accounts.map(sanitiseAccount) });
       return;
     }
 

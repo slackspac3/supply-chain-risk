@@ -289,5 +289,6 @@ Recommended Vercel environment variables for the shared user store:
 - optional: `ALLOWED_ORIGIN` (defaults to `https://slackspac3.github.io`)
 
 Behavior:
-- `GET /api/users` falls back to seeded default accounts if KV is empty.
-- admin-created users persist across systems only when the KV env vars are configured.
+- `GET /api/users` now returns account metadata only; passwords are not exposed publicly.
+- Admin-created users persist across systems only when the shared store env vars are configured.
+- New passwords are shown at account creation time and when an admin uses password reset.

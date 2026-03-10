@@ -3292,10 +3292,10 @@ function renderLogin() {
       </div>
     </main>`);
 
-  const login = () => {
+  const login = async () => {
     const username = document.getElementById('login-user').value;
     const pw = document.getElementById('login-pass').value;
-    const result = AuthService.login(username, pw);
+    const result = await AuthService.login(username, pw);
     if (result.success) {
       activateAuthenticatedState();
       UI.toast(`Logged in as ${result.user.displayName}.`, 'success');
@@ -3306,6 +3306,7 @@ function renderLogin() {
       }
     }
     else {
+      document.getElementById('login-err').textContent = `⚠ ${result.error || 'Invalid username or password'}`;
       document.getElementById('login-err').classList.remove('hidden');
       document.getElementById('login-user').classList.add('error');
       document.getElementById('login-pass').classList.add('error');
@@ -4459,7 +4460,7 @@ function renderAdminSettings() {
       </div>
       <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
         <button class="btn btn--secondary" id="btn-admin-add-user">Add User</button>
-        <span class="form-help" id="admin-new-user-result">${AppState.adminNewUserStatus || 'A dummy username and password will be generated automatically for this PoC.'}</span>
+        <span class="form-help" id="admin-new-user-result">${AppState.adminNewUserStatus || 'A username and password will be generated automatically. Existing passwords are not viewable; use Reset Password to issue a new one.'}</span>
       </div>
     </div>
     <div class="table-wrap mt-4">
@@ -4470,7 +4471,7 @@ function renderAdminSettings() {
             <th>Username</th>
             <th>Assigned BU</th>
             <th>Assigned Function</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -4484,7 +4485,7 @@ function renderAdminSettings() {
               <td>${assignedBU}</td>
               <td>${assignedDepartment}</td>
               <td style="text-align:right">
-                <button class="btn btn--ghost btn--sm btn-reset-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset User</button>
+                <button class="btn btn--ghost btn--sm btn-reset-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset User</button> <button class="btn btn--secondary btn--sm btn-reset-user-password" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset Password</button>
               </td>
             </tr>`;
           }).join('')}
@@ -4941,6 +4942,23 @@ function renderAdminSettings() {
       clearUserPersistentState(username);
       UI.toast(`${displayName} was reset.`, 'success');
       renderAdminSettings();
+    });
+  });
+  document.querySelectorAll('.btn-reset-user-password').forEach(button => {
+    button.addEventListener('click', async () => {
+      const username = button.dataset.username || '';
+      const displayName = button.dataset.displayName || username;
+      if (!await UI.confirm(`Issue a new password for ${displayName}? The old password will stop working.`)) return;
+      try {
+        const result = await AuthService.resetManagedPassword(username);
+        AppState.adminNewUserStatus = `Password reset for ${displayName}: username ${username} / password ${result.password}`;
+        UI.toast(`Password reset for ${username}.`, 'success');
+        renderAdminSettings();
+      } catch (error) {
+        AppState.adminNewUserStatus = `Password reset failed: ${error instanceof Error ? error.message : String(error)}`;
+        document.getElementById('admin-new-user-result').textContent = AppState.adminNewUserStatus;
+        UI.toast('Password reset failed.', 'danger');
+      }
     });
   });
   function renderAdminNewUserDepartments() {

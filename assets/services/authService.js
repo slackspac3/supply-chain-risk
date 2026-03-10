@@ -54,7 +54,7 @@ function resolveApiUrl(path) {
   }
 
   function saveCache(accounts) {
-    accountsCache = Array.isArray(accounts) && accounts.length ? accounts.map(normaliseAccount) : DEFAULT_ACCOUNTS.slice();
+    accountsCache = Array.isArray(accounts) && accounts.length ? accounts.map(normaliseAccount) : DEFAULT_ACCOUNTS.map(sanitiseAccount).map(normaliseAccount);
     localStorage.setItem(ACCOUNTS_CACHE_KEY, JSON.stringify(accountsCache));
   }
 
@@ -163,15 +163,31 @@ function resolveApiUrl(path) {
   }
 
   // [ENTRA-INTEGRATION] Replace with Entra loginPopup() and claim validation.
-  function login(username, password) {
+  async function login(username, password) {
     const normalizedUsername = String(username || '').trim().toLowerCase();
     const normalizedPassword = String(password || '');
-    const account = readCachedAccounts().find(item =>
+    const cached = readCachedAccounts().find(item =>
       item.username.toLowerCase() === normalizedUsername && item.password === normalizedPassword
     );
-    if (!account) return { success: false, error: 'Invalid username or password' };
-    writeSession(account);
-    return { success: true, user: sanitiseAccount(account) };
+    if (cached) {
+      writeSession(cached);
+      return { success: true, user: sanitiseAccount(cached) };
+    }
+    try {
+      const data = await requestUsers('POST', {
+        action: 'login',
+        username: normalizedUsername,
+        password: normalizedPassword
+      });
+      if (Array.isArray(data?.accounts)) saveCache(data.accounts);
+      if (!data?.user) return { success: false, error: 'Invalid username or password' };
+      writeSession(data.user);
+      const knownAccounts = readCachedAccounts().filter(account => account.username !== data.user.username);
+      saveCache([...knownAccounts, data.user]);
+      return { success: true, user: sanitiseAccount(data.user) };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Invalid username or password' };
+    }
   }
 
   function logout() {
@@ -207,9 +223,6 @@ function resolveApiUrl(path) {
     return getCurrentUser();
   }
 
-  function getSeededAccounts() {
-    return readCachedAccounts().map(account => ({ ...sanitiseAccount(account), password: account.password }));
-  }
 
   function getManagedAccounts() {
     return readCachedAccounts()
@@ -229,13 +242,14 @@ function resolveApiUrl(path) {
       businessUnitEntityId,
       departmentEntityId
     });
-    const data = await requestUsers('POST', { account });
+    const data = await requestUsers('POST', { action: 'create', account });
     if (Array.isArray(data?.accounts)) saveCache(data.accounts);
-    return { ...sanitiseAccount(account), password };
+    return { ...(data?.account || sanitiseAccount(account)), password: data?.password || password };
   }
 
   async function updateManagedAccount(username, updates = {}) {
     const data = await requestUsers('PATCH', {
+      action: 'update',
       username: String(username || '').trim().toLowerCase(),
       updates: {
         displayName: typeof updates.displayName === 'string' ? updates.displayName.trim() : undefined,
@@ -253,6 +267,18 @@ function resolveApiUrl(path) {
     return updated ? sanitiseAccount(updated) : null;
   }
 
+  async function resetManagedPassword(username) {
+    const data = await requestUsers('PATCH', {
+      action: 'reset-password',
+      username: String(username || '').trim().toLowerCase()
+    });
+    if (Array.isArray(data?.accounts)) saveCache(data.accounts);
+    return {
+      account: data?.account ? sanitiseAccount(data.account) : null,
+      password: data?.password || ''
+    };
+  }
+
   return {
     init,
     testUsersStoreHealth,
@@ -262,9 +288,9 @@ function resolveApiUrl(path) {
     isAdminAuthenticated,
     getCurrentUser,
     updateSessionContext,
-    getSeededAccounts,
     getManagedAccounts,
     createManagedAccount,
-    updateManagedAccount
+    updateManagedAccount,
+    resetManagedPassword
   };
 })();
