@@ -98,7 +98,13 @@ module.exports = async function handler(req, res) {
         accounts,
         storage: {
           writable: hasWritableKv(),
-          mode: hasWritableKv() ? 'shared-kv' : 'fallback-defaults'
+          mode: hasWritableKv() ? 'shared-kv' : 'fallback-defaults',
+          diagnostics: {
+            kvUrlPresent: !!process.env.KV_REST_API_URL,
+            kvTokenPresent: !!process.env.KV_REST_API_TOKEN,
+            userStoreKey: USERS_KEY,
+            allowedOrigin
+          }
         }
       });
       return;
