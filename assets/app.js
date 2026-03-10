@@ -659,7 +659,10 @@ function renderCompanyStructureSummary(structure = []) {
               <span class="badge badge--gold">${node.type}</span>
               <strong>${node.name}</strong>
             </div>
-            <div class="org-accordion__meta">${getEntityLayerById(settings, node.id)?.contextSummary ? 'Context saved' : 'No context'}</div>
+            <div class="org-accordion__meta">
+              <span class="form-help">${getEntityLayerById(settings, node.id)?.contextSummary ? 'Context saved' : 'No context'}</span>
+              <button class="btn btn--secondary btn--sm org-entity-add-department org-summary-action" data-org-id="${node.id}" type="button">Add Function</button>
+            </div>
           </summary>
           <div class="org-accordion__body">
             <div class="org-accordion__toolbar">
@@ -4548,6 +4551,12 @@ function renderAdminSettings() {
   }
 
   function bindStructureActionHandlers() {
+    structureSummaryEl.querySelectorAll('.org-summary-action').forEach(button => {
+      button.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+    });
     structureSummaryEl.querySelectorAll('.org-entity-context').forEach(button => {
       button.addEventListener('click', () => {
         const target = companyStructure.find(node => node.id === button.dataset.orgId);

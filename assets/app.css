@@ -881,6 +881,9 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--text-muted);
   font-size: var(--text-xs);
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .org-accordion__body {
