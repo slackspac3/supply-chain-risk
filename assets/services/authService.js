@@ -33,13 +33,13 @@ function resolveApiUrl(path) {
   }
 
   function getAdminApiSecret() {
-    return sessionStorage.getItem(ADMIN_SECRET_KEY) || '';
+    return localStorage.getItem(ADMIN_SECRET_KEY) || '';
   }
 
   function setAdminApiSecret(secret) {
     const value = String(secret || '').trim();
-    if (value) sessionStorage.setItem(ADMIN_SECRET_KEY, value);
-    else sessionStorage.removeItem(ADMIN_SECRET_KEY);
+    if (value) localStorage.setItem(ADMIN_SECRET_KEY, value);
+    else localStorage.removeItem(ADMIN_SECRET_KEY);
     return value;
   }
 
@@ -201,7 +201,7 @@ function resolveApiUrl(path) {
 
   function logout() {
     sessionStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(ADMIN_SECRET_KEY);
+
   }
 
   function isAuthenticated() {

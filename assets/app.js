@@ -4476,12 +4476,13 @@ function renderAdminSettings() {
       <div class="grid-2 mt-3">
         <div class="form-group">
           <label class="form-label" for="admin-api-secret">Admin API Secret</label>
-          <input class="form-input" id="admin-api-secret" type="password" placeholder="Paste the Vercel admin secret for this browser session" value="${AuthService.getAdminApiSecret() || ''}">
-          <span class="form-help">Session only. Required for admin-only user actions.</span>
+          <input class="form-input" id="admin-api-secret" type="password" placeholder="Paste the Vercel admin secret for this browser" value="${AuthService.getAdminApiSecret() || ''}">
+          <span class="form-help">Stored in this browser for the PoC. Required for admin-only user actions.</span>
         </div>
       </div>
       <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
         <button class="btn btn--secondary" id="btn-save-admin-secret" type="button">Save Admin Secret</button>
+        <button class="btn btn--ghost" id="btn-clear-admin-secret" type="button">Clear Admin Secret</button>
         <button class="btn btn--secondary" id="btn-test-users-store" type="button">Test Shared User Store</button>
         <span class="form-help" id="admin-users-store-status">Checks whether the Vercel user store is reachable from this browser.</span>
       </div>
@@ -5034,7 +5035,13 @@ function renderAdminSettings() {
   document.getElementById('btn-save-admin-secret')?.addEventListener('click', () => {
     const secret = document.getElementById('admin-api-secret')?.value || '';
     AuthService.setAdminApiSecret(secret);
-    UI.toast(secret ? 'Admin API secret saved for this session.' : 'Admin API secret cleared.', 'success');
+    UI.toast(secret ? 'Admin API secret saved in this browser.' : 'Admin API secret cleared.', 'success');
+  });
+  document.getElementById('btn-clear-admin-secret')?.addEventListener('click', () => {
+    AuthService.setAdminApiSecret('');
+    const input = document.getElementById('admin-api-secret');
+    if (input) input.value = '';
+    UI.toast('Admin API secret cleared.', 'success');
   });
 
   document.getElementById('btn-test-users-store')?.addEventListener('click', async () => {
