@@ -29,7 +29,7 @@ function normaliseAccount(account = {}) {
     username: String(account.username || '').trim().toLowerCase(),
     password: String(account.password || ''),
     displayName: String(account.displayName || '').trim() || 'User',
-    role: account.role === 'admin' ? 'admin' : 'user',
+    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : 'user'),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
     departmentEntityId: String(account.departmentEntityId || '').trim()
   };
@@ -39,7 +39,7 @@ function sanitiseAccount(account = {}) {
   return {
     username: String(account.username || '').trim().toLowerCase(),
     displayName: String(account.displayName || '').trim() || 'User',
-    role: account.role === 'admin' ? 'admin' : 'user',
+    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : 'user'),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
     departmentEntityId: String(account.departmentEntityId || '').trim()
   };
@@ -293,6 +293,7 @@ module.exports = async function handler(req, res) {
       accounts[index] = normaliseAccount({
         ...accounts[index],
         displayName: typeof updates.displayName === 'string' && updates.displayName.trim() ? updates.displayName.trim() : accounts[index].displayName,
+        role: typeof updates.role === 'string' ? updates.role : accounts[index].role,
         businessUnitEntityId: typeof updates.businessUnitEntityId === 'string' ? updates.businessUnitEntityId : accounts[index].businessUnitEntityId,
         departmentEntityId: typeof updates.departmentEntityId === 'string' ? updates.departmentEntityId : accounts[index].departmentEntityId
       });

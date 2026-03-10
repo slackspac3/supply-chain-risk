@@ -677,6 +677,26 @@ function getAdminSettings() {
   }
 }
 
+function applyManagedAccountAssignmentToSettings(account, updates = {}, baseSettings = getAdminSettings()) {
+  const nextRole = updates.role || account.role || 'user';
+  const nextBusinessUnitEntityId = updates.businessUnitEntityId !== undefined ? updates.businessUnitEntityId : (account.businessUnitEntityId || '');
+  const nextStructure = (Array.isArray(baseSettings.companyStructure) ? baseSettings.companyStructure : []).map(node => {
+    if (!isCompanyEntityType(node.type)) return node;
+    if (node.ownerUsername !== account.username && !(nextRole === 'bu_admin' && node.id === nextBusinessUnitEntityId)) return node;
+    if (nextRole === 'bu_admin' && node.id === nextBusinessUnitEntityId) {
+      return { ...node, ownerUsername: account.username };
+    }
+    if (node.ownerUsername === account.username) {
+      return { ...node, ownerUsername: '' };
+    }
+    return node;
+  });
+  return {
+    ...baseSettings,
+    companyStructure: nextStructure
+  };
+}
+
 function saveAdminSettings(settings) {
   const merged = {
     ...DEFAULT_ADMIN_SETTINGS,
@@ -3870,7 +3890,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
   const selectedBusinessId = profile.businessUnitEntityId || resolveUserOrganisationSelection(AppState.currentUser, settings, globalSettings).businessUnitEntityId;
   const selectedBusinessEntity = getEntityById(companyStructure, selectedBusinessId);
   const selectedBusinessDepartments = getDepartmentEntities(companyStructure, selectedBusinessId);
-  const businessOwner = selectedBusinessEntity?.ownerUsername === AppState.currentUser?.username;
+  const businessOwner = (AppState.currentUser?.role === 'bu_admin' && selectedBusinessEntity?.id === AppState.currentUser?.businessUnitEntityId) || selectedBusinessEntity?.ownerUsername === AppState.currentUser?.username;
   const selectedDepartment = getEntityById(companyStructure, profile.departmentEntityId);
   const departmentOwner = selectedDepartment?.ownerUsername === AppState.currentUser?.username;
   const companyContextSections = settings.companyContextSections || buildCompanyContextSections({
@@ -4686,10 +4706,17 @@ function renderAdminSettings() {
     </div>
     <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-canvas)">
       <div class="context-panel-title">Add User</div>
-      <div class="grid-3 mt-3">
+      <div class="grid-4 mt-3">
         <div class="form-group">
           <label class="form-label" for="admin-new-user-name">Display name</label>
           <input class="form-input" id="admin-new-user-name" placeholder="e.g. Sara Finance">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="admin-new-user-role">Role</label>
+          <select class="form-select" id="admin-new-user-role">
+            <option value="user">Standard user</option>
+            <option value="bu_admin">BU admin</option>
+          </select>
         </div>
         <div class="form-group">
           <label class="form-label" for="admin-new-user-bu">Business unit</label>
@@ -4714,6 +4741,7 @@ function renderAdminSettings() {
           <tr>
             <th>User</th>
             <th>Username</th>
+            <th>Role</th>
             <th>Assigned BU</th>
             <th>Assigned Function</th>
             <th>Issued Password</th>
@@ -4722,17 +4750,34 @@ function renderAdminSettings() {
         </thead>
         <tbody>
           ${managedAccounts.map(account => {
-            const assignedBU = getEntityById(companyStructure, account.businessUnitEntityId || '')?.name || 'Not assigned';
-            const assignedDepartment = getEntityById(companyStructure, account.departmentEntityId || '')?.name || 'Not assigned';
+            const departmentsForAccount = getDepartmentEntities(companyStructure, account.businessUnitEntityId || '');
             return `
-            <tr>
+            <tr class="managed-account-row" data-username="${account.username}">
               <td>${account.displayName}</td>
               <td><code>${account.username}</code></td>
-              <td>${assignedBU}</td>
-              <td>${assignedDepartment}</td>
+              <td>
+                <select class="form-select form-select--sm account-role-select" data-username="${account.username}">
+                  <option value="user" ${account.role === 'user' ? 'selected' : ''}>Standard user</option>
+                  <option value="bu_admin" ${account.role === 'bu_admin' ? 'selected' : ''}>BU admin</option>
+                </select>
+              </td>
+              <td>
+                <select class="form-select form-select--sm account-bu-select" data-username="${account.username}">
+                  <option value="">Choose BU</option>
+                  ${companyEntities.map(entity => `<option value="${entity.id}" ${entity.id === (account.businessUnitEntityId || '') ? 'selected' : ''}>${entity.name}</option>`).join('')}
+                </select>
+              </td>
+              <td>
+                <select class="form-select form-select--sm account-department-select" data-username="${account.username}">
+                  <option value="">${account.role === 'bu_admin' ? 'Optional for BU admin' : 'Choose function'}</option>
+                  ${departmentsForAccount.map(entity => `<option value="${entity.id}" ${entity.id === (account.departmentEntityId || '') ? 'selected' : ''}>${entity.name}</option>`).join('')}
+                </select>
+              </td>
               <td><code>${AppState.adminVisiblePasswords[account.username] || 'Reset to issue'}</code></td>
               <td style="text-align:right">
-                <button class="btn btn--ghost btn--sm btn-reset-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset User</button> <button class="btn btn--secondary btn--sm btn-reset-user-password" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset Password</button>
+                <button class="btn btn--secondary btn--sm btn-apply-user-access" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Apply</button>
+                <button class="btn btn--ghost btn--sm btn-reset-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset User</button>
+                <button class="btn btn--secondary btn--sm btn-reset-user-password" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset Password</button>
               </td>
             </tr>`;
           }).join('')}
@@ -5216,19 +5261,84 @@ function renderAdminSettings() {
       }
     });
   });
+
+  document.querySelectorAll('.btn-apply-user-access').forEach(button => {
+    button.addEventListener('click', async () => {
+      const username = button.dataset.username || '';
+      const displayName = button.dataset.displayName || username;
+      const row = button.closest('.managed-account-row');
+      if (!row) return;
+      const role = row.querySelector('.account-role-select')?.value || 'user';
+      const businessUnitEntityId = row.querySelector('.account-bu-select')?.value || '';
+      const departmentEntityId = row.querySelector('.account-department-select')?.value || '';
+      if (!businessUnitEntityId) {
+        UI.toast(role === 'bu_admin' ? 'Choose the business unit this BU admin will manage.' : 'Choose a business unit for this user.', 'warning');
+        return;
+      }
+      if (role !== 'bu_admin' && !departmentEntityId) {
+        UI.toast('Choose a function or department for this standard user.', 'warning');
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Applying…';
+      try {
+        const currentAccount = AuthService.getManagedAccounts().find(account => account.username === username) || { username, role: 'user', businessUnitEntityId: '', departmentEntityId: '' };
+        const updatedAccount = await AuthService.adminUpdateManagedAccount(username, {
+          role,
+          businessUnitEntityId,
+          departmentEntityId: role === 'bu_admin' ? '' : departmentEntityId
+        });
+        const nextSettings = applyManagedAccountAssignmentToSettings(currentAccount, {
+          role: updatedAccount?.role || role,
+          businessUnitEntityId: updatedAccount?.businessUnitEntityId || businessUnitEntityId
+        }, getAdminSettings());
+        saveAdminSettings(nextSettings);
+        AppState.adminNewUserStatus = `Applied ${role === 'bu_admin' ? 'BU admin' : 'standard user'} access for ${displayName}.`;
+        UI.toast(`Updated access for ${displayName}.`, 'success');
+        rememberSettingsScroll('admin-settings');
+        renderAdminSettings();
+      } catch (error) {
+        AppState.adminNewUserStatus = `User update failed: ${error instanceof Error ? error.message : String(error)}`;
+        document.getElementById('admin-new-user-result').textContent = AppState.adminNewUserStatus;
+        UI.toast('User update failed.', 'danger');
+        button.disabled = false;
+        button.textContent = 'Apply';
+      }
+    });
+  });
   function renderAdminNewUserDepartments() {
     const buId = document.getElementById('admin-new-user-bu')?.value || '';
+    const role = document.getElementById('admin-new-user-role')?.value || 'user';
     const departmentEl = document.getElementById('admin-new-user-department');
     if (!departmentEl) return;
     const departments = getDepartmentEntities(companyStructure, buId);
-    departmentEl.innerHTML = departments.length
-      ? `<option value="">Choose function</option>${departments.map(entity => `<option value="${entity.id}">${entity.name}</option>`).join('')}`
-      : '<option value="">No functions configured</option>';
-    departmentEl.disabled = !departments.length;
+    const placeholder = role === 'bu_admin' ? 'Optional for BU admin' : 'Choose function';
+    departmentEl.innerHTML = `<option value="">${departments.length || role === 'bu_admin' ? placeholder : 'No functions configured'}</option>${departments.map(entity => `<option value="${entity.id}">${entity.name}</option>`).join('')}`;
+    departmentEl.disabled = !buId || (!departments.length && role !== 'bu_admin');
+  }
+
+  function renderManagedAccountDepartmentOptions(row) {
+    if (!row) return;
+    const role = row.querySelector('.account-role-select')?.value || 'user';
+    const buId = row.querySelector('.account-bu-select')?.value || '';
+    const departmentEl = row.querySelector('.account-department-select');
+    if (!departmentEl) return;
+    const departments = getDepartmentEntities(companyStructure, buId);
+    const currentValue = departmentEl.value || departmentEl.dataset.currentValue || '';
+    const placeholder = role === 'bu_admin' ? 'Optional for BU admin' : 'Choose function';
+    departmentEl.innerHTML = `<option value="">${departments.length || role === 'bu_admin' ? placeholder : 'No functions configured'}</option>${departments.map(entity => `<option value="${entity.id}" ${entity.id === currentValue ? 'selected' : ''}>${entity.name}</option>`).join('')}`;
+    departmentEl.disabled = !buId || (!departments.length && role !== 'bu_admin');
+    if (!departments.some(entity => entity.id === currentValue)) departmentEl.value = '';
   }
 
   document.getElementById('admin-new-user-bu')?.addEventListener('change', renderAdminNewUserDepartments);
+  document.getElementById('admin-new-user-role')?.addEventListener('change', renderAdminNewUserDepartments);
   renderAdminNewUserDepartments();
+  document.querySelectorAll('.managed-account-row').forEach(row => {
+    row.querySelector('.account-bu-select')?.addEventListener('change', () => renderManagedAccountDepartmentOptions(row));
+    row.querySelector('.account-role-select')?.addEventListener('change', () => renderManagedAccountDepartmentOptions(row));
+    renderManagedAccountDepartmentOptions(row);
+  });
   document.getElementById('btn-save-admin-secret')?.addEventListener('click', async () => {
     const secret = document.getElementById('admin-api-secret')?.value || '';
     AuthService.setAdminApiSecret(secret);
@@ -5277,6 +5387,7 @@ function renderAdminSettings() {
     const button = document.getElementById('btn-admin-add-user');
     const resultEl = document.getElementById('admin-new-user-result');
     const displayName = document.getElementById('admin-new-user-name').value.trim();
+    const role = document.getElementById('admin-new-user-role').value.trim() || 'user';
     const businessUnitEntityId = document.getElementById('admin-new-user-bu').value.trim();
     const departmentEntityId = document.getElementById('admin-new-user-department').value.trim();
     if (!displayName) {
@@ -5286,12 +5397,12 @@ function renderAdminSettings() {
       return;
     }
     if (!businessUnitEntityId) {
-      AppState.adminNewUserStatus = 'Choose a business unit before creating the user.';
+      AppState.adminNewUserStatus = role === 'bu_admin' ? 'Choose the business unit this BU admin will manage.' : 'Choose a business unit before creating the user.';
       resultEl.textContent = AppState.adminNewUserStatus;
       UI.toast(AppState.adminNewUserStatus, 'warning');
       return;
     }
-    if (!departmentEntityId) {
+    if (role !== 'bu_admin' && !departmentEntityId) {
       AppState.adminNewUserStatus = 'Choose a function or department before creating the user.';
       resultEl.textContent = AppState.adminNewUserStatus;
       UI.toast(AppState.adminNewUserStatus, 'warning');
@@ -5301,7 +5412,9 @@ function renderAdminSettings() {
     button.textContent = 'Creating…';
     resultEl.textContent = 'Creating shared user account…';
     try {
-      const account = await AuthService.createManagedAccount({ displayName, businessUnitEntityId, departmentEntityId });
+      const account = await AuthService.createManagedAccount({ displayName, role, businessUnitEntityId, departmentEntityId: role === 'bu_admin' ? '' : departmentEntityId });
+      const nextSettings = applyManagedAccountAssignmentToSettings(account, { role: account.role, businessUnitEntityId: account.businessUnitEntityId }, getAdminSettings());
+      saveAdminSettings(nextSettings);
       AppState.adminVisiblePasswords[account.username] = account.password || '';
       AppState.adminNewUserStatus = `Created ${account.displayName}: username ${account.username} / password ${account.password}`;
       UI.toast(`Created ${account.username}.`, 'success');

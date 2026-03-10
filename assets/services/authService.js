@@ -60,7 +60,7 @@ function resolveApiUrl(path) {
       username: String(account.username || '').trim().toLowerCase(),
       password: String(account.password || ''),
       displayName: String(account.displayName || '').trim() || 'User',
-      role: account.role === 'admin' ? 'admin' : 'user',
+      role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : 'user'),
       businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
       departmentEntityId: String(account.departmentEntityId || '').trim()
     };
@@ -245,7 +245,7 @@ function resolveApiUrl(path) {
       .map(account => sanitiseAccount(account));
   }
 
-  async function createManagedAccount({ displayName, businessUnitEntityId = '', departmentEntityId = '' } = {}) {
+  async function createManagedAccount({ displayName, businessUnitEntityId = '', departmentEntityId = '', role = 'user' } = {}) {
     const accounts = readCachedAccounts();
     const username = buildUsername(displayName, accounts);
     const password = generatePassword(accounts);
@@ -253,7 +253,7 @@ function resolveApiUrl(path) {
       username,
       password,
       displayName,
-      role: 'user',
+      role: role === 'bu_admin' ? 'bu_admin' : 'user',
       businessUnitEntityId,
       departmentEntityId
     });
@@ -279,6 +279,23 @@ function resolveApiUrl(path) {
       session.user = sanitiseAccount(updated);
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
     }
+    return updated ? sanitiseAccount(updated) : null;
+  }
+
+
+  async function adminUpdateManagedAccount(username, updates = {}) {
+    const data = await requestUsers('PATCH', {
+      action: 'admin-update',
+      username: String(username || '').trim().toLowerCase(),
+      updates: {
+        displayName: typeof updates.displayName === 'string' ? updates.displayName.trim() : undefined,
+        role: typeof updates.role === 'string' ? updates.role.trim() : undefined,
+        businessUnitEntityId: typeof updates.businessUnitEntityId === 'string' ? updates.businessUnitEntityId.trim() : undefined,
+        departmentEntityId: typeof updates.departmentEntityId === 'string' ? updates.departmentEntityId.trim() : undefined
+      }
+    }, { includeAdminSecret: true });
+    if (Array.isArray(data?.accounts)) saveCache(data.accounts);
+    const updated = readCachedAccounts().find(account => account.username === String(username || '').trim().toLowerCase()) || null;
     return updated ? sanitiseAccount(updated) : null;
   }
 
@@ -308,6 +325,7 @@ function resolveApiUrl(path) {
     getManagedAccounts,
     createManagedAccount,
     updateManagedAccount,
+    adminUpdateManagedAccount,
     resetManagedPassword,
     getAdminApiSecret,
     setAdminApiSecret
