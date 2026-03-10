@@ -40,7 +40,8 @@ const AppState = {
   currentUser: null,
   draft: {},
   buList: [],
-  docList: []
+  docList: [],
+  adminNewUserStatus: ''
 };
 
 const USER_SETTINGS_KEYS = [
@@ -4451,7 +4452,7 @@ function renderAdminSettings() {
       </div>
       <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
         <button class="btn btn--secondary" id="btn-admin-add-user">Add User</button>
-        <span class="form-help" id="admin-new-user-result">A dummy username and password will be generated automatically for this PoC.</span>
+        <span class="form-help" id="admin-new-user-result">${AppState.adminNewUserStatus || 'A dummy username and password will be generated automatically for this PoC.'}</span>
       </div>
     </div>
     <div class="table-wrap mt-4">
@@ -4483,7 +4484,7 @@ function renderAdminSettings() {
         </tbody>
       </table>
     </div>
-    <div class="form-help mt-3">Reset only affects browser-stored state. Account creation and assignment are stored locally in this PoC.</div>`
+    <div class="form-help mt-3">Reset only affects browser-stored state. Account creation and BU/function assignment are shared through the Vercel user store.</div>`
   });
   setPage(adminLayout('settings', `
     <div class="settings-shell">
@@ -4967,17 +4968,44 @@ function renderAdminSettings() {
     btn.textContent = 'Test Shared User Store';
   });
   document.getElementById('btn-admin-add-user')?.addEventListener('click', async () => {
+    const button = document.getElementById('btn-admin-add-user');
+    const resultEl = document.getElementById('admin-new-user-result');
     const displayName = document.getElementById('admin-new-user-name').value.trim();
     const businessUnitEntityId = document.getElementById('admin-new-user-bu').value.trim();
     const departmentEntityId = document.getElementById('admin-new-user-department').value.trim();
     if (!displayName) {
-      UI.toast('Enter a display name for the new user.', 'warning');
+      AppState.adminNewUserStatus = 'Enter a display name for the new user.';
+      resultEl.textContent = AppState.adminNewUserStatus;
+      UI.toast(AppState.adminNewUserStatus, 'warning');
       return;
     }
-    const account = await AuthService.createManagedAccount({ displayName, businessUnitEntityId, departmentEntityId });
-    document.getElementById('admin-new-user-result').textContent = `Created ${account.displayName}: username ${account.username} / password ${account.password}`;
-    UI.toast(`Created ${account.username}.`, 'success');
-    renderAdminSettings();
+    if (!businessUnitEntityId) {
+      AppState.adminNewUserStatus = 'Choose a business unit before creating the user.';
+      resultEl.textContent = AppState.adminNewUserStatus;
+      UI.toast(AppState.adminNewUserStatus, 'warning');
+      return;
+    }
+    if (!departmentEntityId) {
+      AppState.adminNewUserStatus = 'Choose a function or department before creating the user.';
+      resultEl.textContent = AppState.adminNewUserStatus;
+      UI.toast(AppState.adminNewUserStatus, 'warning');
+      return;
+    }
+    button.disabled = true;
+    button.textContent = 'Creating…';
+    resultEl.textContent = 'Creating shared user account…';
+    try {
+      const account = await AuthService.createManagedAccount({ displayName, businessUnitEntityId, departmentEntityId });
+      AppState.adminNewUserStatus = `Created ${account.displayName}: username ${account.username} / password ${account.password}`;
+      UI.toast(`Created ${account.username}.`, 'success');
+      renderAdminSettings();
+    } catch (error) {
+      AppState.adminNewUserStatus = `User creation failed: ${error instanceof Error ? error.message : String(error)}`;
+      resultEl.textContent = AppState.adminNewUserStatus;
+      UI.toast('User creation failed.', 'danger');
+      button.disabled = false;
+      button.textContent = 'Add User';
+    }
   });
 
   document.getElementById('btn-reset-settings').addEventListener('click', async () => {
