@@ -11,11 +11,11 @@ const USERS_KEY = process.env.USER_STORE_KEY || 'risk_calculator_users';
 
 
 function getKvUrl() {
-  return process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
+  return process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
 }
 
 function getKvToken() {
-  return process.env.USER_STORE_KV_TOKEN || process.env.KV_REST_API_TOKEN || '';
+  return process.env.RC_USER_STORE_TOKEN || process.env.USER_STORE_KV_TOKEN || process.env.KV_REST_API_TOKEN || '';
 }
 
 function normaliseAccount(account = {}) {
@@ -109,6 +109,8 @@ module.exports = async function handler(req, res) {
           writable: hasWritableKv(),
           mode: hasWritableKv() ? 'shared-kv' : 'fallback-defaults',
           diagnostics: {
+            rcUserStoreUrlPresent: !!process.env.RC_USER_STORE_URL,
+            rcUserStoreTokenPresent: !!process.env.RC_USER_STORE_TOKEN,
             kvUrlPresent: !!process.env.KV_REST_API_URL,
             kvTokenPresent: !!process.env.KV_REST_API_TOKEN,
             userStoreKvUrlPresent: !!process.env.USER_STORE_KV_URL,
