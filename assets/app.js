@@ -37,7 +37,7 @@ const DEFAULT_ADMIN_SETTINGS = {
 function resolveCompassProxyUrl() {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   if (origin && origin.includes('vercel.app')) return `${origin}/api/compass`;
-  return 'https://risk-calculator.vercel.app/api/compass';
+  return 'https://risk-calculator-eight.vercel.app/api/compass';
 }
 
 const AppState = {

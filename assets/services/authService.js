@@ -24,7 +24,7 @@ const AuthService = (() => {
 function resolveApiUrl(path) {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   if (origin && origin.includes('vercel.app')) return `${origin}${path}`;
-  return `https://risk-calculator.vercel.app${path}`;
+  return `https://risk-calculator-eight.vercel.app${path}`;
 }
 
   function getUsersApiUrl() {
