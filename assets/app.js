@@ -951,7 +951,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     </div>
     <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap" id="org-context-actions">
       <button class="btn btn--secondary" id="btn-org-build-context" type="button">Build Context from Website</button>
-      <span class="form-help">Use AI to gather website and public-source context before saving.</span>
+      <span class="form-help" id="org-context-actions-help">Use AI to gather website and public-source context before saving.</span>
     </div>`;
   const modal = UI.modal({
     title: existingNode ? 'Edit Organisation Entity' : 'Add Organisation Entity',
@@ -975,6 +975,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
   const ownerLabelEl = document.getElementById('org-owner-label');
   const ownerHelpEl = document.getElementById('org-owner-help');
   const contextActionsEl = document.getElementById('org-context-actions');
+  const contextActionsHelpEl = document.getElementById('org-context-actions-help');
   const contextSectionsWrapEl = document.getElementById('org-context-sections-wrap');
 
   function getSelectedNodeType() {
@@ -995,8 +996,15 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     departmentWrapEl.style.display = departmentEditorMode ? '' : 'none';
     ownerWrapEl.style.display = isCompanyEntityType(selectedNodeType) || departmentEditorMode ? '' : 'none';
     websiteWrapEl.style.display = departmentEditorMode ? 'none' : '';
-    contextActionsEl.style.display = departmentEditorMode ? 'none' : '';
+    contextActionsEl.style.display = '';
     contextSectionsWrapEl.style.display = departmentEditorMode ? 'none' : '';
+    const buildContextBtn = document.getElementById('btn-org-build-context');
+    if (buildContextBtn) buildContextBtn.textContent = departmentEditorMode ? 'AI Assist Context' : 'Build Context from Website';
+    if (contextActionsHelpEl) {
+      contextActionsHelpEl.textContent = departmentEditorMode
+        ? 'Use AI to derive a starter function context from the parent business unit and its retained context.'
+        : 'Use AI to gather website and public-source context before saving.';
+    }
     ownerLabelEl.textContent = departmentEditorMode ? 'Department Owner' : 'Business Unit Admin';
     ownerHelpEl.textContent = departmentEditorMode
       ? 'The assigned owner can maintain department context from their Settings page.'
@@ -1013,6 +1021,67 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     }
   });
   document.getElementById('org-cancel').addEventListener('click', () => modal.close());
+  async function buildDepartmentContextFromParent() {
+    const parentId = parentEl.value || node.parentId || seed.parentId || '';
+    if (!parentId) {
+      UI.toast('Choose the parent business before using AI assist for a function.', 'warning');
+      return;
+    }
+    const settings = getAdminSettings();
+    const parentEntity = getEntityById(structure, parentId);
+    const parentLayer = parentEntity?.id ? getEntityLayerById(settings, parentEntity.id) : null;
+    const llmConfig = getSessionLLMConfig();
+    LLMService.setCompassConfig({
+      apiUrl: llmConfig.apiUrl || DEFAULT_COMPASS_PROXY_URL,
+      model: llmConfig.model || 'gpt-5.1',
+      apiKey: llmConfig.apiKey || ''
+    });
+    const result = await LLMService.buildEntityContext({
+      entity: {
+        id: node.id || '',
+        name: nameEl.value.trim() || defaultDepartmentHint || 'New function',
+        type: 'Department / function',
+        profile: profileEl.value.trim(),
+        departmentHint: departmentTemplateEl.value || defaultDepartmentHint || '',
+        departmentRelationshipType: typeEl.value || defaultDepartmentRelationshipType,
+        ownerUsername: ownerEl.value || ''
+      },
+      parentEntity: parentEntity ? {
+        id: parentEntity.id,
+        name: parentEntity.name,
+        type: parentEntity.type,
+        profile: parentEntity.profile || '',
+        websiteUrl: parentEntity.websiteUrl || ''
+      } : null,
+      existingLayer: null,
+      parentLayer: parentLayer || null,
+      adminSettings: {
+        geography: settings.geography || '',
+        applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
+        aiInstructions: settings.aiInstructions || '',
+        benchmarkStrategy: settings.benchmarkStrategy || '',
+        riskAppetiteStatement: settings.riskAppetiteStatement || ''
+      }
+    });
+    if (result.contextSummary) profileEl.value = result.contextSummary;
+  }
+
+  if (departmentEditorMode) {
+    document.getElementById('btn-org-build-context').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-org-build-context');
+      btn.disabled = true;
+      btn.textContent = 'Building context…';
+      try {
+        await buildDepartmentContextFromParent();
+        UI.toast('Function context drafted from the parent business context.', 'success', 5000);
+      } catch (error) {
+        UI.toast('Context build failed: ' + error.message, 'danger', 6000);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'AI Assist Context';
+      }
+    });
+  }
   document.getElementById('org-save').addEventListener('click', () => {
     const selectedNodeType = getSelectedNodeType();
     const parentId = parentEl.value;
