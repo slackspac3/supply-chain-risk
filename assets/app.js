@@ -607,6 +607,7 @@ function renderCompanyStructureSummary(structure = []) {
   const managedAccounts = AuthService.getManagedAccounts();
   const accountLabelByUsername = new Map(managedAccounts.map(account => [account.username, account.displayName]));
   const byParent = new Map();
+  const settings = getAdminSettings();
   structure.forEach(node => {
     const key = node.parentId || 'root';
     if (!byParent.has(key)) byParent.set(key, []);
@@ -614,67 +615,73 @@ function renderCompanyStructureSummary(structure = []) {
   });
 
   function sortNodes(nodes = []) {
-    return [...nodes].sort((left, right) => {
-      const leftIsDepartment = isDepartmentEntityType(left.type);
-      const rightIsDepartment = isDepartmentEntityType(right.type);
-      if (leftIsDepartment !== rightIsDepartment) return leftIsDepartment ? 1 : -1;
-      return String(left.name || '').localeCompare(String(right.name || ''));
-    });
+    return [...nodes].sort((left, right) => String(left.name || '').localeCompare(String(right.name || '')));
   }
 
   function renderDepartmentList(parentNode) {
     const departments = sortNodes((byParent.get(parentNode.id) || []).filter(node => isDepartmentEntityType(node.type)));
     if (!departments.length) return '';
     return `
-      <div class="org-tree-node__department-group">
-        <div class="form-help" style="margin-top:12px">Functions directly under ${parentNode.name}</div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
-          ${departments.map(node => `
-            <div class="org-related-card org-theme--department">
-              <div class="org-related-card__head">
-                <div>
-                  <div class="context-panel-title">${node.name}</div>
-                  <div class="form-help">${node.departmentRelationshipType || 'In-house'}${node.ownerUsername ? ` · Owner: ${accountLabelByUsername.get(node.ownerUsername) || node.ownerUsername}` : ''}</div>
-                  <div class="form-help">${getEntityLayerById(getAdminSettings(), node.id)?.contextSummary || node.profile || 'No retained department context yet'}</div>
+      <div class="org-accordion__section">
+        <div class="org-accordion__label">Functions</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${departments.map(node => {
+            const contextSummary = getEntityLayerById(settings, node.id)?.contextSummary || node.profile || '';
+            const ownerLabel = node.ownerUsername ? (accountLabelByUsername.get(node.ownerUsername) || node.ownerUsername) : 'No owner';
+            return `
+              <div class="org-related-card org-related-card--compact org-theme--department">
+                <div class="org-related-card__head">
+                  <div>
+                    <div class="org-related-card__title">${node.name}</div>
+                    <div class="form-help">${node.departmentRelationshipType || 'In-house'} · ${ownerLabel} · ${contextSummary ? 'Context saved' : 'No context'}</div>
+                  </div>
+                  <div class="flex items-center gap-3" style="flex-wrap:wrap">
+                    <button class="btn btn--ghost btn--sm org-entity-context" data-org-id="${node.id}" type="button">Context</button>
+                    <button class="btn btn--ghost btn--sm org-entity-edit" data-org-id="${node.id}" type="button">Edit</button>
+                    <button class="btn btn--ghost btn--sm org-entity-delete" data-org-id="${node.id}" type="button">Remove</button>
+                  </div>
                 </div>
-                <div class="flex items-center gap-3" style="flex-wrap:wrap">
-                  <button class="btn btn--ghost btn--sm org-entity-context" data-org-id="${node.id}" type="button">Manage Context</button>
-                  <button class="btn btn--ghost btn--sm org-entity-edit" data-org-id="${node.id}" type="button">Edit</button>
-                  <button class="btn btn--ghost btn--sm org-entity-delete" data-org-id="${node.id}" type="button">Remove</button>
-                </div>
-              </div>
-            </div>`).join('')}
+              </div>`;
+          }).join('')}
         </div>
       </div>`;
   }
 
   function renderNodes(parentId, depth = 0) {
     const childCompanies = sortNodes((byParent.get(parentId || 'root') || []).filter(node => isCompanyEntityType(node.type)));
-    return childCompanies.map(node => `
-      <div class="org-tree-node ${getOrgEntityThemeClass(node.type)}" style="--org-depth:${depth};margin-top:8px">
-        <div class="org-tree-node__rail"></div>
-        <div class="org-tree-node__card">
-          <div class="org-tree-node__head">
-            <div class="org-tree-node__identity">
+    return childCompanies.map(node => {
+      const childMarkup = renderNodes(node.id, depth + 1);
+      const contextSummary = truncateText(getEntityLayerById(settings, node.id)?.contextSummary || node.profile || 'No retained context yet.', 100);
+      return `
+        <details class="org-accordion ${getOrgEntityThemeClass(node.type)}" ${depth < 1 ? 'open' : ''} style="margin-left:${depth * 16}px">
+          <summary class="org-accordion__summary">
+            <div class="org-accordion__identity">
               <span class="badge badge--gold">${node.type}</span>
-              <strong class="org-tree-node__name">${node.name}</strong>
-              ${node.websiteUrl ? `<span class="form-help" style="margin-top:0">${node.websiteUrl}</span>` : ''}
-              ${node.ownerUsername ? `<span class="form-help" style="margin-top:0">Owner: ${accountLabelByUsername.get(node.ownerUsername) || node.ownerUsername}</span>` : ''}
+              <strong>${node.name}</strong>
             </div>
-            <div class="org-tree-node__actions">
-              <button class="btn btn--secondary btn--sm org-entity-add-department" data-org-id="${node.id}" type="button">Add Function / Department</button>
-              <button class="btn btn--ghost btn--sm org-entity-context" data-org-id="${node.id}" type="button">Manage Context</button>
-              <button class="btn btn--ghost btn--sm org-entity-edit" data-org-id="${node.id}" type="button">Edit</button>
-              <button class="btn btn--ghost btn--sm org-entity-delete" data-org-id="${node.id}" type="button">Remove</button>
+            <div class="org-accordion__meta">${getEntityLayerById(settings, node.id)?.contextSummary ? 'Context saved' : 'No context'}</div>
+          </summary>
+          <div class="org-accordion__body">
+            <div class="org-accordion__toolbar">
+              <div class="form-help">${getEntityLineageLabel(structure, node.id) || node.name}</div>
+              <div class="flex items-center gap-3" style="flex-wrap:wrap">
+                <button class="btn btn--secondary btn--sm org-entity-add-department" data-org-id="${node.id}" type="button">Add Function</button>
+                <button class="btn btn--ghost btn--sm org-entity-context" data-org-id="${node.id}" type="button">Manage Context</button>
+                <button class="btn btn--ghost btn--sm org-entity-edit" data-org-id="${node.id}" type="button">Edit</button>
+              </div>
             </div>
+            <div class="org-accordion__snapshot">${contextSummary}</div>
+            ${renderDepartmentList(node)}
+            ${childMarkup ? `
+              <div class="org-accordion__section">
+                <div class="org-accordion__label">Child Entities</div>
+                <div style="display:flex;flex-direction:column;gap:12px">${childMarkup}</div>
+              </div>` : ''}
           </div>
-          ${depth ? `<div class="org-tree-node__path">${getEntityLineageLabel(structure, node.id)}</div>` : ''}
-          ${renderDepartmentList(node)}
-        </div>
-        <div class="org-tree-node__children">${renderNodes(node.id, depth + 1)}</div>
-      </div>`).join('');
+        </details>`;
+    }).join('');
   }
-  return `<div class="org-tree">${renderNodes('root')}</div>`;
+  return `<div class="org-accordion-list">${renderNodes('root')}</div>`;
 }
 
 function getEntityLineage(structure = [], entityId = '') {
@@ -4157,19 +4164,13 @@ function renderAdminSettings() {
     meta: `${companyEntities.length} businesses · ${departmentEntities.length} departments`,
     open: true,
     body: `<div class="card" style="padding:var(--sp-5);background:var(--bg-elevated)">
-      <div class="context-panel-title">Add Businesses, Portfolio Entities, Partners, And Departments</div>
-      <p class="context-panel-copy">Use industry-standard relationship types for the wider group. Departments must always sit under a business entity. Company entities can be enriched from public website context before saving.</p>
-      <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
+      <div class="context-panel-title">Organisation Tree</div>
+      <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
         <button class="btn btn--secondary" id="btn-add-org-entity">Add Entity</button>
         <button class="btn btn--secondary" id="btn-add-org-function">Add Function / Department</button>
-        <span class="form-help">Choose explicitly whether you are adding a business entity or a function beneath an existing business.</span>
+        <span class="form-help">Context is now managed directly inside the tree.</span>
       </div>
       <div id="admin-company-structure-summary" class="mt-4">${renderCompanyStructureSummary(companyStructure)}</div>
-    </div>
-    <div class="card mt-4" style="padding:var(--sp-5);background:var(--bg-elevated)">
-      <div class="context-panel-title">Context Coverage Snapshot</div>
-      <p class="context-panel-copy">Use <strong>Manage Context</strong> on any business or department to edit geography, appetite, regulations, and AI guidance for that node.</p>
-      <div id="admin-layer-summary-list" class="mt-4"></div>
     </div>`
   });
   const companyBuilderSection = renderSettingsSection({
