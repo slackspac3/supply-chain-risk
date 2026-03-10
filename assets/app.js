@@ -524,6 +524,57 @@ function renderCompanyStructureSummary(structure = []) {
   return `<div>${renderNodes('root')}</div>`;
 }
 
+function getEntityLineage(structure = [], entityId = '') {
+  if (!entityId) return [];
+  const byId = new Map(structure.map(node => [node.id, node]));
+  const chain = [];
+  let cursor = byId.get(entityId);
+  const visited = new Set();
+  while (cursor && !visited.has(cursor.id)) {
+    chain.unshift(cursor);
+    visited.add(cursor.id);
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : null;
+  }
+  return chain;
+}
+
+function getEntityLineageLabel(structure = [], entityId = '') {
+  const chain = getEntityLineage(structure, entityId);
+  return chain.length ? chain.map(node => node.name).join(' > ') : '';
+}
+
+function getEntityLayerById(settings = getAdminSettings(), entityId = '') {
+  const layers = Array.isArray(settings.entityContextLayers) ? settings.entityContextLayers : [];
+  return layers.find(layer => layer.entityId === entityId) || null;
+}
+
+function buildBUFromOrgEntity(entity, settings = getAdminSettings()) {
+  const layer = getEntityLayerById(settings, entity?.id);
+  const contextSections = entity?.contextSections || {};
+  return {
+    id: slugify(entity?.name || `bu-${Date.now()}`),
+    name: entity?.name || '',
+    orgEntityId: entity?.id || '',
+    geography: layer?.geography || '',
+    criticalServices: [],
+    keySystems: [],
+    dataTypes: [],
+    regulatoryTags: [...new Set([
+      ...(layer?.applicableRegulations || [])
+    ])],
+    contextSummary: layer?.contextSummary || contextSections.companySummary || entity?.profile || '',
+    aiGuidance: layer?.aiInstructions || '',
+    notes: entity?.type ? `Mapped from organisation entity: ${entity.type}.` : '',
+    defaultAssumptions: {
+      tef: { min: 1, likely: 4, max: 10 },
+      controlStrength: { min: 0.4, likely: 0.6, max: 0.85 },
+      threatCapability: { min: 0.3, likely: 0.55, max: 0.9 },
+      secondaryProbability: { min: 0.05, likely: 0.15, max: 0.3 }
+    },
+    docIds: []
+  };
+}
+
 function isDepartmentEntityType(type = '') {
   return String(type).toLowerCase() === 'department / function';
 }
@@ -4029,12 +4080,13 @@ function renderAdminBU() {
   const settings = getAdminSettings();
   const companyStructure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
   const structureMap = new Map(companyStructure.map(node => [node.id, node]));
+  const unlinkedEntities = companyStructure.filter(node => !buList.some(bu => bu.orgEntityId === node.id));
   const linkedCount = buList.filter(bu => bu.orgEntityId && structureMap.has(bu.orgEntityId)).length;
   setPage(adminLayout('bu', `
     <div class="flex items-center justify-between mb-6">
       <div>
         <h2>Organisation Customisation</h2>
-        <p style="margin-top:6px">Link assessment business units to the organisation tree and refine context per business or department. This is where users tailor what each BU represents in practice.</p>
+        <p style="margin-top:6px">Turn the organisation tree into assessment-ready business contexts. Each BU should map cleanly to a parent, subsidiary, business, or department you already created in Organisation Setup.</p>
       </div>
       <div class="flex gap-3">
         <button class="btn btn--ghost btn--sm" id="btn-reset-bu">Reset Defaults</button>
@@ -4053,17 +4105,42 @@ function renderAdminBU() {
         <div class="admin-overview-foot">BUs already mapped to a saved business or department</div>
       </div>
       <div class="admin-overview-card">
+        <div class="admin-overview-label">Unlinked Org Entities</div>
+        <div class="admin-overview-value">${unlinkedEntities.length}</div>
+        <div class="admin-overview-foot">Entities in Organisation Setup that do not yet have a BU context</div>
+      </div>
+      <div class="admin-overview-card">
         <div class="admin-overview-label">Average Regulatory Tags</div>
         <div class="admin-overview-value">${buList.length ? (buList.reduce((sum, bu) => sum + (bu.regulatoryTags?.length || 0), 0) / buList.length).toFixed(1) : '0.0'}</div>
         <div class="admin-overview-foot">Signals how much context each BU carries</div>
       </div>
     </div>
+    ${unlinkedEntities.length ? `
+      <div class="card card--elevated mb-6">
+        <div class="context-panel-title">Organisation Entities Ready for BU Context</div>
+        <p class="context-panel-copy">You already created these in Organisation Setup. Create an Org Customisation record from them instead of retyping the same structure again.</p>
+        <div class="grid-2 mt-4">
+          ${unlinkedEntities.map(entity => `
+            <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <div>
+                  <div class="context-panel-title">${entity.name}</div>
+                  <div class="form-help">${getEntityLineageLabel(companyStructure, entity.id) || entity.name}</div>
+                  <div class="form-help">${entity.type}</div>
+                </div>
+                <button class="btn btn--secondary btn--sm btn-create-bu-from-entity" data-entity-id="${entity.id}" type="button">Create BU</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>` : ''}
     <div style="overflow-x:auto">
       <table class="data-table">
-        <thead><tr><th>Name</th><th>Mapped Business / Department</th><th>Critical Services</th><th>Regulatory</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Mapped Business / Department</th><th>Inherited Path</th><th>Critical Services</th><th>Regulatory</th><th>Actions</th></tr></thead>
         <tbody>${buList.map(bu=>`<tr>
           <td><strong style="color:var(--text-primary)">${bu.name}</strong><br><span style="font-size:.68rem;color:var(--text-muted)">${bu.id}</span></td>
           <td style="font-size:.8rem">${bu.orgEntityId && structureMap.has(bu.orgEntityId) ? `${structureMap.get(bu.orgEntityId).name} (${structureMap.get(bu.orgEntityId).type})` : '<span style="color:var(--text-muted)">Not linked yet</span>'}</td>
+          <td style="font-size:.78rem">${bu.orgEntityId ? (getEntityLineageLabel(companyStructure, bu.orgEntityId) || '<span style="color:var(--text-muted)">—</span>') : '<span style="color:var(--text-muted)">—</span>'}</td>
           <td style="font-size:.8rem">${bu.criticalServices.slice(0,2).join(', ')}${bu.criticalServices.length>2?'…':''}</td>
           <td>${bu.regulatoryTags.map(t=>`<span class="badge badge--gold" style="font-size:.6rem;margin:2px">${t}</span>`).join('')}</td>
           <td><button class="btn btn--ghost btn--sm" data-id="${bu.id}" id="edit-bu-${bu.id}">Edit</button> <button class="btn btn--ghost btn--sm" data-id="${bu.id}" id="del-bu-${bu.id}" style="color:var(--color-danger-400)">Delete</button></td>
@@ -4081,6 +4158,13 @@ function renderAdminBU() {
     }
   });
   document.getElementById('btn-add-bu').addEventListener('click', () => openBUEditor(null));
+  document.querySelectorAll('.btn-create-bu-from-entity').forEach(button => {
+    button.addEventListener('click', () => {
+      const entity = structureMap.get(button.dataset.entityId || '');
+      if (!entity) return;
+      openBUEditor(buildBUFromOrgEntity(entity, settings));
+    });
+  });
   buList.forEach(bu => {
     document.getElementById('edit-bu-'+bu.id)?.addEventListener('click', () => openBUEditor(bu));
     document.getElementById('del-bu-'+bu.id)?.addEventListener('click', async () => {
@@ -4094,7 +4178,9 @@ function renderAdminBU() {
 
 function openBUEditor(bu) {
   const isNew = !bu;
-  const companyStructure = Array.isArray(getAdminSettings().companyStructure) ? getAdminSettings().companyStructure : [];
+  const settings = getAdminSettings();
+  const companyStructure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
+  const structureMap = new Map(companyStructure.map(node => [node.id, node]));
   let ti = {};
   const m = UI.modal({
     title: isNew ? 'Add BU / Department Context' : `Edit: ${bu.name}`,
@@ -4109,11 +4195,19 @@ function openBUEditor(bu) {
           <option value="">Not linked yet</option>
           ${companyStructure.map(node => `<option value="${node.id}" ${bu?.orgEntityId === node.id ? 'selected' : ''}>${node.name} (${node.type})</option>`).join('')}
         </select>
-        <span class="form-help">Link this BU to a saved business or department from Organisation Setup.</span>
+        <span class="form-help">Link this BU to a saved business or department from Organisation Setup. Linked entity context can be pulled in below.</span>
       </div>
       <div class="form-group">
         <label class="form-label">BU Geography Override</label>
         <input class="form-input" id="bu-geo" value="${bu?.geography || ''}" placeholder="Optional geography override">
+      </div>
+    </div>
+    <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-canvas)">
+      <div class="context-panel-title">Linked Entity Context</div>
+      <div id="bu-linked-entity-summary" class="form-help">Select a mapped business or department to see inherited organisation context.</div>
+      <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
+        <button class="btn btn--ghost btn--sm" id="btn-apply-linked-context" type="button">Apply Linked Context</button>
+        <span class="form-help">Fills empty or default BU fields from the linked organisation entity and its context layer.</span>
       </div>
     </div>
     <div class="form-group mt-4"><label class="form-label">Critical Services</label><div class="tag-input-wrap" id="ti-services"></div></div>
@@ -4132,6 +4226,57 @@ function openBUEditor(bu) {
     ti.datatypes = UI.tagInput('ti-datatypes', bu?.dataTypes||[]);
     ti.regtags   = UI.tagInput('ti-regtags',   bu?.regulatoryTags||[]);
   });
+
+  function renderLinkedEntitySummary() {
+    const entityId = document.getElementById('bu-org-entity').value || '';
+    const summaryEl = document.getElementById('bu-linked-entity-summary');
+    const entity = structureMap.get(entityId);
+    const layer = getEntityLayerById(settings, entityId);
+    if (!entity || !summaryEl) {
+      summaryEl.innerHTML = 'Select a mapped business or department to see inherited organisation context.';
+      return;
+    }
+    const parts = [
+      `<strong>${entity.name}</strong>`,
+      entity.type,
+      getEntityLineageLabel(companyStructure, entityId),
+      layer?.geography ? `Layer geography: ${layer.geography}` : '',
+      layer?.applicableRegulations?.length ? `Layer regulations: ${layer.applicableRegulations.join(', ')}` : '',
+      layer?.contextSummary ? `Layer summary: ${layer.contextSummary}` : '',
+      entity.profile ? `Entity profile captured` : ''
+    ].filter(Boolean);
+    summaryEl.innerHTML = parts.join('<br>');
+  }
+
+  function applyLinkedEntityContext(force = false) {
+    const entityId = document.getElementById('bu-org-entity').value || '';
+    const entity = structureMap.get(entityId);
+    if (!entity) return;
+    const layer = getEntityLayerById(settings, entityId);
+    const geoEl = document.getElementById('bu-geo');
+    const contextEl = document.getElementById('bu-context');
+    const aiEl = document.getElementById('bu-ai-guidance');
+    const notesEl = document.getElementById('bu-notes');
+    const inheritedRegs = Array.from(new Set([...(layer?.applicableRegulations || [])]));
+    if (force || !geoEl.value.trim()) geoEl.value = layer?.geography || geoEl.value;
+    if (force || !contextEl.value.trim()) contextEl.value = layer?.contextSummary || entity.profile || contextEl.value;
+    if (force || !aiEl.value.trim()) aiEl.value = layer?.aiInstructions || aiEl.value;
+    if (force || !notesEl.value.trim()) notesEl.value = entity.type ? `Mapped from organisation entity: ${entity.type}.` : notesEl.value;
+    if (inheritedRegs.length) {
+      const nextTags = force
+        ? inheritedRegs
+        : Array.from(new Set([...(ti.regtags?.getTags() || []), ...inheritedRegs]));
+      ti.regtags?.setTags(nextTags);
+    }
+    renderLinkedEntitySummary();
+  }
+
+  document.getElementById('bu-org-entity').addEventListener('change', () => {
+    renderLinkedEntitySummary();
+    if (isNew) applyLinkedEntityContext(false);
+  });
+  document.getElementById('btn-apply-linked-context').addEventListener('click', () => applyLinkedEntityContext(true));
+  setTimeout(renderLinkedEntitySummary, 0);
   document.getElementById('bu-cancel').addEventListener('click', () => m.close());
   document.getElementById('bu-save').addEventListener('click', () => {
     const id = document.getElementById('bu-id').value.trim();
