@@ -98,10 +98,13 @@ const UI = (() => {
   }
 
   // ─── Tag Input ────────────────────────────────────────────
-  function tagInput(containerId, initialTags = []) {
+  function tagInput(containerId, initialTags = [], onChange = null) {
     const wrap = document.getElementById(containerId);
     if (!wrap) return;
     let tags = [...initialTags];
+    const notify = () => {
+      if (typeof onChange === 'function') onChange([...tags]);
+    };
 
     function render() {
       wrap.innerHTML = `
@@ -111,6 +114,7 @@ const UI = (() => {
         btn.addEventListener('click', () => {
           tags.splice(parseInt(btn.dataset.idx), 1);
           render();
+          notify();
         });
       });
       const input = wrap.querySelector('.tag-input');
@@ -120,10 +124,12 @@ const UI = (() => {
           const val = input.value.trim().replace(/,$/, '');
           if (val && !tags.includes(val)) tags.push(val);
           render();
+          notify();
         }
         if (e.key === 'Backspace' && !input.value && tags.length) {
           tags.pop();
           render();
+          notify();
         }
       });
     }
@@ -131,7 +137,7 @@ const UI = (() => {
     render();
     return {
       getTags: () => [...tags],
-      setTags: (newTags) => { tags = [...newTags]; render(); }
+      setTags: (newTags) => { tags = [...newTags]; render(); notify(); }
     };
   }
 

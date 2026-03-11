@@ -347,6 +347,45 @@ function renderGeographySelect(id, selected = '', placeholder = 'Choose geograph
   </select>`;
 }
 
+const GEOGRAPHY_REGULATION_MAP = {
+  'United Arab Emirates': ['UAE PDPL', 'UAE Cybersecurity Council Guidance'],
+  'Abu Dhabi': ['UAE PDPL', 'UAE Cybersecurity Council Guidance'],
+  'Dubai': ['UAE PDPL', 'UAE Cybersecurity Council Guidance'],
+  'GCC': ['GCC cross-border data transfer obligations'],
+  'Saudi Arabia': ['Saudi PDPL'],
+  'Qatar': ['Qatar Personal Data Privacy Protection Law'],
+  'Kuwait': ['Kuwait data privacy obligations'],
+  'Bahrain': ['Bahrain PDPL'],
+  'Oman': ['Oman Personal Data Protection Law'],
+  'Middle East': ['Regional data localisation and sectoral obligations'],
+  'North Africa': ['Jurisdiction-specific privacy and cyber obligations'],
+  'Europe': ['GDPR', 'NIS2'],
+  'United Kingdom': ['UK GDPR', 'UK NIS Regulations'],
+  'United States': ['US state privacy laws', 'SEC cyber disclosure rules'],
+  'India': ['DPDP Act 2023'],
+  'Asia Pacific': ['APAC privacy and localisation obligations'],
+  'Global': ['Cross-border data transfer and sanctions obligations']
+};
+
+function normaliseScenarioGeographies(geographies = [], fallback = DEFAULT_ADMIN_SETTINGS.geography) {
+  const input = Array.isArray(geographies) ? geographies : [geographies];
+  const clean = Array.from(new Set(input.map(value => String(value || '').trim()).filter(Boolean)));
+  if (clean.length) return clean;
+  return [String(fallback || DEFAULT_ADMIN_SETTINGS.geography).trim() || DEFAULT_ADMIN_SETTINGS.geography];
+}
+
+function formatScenarioGeographies(geographies = [], fallback = DEFAULT_ADMIN_SETTINGS.geography) {
+  return normaliseScenarioGeographies(geographies, fallback).join(', ');
+}
+
+function getScenarioGeographies() {
+  return normaliseScenarioGeographies(AppState.draft.geographies || AppState.draft.geography, getEffectiveSettings().geography);
+}
+
+function deriveGeographyRegulations(geographies = []) {
+  return Array.from(new Set(normaliseScenarioGeographies(geographies).flatMap(geo => GEOGRAPHY_REGULATION_MAP[geo] || [])));
+}
+
 function getCurrentUserOrThrow() {
   const user = AuthService.getCurrentUser();
   if (!user?.username) {
@@ -657,6 +696,7 @@ function resetDraft() {
     citations: [], recommendations: [],
     fairParams: {}, results: null,
     geography: DEFAULT_ADMIN_SETTINGS.geography,
+    geographies: [DEFAULT_ADMIN_SETTINGS.geography],
     selectedRisks: [],
     enhancedNarrative: '',
     uploadedRegisterName: '',
@@ -723,7 +763,8 @@ function ensureDraftShape() {
     recommendations: Array.isArray(AppState.draft.recommendations) ? AppState.draft.recommendations : [],
     fairParams: AppState.draft.fairParams || {},
     results: AppState.draft.results || null,
-    geography: AppState.draft.geography || DEFAULT_ADMIN_SETTINGS.geography,
+    geography: formatScenarioGeographies(AppState.draft.geographies || AppState.draft.geography, DEFAULT_ADMIN_SETTINGS.geography),
+    geographies: normaliseScenarioGeographies(AppState.draft.geographies || AppState.draft.geography, DEFAULT_ADMIN_SETTINGS.geography),
     selectedRisks: Array.isArray(AppState.draft.selectedRisks) ? AppState.draft.selectedRisks : [],
     enhancedNarrative: AppState.draft.enhancedNarrative || '',
     uploadedRegisterName: AppState.draft.uploadedRegisterName || '',
@@ -1826,12 +1867,13 @@ function getScenarioMultipliers() {
   };
 }
 
-function deriveApplicableRegulations(bu, selectedRisks = []) {
+function deriveApplicableRegulations(bu, selectedRisks = [], geographies = getScenarioGeographies()) {
   const settings = getEffectiveSettings();
   const tags = [
     ...settings.applicableRegulations,
     ...(AppState.draft.applicableRegulations || []),
     ...(bu?.regulatoryTags || []),
+    ...deriveGeographyRegulations(geographies),
     ...selectedRisks.flatMap(r => r.regulations || [])
   ].filter(Boolean);
   return Array.from(new Set(tags));
@@ -2543,7 +2585,8 @@ function renderWizard1() {
     }
   }
   const selectedRisks = getSelectedRisks();
-  const regs = draft.applicableRegulations?.length ? draft.applicableRegulations : settings.applicableRegulations;
+  const scenarioGeographies = getScenarioGeographies();
+  const regs = deriveApplicableRegulations(buList.find(b => b.id === draft.buId), selectedRisks, scenarioGeographies);
 
   setPage(`
     <main class="page">
@@ -2565,8 +2608,12 @@ function renderWizard1() {
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label" for="wizard-geo">Geography</label>
-                <input class="form-input" id="wizard-geo" value="${draft.geography || settings.geography}" placeholder="e.g. United Arab Emirates">
+                <label class="form-label">Geographies</label>
+                <div class="tag-input-wrap" id="ti-wizard-geographies"></div>
+                <div class="citation-chips" style="margin-top:10px">
+                  ${GEOGRAPHY_OPTIONS.map(option => `<button type="button" class="chip wizard-geo-chip" data-geo="${option}">${option}</button>`).join('')}
+                </div>
+                <span class="form-help">Select all countries or regions relevant to this scenario. Applicable regulations will update from the combined footprint.</span>
               </div>
             </div>
             <div class="context-grid mt-4">
@@ -2695,12 +2742,23 @@ function renderWizard1() {
     const bu = buList.find(b => b.id === this.value) || null;
     AppState.draft.buId = bu?.id || null;
     AppState.draft.buName = bu?.name || null;
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(bu, getSelectedRisks());
+    AppState.draft.applicableRegulations = deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies());
     saveDraft();
     renderWizard1();
   });
-  document.getElementById('wizard-geo').addEventListener('input', function() {
-    AppState.draft.geography = this.value.trim();
+  const syncWizardGeographies = nextGeographies => {
+    AppState.draft.geographies = normaliseScenarioGeographies(nextGeographies, settings.geography);
+    AppState.draft.geography = formatScenarioGeographies(AppState.draft.geographies, settings.geography);
+    AppState.draft.applicableRegulations = deriveApplicableRegulations(buList.find(b => b.id === AppState.draft.buId), getSelectedRisks(), AppState.draft.geographies);
+    saveDraft();
+    renderWizard1();
+  };
+  const wizardGeographyInput = UI.tagInput('ti-wizard-geographies', scenarioGeographies, syncWizardGeographies);
+  document.querySelectorAll('.wizard-geo-chip').forEach(button => {
+    button.addEventListener('click', () => {
+      const next = Array.from(new Set([...(wizardGeographyInput.getTags() || []), button.dataset.geo]));
+      wizardGeographyInput.setTags(next);
+    });
   });
   ['event', 'asset', 'cause', 'impact'].forEach(key => {
     document.getElementById(`guided-${key}`).addEventListener('input', function() {
@@ -2762,10 +2820,11 @@ function renderWizard1() {
       }
     }
     if (!AppState.draft.narrative.trim() && !selected.length) { UI.toast('Please complete the guided questions, enter a risk statement, or select at least one risk.', 'warning'); return; }
-    AppState.draft.geography = document.getElementById('wizard-geo').value.trim() || settings.geography;
+    AppState.draft.geographies = normaliseScenarioGeographies(wizardGeographyInput.getTags(), settings.geography);
+    AppState.draft.geography = formatScenarioGeographies(AppState.draft.geographies, settings.geography);
     AppState.draft.narrative = AppState.draft.narrative.trim();
     AppState.draft.enhancedNarrative = AppState.draft.enhancedNarrative || AppState.draft.narrative;
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(buList.find(b => b.id === buId), selected);
+    AppState.draft.applicableRegulations = deriveApplicableRegulations(buList.find(b => b.id === buId), selected, AppState.draft.geographies);
     if (!AppState.draft.scenarioTitle) {
       AppState.draft.scenarioTitle = selected.length === 1 ? selected[0].title : `${selected.length || 1}-risk scenario for ${AppState.draft.buName}`;
     }
@@ -2859,8 +2918,8 @@ async function runIntakeAssist() {
       registerText: AppState.draft.registerFindings,
       registerMeta: AppState.draft.registerMeta,
       businessUnit: bu,
-      geography: document.getElementById('wizard-geo')?.value.trim() || AppState.draft.geography,
-      applicableRegulations: deriveApplicableRegulations(bu, getSelectedRisks()),
+      geography: formatScenarioGeographies(getScenarioGeographies()),
+      applicableRegulations: deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()),
       citations,
       adminSettings: {
         ...getEffectiveSettings(),
@@ -2901,7 +2960,7 @@ async function analyseUploadedRegister() {
       registerText: AppState.draft.registerFindings,
       registerMeta: AppState.draft.registerMeta,
       businessUnit: bu,
-      geography: AppState.draft.geography,
+      geography: formatScenarioGeographies(getScenarioGeographies()),
       applicableRegulations: AppState.draft.applicableRegulations || [],
       adminSettings: {
         ...getEffectiveSettings(),
@@ -3030,8 +3089,8 @@ async function runLLMAssist() {
     const citations = await RAGService.retrieveRelevantDocs(AppState.draft.buId, scenarioText);
     const result = await LLMService.generateScenarioAndInputs(scenarioText, {
       ...bu,
-      regulatoryTags: deriveApplicableRegulations(bu, getSelectedRisks()),
-      geography: AppState.draft.geography,
+      regulatoryTags: deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()),
+      geography: formatScenarioGeographies(getScenarioGeographies()),
       benchmarkStrategy: getEffectiveSettings().benchmarkStrategy,
       companyContextProfile: getEffectiveSettings().companyContextProfile,
       companyStructureContext: buildOrganisationContextSummary(getAdminSettings())
