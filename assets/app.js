@@ -3001,6 +3001,7 @@ async function runIntakeAssist() {
       businessUnit: bu,
       geography: formatScenarioGeographies(getScenarioGeographies()),
       applicableRegulations: deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()),
+      guidedInput: { ...AppState.draft.guidedInput },
       citations,
       adminSettings: {
         ...getEffectiveSettings(),
@@ -3048,6 +3049,7 @@ async function enhanceNarrativeWithAI() {
       businessUnit: bu,
       geography: formatScenarioGeographies(getScenarioGeographies()),
       applicableRegulations: deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()),
+      guidedInput: { ...AppState.draft.guidedInput },
       citations,
       adminSettings: {
         ...getEffectiveSettings(),

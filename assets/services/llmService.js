@@ -271,11 +271,50 @@ const LLMService = (() => {
     };
   }
 
+  function _buildScenarioExpansion(input = {}) {
+    const statement = String(input.riskStatement || '').trim();
+    const businessUnit = String(input.businessUnit?.name || 'the business unit').trim();
+    const geography = String(input.geography || 'the selected geography').trim();
+    const asset = String(input.guidedInput?.asset || '').trim();
+    const cause = String(input.guidedInput?.cause || '').trim();
+    const impact = String(input.guidedInput?.impact || '').trim();
+    const urgency = String(input.guidedInput?.urgency || 'medium').trim().toLowerCase();
+    const lower = [statement, asset, cause, impact].join(' ').toLowerCase();
+
+    let scenarioExpansion = statement;
+    let summary = `AI identified candidate risks and expanded the scenario into a more realistic assessment narrative for ${businessUnit}.`;
+    let riskTitles = _extractRiskCandidates([statement, cause, impact].join('\n'));
+
+    if (/azure ad|active directory|identity|entra|sso|email/i.test(lower)) {
+      scenarioExpansion = `In ${geography}, ${businessUnit} faces a material identity-compromise scenario in which ${statement.charAt(0).toLowerCase() + statement.slice(1)}. A likely progression is targeted credential theft or session hijack against ${asset || 'the central identity platform'}, followed by account takeover, privileged escalation, and unauthorised access to email, collaboration tools, cloud administration, and other federated business services. In practice, this can drive downstream business email compromise, internal fraud, disruptive administrative changes, loss of access for legitimate users, and regulatory or contractual exposure where sensitive data, critical operations, or cross-border services are affected. ${['high', 'critical'].includes(urgency) ? 'Given the stated urgency, this should be treated as an active material-control scenario requiring immediate containment, privileged-account review, and assessment of downstream operational and financial exposure.' : 'This should be assessed not only as an isolated identity event, but as a gateway scenario with knock-on operational, financial, third-party, and regulatory effects.'}`;
+      summary = `AI expanded the scenario beyond the initial identity-control failure to include the common knock-on effects seen in real identity compromise events: account takeover, email compromise, privileged abuse, downstream service disruption, fraud, and regulatory exposure.`;
+      riskTitles = [
+        { title: 'Identity platform compromise causing privileged account takeover', category: 'Identity & Access', regulations: ['UAE PDPL', 'UK GDPR', 'SEC cyber disclosure rules'] },
+        { title: 'Business email compromise following identity compromise', category: 'Financial Crime', regulations: ['UAE AML/CFT'] },
+        { title: 'Administrative lockout or unauthorised tenant changes disrupting operations', category: 'Operational Resilience', regulations: ['UAE Cybersecurity Council Guidance'] },
+        { title: 'Sensitive data exposure through compromised mailboxes and cloud services', category: 'Data Protection', regulations: ['UAE PDPL', 'GDPR'] }
+      ];
+    } else if (/ransom|encrypt/i.test(lower)) {
+      scenarioExpansion = `In ${geography}, ${businessUnit} faces a ransomware-driven disruption scenario in which ${statement.charAt(0).toLowerCase() + statement.slice(1)}. A realistic progression is initial access, lateral movement, abuse of privileged access, encryption or destructive action against critical systems, and secondary pressure through data theft or extortion. The scenario should therefore be assessed for downtime, operational backlog, emergency response cost, customer or stakeholder disruption, and regulatory consequences where sensitive or regulated services are impacted.`;
+    } else if (/supplier|vendor|third-party/i.test(lower)) {
+      scenarioExpansion = `In ${geography}, ${businessUnit} faces a third-party driven risk scenario in which ${statement.charAt(0).toLowerCase() + statement.slice(1)}. The realistic concern is not only the initial supplier-side failure, but the downstream effect on privileged access, data exchange, service dependency, contractual commitments, and concentration risk across connected business processes. This should be assessed for both immediate operational disruption and follow-on regulatory, commercial, and assurance impacts.`;
+    } else if (/cloud|misconfig|storage|bucket/i.test(lower)) {
+      scenarioExpansion = `In ${geography}, ${businessUnit} faces a cloud exposure scenario in which ${statement.charAt(0).toLowerCase() + statement.slice(1)}. A realistic progression includes unauthorised discovery, data exposure or exfiltration, service mis-use, persistence through compromised credentials or automation, and delayed detection due to fragmented cloud ownership. This should be assessed for confidentiality impact, operational recovery effort, regulatory response, and reputational consequences where customer or business-critical data is involved.`;
+    }
+
+    return {
+      scenarioExpansion,
+      summary,
+      riskTitles
+    };
+  }
+
   function _generateRiskBuilderStub(input) {
     const riskStatement = input.riskStatement || '';
     const registerText = input.registerText || '';
     const joined = [riskStatement, registerText].filter(Boolean).join('\n');
-    const risks = _extractRiskCandidates(joined).map((risk, idx) => ({
+    const scenarioExpansion = _buildScenarioExpansion(input);
+    const risks = scenarioExpansion.riskTitles.map((risk, idx) => ({
       id: `stub-risk-${idx + 1}`,
       title: risk.title,
       category: risk.category,
@@ -295,10 +334,8 @@ const LLMService = (() => {
           'Challenge any number that does not fit the business context or known incident history.'
         ];
     return {
-      enhancedStatement: riskStatement
-        ? `In ${input.geography || 'the selected geography'}, ${input.businessUnit?.name || 'the business unit'} faces a material risk scenario in which ${riskStatement.charAt(0).toLowerCase() + riskStatement.slice(1)}. This scenario should be assessed for operational disruption, regulatory exposure, and downstream commercial impact across the selected risk set.`
-        : '',
-      summary: `AI identified ${risks.length} candidate risk${risks.length > 1 ? 's' : ''} and prepared a combined scenario for FAIR analysis.`,
+      enhancedStatement: riskStatement ? scenarioExpansion.scenarioExpansion : '',
+      summary: registerText ? `AI identified ${risks.length} candidate risk${risks.length > 1 ? 's' : ''} from the uploaded material and expanded the scenario into a more realistic assessment narrative.` : scenarioExpansion.summary,
       linkAnalysis: risks.length > 1
         ? 'Several selected risks appear capable of cascading together. Treat them as linked if one event could trigger operational, regulatory, or third-party consequences in the same chain.'
         : 'A single primary risk driver was identified from the intake.',
@@ -388,7 +425,7 @@ ${retrievedDocs.map(d => `- ${d.title}: ${d.excerpt}`).join('\
     await new Promise(r => setTimeout(r, 1400 + Math.random() * 600));
     if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
       try {
-        const systemPrompt = `You are a senior enterprise risk analyst. Given a risk statement, optional risk register text, business context, and regulations, return JSON only with this schema:
+        const systemPrompt = `You are a senior enterprise risk analyst. Given a risk statement, optional risk register text, business context, and regulations, expand the scenario realistically using likely attack paths, common knock-on effects, business consequences, and known industry patterns. Do not merely paraphrase the input. If the scenario concerns identity compromise, explain likely downstream effects such as email compromise, privileged misuse, tenant or admin abuse, fraud, service disruption, and data exposure where relevant. Return JSON only with this schema:
 {
   "enhancedStatement": "string",
   "summary": "string",
@@ -405,6 +442,7 @@ Geography: ${input.geography || 'Unknown'}
 BU context summary: ${input.businessUnit?.contextSummary || input.businessUnit?.notes || '(none)'}
 BU-specific AI guidance: ${input.businessUnit?.aiGuidance || '(none)'}
 Applicable regulations: ${(input.applicableRegulations || []).join(', ')}
+Guided intake: ${JSON.stringify(input.guidedInput || {})}
 AI guidance: ${input.adminSettings?.aiInstructions || ''}
 Benchmark strategy: ${input.adminSettings?.benchmarkStrategy || ''}
 Admin context summary: ${input.adminSettings?.adminContextSummary || ''}
@@ -422,7 +460,15 @@ Risk register text:
 ${input.registerText || '(none)'}
 
 Retrieved citations:
-${(input.citations || []).map(c => `- ${c.title}: ${c.excerpt}`).join('\n')}`;
+${(input.citations || []).map(c => `- ${c.title}: ${c.excerpt}`).join('\n')}
+
+Instructions:
+- make the enhancedStatement read like a realistic scenario narrative, not a polished restatement
+- explain the most likely progression of the event and the common secondary effects
+- include business and operational consequences, not just the technical failure
+- reflect the stated urgency where provided
+- if the scenario involves identity, directory, SSO, or Azure AD/Entra compromise, include plausible knock-on effects such as mailbox compromise, privileged misuse, tenant changes, service disruption, fraud, and data exposure where relevant
+- produce concise but concrete candidate risks that a user can choose from`;
         const raw = await _callLLM(systemPrompt, userPrompt);
         if (raw) {
           const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
