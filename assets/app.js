@@ -1612,6 +1612,18 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
   return modal;
 }
 
+function getAdminLLMConfig() {
+  const saved = getSessionLLMConfig();
+  const apiUrlEl = document.getElementById('admin-compass-url');
+  const modelEl = document.getElementById('admin-compass-model');
+  const apiKeyEl = document.getElementById('admin-compass-key');
+  return {
+    apiUrl: apiUrlEl?.value.trim() || saved.apiUrl || DEFAULT_COMPASS_PROXY_URL,
+    model: modelEl?.value.trim() || saved.model || 'gpt-5.1',
+    apiKey: apiKeyEl?.value.trim() || saved.apiKey || ''
+  };
+}
+
 function getSessionLLMConfig() {
   try {
     const config = JSON.parse(sessionStorage.getItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX)) || 'null') || {};
@@ -5112,11 +5124,7 @@ function renderAdminSettings(activeSection = 'org') {
     const buildContextBtn = document.getElementById('btn-org-build-context');
     if (buildContextBtn && !departmentEditorMode) {
       buildContextBtn.addEventListener('click', async () => {
-        const llmConfig = {
-          apiUrl: document.getElementById('admin-compass-url').value.trim() || '${DEFAULT_COMPASS_PROXY_URL}',
-          model: document.getElementById('admin-compass-model').value.trim() || 'gpt-5.1',
-          apiKey: document.getElementById('admin-compass-key').value.trim()
-        };
+        const llmConfig = getAdminLLMConfig();
         const targetUrl = document.getElementById('org-website-url').value.trim();
         if (!targetUrl) {
           UI.toast('Enter a company website URL first.', 'warning');
@@ -5358,22 +5366,14 @@ function renderAdminSettings(activeSection = 'org') {
     }
   });
   document.getElementById('btn-save-session-llm').addEventListener('click', () => {
-    const config = {
-      apiUrl: document.getElementById('admin-compass-url').value.trim() || '${DEFAULT_COMPASS_PROXY_URL}',
-      model: document.getElementById('admin-compass-model').value.trim() || 'gpt-5.1',
-      apiKey: document.getElementById('admin-compass-key').value.trim()
-    };
+    const config = getAdminLLMConfig();
     saveSessionLLMConfig(config);
     LLMService.setCompassConfig(config);
     UI.toast(config.apiKey ? 'Compass session key loaded for this session.' : 'Compass proxy/session settings loaded for this session.', 'success');
   });
   document.getElementById('btn-test-session-llm').addEventListener('click', async () => {
     const btn = document.getElementById('btn-test-session-llm');
-    const config = {
-      apiUrl: document.getElementById('admin-compass-url').value.trim() || '${DEFAULT_COMPASS_PROXY_URL}',
-      model: document.getElementById('admin-compass-model').value.trim() || 'gpt-5.1',
-      apiKey: document.getElementById('admin-compass-key').value.trim()
-    };
+    const config = getAdminLLMConfig();
     btn.disabled = true;
     btn.textContent = 'Testing…';
     try {
