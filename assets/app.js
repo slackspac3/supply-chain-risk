@@ -3272,18 +3272,37 @@ async function runLLMAssist() {
     AppState.draft.inputRationale = result.inputRationale || AppState.draft.inputRationale;
     const s = result.suggestedInputs;
     if (s) {
-      const lc = s.lossComponents;
+      const currentFair = AppState.draft.fairParams || {};
+      const lc = s.lossComponents || {};
       AppState.draft.fairParams = {
-        ...AppState.draft.fairParams,
-        tefMin: s.TEF.min, tefLikely: s.TEF.likely, tefMax: s.TEF.max,
-        controlStrMin: s.controlStrength.min, controlStrLikely: s.controlStrength.likely, controlStrMax: s.controlStrength.max,
-        threatCapMin: s.threatCapability.min, threatCapLikely: s.threatCapability.likely, threatCapMax: s.threatCapability.max,
-        irMin: lc?.incidentResponse?.min, irLikely: lc?.incidentResponse?.likely, irMax: lc?.incidentResponse?.max,
-        biMin: lc?.businessInterruption?.min, biLikely: lc?.businessInterruption?.likely, biMax: lc?.businessInterruption?.max,
-        dbMin: lc?.dataBreachRemediation?.min, dbLikely: lc?.dataBreachRemediation?.likely, dbMax: lc?.dataBreachRemediation?.max,
-        rlMin: lc?.regulatoryLegal?.min, rlLikely: lc?.regulatoryLegal?.likely, rlMax: lc?.regulatoryLegal?.max,
-        tpMin: lc?.thirdPartyLiability?.min, tpLikely: lc?.thirdPartyLiability?.likely, tpMax: lc?.thirdPartyLiability?.max,
-        rcMin: lc?.reputationContract?.min, rcLikely: lc?.reputationContract?.likely, rcMax: lc?.reputationContract?.max,
+        ...currentFair,
+        tefMin: s.TEF?.min ?? currentFair.tefMin,
+        tefLikely: s.TEF?.likely ?? currentFair.tefLikely,
+        tefMax: s.TEF?.max ?? currentFair.tefMax,
+        controlStrMin: s.controlStrength?.min ?? currentFair.controlStrMin,
+        controlStrLikely: s.controlStrength?.likely ?? currentFair.controlStrLikely,
+        controlStrMax: s.controlStrength?.max ?? currentFair.controlStrMax,
+        threatCapMin: s.threatCapability?.min ?? currentFair.threatCapMin,
+        threatCapLikely: s.threatCapability?.likely ?? currentFair.threatCapLikely,
+        threatCapMax: s.threatCapability?.max ?? currentFair.threatCapMax,
+        irMin: lc.incidentResponse?.min ?? currentFair.irMin,
+        irLikely: lc.incidentResponse?.likely ?? currentFair.irLikely,
+        irMax: lc.incidentResponse?.max ?? currentFair.irMax,
+        biMin: lc.businessInterruption?.min ?? currentFair.biMin,
+        biLikely: lc.businessInterruption?.likely ?? currentFair.biLikely,
+        biMax: lc.businessInterruption?.max ?? currentFair.biMax,
+        dbMin: lc.dataBreachRemediation?.min ?? currentFair.dbMin,
+        dbLikely: lc.dataBreachRemediation?.likely ?? currentFair.dbLikely,
+        dbMax: lc.dataBreachRemediation?.max ?? currentFair.dbMax,
+        rlMin: lc.regulatoryLegal?.min ?? currentFair.rlMin,
+        rlLikely: lc.regulatoryLegal?.likely ?? currentFair.rlLikely,
+        rlMax: lc.regulatoryLegal?.max ?? currentFair.rlMax,
+        tpMin: lc.thirdPartyLiability?.min ?? currentFair.tpMin,
+        tpLikely: lc.thirdPartyLiability?.likely ?? currentFair.tpLikely,
+        tpMax: lc.thirdPartyLiability?.max ?? currentFair.tpMax,
+        rcMin: lc.reputationContract?.min ?? currentFair.rcMin,
+        rcLikely: lc.reputationContract?.likely ?? currentFair.rcLikely,
+        rcMax: lc.reputationContract?.max ?? currentFair.rcMax,
       };
     }
     saveDraft();

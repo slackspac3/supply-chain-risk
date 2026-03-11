@@ -209,12 +209,18 @@ const LLMService = (() => {
       ];
     }
 
-    // Add BU context to defaults if available
+    // Add BU context to defaults if available, but tolerate partial or older settings payloads.
     if (buContext && buContext.defaultAssumptions) {
-      const da = buContext.defaultAssumptions;
-      tef = { min: da.TEF.min,     likely: da.TEF.likely,     max: da.TEF.max };
-      cs  = { min: da.controlStrength.min, likely: da.controlStrength.likely, max: da.controlStrength.max };
-      tc  = { min: da.threatCapability.min, likely: da.threatCapability.likely, max: da.threatCapability.max };
+      const da = buContext.defaultAssumptions || {};
+      if (da.TEF?.min != null && da.TEF?.likely != null && da.TEF?.max != null) {
+        tef = { min: da.TEF.min, likely: da.TEF.likely, max: da.TEF.max };
+      }
+      if (da.controlStrength?.min != null && da.controlStrength?.likely != null && da.controlStrength?.max != null) {
+        cs = { min: da.controlStrength.min, likely: da.controlStrength.likely, max: da.controlStrength.max };
+      }
+      if (da.threatCapability?.min != null && da.threatCapability?.likely != null && da.threatCapability?.max != null) {
+        tc = { min: da.threatCapability.min, likely: da.threatCapability.likely, max: da.threatCapability.max };
+      }
     }
 
     return {
