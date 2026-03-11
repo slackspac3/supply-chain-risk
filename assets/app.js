@@ -2909,7 +2909,7 @@ function renderWizard1() {
 function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
   const cleanedRisks = (riskCandidates || []).filter(risk => !isNoiseRiskText(risk.title) && risk.title !== '-');
   const selectedIds = new Set((selectedRisks || []).map(risk => risk.id));
-  const sourceLabel = risk => risk.source === 'manual' ? 'Manual entry' : risk.source === 'register' || risk.source === 'ai+register' ? 'From upload' : 'AI suggested';
+  const sourceLabel = risk => risk.source === 'manual' ? 'Manual' : risk.source === 'register' || risk.source === 'ai+register' ? 'Upload' : 'AI generated';
   if (!cleanedRisks.length) {
     return `<div class="empty-state">No candidate risks yet. Use AI enhancement, upload a register, or add risks manually.</div>`;
   }
@@ -2928,7 +2928,10 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
             <input type="checkbox" class="risk-select-checkbox" data-risk-id="${risk.id}" ${selectedIds.has(risk.id) ? 'checked' : ''} style="margin-top:4px">
             <div>
               <div class="risk-pick-title">${risk.title}</div>
-              <div class="risk-pick-meta">${risk.category} · ${sourceLabel(risk)}</div>
+              <div class="risk-pick-badges">
+                <span class="risk-pick-badge">${risk.category}</span>
+                <span class="risk-pick-badge risk-pick-badge--source">${sourceLabel(risk)}</span>
+              </div>
             </div>
           </label>
           <button class="btn btn--ghost btn--sm btn-remove-risk" data-risk-id="${risk.id}" type="button">Remove</button>

@@ -277,10 +277,11 @@ code { font-family: var(--font-mono); font-size: 0.875em; background: var(--bg-e
 }
 
 .risk-pick-card {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--bg-elevated);
-  padding: var(--sp-4);
+  border: 1px solid color-mix(in srgb, var(--border-default) 55%, transparent);
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-elevated) 88%, white 12%), var(--bg-elevated));
+  padding: var(--sp-5);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
 }
 
 .risk-pick-head {
@@ -294,17 +295,43 @@ code { font-family: var(--font-mono); font-size: 0.875em; background: var(--bg-e
 .risk-pick-title {
   font-weight: var(--font-semibold);
   color: var(--text-primary);
+  font-size: var(--text-base);
+  line-height: 1.45;
 }
 
-.risk-pick-meta,
+.risk-pick-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.risk-pick-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--color-primary-300) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary-300) 28%, transparent);
+}
+
+.risk-pick-badge--source {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--accent-gold) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent-gold) 35%, transparent);
+}
+
 .risk-pick-desc {
+  margin-bottom: var(--sp-4);
+  line-height: 1.65;
   font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-
-.risk-pick-desc {
-  margin-bottom: var(--sp-3);
-  line-height: 1.6;
+  color: var(--text-secondary);
 }
 
 .empty-state {
