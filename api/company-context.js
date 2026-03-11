@@ -262,6 +262,56 @@ function tryParseStructuredJson(raw) {
   return null;
 }
 
+async function repairStructuredJson(raw, canonicalUrl, pages, newsItems, compassApiUrl, compassModel, compassApiKey) {
+  const cleaned = String(raw || '').trim();
+  if (!cleaned) return null;
+  const repairPrompt = `You repair malformed model output into strict JSON for a company risk context builder.
+Return ONLY valid JSON matching this schema:
+{
+  "companySummary": "string",
+  "businessProfile": "string",
+  "operatingModel": "string",
+  "publicCommitments": ["string"],
+  "riskSignals": ["string"],
+  "likelyObligations": ["string"],
+  "regulatorySignals": ["string"],
+  "aiGuidance": "string",
+  "suggestedGeography": "string",
+  "sources": [{"url":"string","note":"string"}]
+}`;
+  const repairUser = `Website: ${canonicalUrl}
+
+Original malformed response:
+${cleaned}
+
+Known website sources:
+${pages.map(page => `${page.url}`).join('\n')}
+
+Known news sources:
+${newsItems.map(item => `${item.link}`).join('\n')}
+
+Repair the response into the required JSON schema. Preserve company-specific meaning. If a field is missing, infer cautiously from the malformed response and sources only.`;
+  const upstream = await fetch(compassApiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${compassApiKey}`
+    },
+    body: JSON.stringify({
+      model: compassModel,
+      max_completion_tokens: 1400,
+      temperature: 0,
+      messages: [
+        { role: 'system', content: repairPrompt },
+        { role: 'user', content: repairUser }
+      ]
+    })
+  });
+  if (!upstream.ok) return null;
+  const payload = await upstream.json();
+  return tryParseStructuredJson(payload.choices?.[0]?.message?.content || '');
+}
+
 function normaliseContextPayload(parsed, canonicalUrl, pages, newsItems) {
   const fallback = buildFallbackProfile(canonicalUrl, pages, newsItems);
   if (!parsed || typeof parsed !== 'object') return fallback;
@@ -336,7 +386,7 @@ module.exports = async function handler(req, res) {
     const candidateUrls = deriveCandidateUrls(canonicalUrl, rootHtml);
 
     const pageResults = await Promise.allSettled(
-      candidateUrls.slice(0, 6).map(url =>
+      candidateUrls.slice(0, 10).map(url =>
         (url === canonicalUrl ? Promise.resolve(rootHtml) : fetchText(url, 6500))
           .then(html => ({ url, html }))
       )
@@ -422,7 +472,10 @@ Instructions:
 
     const payload = await upstream.json();
     const raw = payload.choices?.[0]?.message?.content || '';
-    const parsed = tryParseStructuredJson(raw);
+    let parsed = tryParseStructuredJson(raw);
+    if (!parsed) {
+      parsed = await repairStructuredJson(raw, canonicalUrl, pages, newsItems, compassApiUrl, compassModel, process.env.COMPASS_API_KEY);
+    }
     res.status(200).json(normaliseContextPayload(parsed, canonicalUrl, pages, newsItems));
   } catch (error) {
     res.status(502).json({
