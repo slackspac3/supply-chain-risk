@@ -2183,13 +2183,32 @@ function composeGuidedNarrative(guidedInput = {}) {
   const asset = String(guidedInput.asset || '').trim();
   const cause = String(guidedInput.cause || '').trim();
   const impact = String(guidedInput.impact || '').trim();
-  const urgency = String(guidedInput.urgency || 'medium').trim();
+  const urgency = String(guidedInput.urgency || 'medium').trim().toLowerCase();
+  const urgencyPrefix = urgency ? `${urgency.charAt(0).toUpperCase() + urgency.slice(1)}-urgency` : 'Material';
+  if (!event && !asset && !cause && !impact) return '';
+
+  let primaryClause = event;
+  if (cause && event) {
+    primaryClause = `${cause.toLowerCase()} could lead to ${event.charAt(0).toLowerCase() + event.slice(1)}`;
+  } else if (cause) {
+    primaryClause = `${cause} could trigger a material risk event`;
+  } else if (event) {
+    primaryClause = `${event.charAt(0).toLowerCase() + event.slice(1)}`;
+  }
+
   const parts = [];
-  if (event) parts.push(`A risk scenario is being assessed where ${event.charAt(0).toLowerCase() + event.slice(1)}.`);
-  if (asset) parts.push(`The main asset, service, or team affected is ${asset}.`);
-  if (cause) parts.push(`The likely trigger or threat driver is ${cause}.`);
-  if (impact) parts.push(`The expected business, operational, or regulatory impact is ${impact}.`);
-  if (urgency) parts.push(`Current urgency is assessed as ${urgency}.`);
+  if (primaryClause) {
+    parts.push(`${urgencyPrefix} scenario: ${primaryClause.charAt(0).toUpperCase() + primaryClause.slice(1)}.`);
+  }
+  if (asset) {
+    parts.push(`${asset} is the primary asset or service in scope.`);
+  }
+  if (impact) {
+    parts.push(`The scenario could result in ${impact.charAt(0).toLowerCase() + impact.slice(1)}.`);
+  }
+  if (asset && /identity|directory|sso|email|azure ad|active directory/i.test(`${event} ${asset} ${cause}`.toLowerCase())) {
+    parts.push('Likely knock-on effects include mailbox compromise, privileged misuse, downstream service disruption, and data exposure if the event is not contained quickly.');
+  }
   return parts.join(' ');
 }
 
