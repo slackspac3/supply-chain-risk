@@ -1053,10 +1053,10 @@ function renderCompanyStructureSummary(structure = []) {
   if (!structure.length) {
     return `<div class="form-help">No organisation structure saved yet. Add a top-level entity such as a holding company or operating company, then attach subsidiaries, portfolio companies, partners, and departments beneath it.</div>`;
   }
+  const settings = getAdminSettings();
   const managedAccounts = getManagedAccountsForAdmin(settings);
   const accountLabelByUsername = new Map(managedAccounts.map(account => [account.username, account.displayName]));
   const byParent = new Map();
-  const settings = getAdminSettings();
   structure.forEach(node => {
     const key = node.parentId || 'root';
     if (!byParent.has(key)) byParent.set(key, []);
@@ -1319,7 +1319,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
   const defaultSections = node.contextSections || seed.contextSections || null;
   const defaultDepartmentHint = node.departmentHint || seed.departmentHint || '';
   const defaultOwner = node.ownerUsername || seed.ownerUsername || '';
-  const managedAccounts = AuthService.getManagedAccounts();
+  const managedAccounts = getManagedAccountsForAdmin(settings);
   const body = `
     <div class="context-panel-copy" style="margin-bottom:12px">Capture how this entity fits into the wider group so later assessments inherit the right business, ownership, and department context.</div>
     <div class="grid-2" style="gap:12px">
