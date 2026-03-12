@@ -2091,6 +2091,25 @@ function formatGroupedNumber(value) {
   return `${negative ? '-' : ''}${groupedWhole}${decimalPart}`;
 }
 
+function getCurrencyPrefix(currency = AppState.currency) {
+  return currency === 'AED' ? 'AED ' : '$';
+}
+
+function convertUsdToDisplayCurrency(value, currency = AppState.currency) {
+  const amount = Number(value || 0);
+  return currency === 'AED' ? amount * AppState.fxRate : amount;
+}
+
+function convertDisplayCurrencyToUsd(value, currency = AppState.currency) {
+  const amount = Number(value || 0);
+  return currency === 'AED' ? amount / AppState.fxRate : amount;
+}
+
+function formatCurrencyInputValue(value, currency = AppState.currency) {
+  const displayValue = convertUsdToDisplayCurrency(value, currency);
+  return formatGroupedNumber(Math.round(displayValue));
+}
+
 function positionCaretFromNumericOffset(formatted, numericOffset) {
   if (numericOffset <= 0) return 0;
   let seen = 0;
@@ -3992,11 +4011,8 @@ function renderBenchmarkRationaleBlock(benchmarkBasis, inputRationale) {
 }
 
 function formatPlainCurrency(value, currency = 'USD') {
-  const amount = Number(value || 0);
-  if (currency === 'AED') {
-    return `AED ${Math.round(amount * AppState.fxRate).toLocaleString('en-AE')}`;
-  }
-  return `USD ${Math.round(amount).toLocaleString('en-US')}`;
+  const displayValue = Math.round(convertUsdToDisplayCurrency(value, currency));
+  return `${getCurrencyPrefix(currency)}${displayValue.toLocaleString(currency === 'AED' ? 'en-AE' : 'en-US')}`;
 }
 
 function describeExposureBand(value) {
@@ -4311,11 +4327,12 @@ function tripleInput(prefix, label, min, likely, max, labels = {}) {
   const inputClass = labels.money ? 'form-input fair-input money-input' : 'form-input fair-input';
   const stepAttr = inputType === 'number' ? ' step="any"' : '';
   const inputMode = labels.money ? 'decimal' : (labels.inputMode || 'decimal');
-  const formatValue = value => labels.money ? formatGroupedNumber(value) : value;
+  const formatValue = value => labels.money ? formatCurrencyInputValue(value) : value;
+  const currencyBadge = labels.money ? `<span class="range-col-currency">${getCurrencyPrefix()}</span>` : '';
   return `<div class="range-group">
-    <div class="form-group"><div class="range-col-label">${minLabel}</div><input class="${inputClass}" id="${prefix}-min" data-key="${prefix}Min" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(min)}" aria-label="${label} min"></div>
-    <div class="form-group"><div class="range-col-label" style="color:var(--color-primary-300)">${likelyLabel}</div><input class="${inputClass}" id="${prefix}-likely" data-key="${prefix}Likely" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(likely)}" aria-label="${label} likely"></div>
-    <div class="form-group"><div class="range-col-label">${maxLabel}</div><input class="${inputClass}" id="${prefix}-max" data-key="${prefix}Max" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(max)}" aria-label="${label} max"></div>
+    <div class="form-group"><div class="range-col-label">${minLabel}${currencyBadge}</div><input class="${inputClass}" id="${prefix}-min" data-key="${prefix}Min" data-money="${labels.money ? 'true' : 'false'}" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(min)}" aria-label="${label} min"></div>
+    <div class="form-group"><div class="range-col-label" style="color:var(--color-primary-300)">${likelyLabel}${currencyBadge}</div><input class="${inputClass}" id="${prefix}-likely" data-key="${prefix}Likely" data-money="${labels.money ? 'true' : 'false'}" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(likely)}" aria-label="${label} likely"></div>
+    <div class="form-group"><div class="range-col-label">${maxLabel}${currencyBadge}</div><input class="${inputClass}" id="${prefix}-max" data-key="${prefix}Max" data-money="${labels.money ? 'true' : 'false'}" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(max)}" aria-label="${label} max"></div>
   </div>`;
 }
 
@@ -4329,8 +4346,12 @@ function lossRow(prefix, label, min, likely, max, tooltip) {
 function collectFairParams() {
   const p = AppState.draft.fairParams;
   document.querySelectorAll('.fair-input').forEach(input => {
-    const val = parseFlexibleNumber(input.value);
-    if (!Number.isNaN(val)) p[input.dataset.key] = val;
+    const rawValue = parseFlexibleNumber(input.value);
+    if (Number.isNaN(rawValue)) return;
+    const val = input.dataset.money === 'true'
+      ? convertDisplayCurrencyToUsd(rawValue)
+      : rawValue;
+    p[input.dataset.key] = val;
   });
   const dist = document.getElementById('adv-dist');
   const iter = document.getElementById('adv-iter');
