@@ -3422,6 +3422,74 @@ function renderBenchmarkRationaleBlock(benchmarkBasis, inputRationale) {
   </div>`;
 }
 
+function formatPlainCurrency(value, currency = 'USD') {
+  const amount = Number(value || 0);
+  if (currency === 'AED') {
+    return `AED ${Math.round(amount * AppState.fxRate).toLocaleString('en-AE')}`;
+  }
+  return `USD ${Math.round(amount).toLocaleString('en-US')}`;
+}
+
+function describeExposureBand(value) {
+  const num = Number(value || 0);
+  if (num <= 0.25) return 'low chance of succeeding';
+  if (num <= 0.5) return 'meaningful but not easy to pull off';
+  if (num <= 0.75) return 'plausible if the attacker is capable';
+  return 'highly plausible unless controls hold up well';
+}
+
+function buildEstimateExplainer(draft, bu, isAdv, currency) {
+  const p = draft.fairParams || {};
+  const hasAI = !!draft.llmAssisted;
+  const tef = [p.tefMin, p.tefLikely, p.tefMax].every(v => v != null)
+    ? `AI is currently assuming this could happen between ${p.tefMin} and ${p.tefMax} times per year, with ${p.tefLikely} as the most realistic planning case.`
+    : 'Use the range to describe how often this could happen in a quiet year, a typical year, and a severe but still plausible year.';
+  const exposure = isAdv && p.vulnDirect
+    ? ([p.vulnMin, p.vulnLikely, p.vulnMax].every(v => v != null)
+      ? `The direct exposure values mean the event has roughly a ${Math.round((p.vulnMin || 0) * 100)}% to ${Math.round((p.vulnMax || 0) * 100)}% chance of succeeding if attempted, with ${Math.round((p.vulnLikely || 0) * 100)}% as the working case.`
+      : 'Direct exposure means you are estimating the chance that the event succeeds if attempted.')
+    : ([p.threatCapLikely, p.controlStrLikely].every(v => v != null)
+      ? `In basic mode, these numbers are split into attacker capability and control strength. Right now the AI is saying the attacker looks ${describeExposureBand(p.threatCapLikely)} while your controls look ${describeExposureBand(1 - (p.controlStrLikely || 0)) === 'low chance of succeeding' ? 'stronger than average' : 'material but not absolute'}.`
+      : 'In basic mode, you do not estimate exposure directly. You describe attacker capability and how strong your controls are, and the model derives exposure from that.')
+  const likelyLoss = ['irLikely','biLikely','dbLikely','rlLikely','tpLikely','rcLikely'].reduce((sum, key) => sum + Number(p[key] || 0), 0);
+  const severeLoss = ['irMax','biMax','dbMax','rlMax','tpMax','rcMax'].reduce((sum, key) => sum + Number(p[key] || 0), 0);
+  const loss = likelyLoss || severeLoss
+    ? `Using the current values, the model reads this as roughly ${formatPlainCurrency(likelyLoss, currency)} in a realistic single-event case, rising to about ${formatPlainCurrency(severeLoss, currency)} in a severe case before annual frequency is applied.`
+    : 'Each cost row is a per-event estimate. The model adds those rows together to understand what one event might cost before frequency is applied across a year.';
+  const source = hasAI
+    ? `These starting numbers were pre-filled from the scenario narrative, selected risks, ${bu?.name ? `${bu.name} context and defaults, ` : ''}any linked internal citations, and FAIR-style benchmark logic. They are starting assumptions, not final answers.`
+    : `These are your working assumptions. If you have internal incident data, control evidence, or finance input, adjust the ranges to reflect that evidence.`;
+  return { source, tef, exposure, loss };
+}
+
+function renderEstimateExplainerCard(draft, bu, isAdv, currency) {
+  const explainer = buildEstimateExplainer(draft, bu, isAdv, currency);
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="context-panel-title">What These AI Values Mean</div>
+    <div style="display:flex;flex-direction:column;gap:var(--sp-4);margin-top:var(--sp-3)">
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Where the starting values came from</div>
+        <p class="context-panel-copy">${explainer.source}</p>
+      </div>
+      <div class="context-grid">
+        <div class="context-chip-panel">
+          <div class="context-panel-title">Frequency</div>
+          <p class="context-panel-copy">${explainer.tef}</p>
+        </div>
+        <div class="context-chip-panel">
+          <div class="context-panel-title">Exposure</div>
+          <p class="context-panel-copy">${explainer.exposure}</p>
+        </div>
+        <div class="context-chip-panel">
+          <div class="context-panel-title">Cost</div>
+          <p class="context-panel-copy">${explainer.loss}</p>
+        </div>
+      </div>
+      <div class="context-panel-foot">Read the three columns as: low case = quieter outcome, expected case = planning assumption, severe case = bad but still plausible outcome. You are not trying to predict one perfect number.</div>
+    </div>
+  </div>`;
+}
+
 function attachCitationHandlers() {
   document.querySelectorAll('.citation-chip').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3464,6 +3532,7 @@ function renderWizard3() {
           ${draft.learningNote ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Template learning</div><p class="context-panel-copy">${draft.learningNote}</p></div>` : ''}
           ${draft.workflowGuidance?.length ? renderWorkflowGuidanceBlock(draft.workflowGuidance) : ''}
           ${renderBenchmarkRationaleBlock(draft.benchmarkBasis, draft.inputRationale)}
+          ${renderEstimateExplainerCard(draft, bu, isAdv, cur)}
 
           <div class="card card--elevated anim-fade-in">
             <div class="context-panel-title">How to complete this step</div>
