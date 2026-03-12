@@ -252,8 +252,49 @@ const LLMService = (() => {
     };
   }
 
+  function _cleanUserFacingText(value = '', { maxSentences = 0, stripTrailingPeriod = false } = {}) {
+    let text = _dedupeSentences(String(value || '').replace(/\s+/g, ' ').trim());
+    if (!text) return '';
+
+    text = text
+      .replace(/candidate risk identified from (?:the )?(?:intake text|uploaded register|register analysis)[^.]*\.?/gi, '')
+      .replace(/a risk scenario is being assessed where\s*/gi, '')
+      .replace(/this scenario should be assessed for\s*/gi, 'Focus on ')
+      .replace(/current urgency is assessed as\s*/gi, 'Urgency is ')
+      .replace(/the main asset, service, or team affected is\s*/gi, 'The scenario affects ')
+      .replace(/the likely trigger or threat driver is\s*/gi, 'The likely trigger is ')
+      .replace(/the expected business, operational, or regulatory impact is\s*/gi, 'The likely impact is ')
+      .replace(/\s+\./g, '.')
+      .replace(/\.\./g, '.')
+      .replace(/\s+,/g, ',')
+      .trim();
+
+    if (maxSentences > 0) {
+      text = text.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, maxSentences).join(' ').trim();
+    }
+    if (stripTrailingPeriod) {
+      text = text.replace(/[.]+$/g, '').trim();
+    }
+    return text;
+  }
+
   function _normaliseGuidance(items = []) {
-    return Array.from(new Set((Array.isArray(items) ? items : []).map((item) => String(item || '').trim()).filter(Boolean))).slice(0, 5);
+    return Array.from(new Set((Array.isArray(items) ? items : [])
+      .map((item) => _cleanUserFacingText(item, { maxSentences: 1, stripTrailingPeriod: true }))
+      .filter(Boolean)))
+      .slice(0, 5);
+  }
+
+  function _normaliseInputRationale(value = {}) {
+    return {
+      tef: _cleanUserFacingText(value?.tef || '', { maxSentences: 2 }),
+      vulnerability: _cleanUserFacingText(value?.vulnerability || '', { maxSentences: 2 }),
+      lossComponents: _cleanUserFacingText(value?.lossComponents || '', { maxSentences: 2 })
+    };
+  }
+
+  function _normaliseBenchmarkBasis(value = '') {
+    return _cleanUserFacingText(value, { maxSentences: 3 });
   }
 
   function _normaliseRiskCards(risks = []) {
@@ -265,11 +306,13 @@ const LLMService = (() => {
       return true;
     }).map((risk) => ({
       ...risk,
-      title: String(risk.title || '').trim(),
-      category: String(risk.category || 'Cyber').trim(),
-      description: _dedupeSentences(String(risk.description || '').trim()),
+      title: _cleanUserFacingText(risk.title || '', { maxSentences: 1, stripTrailingPeriod: true }),
+      category: _cleanUserFacingText(risk.category || 'Cyber', { maxSentences: 1, stripTrailingPeriod: true }) || 'Cyber',
+      description: _cleanUserFacingText(risk.description || '', { maxSentences: 2 }),
+      impact: _cleanUserFacingText(risk.impact || '', { maxSentences: 1 }),
+      why: _cleanUserFacingText(risk.why || '', { maxSentences: 2 }),
       regulations: Array.from(new Set((risk.regulations || []).map(String).filter(Boolean))).slice(0, 5)
-    }));
+    })).filter((risk) => risk.title);
   }
 
   function _generateStub(narrative, buContext, citations) {
@@ -559,17 +602,25 @@ ${retrievedDocs.map(d => `- ${d.title}: ${d.excerpt}`).join('\
           return {
             ...fallback,
             ...parsed,
-            scenarioTitle: keepFallbackClassification ? fallback.scenarioTitle : (cleanedTitle || fallback.scenarioTitle),
-            structuredScenario: {
-              ...fallback.structuredScenario,
-              ...(keepFallbackClassification ? {} : (parsed.structuredScenario || {}))
-            },
+            scenarioTitle: _cleanUserFacingText(keepFallbackClassification ? fallback.scenarioTitle : (cleanedTitle || fallback.scenarioTitle), { maxSentences: 1, stripTrailingPeriod: true }),
+            structuredScenario: (() => {
+              const mergedStructured = {
+                ...fallback.structuredScenario,
+                ...(keepFallbackClassification ? {} : (parsed.structuredScenario || {}))
+              };
+              return {
+                assetService: _cleanUserFacingText(mergedStructured.assetService || '', { maxSentences: 1, stripTrailingPeriod: true }),
+                threatCommunity: _cleanUserFacingText(mergedStructured.threatCommunity || '', { maxSentences: 1, stripTrailingPeriod: true }),
+                attackType: _cleanUserFacingText(mergedStructured.attackType || '', { maxSentences: 1, stripTrailingPeriod: true }),
+                effect: _cleanUserFacingText(mergedStructured.effect || '', { maxSentences: 2 })
+              };
+            })(),
             workflowGuidance: _normaliseGuidance(parsed.workflowGuidance?.length ? parsed.workflowGuidance : fallback.workflowGuidance),
-            benchmarkBasis: String(parsed.benchmarkBasis || fallback.benchmarkBasis || '').trim(),
-            inputRationale: {
+            benchmarkBasis: _normaliseBenchmarkBasis(parsed.benchmarkBasis || fallback.benchmarkBasis || ''),
+            inputRationale: _normaliseInputRationale({
               ...fallback.inputRationale,
               ...(parsed.inputRationale || {})
-            },
+            }),
             suggestedInputs: {
               ...fallbackInputs,
               ...parsedInputs,
@@ -655,10 +706,10 @@ Instructions:
           return {
             ...parsed,
             enhancedStatement: _buildScenarioExpansion({ ...input, riskStatement: parsed.enhancedStatement || input.riskStatement }).scenarioExpansion,
-            summary: _dedupeSentences(parsed.summary || ''),
-            linkAnalysis: _dedupeSentences(parsed.linkAnalysis || ''),
+            summary: _cleanUserFacingText(parsed.summary || '', { maxSentences: 3 }),
+            linkAnalysis: _cleanUserFacingText(parsed.linkAnalysis || '', { maxSentences: 3 }),
             workflowGuidance: _normaliseGuidance(parsed.workflowGuidance),
-            benchmarkBasis: String(parsed.benchmarkBasis || 'Use FAIR-aligned assumptions, test them against control evidence, and prefer local regulatory or operational comparators where credible before falling back to mature global incident patterns.').trim(),
+            benchmarkBasis: _normaliseBenchmarkBasis(parsed.benchmarkBasis || 'Use FAIR-aligned assumptions, test them against control evidence, and prefer local regulatory or operational comparators where credible before falling back to mature global incident patterns.'),
             risks: _normaliseRiskCards(parsed.risks),
             regulations: Array.from(new Set((parsed.regulations || []).map(String).filter(Boolean))),
             citations: input.citations || []
@@ -716,7 +767,21 @@ Instructions:
 - include workflow guidance that tells a non-risk practitioner what to do after extraction`;
         const raw = await _callLLM(systemPrompt, userPrompt);
         if (raw) {
-          return JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+          const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+          return {
+            summary: _cleanUserFacingText(parsed.summary || '', { maxSentences: 3 }),
+            linkAnalysis: _cleanUserFacingText(parsed.linkAnalysis || '', { maxSentences: 3 }),
+            workflowGuidance: _normaliseGuidance(parsed.workflowGuidance),
+            benchmarkBasis: _normaliseBenchmarkBasis(parsed.benchmarkBasis || ''),
+            risks: _normaliseRiskCards(parsed.risks).map((risk, idx) => ({
+              id: risk.id || `register-risk-${idx + 1}`,
+              title: risk.title,
+              category: risk.category || 'Register',
+              description: risk.description || 'Imported from the uploaded register for review.',
+              source: risk.source || 'register',
+              regulations: risk.regulations || []
+            }))
+          };
         }
       } catch (e) {
         console.warn('analyseRiskRegister fallback:', e.message);
