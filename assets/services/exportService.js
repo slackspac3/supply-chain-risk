@@ -82,6 +82,41 @@ const ExportService = (() => {
       .trim();
   }
 
+
+  function _buildExecutiveDecisionSupport(assessment, results, intelligence) {
+    const confidence = intelligence?.confidence || null;
+    const drivers = intelligence?.drivers || { upward: [], stabilisers: [] };
+    const strongestUpward = drivers.upward?.[0] || '';
+    const strongestStabiliser = drivers.stabilisers?.[0] || '';
+
+    if (results.toleranceBreached) {
+      return {
+        decision: 'Escalate and reduce now',
+        rationale: 'The scenario is already above tolerance on a severe single-event basis, so leadership should treat it as an active risk reduction decision rather than a monitoring case.',
+        priority: strongestUpward || 'The severe-event loss estimate is above tolerance and needs direct treatment focus.',
+        managementFocus: strongestStabiliser
+          ? `Preserve the controls that are currently helping, but focus immediate action on the main upward driver. ${strongestStabiliser}`
+          : 'Focus the next management discussion on the biggest upward driver and the fastest credible reduction lever.'
+      };
+    }
+    if (results.nearTolerance || results.annualReviewTriggered) {
+      return {
+        decision: 'Actively reduce and review',
+        rationale: 'The scenario is not yet above tolerance, but it is close enough to justify named actions, management review, and a clear reduction plan before exposure worsens.',
+        priority: strongestUpward || 'The current estimate is being pushed up by one or two material assumptions that should be challenged and improved.',
+        managementFocus: confidence?.label === 'Low confidence'
+          ? 'Reduce the exposure, but also improve the evidence behind the estimate before relying on it for long-term decisions.'
+          : (strongestStabiliser || 'Use the current control position as the baseline and test which action would move the result down fastest.')
+      };
+    }
+    return {
+      decision: 'Monitor and improve selectively',
+      rationale: 'The scenario is currently within tolerance, so the priority is to preserve the stabilisers, watch for change, and improve the most material weak point before it becomes urgent.',
+      priority: strongestUpward || 'Use this as a monitored scenario and challenge the assumptions that could move it upward fastest.',
+      managementFocus: strongestStabiliser || 'Keep the strongest current control in place and refresh the assessment if the threat picture, geography, or business dependence changes.'
+    };
+  }
+
   // ─── JSON Export ─────────────────────────────────────────
   function exportJSON(assessment) {
     const blob = new Blob([JSON.stringify(assessment, null, 2)], { type: 'application/json' });
@@ -125,6 +160,7 @@ const ExportService = (() => {
     const recommendations = Array.isArray(assessment.recommendations) ? assessment.recommendations : [];
     const technicalInputs = r.inputs || assessment.fairParams || {};
     const intelligence = assessment.assessmentIntelligence || null;
+    const executiveDecision = _buildExecutiveDecisionSupport(assessment, r, intelligence);
     const confidence = intelligence?.confidence || null;
     const drivers = intelligence?.drivers || null;
     const assumptions = Array.isArray(intelligence?.assumptions) ? intelligence.assumptions : [];
@@ -260,25 +296,20 @@ const ExportService = (() => {
 
       <div class="decision-grid">
         <div class="card">
-          <div class="section-label">What leaders should do now</div>
-          <div class="decision-row">
-            <div class="section-label">Immediate action</div>
-            <div class="body-copy">${executiveAction}</div>
-          </div>
-          <div class="decision-row">
-            <div class="section-label">Why this matters</div>
-            <div class="body-copy">${r.portfolioMeta?.linked ? `${r.selectedRiskCount || risks.length || 1} linked risks are being treated as one connected scenario.` : `${r.selectedRiskCount || risks.length || 1} risks are being assessed together without linked uplift.`}</div>
-          </div>
-          <div class="decision-row">
-            <div class="section-label">Escalation rule</div>
-            <div class="body-copy">${(typeof getEffectiveSettings === 'function' ? getEffectiveSettings().escalationGuidance : '') || 'Escalate when the scenario is above tolerance, close to tolerance, or materially affects regulated services.'}</div>
-          </div>
+          <div class="section-label">Recommended decision</div>
+          <div class="decision-row"><div class="section-label">Decision</div><div class="body-copy">${executiveDecision.decision}</div></div>
+          <div class="decision-row"><div class="section-label">Why this is the right call now</div><div class="body-copy">${executiveDecision.rationale}</div></div>
+          <div class="decision-row"><div class="section-label">Immediate action</div><div class="body-copy">${executiveAction}</div></div>
+          <div class="decision-row"><div class="section-label">Main priority now</div><div class="body-copy">${executiveDecision.priority}</div></div>
+          <div class="decision-row"><div class="section-label">Management focus</div><div class="body-copy">${executiveDecision.managementFocus}</div></div>
         </div>
         <div class="card">
           <div class="section-label">Threshold view</div>
           <div class="threshold-row"><span>Warning trigger</span><strong>${fmt(r.warningThreshold || r.threshold)}</strong></div>
           <div class="threshold-row"><span>Tolerance threshold</span><strong>${fmt(r.threshold)}</strong></div>
           <div class="threshold-row"><span>Annual review trigger</span><strong>${fmt(r.annualReviewThreshold || r.ale.p90)}</strong></div>
+          <div class="decision-row"><div class="section-label">Why this matters</div><div class="body-copy">${r.portfolioMeta?.linked ? `${r.selectedRiskCount || risks.length || 1} linked risks are being treated as one connected scenario.` : `${r.selectedRiskCount || risks.length || 1} risks are being assessed together without linked uplift.`}</div></div>
+          <div class="decision-row"><div class="section-label">Escalation rule</div><div class="body-copy">${(typeof getEffectiveSettings === 'function' ? getEffectiveSettings().escalationGuidance : '') || 'Escalate when the scenario is above tolerance, close to tolerance, or materially affects regulated services.'}</div></div>
           <div class="body-copy">The report leads with the decision threshold first, then the supporting detail behind it.</div>
         </div>
       </div>

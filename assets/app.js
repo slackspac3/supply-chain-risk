@@ -3958,6 +3958,40 @@ function buildExecutiveScenarioSummary(assessment) {
     .trim();
 }
 
+function buildExecutiveDecisionSupport(assessment, results, intelligence) {
+  const confidence = intelligence?.confidence || null;
+  const drivers = intelligence?.drivers || { upward: [], stabilisers: [] };
+  const strongestUpward = drivers.upward?.[0] || '';
+  const strongestStabiliser = drivers.stabilisers?.[0] || '';
+
+  if (results.toleranceBreached) {
+    return {
+      decision: 'Escalate and reduce now',
+      rationale: 'The scenario is already above tolerance on a severe single-event basis, so leadership should treat it as an active risk reduction decision rather than a monitoring case.',
+      priority: strongestUpward || 'The severe-event loss estimate is above tolerance and needs direct treatment focus.',
+      managementFocus: strongestStabiliser
+        ? `Preserve the controls that are currently helping, but focus immediate action on the main upward driver. ${strongestStabiliser}`
+        : 'Focus the next management discussion on the biggest upward driver and the fastest credible reduction lever.'
+    };
+  }
+  if (results.nearTolerance || results.annualReviewTriggered) {
+    return {
+      decision: 'Actively reduce and review',
+      rationale: 'The scenario is not yet above tolerance, but it is close enough to justify named actions, management review, and a clear reduction plan before exposure worsens.',
+      priority: strongestUpward || 'The current estimate is being pushed up by one or two material assumptions that should be challenged and improved.',
+      managementFocus: confidence?.label === 'Low confidence'
+        ? 'Reduce the exposure, but also improve the evidence behind the estimate before relying on it for long-term decisions.'
+        : (strongestStabiliser || 'Use the current control position as the baseline and test which action would move the result down fastest.')
+    };
+  }
+  return {
+    decision: 'Monitor and improve selectively',
+    rationale: 'The scenario is currently within tolerance, so the priority is to preserve the stabilisers, watch for change, and improve the most material weak point before it becomes urgent.',
+    priority: strongestUpward || 'Use this as a monitored scenario and challenge the assumptions that could move it upward fastest.',
+    managementFocus: strongestStabiliser || 'Keep the strongest current control in place and refresh the assessment if the threat picture, geography, or business dependence changes.'
+  };
+}
+
 function renderAssessmentAssumptionsBlock(assumptions) {
   if (!assumptions?.length) return '';
   return `<section class="results-section-stack">
@@ -4151,6 +4185,7 @@ function renderResults(id, isShared) {
   const scenarioNarrative = buildExecutiveScenarioSummary(assessment) || 'No scenario narrative available.';
   const technicalInputs = r.inputs || assessment.fairParams || {};
   const assessmentIntelligence = assessment.assessmentIntelligence || buildAssessmentIntelligence(assessment, r, technicalInputs, r.portfolioMeta || {});
+  const executiveDecision = buildExecutiveDecisionSupport(assessment, r, assessmentIntelligence);
   const recommendationCards = assessment.recommendations?.length ? `
     <section class="results-section-stack">
       <div class="results-section-heading">Priority actions</div>
@@ -4209,18 +4244,23 @@ function renderResults(id, isShared) {
 
       <div class="results-decision-grid">
         <div class="results-decision-card">
-          <div class="results-section-heading">What leaders should do now</div>
+          <div class="results-section-heading">Recommended decision</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);flex-wrap:wrap">
+            <strong style="font-family:var(--font-display);font-size:var(--text-xl);color:var(--text-primary)">${executiveDecision.decision}</strong>
+            <span class="badge ${r.toleranceBreached ? 'badge--danger' : r.nearTolerance ? 'badge--warning' : 'badge--success'}">${statusTitle}</span>
+          </div>
+          <p class="results-decision-copy" style="margin-top:var(--sp-3)">${executiveDecision.rationale}</p>
           <div class="results-decision-row">
             <span class="results-decision-label">Immediate action</span>
             <div class="results-decision-copy">${executiveAction}</div>
           </div>
           <div class="results-decision-row">
-            <span class="results-decision-label">Why this matters</span>
-            <div class="results-decision-copy">${scenarioScopeSummary}</div>
+            <span class="results-decision-label">Main priority now</span>
+            <div class="results-decision-copy">${executiveDecision.priority}</div>
           </div>
           <div class="results-decision-row">
-            <span class="results-decision-label">Escalation rule</span>
-            <div class="results-decision-copy">${getEffectiveSettings().escalationGuidance}</div>
+            <span class="results-decision-label">Management focus</span>
+            <div class="results-decision-copy">${executiveDecision.managementFocus}</div>
           </div>
         </div>
         <div class="results-decision-card">
@@ -4229,6 +4269,14 @@ function renderResults(id, isShared) {
             <div class="results-threshold-row"><span>Warning trigger</span><strong>${fmtCurrency(r.warningThreshold || getWarningThreshold())}</strong></div>
             <div class="results-threshold-row"><span>Tolerance threshold</span><strong>${fmtCurrency(r.threshold)}</strong></div>
             <div class="results-threshold-row"><span>Annual review trigger</span><strong>${fmtCurrency(r.annualReviewThreshold || getAnnualReviewThreshold())}</strong></div>
+          </div>
+          <div class="results-decision-row">
+            <span class="results-decision-label">Why this matters</span>
+            <div class="results-decision-copy">${scenarioScopeSummary}</div>
+          </div>
+          <div class="results-decision-row">
+            <span class="results-decision-label">Escalation rule</span>
+            <div class="results-decision-copy">${getEffectiveSettings().escalationGuidance}</div>
           </div>
           <p class="results-threshold-foot">The page is ordered so leaders see the decision threshold first, then the numbers that explain why.</p>
         </div>
