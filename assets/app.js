@@ -4105,6 +4105,24 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
   };
 }
 
+function createTreatmentDraftFromAssessment(assessment) {
+  const clone = JSON.parse(JSON.stringify(assessment || {}));
+  const originalTitle = clone.scenarioTitle || 'Untitled assessment';
+  AppState.draft = {
+    ...clone,
+    id: 'a_' + Date.now(),
+    scenarioTitle: `${originalTitle} — Treatment case`,
+    learningNote: `Cloned from ${originalTitle} so you can test a treated-state version against the original baseline.`,
+    comparisonBaselineId: assessment.id,
+    results: null,
+    completedAt: null
+  };
+  if (AppState.draft.fairParams && typeof AppState.draft.fairParams === 'object') {
+    AppState.draft.fairParams = { ...AppState.draft.fairParams };
+  }
+  saveDraft();
+}
+
 function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, comparison) {
   if (!comparisonOptions?.length) return '';
   return `<section class="results-section-stack">
@@ -4565,6 +4583,7 @@ function renderResults(id, isShared) {
             <button class="btn btn--secondary btn--sm" id="btn-share-results">Share</button>
             <button class="btn btn--secondary btn--sm" id="btn-export-json">↓ JSON</button>
             <button class="btn btn--secondary btn--sm" id="btn-export-pptx">↓ PPTX Spec</button>
+            <button class="btn btn--secondary btn--sm" id="btn-create-treatment-case">Create Treatment Case</button>
             <button class="btn btn--primary btn--sm" id="btn-export-pdf">↓ PDF Report</button>
           </div>
         </div>
@@ -4612,6 +4631,11 @@ function renderResults(id, isShared) {
   });
   document.getElementById('btn-export-pdf').addEventListener('click', () => ExportService.exportPDF(assessment, AppState.currency, AppState.fxRate));
   document.getElementById('btn-export-pptx').addEventListener('click', () => { ExportService.exportPPTXSpec(assessment, AppState.currency, AppState.fxRate); UI.toast('PPTX spec exported as JSON. See README.','info',5000); });
+  document.getElementById('btn-create-treatment-case').addEventListener('click', () => {
+    createTreatmentDraftFromAssessment(assessment);
+    UI.toast('Treatment case created. Adjust the assumptions and rerun to compare against the original.', 'success');
+    Router.navigate('/wizard/3');
+  });
   document.getElementById('btn-new-assess').addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
 }
 
