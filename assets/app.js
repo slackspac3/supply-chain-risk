@@ -6449,7 +6449,7 @@ function renderAdminSettings(activeSection = 'org') {
     try {
       await loadAuditLog();
       rememberSettingsScroll('admin-settings');
-      renderAdminSettings();
+      renderAdminSettings(currentSettingsSection);
     } catch (error) {
       UI.toast(`Audit log refresh failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
     }
@@ -6457,7 +6457,7 @@ function renderAdminSettings(activeSection = 'org') {
   if (!AppState.auditLogCache.loaded && !AppState.auditLogCache.loading) {
     loadAuditLog().then(() => {
       rememberSettingsScroll('admin-settings');
-      renderAdminSettings();
+      renderAdminSettings(currentSettingsSection);
     }).catch(() => {});
   }
   const regsHost = document.getElementById('ti-admin-regulations');
@@ -6911,7 +6911,7 @@ function renderAdminSettings(activeSection = 'org') {
     sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX));
     LLMService.clearCompassConfig();
     rememberSettingsScroll('admin-settings');
-      renderAdminSettings();
+      renderAdminSettings(currentSettingsSection);
     UI.toast('Compass browser key cleared.', 'success');
   });
 
@@ -6923,7 +6923,7 @@ function renderAdminSettings(activeSection = 'org') {
       clearUserPersistentState(username);
       UI.toast(`${displayName} was reset.`, 'success');
       rememberSettingsScroll('admin-settings');
-      renderAdminSettings();
+      renderAdminSettings(currentSettingsSection);
     });
   });
   document.querySelectorAll('.btn-reset-user-password').forEach(button => {
@@ -6937,7 +6937,7 @@ function renderAdminSettings(activeSection = 'org') {
         AppState.adminNewUserStatus = `Password reset for ${displayName}: username ${username} / password ${result.password}`;
         UI.toast(`Password reset for ${username}.`, 'success');
         rememberSettingsScroll('admin-settings');
-      renderAdminSettings();
+      renderAdminSettings(currentSettingsSection);
       } catch (error) {
         AppState.adminNewUserStatus = `Password reset failed: ${error instanceof Error ? error.message : String(error)}`;
         document.getElementById('admin-new-user-result').textContent = AppState.adminNewUserStatus;
@@ -6952,7 +6952,7 @@ function renderAdminSettings(activeSection = 'org') {
       if (!ok) return;
       UI.toast(`Updated access for ${button.dataset.displayName || button.dataset.username || 'user'}.`, 'success');
       rememberSettingsScroll('admin-settings');
-      renderAdminSettings();
+      renderAdminSettings(currentSettingsSection);
     });
   });
   function renderAdminNewUserDepartments() {
@@ -7078,7 +7078,7 @@ function renderAdminSettings(activeSection = 'org') {
       AppState.adminNewUserStatus = `Created ${account.displayName}: username ${account.username} / password ${account.password}`;
       UI.toast(`Created ${account.username}.`, 'success');
       rememberSettingsScroll('admin-settings');
-      renderAdminSettings();
+      renderAdminSettings(currentSettingsSection);
     } catch (error) {
       AppState.adminNewUserStatus = `User creation failed: ${error instanceof Error ? error.message : String(error)}`;
       resultEl.textContent = AppState.adminNewUserStatus;
@@ -7093,7 +7093,7 @@ function renderAdminSettings(activeSection = 'org') {
       localStorage.removeItem(GLOBAL_ADMIN_STORAGE_KEY);
       UI.toast('Settings reset.', 'success');
       rememberSettingsScroll('admin-settings');
-      renderAdminSettings();
+      renderAdminSettings(currentSettingsSection);
     }
   });
 }
