@@ -1082,7 +1082,7 @@ function renderCompanyStructureSummary(structure = []) {
                 <div class="org-related-card__head">
                   <div>
                     <div class="org-related-card__title">${node.name}</div>
-                    <div class="form-help">${node.departmentRelationshipType || 'In-house'} · ${ownerLabel} · ${contextSummary ? 'Context saved' : 'No context'}</div>
+                    <div class="form-help">${node.departmentRelationshipType || 'In-house'} · ${ownerLabel} · ${contextSummary ? 'Saved context' : 'No saved context'}</div>
                   </div>
                   <div class="flex items-center gap-3" style="flex-wrap:wrap">
                     <button class="btn btn--ghost btn--sm org-entity-context" data-org-id="${node.id}" type="button">Context</button>
@@ -1100,7 +1100,7 @@ function renderCompanyStructureSummary(structure = []) {
     const childCompanies = sortNodes((byParent.get(parentId || 'root') || []).filter(node => isCompanyEntityType(node.type)));
     return childCompanies.map(node => {
       const childMarkup = renderNodes(node.id, depth + 1);
-      const contextSummary = truncateText(getEntityLayerById(settings, node.id)?.contextSummary || node.profile || 'No retained context yet.', 100);
+      const contextSummary = truncateText(getEntityLayerById(settings, node.id)?.contextSummary || node.profile || 'No saved context yet.', 100);
       return `
         <details class="org-accordion ${getOrgEntityThemeClass(node.type)}" ${depth < 1 ? 'open' : ''} style="margin-left:${depth * 16}px">
           <summary class="org-accordion__summary">
@@ -1109,7 +1109,7 @@ function renderCompanyStructureSummary(structure = []) {
               <strong>${node.name}</strong>
             </div>
             <div class="org-accordion__meta">
-              <span class="form-help">${getEntityLayerById(settings, node.id)?.contextSummary ? 'Context saved' : 'No context'}</span>
+              <span class="form-help">${getEntityLayerById(settings, node.id)?.contextSummary ? 'Saved context' : 'No saved context'}</span>
               <button class="btn btn--secondary btn--sm org-entity-add-department org-summary-action" data-org-id="${node.id}" type="button">Add Function</button>
               <button class="btn btn--ghost btn--sm org-entity-context org-summary-action" data-org-id="${node.id}" type="button">Context</button>
               <button class="btn btn--ghost btn--sm org-entity-edit org-summary-action" data-org-id="${node.id}" type="button">Edit</button>
@@ -2627,7 +2627,7 @@ function renderUserDashboard() {
       title: draftTitle || 'Untitled draft',
       status: 'Draft in progress',
       detail: 'Continue from where you left off and complete the next assessment step.',
-      actionLabel: 'Continue Draft',
+      actionLabel: 'Resume Draft',
       action: 'draft'
     }] : []),
     ...assessmentsNeedingReview.map(a => ({
@@ -2661,7 +2661,7 @@ function renderUserDashboard() {
               <h2 style="margin-top:var(--sp-4)">Welcome back, ${user?.displayName || 'there'}.</h2>
               <p style="margin-top:10px;color:rgba(255,255,255,.74);max-width:680px">This is your main working space. Use it to start a new risk assessment, keep track of what you have already analysed, and stay on top of the context that shapes your outputs.</p>
               <div class="flex items-center gap-3 mt-6" style="flex-wrap:wrap">
-                <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment">Run New Risk Assessment</button>
+                <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment">Start a New Risk Assessment</button>
                 <button class="btn btn--secondary" id="btn-dashboard-open-settings">Review Personal Settings</button>
               </div>
             </div>
@@ -2718,7 +2718,7 @@ function renderUserDashboard() {
                     </div>
                     <div class="form-help" style="margin-top:10px">${item.actionLabel} →</div>
                   </button>
-                `).join('') : `<div class="form-help">No draft or review actions are open. Start a new assessment when you are ready.</div>`}
+                `).join('') : `<div class="form-help">You have nothing waiting for review right now. Start a new assessment when you are ready.</div>`}
               </div>
             </div>
 
@@ -2741,7 +2741,7 @@ function renderUserDashboard() {
                       <span class="badge ${assessment.results?.toleranceBreached ? 'badge--danger' : assessment.results?.nearTolerance ? 'badge--warning' : 'badge--gold'}">${assessment.results?.toleranceBreached ? 'Above tolerance' : assessment.results?.nearTolerance ? 'Close to tolerance' : 'Open result'}</span>
                     </div>
                   </button>
-                `).join('') : `<div class="form-help">No completed assessments yet. Your completed analyses will appear here.</div>`}
+                `).join('') : `<div class="form-help">No completed assessments yet. Finished assessments will appear here for quick review and comparison.</div>`}
               </div>
             </div>
           </div>
@@ -2793,11 +2793,11 @@ function renderUserDashboard() {
                 <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)">
                   <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Draft assessment</div>
                   <div style="margin-top:6px;font-weight:600">${draftTitle || 'No draft in progress'}</div>
-                  <div class="form-help" style="margin-top:6px">${hasDraft ? 'Continue from where you left off or start a new analysis.' : 'A new draft will be created when you start your next assessment.'}</div>
+                  <div class="form-help" style="margin-top:6px">${hasDraft ? 'Continue from where you left off or start a new analysis.' : 'Your next assessment will start with a fresh draft.'}</div>
                 </div>
               </div>
               <div class="flex items-center gap-3 mt-5" style="flex-wrap:wrap">
-                <button class="btn btn--secondary" id="btn-dashboard-continue-draft" ${hasDraft ? '' : 'disabled'}>Continue Draft</button>
+                <button class="btn btn--secondary" id="btn-dashboard-continue-draft" ${hasDraft ? '' : 'disabled'}>Resume Draft</button>
                 <button class="btn btn--ghost" id="btn-dashboard-settings-secondary">Open Settings</button>
               </div>
             </div>
@@ -2874,6 +2874,7 @@ function renderWizard1() {
         <div class="wizard-header">
           ${UI.renderStepper(1)}
           <h2 class="wizard-step-title">AI-Assisted Risk &amp; Context Builder</h2>
+          <p class="form-help" style="margin-top:8px">Start with a short risk statement, then let AI sharpen it or extract risks from a register. Select only the risks you want to carry forward.</p>
           <p class="wizard-step-desc">Start with a risk statement or upload a register. AI will enhance the context, extract candidate risks, and prepare a linked scenario for quantification.</p>
         </div>
         <div class="wizard-body">
@@ -3018,7 +3019,7 @@ function renderWizard1() {
         </div>
         <div class="wizard-footer">
           <a class="btn btn--ghost" href="#/">← Home</a>
-          <button class="btn btn--primary" id="btn-next-1">Next: Refine Scenario →</button>
+          <button class="btn btn--primary" id="btn-next-1">Continue to Scenario Review →</button>
         </div>
       </div>
     </main>`);
@@ -3130,7 +3131,7 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
   const selectedIds = new Set((selectedRisks || []).map(risk => risk.id));
   const sourceLabel = risk => risk.source === 'manual' ? 'Manual' : risk.source === 'register' || risk.source === 'ai+register' ? 'Upload' : 'AI generated';
   if (!cleanedRisks.length) {
-    return `<div class="empty-state">No candidate risks yet. Use AI enhancement, upload a register, or add risks manually.</div>`;
+    return `<div class="empty-state">No risks have been selected yet. Start with AI enhancement, upload a register, or add risks manually to build your shortlist.</div>`;
   }
   const linkedRecommendations = getLinkedRiskRecommendations(selectedRisks || []);
   return `${linkedRecommendations.length ? `<div class="card mb-4" style="background:var(--bg-elevated)"><div class="context-panel-title">Suggested linked-risk groupings</div><div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">${linkedRecommendations.map(group => `<div><div style="font-size:.78rem;font-weight:600;color:var(--text-primary)">${group.label}</div><div class="context-panel-copy" style="margin-top:4px">${group.risks.join(', ')}</div></div>`).join('')}</div><div class="context-panel-foot">${AppState.draft.linkAnalysis || 'Treat these as linked where one control or event could trigger the others in the same scenario.'}</div></div>` : ''}
@@ -3386,6 +3387,7 @@ function renderWizard2() {
         <div class="wizard-header">
           ${UI.renderStepper(2)}
           <h2 class="wizard-step-title">Refine the Scenario</h2>
+          <p class="form-help" style="margin-top:8px">Use this step to turn the selected risk into one clear assessment scope. The AI assist should help draft the scenario and suggest starting FAIR inputs.</p>
           <p class="wizard-step-desc">Review the AI-built context, refine the narrative, and confirm how the selected risks should be quantified together.</p>
         </div>
         <div class="wizard-body">
@@ -3441,7 +3443,7 @@ function renderWizard2() {
         </div>
         <div class="wizard-footer">
           <button class="btn btn--ghost" id="btn-back-2">← Back</button>
-          <button class="btn btn--primary" id="btn-next-2">Next: FAIR Inputs →</button>
+          <button class="btn btn--primary" id="btn-next-2">Continue to Loss Estimation →</button>
         </div>
       </div>
     </main>`);
@@ -3683,6 +3685,7 @@ function renderWizard3() {
           <div class="flex items-center justify-between">
             <div>
               <h2 class="wizard-step-title">Estimate the Scenario in Plain Language</h2>
+              <p class="form-help" style="margin-top:8px">Review the starting numbers, sense-check them against what you know, and adjust anything that feels too low, too high, or too uncertain.</p>
               <p class="wizard-step-desc">Answer a few practical questions about how often this could happen, how exposed you are, and what the impact could cost. ${draft.llmAssisted?'<span style="color:var(--color-success-400)">✓ Pre-loaded from AI assist</span>':''}</p>
             </div>
             <div class="mode-toggle">
@@ -3807,7 +3810,7 @@ function renderWizard3() {
         </div>
         <div class="wizard-footer">
           <button class="btn btn--ghost" id="btn-back-3">← Back</button>
-          <button class="btn btn--primary" id="btn-next-3">Next: Review →</button>
+          <button class="btn btn--primary" id="btn-next-3">Continue to Results →</button>
         </div>
       </div>
     </main>`);
@@ -4256,7 +4259,7 @@ function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, 
       <div class="results-comparison-head">
         <div>
           <div class="results-driver-label">Comparison baseline</div>
-          <div class="results-comparison-sub">Choose another saved assessment to see how this result has moved.</div>
+          <div class="results-comparison-sub">Choose another saved assessment to understand what changed and how this scenario compares.</div>
         </div>
         <select class="form-select results-comparison-select" id="results-compare-select">
           <option value="">No comparison selected</option>
@@ -4287,7 +4290,7 @@ function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, 
             <div class="results-comparison-foot">Severe-year comparison</div>
           </div>
         </div>` : `
-        <div class="results-comparison-empty">Choose a baseline to compare movement in severity, annual exposure, and threshold position.</div>`}
+        <div class="results-comparison-empty">Choose a baseline assessment to compare potential event size, yearly exposure, and tolerance position.</div>`}
     </div>
   </section>`;
 }
@@ -4855,9 +4858,9 @@ function renderLoginOrganisationSelection(currentUser, existingSettings = getUse
               <select class="form-select" id="login-department" ${departmentOptions.length ? '' : 'disabled'}>
                 ${departmentOptions.length
                   ? departmentOptions.map(entity => `<option value="${entity.id}" ${entity.id === selectedDepartmentId ? 'selected' : ''}>${entity.name}${entity.ownerUsername === currentUser.username ? ' · your department' : ''}</option>`).join('')
-                  : '<option value="">No departments configured yet</option>'}
+                  : '<option value="">No functions configured yet</option>'}
               </select>
-              <span class="form-help">${departmentOptions.length ? 'Choose the function you work within. Department owners can maintain this context from Settings.' : 'No department has been configured beneath this business yet. The admin can add one from Org Customisation.'}</span>
+              <span class="form-help">${departmentOptions.length ? 'Choose the function you work within. Department owners can maintain this context from Settings.' : 'No function has been configured beneath this business yet. Ask an admin or BU admin to add one before continuing.'}</span>
             </div>
             <div class="flex items-center justify-between mt-6" style="gap:var(--sp-4);flex-wrap:wrap">
               <button class="btn btn--ghost" id="btn-login-switch-account">Switch Account</button>
@@ -5206,7 +5209,7 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
         const selectedDepartmentId = draftSettings.userProfile.departmentEntityId;
         deptEl.innerHTML = departments.length
           ? departments.map(entity => `<option value="${entity.id}" ${entity.id === selectedDepartmentId ? 'selected' : ''}>${entity.name}</option>`).join('')
-          : '<option value="">No departments configured yet</option>';
+          : '<option value="">No functions configured yet</option>';
         deptEl.disabled = !departments.length;
       };
       buEl.addEventListener('change', () => {
@@ -5574,14 +5577,14 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
               <div>
                 <div class="context-panel-title">${department.name}</div>
                 <div class="form-help">${department.ownerUsername ? `Owner: ${department.ownerUsername}` : 'Owner not assigned yet'}</div>
-                <div class="form-help">${getEntityLayerById(globalSettings, department.id)?.contextSummary || department.profile || 'No retained department context yet'}</div>
+                <div class="form-help">${getEntityLayerById(globalSettings, department.id)?.contextSummary || department.profile || 'No saved function context yet'}</div>
               </div>
               <div class="flex items-center gap-3" style="flex-wrap:wrap">
                 <button class="btn btn--ghost btn--sm btn-user-edit-department" data-department-id="${department.id}" type="button">Edit Department</button>
                 <button class="btn btn--secondary btn--sm btn-user-edit-department-context" data-department-id="${department.id}" type="button">Manage Context</button>
               </div>
             </div>
-          </div>`).join('') : '<div class="form-help">No functions or departments exist under this business unit yet.</div>'}
+          </div>`).join('') : '<div class="form-help">No functions have been added under this business unit yet.</div>'}
       </div>`
   }) : ''}
   ${departmentOwner ? renderSettingsSection({
@@ -5709,7 +5712,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     const fallbackDepartmentId = departments.some(entity => entity.id === preferredDepartmentId) ? preferredDepartmentId : (departments[0]?.id || '');
     departmentEl.innerHTML = departments.length
       ? departments.map(entity => `<option value="${entity.id}" ${entity.id === fallbackDepartmentId ? 'selected' : ''}>${entity.name}</option>`).join('')
-      : '<option value="">No departments configured yet</option>';
+      : '<option value="">No functions configured yet</option>';
     departmentEl.disabled = !departments.length;
   }
   businessUnitEl.addEventListener('change', renderUserDepartmentOptions);
@@ -6266,7 +6269,7 @@ function renderAdminSettings(activeSection = 'org') {
     <div class="table-wrap mt-4">
       <table>
         <thead><tr><th>Time</th><th>Actor</th><th>Role</th><th>Event</th><th>Target</th><th>Status</th><th>Details</th></tr></thead>
-        <tbody>${auditEntries.length ? auditEntries.map(entry => `<tr><td>${new Date(entry.ts).toLocaleString()}</td><td>${entry.actorUsername || 'system'}</td><td>${entry.actorRole || 'system'}</td><td>${entry.eventType || 'event'}</td><td>${entry.target || '—'}</td><td>${entry.status || 'success'}</td><td>${formatAuditDetails(entry.details) || '—'}</td></tr>`).join('') : '<tr><td colspan="7">No audit events loaded yet.</td></tr>'}</tbody>
+        <tbody>${auditEntries.length ? auditEntries.map(entry => `<tr><td>${new Date(entry.ts).toLocaleString()}</td><td>${entry.actorUsername || 'system'}</td><td>${entry.actorRole || 'system'}</td><td>${entry.eventType || 'event'}</td><td>${entry.target || '—'}</td><td>${entry.status || 'success'}</td><td>${formatAuditDetails(entry.details) || '—'}</td></tr>`).join('') : '<tr><td colspan="7">No audit activity has been loaded yet.</td></tr>'}</tbody>
       </table>
     </div>`
   });
@@ -6485,7 +6488,7 @@ function renderAdminSettings(activeSection = 'org') {
   function renderEntityLayerSummary() {
     if (!layerSummaryEl) return;
     if (!entityContextLayers.length) {
-      layerSummaryEl.innerHTML = `<div class="form-help">No business or department context layers saved yet.</div>`;
+      layerSummaryEl.innerHTML = `<div class="form-help">No business or function context layers have been saved yet.</div>`;
       return;
     }
     const idToNode = new Map(companyStructure.map(node => [node.id, node]));
@@ -7130,7 +7133,7 @@ function renderAdminBU() {
   function renderDepartmentCard(department) {
     const departmentLayer = getEntityLayerById(settings, department.id);
     const ownerLabel = department.ownerUsername ? (accountLabelByUsername.get(department.ownerUsername) || department.ownerUsername) : 'No owner';
-    const contextLabel = departmentLayer?.contextSummary ? 'Context saved' : 'No context';
+    const contextLabel = departmentLayer?.contextSummary ? 'Saved context' : 'No saved context';
     return `
       <div class="org-related-card org-related-card--compact org-theme--department">
         <div class="org-related-card__head">
@@ -7151,7 +7154,7 @@ function renderAdminBU() {
     const departments = getDepartmentEntities(companyStructure, entity.id);
     const childCompanies = getChildCompanyEntities(companyStructure, entity.id);
     const lineage = getEntityLineageLabel(companyStructure, entity.id) || entity.name;
-    const summary = truncateText(entityLayer?.contextSummary || entity.profile || 'No retained context yet.', 120);
+    const summary = truncateText(entityLayer?.contextSummary || entity.profile || 'No saved context yet.', 120);
     const childMarkup = childCompanies.length ? childCompanies.map(child => renderCompanyNode(child, depth + 1)).join('') : '';
     return `
       <details class="org-accordion ${getOrgEntityThemeClass(entity.type)}" ${depth < 1 ? 'open' : ''} style="margin-left:${depth * 16}px">
@@ -7162,7 +7165,7 @@ function renderAdminBU() {
             <span class="form-help">${departments.length} functions · ${childCompanies.length} child entities</span>
           </div>
           <div class="org-accordion__meta">
-            <span class="form-help">${entityLayer?.contextSummary ? 'Context saved' : 'No context'}</span>
+            <span class="form-help">${entityLayer?.contextSummary ? 'Saved context' : 'No saved context'}</span>
           </div>
         </summary>
         <div class="org-accordion__body">
