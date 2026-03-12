@@ -3696,7 +3696,7 @@ function renderWizard3() {
         </div>
         <div class="wizard-body">
           ${draft.learningNote ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Template learning</div><p class="context-panel-copy">${draft.learningNote}</p></div>` : ''}
-          ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Before-and-after baseline</div><p class="context-panel-copy">You are working on an improved version of <strong>${baselineAssessment.scenarioTitle || 'the original assessment'}</strong>. Adjust the assumptions below to reflect the control or resilience change you want to test, then rerun and compare the result against the original.</p><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Test stronger controls</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="frequency">Test lower event frequency</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="business-interruption">Test lower disruption cost</button></div><div class="form-help" style="margin-top:10px">These prompts are just shortcuts for a before-and-after test. You can still edit every number manually.</div></div>` : ''}
+          ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Current assessment baseline</div><p class="context-panel-copy">You are working from <strong>${baselineAssessment.scenarioTitle || 'the original assessment'}</strong>. Adjust the assumptions below to reflect a stronger control position or better resilience, then rerun to compare the new result against the current baseline.</p><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Try stronger controls</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="frequency">Try lower event frequency</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="business-interruption">Try lower disruption cost</button></div><div class="form-help" style="margin-top:10px">These are quick starting points. You can still adjust every number manually before rerunning the analysis.</div></div>` : ''}
           ${draft.workflowGuidance?.length ? renderWorkflowGuidanceBlock(draft.workflowGuidance) : ''}
           ${renderBenchmarkRationaleBlock(draft.benchmarkBasis, draft.inputRationale)}
           ${renderEstimateExplainerCard(draft, bu, isAdv, cur)}
@@ -4240,7 +4240,7 @@ function createTreatmentDraftFromAssessment(assessment) {
     ...clone,
     id: 'a_' + Date.now(),
     scenarioTitle: `${originalTitle} — Treatment case`,
-    learningNote: `Cloned from ${originalTitle} so you can test a before-and-after version against the original baseline.`,
+    learningNote: `Cloned from ${originalTitle} so you can compare a stronger future-state view against the current baseline.`,
     comparisonBaselineId: assessment.id,
     results: null,
     completedAt: null
@@ -4258,7 +4258,7 @@ function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, 
     <div class="results-comparison-card">
       <div class="results-comparison-head">
         <div>
-          <div class="results-driver-label">Comparison baseline</div>
+          <div class="results-driver-label">Current baseline</div>
           <div class="results-comparison-sub">Choose another saved assessment to understand what changed and how this scenario compares.</div>
         </div>
         <select class="form-select results-comparison-select" id="results-compare-select">
@@ -4290,7 +4290,7 @@ function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, 
             <div class="results-comparison-foot">Severe-year comparison</div>
           </div>
         </div>` : `
-        <div class="results-comparison-empty">Choose a baseline assessment to compare potential event size, yearly exposure, and tolerance position.</div>`}
+        <div class="results-comparison-empty">Choose a baseline assessment to compare event size, yearly exposure, and tolerance position.</div>`}
     </div>
   </section>`;
 }
@@ -4707,7 +4707,7 @@ function renderResults(id, isShared) {
             <button class="btn btn--secondary btn--sm" id="btn-share-results">Share</button>
             <button class="btn btn--secondary btn--sm" id="btn-export-json">↓ JSON</button>
             <button class="btn btn--secondary btn--sm" id="btn-export-pptx">↓ PPTX Spec</button>
-            <button class="btn btn--secondary btn--sm" id="btn-create-treatment-case">Test an Improvement</button>
+            <button class="btn btn--secondary btn--sm" id="btn-create-treatment-case">Compare a Better Outcome</button>
             <button class="btn btn--primary btn--sm" id="btn-export-pdf">↓ PDF Report</button>
           </div>
         </div>
