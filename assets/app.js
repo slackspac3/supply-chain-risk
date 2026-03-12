@@ -2786,7 +2786,7 @@ function renderUserDashboard() {
                     </div>
                     <div class="flex items-center gap-3" style="margin-top:10px;flex-wrap:wrap">
                       <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.action}">${item.actionLabel}</button>
-                      ${item.action === 'draft' ? '<button type="button" class="btn btn--ghost btn--sm dashboard-archive-draft">Archive</button><button type="button" class="btn btn--ghost btn--sm dashboard-delete-draft">Delete</button>' : '<button type="button" class="btn btn--ghost btn--sm dashboard-archive-assessment" data-assessment-id="'+"${item.action}"+'">Archive</button><button type="button" class="btn btn--ghost btn--sm dashboard-delete-assessment" data-assessment-id="'+"${item.action}"+'">Delete</button>'}
+                      ${item.action === 'draft' ? '<button type="button" class="btn btn--ghost btn--sm dashboard-archive-draft">Archive</button><button type="button" class="btn btn--ghost btn--sm dashboard-delete-draft">Delete</button>' : `<button type="button" class="btn btn--ghost btn--sm dashboard-archive-assessment" data-assessment-id="${item.action}">Archive</button><button type="button" class="btn btn--ghost btn--sm dashboard-delete-assessment" data-assessment-id="${item.action}">Delete</button>`}
                     </div>
                   </div>
                 `).join('') : `<div class="form-help">You have nothing waiting for review right now. Start a new assessment when you are ready.</div>`}
