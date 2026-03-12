@@ -3619,6 +3619,7 @@ function renderWizard3() {
   const isAdv = AppState.mode === 'advanced';
   const cur = AppState.currency;
   const sym = cur === 'AED' ? 'AED' : 'USD $';
+  const baselineAssessment = draft.comparisonBaselineId ? getAssessmentById(draft.comparisonBaselineId) : null;
 
   const v = (key, def) => p[key] != null ? p[key] : def;
 
@@ -3640,6 +3641,7 @@ function renderWizard3() {
         </div>
         <div class="wizard-body">
           ${draft.learningNote ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Template learning</div><p class="context-panel-copy">${draft.learningNote}</p></div>` : ''}
+          ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Treatment case baseline</div><p class="context-panel-copy">You are working on a treated-state version of <strong>${baselineAssessment.scenarioTitle || 'the original assessment'}</strong>. Adjust the assumptions below to reflect the control or resilience change you want to test, then rerun and compare the result against the original.</p><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Improve control strength</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="frequency">Reduce event frequency</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="business-interruption">Reduce business interruption</button></div><div class="form-help" style="margin-top:10px">These prompts are just shortcuts for a treated-state test. You can still edit every number manually.</div></div>` : ''}
           ${draft.workflowGuidance?.length ? renderWorkflowGuidanceBlock(draft.workflowGuidance) : ''}
           ${renderBenchmarkRationaleBlock(draft.benchmarkBasis, draft.inputRationale)}
           ${renderEstimateExplainerCard(draft, bu, isAdv, cur)}
@@ -3770,6 +3772,13 @@ function renderWizard3() {
     AppState.draft.fairParams.vulnDirect = this.checked;
   });
   attachFormattedMoneyInputs();
+  document.querySelectorAll('.treatment-prompt-chip').forEach(button => {
+    button.addEventListener('click', () => {
+      applyTreatmentPrompt(button.dataset.treatmentPrompt);
+      renderWizard3();
+      UI.toast('Treatment prompt applied. Review the numbers and rerun the scenario.', 'success');
+    });
+  });
   document.getElementById('btn-back-3').addEventListener('click', () => Router.navigate('/wizard/2'));
   document.getElementById('btn-next-3').addEventListener('click', () => {
     collectFairParams();
@@ -4103,6 +4112,38 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
         ? 'This scenario is currently less severe than the selected baseline on the severe single-event view.'
         : 'This scenario is broadly aligned with the selected baseline on the severe single-event view.'
   };
+}
+
+function applyTreatmentPrompt(promptId) {
+  const p = AppState.draft.fairParams || (AppState.draft.fairParams = {});
+  const multiply = (key, factor, floor = 0, ceil = null) => {
+    const current = Number(p[key] || 0);
+    let next = current * factor;
+    if (floor != null) next = Math.max(floor, next);
+    if (ceil != null) next = Math.min(ceil, next);
+    p[key] = Number(next.toFixed(2));
+  };
+
+  if (promptId === 'control-strength') {
+    multiply('controlStrMin', 1.15, 0, 0.99);
+    multiply('controlStrLikely', 1.15, 0, 0.99);
+    multiply('controlStrMax', 1.12, 0, 0.995);
+    multiply('vulnMin', 0.9, 0.01, 1);
+    multiply('vulnLikely', 0.85, 0.01, 1);
+    multiply('vulnMax', 0.8, 0.01, 1);
+  } else if (promptId === 'frequency') {
+    multiply('tefMin', 0.8, 0.1, null);
+    multiply('tefLikely', 0.75, 0.1, null);
+    multiply('tefMax', 0.7, 0.1, null);
+  } else if (promptId === 'business-interruption') {
+    multiply('biMin', 0.7, 0, null);
+    multiply('biLikely', 0.65, 0, null);
+    multiply('biMax', 0.6, 0, null);
+    multiply('irMin', 0.9, 0, null);
+    multiply('irLikely', 0.9, 0, null);
+    multiply('irMax', 0.9, 0, null);
+  }
+  saveDraft();
 }
 
 function createTreatmentDraftFromAssessment(assessment) {
