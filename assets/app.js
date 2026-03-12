@@ -4067,6 +4067,86 @@ function buildExecutiveDecisionSupport(assessment, results, intelligence) {
   };
 }
 
+function formatComparisonDelta(currentValue, baselineValue, formatter = fmtCurrency) {
+  const current = Number(currentValue || 0);
+  const baseline = Number(baselineValue || 0);
+  const delta = current - baseline;
+  const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat';
+  const label = delta > 0 ? 'Higher' : delta < 0 ? 'Lower' : 'No change';
+  return {
+    direction,
+    label,
+    formatted: `${label} by ${formatter(Math.abs(delta))}`
+  };
+}
+
+function buildAssessmentComparison(currentAssessment, baselineAssessment) {
+  if (!currentAssessment?.results || !baselineAssessment?.results) return null;
+  const current = currentAssessment.results;
+  const baseline = baselineAssessment.results;
+  const severeEvent = formatComparisonDelta(current.lm?.p90, baseline.lm?.p90);
+  const annualExposure = formatComparisonDelta(current.ale?.mean, baseline.ale?.mean);
+  const severeAnnual = formatComparisonDelta(current.ale?.p90, baseline.ale?.p90);
+  const currentStatus = current.toleranceBreached ? 'Above tolerance' : current.nearTolerance ? 'Close to tolerance' : 'Within tolerance';
+  const baselineStatus = baseline.toleranceBreached ? 'Above tolerance' : baseline.nearTolerance ? 'Close to tolerance' : 'Within tolerance';
+  return {
+    baselineTitle: baselineAssessment.scenarioTitle || 'Selected baseline',
+    baselineDate: new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }),
+    severeEvent,
+    annualExposure,
+    severeAnnual,
+    currentStatus,
+    baselineStatus,
+    summary: severeEvent.direction === 'up'
+      ? 'This scenario is currently running hotter than the selected baseline on the severe single-event view.'
+      : severeEvent.direction === 'down'
+        ? 'This scenario is currently less severe than the selected baseline on the severe single-event view.'
+        : 'This scenario is broadly aligned with the selected baseline on the severe single-event view.'
+  };
+}
+
+function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, comparison) {
+  if (!comparisonOptions?.length) return '';
+  return `<section class="results-section-stack">
+    <div class="results-section-heading">Compare with another assessment</div>
+    <div class="results-comparison-card">
+      <div class="results-comparison-head">
+        <div>
+          <div class="results-driver-label">Comparison baseline</div>
+          <div class="results-comparison-sub">Choose another saved assessment to see how this result has moved.</div>
+        </div>
+        <select class="form-select results-comparison-select" id="results-compare-select">
+          <option value="">No comparison selected</option>
+          ${comparisonOptions.map(option => `<option value="${option.id}" ${activeComparisonId === option.id ? 'selected' : ''}>${option.label}</option>`).join('')}
+        </select>
+      </div>
+      ${comparison ? `
+        <div class="results-comparison-banner">
+          <strong>Comparing against:</strong> ${comparison.baselineTitle} · ${comparison.baselineDate}
+        </div>
+        <p class="results-summary-copy" style="margin-top:var(--sp-3)">${comparison.summary}</p>
+        <div class="results-comparison-grid">
+          <div class="results-comparison-metric ${comparison.severeEvent.direction}">
+            <div class="results-impact-label">Severe single event</div>
+            <div class="results-comparison-value">${comparison.severeEvent.formatted}</div>
+            <div class="results-comparison-foot">Current: ${comparison.currentStatus} · Baseline: ${comparison.baselineStatus}</div>
+          </div>
+          <div class="results-comparison-metric ${comparison.annualExposure.direction}">
+            <div class="results-impact-label">Expected annual exposure</div>
+            <div class="results-comparison-value">${comparison.annualExposure.formatted}</div>
+            <div class="results-comparison-foot">Average-year comparison</div>
+          </div>
+          <div class="results-comparison-metric ${comparison.severeAnnual.direction}">
+            <div class="results-impact-label">High-end annual exposure</div>
+            <div class="results-comparison-value">${comparison.severeAnnual.formatted}</div>
+            <div class="results-comparison-foot">Severe-year comparison</div>
+          </div>
+        </div>` : `
+        <div class="results-comparison-empty">Choose a baseline to compare movement in severity, annual exposure, and threshold position.</div>`}
+    </div>
+  </section>`;
+}
+
 function renderAssessmentAssumptionsBlock(assumptions) {
   if (!assumptions?.length) return '';
   return `<section class="results-section-stack">
@@ -4261,6 +4341,17 @@ function renderResults(id, isShared) {
   const technicalInputs = r.inputs || assessment.fairParams || {};
   const assessmentIntelligence = assessment.assessmentIntelligence || buildAssessmentIntelligence(assessment, r, technicalInputs, r.portfolioMeta || {});
   const executiveDecision = buildExecutiveDecisionSupport(assessment, r, assessmentIntelligence);
+  const comparisonOptions = getAssessments()
+    .filter(item => item.id !== assessment.id && item.results)
+    .sort((a, b) => new Date(b.completedAt || b.createdAt || 0).getTime() - new Date(a.completedAt || a.createdAt || 0).getTime())
+    .slice(0, 12)
+    .map(item => ({
+      id: item.id,
+      label: `${item.scenarioTitle || 'Untitled assessment'} · ${item.buName || '—'} · ${new Date(item.completedAt || item.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}`
+    }));
+  const activeComparisonId = AppState.resultsComparisonId || '';
+  const baselineAssessment = activeComparisonId ? getAssessmentById(activeComparisonId) : null;
+  const comparison = baselineAssessment ? buildAssessmentComparison(assessment, baselineAssessment) : null;
   const recommendationCards = assessment.recommendations?.length ? `
     <section class="results-section-stack">
       <div class="results-section-heading">Priority actions</div>
@@ -4375,6 +4466,8 @@ function renderResults(id, isShared) {
           ${(assessment.applicableRegulations?.length ? `<div class="results-chip-block">${assessment.applicableRegulations.map(tag => `<span class="badge badge--neutral">${tag}</span>`).join('')}</div>` : '')}
         </div>
       </div>
+
+      ${renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, comparison)}
 
       ${renderAssessmentAssumptionsBlock(assessmentIntelligence.assumptions)}
 
@@ -4513,6 +4606,10 @@ function renderResults(id, isShared) {
   else attachCitationHandlers();
   document.getElementById('btn-share-results').addEventListener('click', () => ShareService.copyShareLink(assessment));
   document.getElementById('btn-export-json').addEventListener('click', () => { ExportService.exportJSON(assessment); UI.toast('JSON exported.','success'); });
+  document.getElementById('results-compare-select')?.addEventListener('change', (event) => {
+    AppState.resultsComparisonId = event.target.value || '';
+    renderResults(id, isShared || assessment._shared);
+  });
   document.getElementById('btn-export-pdf').addEventListener('click', () => ExportService.exportPDF(assessment, AppState.currency, AppState.fxRate));
   document.getElementById('btn-export-pptx').addEventListener('click', () => { ExportService.exportPPTXSpec(assessment, AppState.currency, AppState.fxRate); UI.toast('PPTX spec exported as JSON. See README.','info',5000); });
   document.getElementById('btn-new-assess').addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
