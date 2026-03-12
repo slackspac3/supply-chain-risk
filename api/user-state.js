@@ -58,6 +58,12 @@ async function writeUserState(username, state) {
   return next;
 }
 
+
+function canAccessUserState(session, username) {
+  const safeUsername = String(username || '').trim().toLowerCase();
+  return !!session && (session.role === 'admin' || String(session.username || '').trim().toLowerCase() === safeUsername);
+}
+
 module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const body = typeof req.body === 'string'
@@ -84,8 +90,13 @@ module.exports = async function handler(req, res) {
 
   try {
     const username = String(req.method === 'GET' ? req.query?.username : body.username || '').trim().toLowerCase();
+    const session = verifySessionToken(req.headers['x-session-token']);
     if (!username) {
       res.status(400).json({ error: 'Username required.' });
+      return;
+    }
+    if (!canAccessUserState(session, username)) {
+      res.status(403).json({ error: 'You are not allowed to access this user state.' });
       return;
     }
 
@@ -97,8 +108,7 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'PUT') {
       const state = await writeUserState(username, body.state || {});
-      const session = verifySessionToken(req.headers['x-session-token']);
-      if (body.audit && session?.username === username) {
+      if (body.audit && session) {
         await appendAuditEvent({
           category: body.audit.category || 'user_state',
           eventType: body.audit.eventType || 'user_state_updated',

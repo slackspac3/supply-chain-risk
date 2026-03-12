@@ -92,6 +92,110 @@ function isAdminSecretValid(req) {
   return !!ADMIN_API_SECRET && req.headers['x-admin-secret'] === ADMIN_API_SECRET;
 }
 
+function stableSortById(items = []) {
+  return [...items].sort((left, right) => String(left?.id || '').localeCompare(String(right?.id || '')));
+}
+
+function normaliseStructureNode(node = {}) {
+  return {
+    id: String(node.id || ''),
+    parentId: String(node.parentId || ''),
+    type: String(node.type || ''),
+    name: String(node.name || ''),
+    websiteUrl: String(node.websiteUrl || ''),
+    profile: String(node.profile || ''),
+    departmentHint: String(node.departmentHint || ''),
+    departmentRelationshipType: String(node.departmentRelationshipType || ''),
+    ownerUsername: String(node.ownerUsername || ''),
+    contextSections: node.contextSections && typeof node.contextSections === 'object' ? node.contextSections : null
+  };
+}
+
+function normaliseLayer(layer = {}) {
+  return {
+    entityId: String(layer.entityId || ''),
+    entityName: String(layer.entityName || ''),
+    geography: String(layer.geography || ''),
+    riskAppetiteStatement: String(layer.riskAppetiteStatement || ''),
+    applicableRegulations: Array.isArray(layer.applicableRegulations) ? [...layer.applicableRegulations].sort() : [],
+    aiInstructions: String(layer.aiInstructions || ''),
+    benchmarkStrategy: String(layer.benchmarkStrategy || ''),
+    contextSummary: String(layer.contextSummary || '')
+  };
+}
+
+function sameValue(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function canBuAdminWriteSettings(currentSettings, proposedSettings, session) {
+  const ownedBusinessUnitId = String(session?.businessUnitEntityId || '').trim();
+  if (!ownedBusinessUnitId) return false;
+
+  const guardedGlobalKeys = [
+    'geography',
+    'companyWebsiteUrl',
+    'companyContextProfile',
+    'companyContextSections',
+    'riskAppetiteStatement',
+    'applicableRegulations',
+    'aiInstructions',
+    'benchmarkStrategy',
+    'defaultLinkMode',
+    'toleranceThresholdUsd',
+    'warningThresholdUsd',
+    'annualReviewThresholdUsd',
+    'adminContextSummary',
+    'escalationGuidance'
+  ];
+
+  for (const key of guardedGlobalKeys) {
+    if (!sameValue(currentSettings[key], proposedSettings[key])) {
+      return false;
+    }
+  }
+
+  const currentStructure = Array.isArray(currentSettings.companyStructure) ? currentSettings.companyStructure : [];
+  const proposedStructure = Array.isArray(proposedSettings.companyStructure) ? proposedSettings.companyStructure : [];
+  const isDepartment = node => String(node.type || '').toLowerCase() === 'department / function';
+
+  const currentCompanyNodes = stableSortById(currentStructure.filter(node => !isDepartment(node)).map(normaliseStructureNode));
+  const proposedCompanyNodes = stableSortById(proposedStructure.filter(node => !isDepartment(node)).map(normaliseStructureNode));
+  if (!sameValue(currentCompanyNodes, proposedCompanyNodes)) {
+    return false;
+  }
+
+  const currentOutsideDepartments = stableSortById(
+    currentStructure.filter(node => isDepartment(node) && String(node.parentId || '') !== ownedBusinessUnitId).map(normaliseStructureNode)
+  );
+  const proposedOutsideDepartments = stableSortById(
+    proposedStructure.filter(node => isDepartment(node) && String(node.parentId || '') !== ownedBusinessUnitId).map(normaliseStructureNode)
+  );
+  if (!sameValue(currentOutsideDepartments, proposedOutsideDepartments)) {
+    return false;
+  }
+
+  const proposedInsideDepartments = proposedStructure.filter(node => isDepartment(node) && String(node.parentId || '') === ownedBusinessUnitId);
+  const allowedLayerEntityIds = new Set([
+    ownedBusinessUnitId,
+    ...currentStructure
+      .filter(node => isDepartment(node) && String(node.parentId || '') === ownedBusinessUnitId)
+      .map(node => String(node.id || '')),
+    ...proposedInsideDepartments.map(node => String(node.id || ''))
+  ]);
+
+  const currentOutsideLayers = stableSortById(
+    (Array.isArray(currentSettings.entityContextLayers) ? currentSettings.entityContextLayers : [])
+      .filter(layer => !allowedLayerEntityIds.has(String(layer.entityId || '')))
+      .map(normaliseLayer)
+  );
+  const proposedOutsideLayers = stableSortById(
+    (Array.isArray(proposedSettings.entityContextLayers) ? proposedSettings.entityContextLayers : [])
+      .filter(layer => !allowedLayerEntityIds.has(String(layer.entityId || '')))
+      .map(normaliseLayer)
+  );
+  return sameValue(currentOutsideLayers, proposedOutsideLayers);
+}
 
 module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
@@ -140,7 +244,15 @@ module.exports = async function handler(req, res) {
         res.status(403).json({ error: 'Admin secret or valid session token required.' });
         return;
       }
-      const settings = await writeSettings(body.settings || {});
+      const currentSettings = await readSettings();
+      const nextSettings = normaliseSettings(body.settings || {});
+      const isAdminActor = isAdminSecretValid(req) || session?.role === 'admin';
+      const isScopedBuAdmin = session?.role === 'bu_admin' && canBuAdminWriteSettings(currentSettings, nextSettings, session);
+      if (!isAdminActor && !isScopedBuAdmin) {
+        res.status(403).json({ error: 'You are not allowed to modify these shared settings.' });
+        return;
+      }
+      const settings = await writeSettings(nextSettings);
       await appendAuditEvent({ category: body.audit?.category || 'settings', eventType: body.audit?.eventType || 'settings_updated', actorUsername: session?.username || 'admin', actorRole: session?.role || 'admin', target: body.audit?.target || 'global_settings', status: 'success', source: 'server', details: body.audit?.details || {} });
       res.status(200).json({ settings });
       return;
