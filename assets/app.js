@@ -1743,6 +1743,41 @@ function fmtCurrency(usdValue) {
   return '$' + v.toFixed(0);
 }
 
+function parseFlexibleNumber(value) {
+  const cleaned = String(value == null ? '' : value)
+    .replace(/,/g, '')
+    .replace(/[^0-9.-]/g, '')
+    .trim();
+  if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === '-.') return NaN;
+  return Number(cleaned);
+}
+
+function formatGroupedNumber(value) {
+  const numeric = parseFlexibleNumber(value);
+  if (!Number.isFinite(numeric)) return '';
+  const sign = numeric < 0 ? '-' : '';
+  const abs = Math.abs(numeric);
+  const asText = String(abs);
+  const parts = asText.split('.');
+  const whole = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return sign + (parts[1] ? `${whole}.${parts[1]}` : whole);
+}
+
+function attachFormattedMoneyInputs() {
+  document.querySelectorAll('.money-input').forEach(input => {
+    if (input.dataset.moneyBound === 'true') return;
+    input.dataset.moneyBound = 'true';
+    input.addEventListener('focus', () => {
+      const numeric = parseFlexibleNumber(input.value);
+      input.value = Number.isFinite(numeric) ? String(numeric) : '';
+    });
+    input.addEventListener('blur', () => {
+      input.value = formatGroupedNumber(input.value);
+    });
+    input.value = formatGroupedNumber(input.value);
+  });
+}
+
 function setPage(html) {
   document.getElementById('main-content').innerHTML = html;
 }
@@ -3604,7 +3639,7 @@ function renderWizard3() {
             <div id="secondary-inputs" ${!p.secondaryEnabled?'class="hidden"':''}>
               <div class="grid-2">
                 <div><p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">How likely is the follow-on impact? Use 0 to 1.</p>${tripleInput('secProb','Secondary probability', v('secProbMin',0.1), v('secProbLikely',0.3), v('secProbMax',0.7), { minLabel: 'Low chance', likelyLabel: 'Expected chance', maxLabel: 'High chance' })}</div>
-                <div><p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">If it happens, how large could that extra impact be in ${sym}?</p>${tripleInput('secMag','Secondary magnitude', v('secMagMin',100000), v('secMagLikely',500000), v('secMagMax',2000000), { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'High cost' })}</div>
+                <div><p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">If it happens, how large could that extra impact be in ${sym}?</p>${tripleInput('secMag','Secondary magnitude', v('secMagMin',100000), v('secMagLikely',500000), v('secMagMax',2000000), { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'High cost', money: true, inputType: 'text' })}</div>
               </div>
             </div>
           </div>
@@ -3659,6 +3694,7 @@ function renderWizard3() {
     document.getElementById('vuln-derived-section')?.classList.toggle('hidden', this.checked);
     AppState.draft.fairParams.vulnDirect = this.checked;
   });
+  attachFormattedMoneyInputs();
   document.getElementById('btn-back-3').addEventListener('click', () => Router.navigate('/wizard/2'));
   document.getElementById('btn-next-3').addEventListener('click', () => {
     collectFairParams();
@@ -3671,25 +3707,30 @@ function tripleInput(prefix, label, min, likely, max, labels = {}) {
   const minLabel = labels.minLabel || 'Min';
   const likelyLabel = labels.likelyLabel || 'Most Likely';
   const maxLabel = labels.maxLabel || 'Max';
+  const inputType = labels.inputType || 'number';
+  const inputClass = labels.money ? 'form-input fair-input money-input' : 'form-input fair-input';
+  const stepAttr = inputType === 'number' ? ' step="any"' : '';
+  const inputMode = labels.money ? 'decimal' : (labels.inputMode || 'decimal');
+  const formatValue = value => labels.money ? formatGroupedNumber(value) : value;
   return `<div class="range-group">
-    <div class="form-group"><div class="range-col-label">${minLabel}</div><input class="form-input fair-input" id="${prefix}-min" data-key="${prefix}Min" type="number" step="any" value="${min}" aria-label="${label} min"></div>
-    <div class="form-group"><div class="range-col-label" style="color:var(--color-primary-300)">${likelyLabel}</div><input class="form-input fair-input" id="${prefix}-likely" data-key="${prefix}Likely" type="number" step="any" value="${likely}" aria-label="${label} likely"></div>
-    <div class="form-group"><div class="range-col-label">${maxLabel}</div><input class="form-input fair-input" id="${prefix}-max" data-key="${prefix}Max" type="number" step="any" value="${max}" aria-label="${label} max"></div>
+    <div class="form-group"><div class="range-col-label">${minLabel}</div><input class="${inputClass}" id="${prefix}-min" data-key="${prefix}Min" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(min)}" aria-label="${label} min"></div>
+    <div class="form-group"><div class="range-col-label" style="color:var(--color-primary-300)">${likelyLabel}</div><input class="${inputClass}" id="${prefix}-likely" data-key="${prefix}Likely" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(likely)}" aria-label="${label} likely"></div>
+    <div class="form-group"><div class="range-col-label">${maxLabel}</div><input class="${inputClass}" id="${prefix}-max" data-key="${prefix}Max" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(max)}" aria-label="${label} max"></div>
   </div>`;
 }
 
 function lossRow(prefix, label, min, likely, max, tooltip) {
   return `<div>
     <div style="font-size:.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:6px">${label}<span data-tooltip="${tooltip}" style="cursor:help;color:var(--color-accent-300);font-size:.72rem">ⓘ</span></div>
-    ${tripleInput(prefix, label, min, likely, max, { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'Severe cost' })}
+    ${tripleInput(prefix, label, min, likely, max, { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'Severe cost', money: true, inputType: 'text' })}
   </div>`;
 }
 
 function collectFairParams() {
   const p = AppState.draft.fairParams;
   document.querySelectorAll('.fair-input').forEach(input => {
-    const val = parseFloat(input.value);
-    if (!isNaN(val)) p[input.dataset.key] = val;
+    const val = parseFlexibleNumber(input.value);
+    if (!Number.isNaN(val)) p[input.dataset.key] = val;
   });
   const dist = document.getElementById('adv-dist');
   const iter = document.getElementById('adv-iter');
