@@ -6460,7 +6460,8 @@ function renderAdminSettings(activeSection = 'org') {
       renderAdminSettings();
     }).catch(() => {});
   }
-  const regsInput = UI.tagInput('ti-admin-regulations', settings.applicableRegulations);
+  const regsHost = document.getElementById('ti-admin-regulations');
+  const regsInput = regsHost ? UI.tagInput('ti-admin-regulations', settings.applicableRegulations) : null;
   const structureSummaryEl = document.getElementById('admin-company-structure-summary');
   const layerSummaryEl = document.getElementById('admin-layer-summary-list');
   const profileEl = document.getElementById('admin-company-profile');
@@ -6475,6 +6476,7 @@ function renderAdminSettings(activeSection = 'org') {
   }
 
   function refreshStructureSummary() {
+    if (!structureSummaryEl) return;
     structureSummaryEl.innerHTML = renderCompanyStructureSummary(companyStructure);
     bindStructureActionHandlers();
   }
@@ -6609,6 +6611,7 @@ function renderAdminSettings(activeSection = 'org') {
   }
 
   function bindStructureActionHandlers() {
+    if (!structureSummaryEl) return;
     structureSummaryEl.querySelectorAll('.org-summary-action').forEach(button => {
       button.addEventListener('click', event => {
         event.preventDefault();
