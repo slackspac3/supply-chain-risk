@@ -4471,12 +4471,18 @@ function applyTreatmentPrompt(promptId) {
 function createTreatmentDraftFromAssessment(assessment) {
   const clone = JSON.parse(JSON.stringify(assessment || {}));
   const originalTitle = clone.scenarioTitle || 'Untitled assessment';
+  delete clone.results;
+  delete clone.completedAt;
+  delete clone.archivedAt;
+  delete clone._shared;
+  delete clone.assessmentIntelligence;
   AppState.draft = {
     ...clone,
     id: 'a_' + Date.now(),
     scenarioTitle: `${originalTitle} — Treatment case`,
     learningNote: `Cloned from ${originalTitle} so you can compare a stronger future-state view against the current baseline.`,
     comparisonBaselineId: assessment.id,
+    treatmentImprovementRequest: '',
     results: null,
     completedAt: null
   };
