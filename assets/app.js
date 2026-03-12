@@ -2685,7 +2685,7 @@ function renderUserDashboard() {
   const latestAssessment = recentAssessments[0] || null;
   const learningStore = getLearningStore();
   const templateLoads = Object.values(learningStore.templates || {}).reduce((sum, item) => sum + Number(item.loads || 0), 0);
-  const draftTitle = String(AppState.draft?.scenarioTitle || AppState.draft?.scenarioNarrative || '').trim();
+  const draftTitle = String(AppState.draft?.scenarioTitle || AppState.draft?.narrative || '').trim();
   const hasDraft = Boolean(draftTitle);
   const focusAreas = Array.isArray(profile.focusAreas) ? profile.focusAreas.filter(Boolean) : [];
   const assessmentsNeedingReview = assessments.filter(a => a?.results && (a.results.toleranceBreached || a.results.nearTolerance || a.results.annualReviewTriggered)).slice(0, 3);
