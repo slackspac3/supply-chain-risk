@@ -7329,7 +7329,10 @@ function renderAdminSettings(activeSection = 'org') {
 
   document.getElementById('btn-reset-settings')?.addEventListener('click', async () => {
     if (await UI.confirm('Reset platform settings to defaults?')) {
-      localStorage.removeItem(GLOBAL_ADMIN_STORAGE_KEY);
+      const resetSettings = JSON.parse(JSON.stringify(DEFAULT_ADMIN_SETTINGS));
+      saveAdminSettings(resetSettings);
+      if (!AppState.draft.geography) AppState.draft.geography = resetSettings.geography;
+      saveDraft();
       UI.toast('Settings reset.', 'success');
       rememberSettingsScroll('admin-settings');
       safeRenderAdminSettings(currentSettingsSection);
