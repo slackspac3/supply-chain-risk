@@ -2927,40 +2927,40 @@ function renderUserDashboard() {
   document.getElementById('btn-dashboard-open-settings')?.addEventListener('click', () => Router.navigate('/settings'));
   document.getElementById('btn-dashboard-settings-secondary')?.addEventListener('click', () => Router.navigate('/settings'));
   document.getElementById('btn-dashboard-continue-draft')?.addEventListener('click', () => Router.navigate('/wizard/1'));
-  document.querySelectorAll('.dashboard-open-action').forEach(button => {
-    button.addEventListener('click', () => {
-      const id = button.dataset.assessmentId;
+  document.querySelector('main.page')?.addEventListener('click', async event => {
+    const target = event.target.closest('button');
+    if (!target) return;
+    const row = target.closest('.dashboard-assessment-row');
+    const id = target.dataset.assessmentId || row?.dataset.assessmentId || '';
+
+    if (target.classList.contains('dashboard-open-action')) {
       if (id === 'draft') {
         Router.navigate('/wizard/1');
         return;
       }
-      Router.navigate(`/results/${id}`);
-    });
-  });
-  document.querySelectorAll('.dashboard-archive-assessment').forEach(button => {
-    button.addEventListener('click', async () => {
-      const row = button.closest('.dashboard-assessment-row');
-      const id = button.dataset.assessmentId || row?.dataset.assessmentId;
+      if (id) Router.navigate(`/results/${id}`);
+      return;
+    }
+
+    if (target.classList.contains('dashboard-archive-assessment')) {
       if (!id) return;
       if (!await UI.confirm('Archive this assessment? It will be removed from your main dashboard.')) return;
       if (!archiveAssessment(id)) { UI.toast('Could not find that assessment to archive.', 'warning'); return; }
       UI.toast('Assessment archived.', 'success');
       renderUserDashboard();
-    });
-  });
-  document.querySelectorAll('.dashboard-delete-assessment').forEach(button => {
-    button.addEventListener('click', async () => {
-      const row = button.closest('.dashboard-assessment-row');
-      const id = button.dataset.assessmentId || row?.dataset.assessmentId;
+      return;
+    }
+
+    if (target.classList.contains('dashboard-delete-assessment')) {
       if (!id) return;
       if (!await UI.confirm('Delete this assessment permanently from your workspace?')) return;
       if (!deleteAssessment(id)) { UI.toast('Could not find that assessment to delete.', 'warning'); return; }
       UI.toast('Assessment deleted.', 'success');
       renderUserDashboard();
-    });
-  });
-  document.querySelectorAll('.dashboard-archive-draft').forEach(button => {
-    button.addEventListener('click', async () => {
+      return;
+    }
+
+    if (target.classList.contains('dashboard-archive-draft')) {
       if (!await UI.confirm('Archive the current draft and remove it from your active dashboard?')) return;
       const archived = archiveCurrentDraft();
       if (!archived) {
@@ -2969,20 +2969,18 @@ function renderUserDashboard() {
       }
       UI.toast('Draft archived.', 'success');
       renderUserDashboard();
-    });
-  });
-  document.querySelectorAll('.dashboard-delete-draft').forEach(button => {
-    button.addEventListener('click', async () => {
+      return;
+    }
+
+    if (target.classList.contains('dashboard-delete-draft')) {
       if (!await UI.confirm('Delete the current draft from your workspace?')) return;
       deleteCurrentDraft();
       UI.toast('Draft deleted.', 'success');
       renderUserDashboard();
-    });
-  });
-  document.querySelectorAll('.dashboard-restore-assessment').forEach(button => {
-    button.addEventListener('click', () => {
-      const row = button.closest('.dashboard-assessment-row');
-      const id = button.dataset.assessmentId || row?.dataset.assessmentId;
+      return;
+    }
+
+    if (target.classList.contains('dashboard-restore-assessment')) {
       if (!id) return;
       const assessment = getAssessmentById(id);
       if (!assessment) return;
@@ -2995,7 +2993,7 @@ function renderUserDashboard() {
       restoreArchivedDraftToWorkspace(id);
       UI.toast('Archived draft restored to your active workspace.', 'success');
       Router.navigate('/wizard/1');
-    });
+    }
   });
 }
 
