@@ -1,4 +1,4 @@
-# G42 Tech & Cyber Risk Quantifier — PoC
+# Tech & Cyber Risk Quantifier — PoC
 
 A FAIR-based Monte Carlo simulation tool for structured cyber risk assessment. Built as a pure front-end SPA (HTML + CSS + Vanilla JS), no build tools required.
 
