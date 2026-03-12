@@ -3641,7 +3641,7 @@ function renderWizard3() {
         </div>
         <div class="wizard-body">
           ${draft.learningNote ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Template learning</div><p class="context-panel-copy">${draft.learningNote}</p></div>` : ''}
-          ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Treatment case baseline</div><p class="context-panel-copy">You are working on a treated-state version of <strong>${baselineAssessment.scenarioTitle || 'the original assessment'}</strong>. Adjust the assumptions below to reflect the control or resilience change you want to test, then rerun and compare the result against the original.</p><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Improve control strength</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="frequency">Reduce event frequency</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="business-interruption">Reduce business interruption</button></div><div class="form-help" style="margin-top:10px">These prompts are just shortcuts for a treated-state test. You can still edit every number manually.</div></div>` : ''}
+          ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Before-and-after baseline</div><p class="context-panel-copy">You are working on an improved version of <strong>${baselineAssessment.scenarioTitle || 'the original assessment'}</strong>. Adjust the assumptions below to reflect the control or resilience change you want to test, then rerun and compare the result against the original.</p><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Improve control strength</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="frequency">Reduce event frequency</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="business-interruption">Reduce business interruption</button></div><div class="form-help" style="margin-top:10px">These prompts are just shortcuts for a before-and-after test. You can still edit every number manually.</div></div>` : ''}
           ${draft.workflowGuidance?.length ? renderWorkflowGuidanceBlock(draft.workflowGuidance) : ''}
           ${renderBenchmarkRationaleBlock(draft.benchmarkBasis, draft.inputRationale)}
           ${renderEstimateExplainerCard(draft, bu, isAdv, cur)}
@@ -4153,7 +4153,7 @@ function createTreatmentDraftFromAssessment(assessment) {
     ...clone,
     id: 'a_' + Date.now(),
     scenarioTitle: `${originalTitle} — Treatment case`,
-    learningNote: `Cloned from ${originalTitle} so you can test a treated-state version against the original baseline.`,
+    learningNote: `Cloned from ${originalTitle} so you can test a before-and-after version against the original baseline.`,
     comparisonBaselineId: assessment.id,
     results: null,
     completedAt: null
@@ -4624,7 +4624,7 @@ function renderResults(id, isShared) {
             <button class="btn btn--secondary btn--sm" id="btn-share-results">Share</button>
             <button class="btn btn--secondary btn--sm" id="btn-export-json">↓ JSON</button>
             <button class="btn btn--secondary btn--sm" id="btn-export-pptx">↓ PPTX Spec</button>
-            <button class="btn btn--secondary btn--sm" id="btn-create-treatment-case">Create Treatment Case</button>
+            <button class="btn btn--secondary btn--sm" id="btn-create-treatment-case">Test an Improvement</button>
             <button class="btn btn--primary btn--sm" id="btn-export-pdf">↓ PDF Report</button>
           </div>
         </div>
@@ -4674,7 +4674,7 @@ function renderResults(id, isShared) {
   document.getElementById('btn-export-pptx').addEventListener('click', () => { ExportService.exportPPTXSpec(assessment, AppState.currency, AppState.fxRate); UI.toast('PPTX spec exported as JSON. See README.','info',5000); });
   document.getElementById('btn-create-treatment-case').addEventListener('click', () => {
     createTreatmentDraftFromAssessment(assessment);
-    UI.toast('Treatment case created. Adjust the assumptions and rerun to compare against the original.', 'success');
+    UI.toast('Improvement test created. Adjust the assumptions and rerun to compare against the original.', 'success');
     Router.navigate('/wizard/3');
   });
   document.getElementById('btn-new-assess').addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
