@@ -7109,7 +7109,8 @@ function safeRenderAdminSettings(section = getPreferredAdminSection()) {
       UI.toast('A problem affected the selected admin section, so the page reopened in Organisation Setup.', 'warning', 5000);
     } catch (fallbackError) {
       console.error('safeRenderAdminSettings hard failure:', fallbackError);
-      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/org">Open Organisation Setup</a><a class="btn btn--ghost" href="#/dashboard">Home</a></div></div></div></main>`);
+      const errorMessage = String(fallbackError?.message || error?.message || 'Unknown admin render error');
+      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="form-help mt-4" style="word-break:break-word"><strong>Error:</strong> ${errorMessage}</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/org">Open Organisation Setup</a><a class="btn btn--ghost" href="#/dashboard">Home</a></div></div></div></main>`);
     }
   }
 }
