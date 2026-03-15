@@ -1703,6 +1703,19 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap" id="org-context-actions">
       <button class="btn btn--secondary" id="btn-org-build-context" type="button">Build Context from Website</button>
       <span class="form-help" id="org-context-actions-help">Use AI to gather website and public-source context before saving.</span>
+    </div>
+    <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-elevated)" id="org-context-refinement-wrap">
+      <div class="context-panel-title">Refine This Context With AI</div>
+      <p class="form-help" id="org-context-refinement-help" style="margin-top:6px">Use follow-up prompts to keep shaping the context until it is ready to save.</p>
+      <div id="org-context-refinement-history" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
+      <div class="form-group mt-4">
+        <label class="form-label" for="org-context-followup">Follow-up prompt</label>
+        <textarea class="form-textarea" id="org-context-followup" rows="3" placeholder="Tell the AI what to change, emphasise, shorten, or make more specific."></textarea>
+      </div>
+      <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
+        <button class="btn btn--secondary" id="btn-org-refine-context" type="button">Refine Context with AI</button>
+        <span class="form-help" id="org-context-refine-status">The context fields above will update in place each time you refine them.</span>
+      </div>
     </div>`;
   const modal = UI.modal({
     title: isSeedDepartment
@@ -1730,9 +1743,54 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
   const contextActionsEl = document.getElementById('org-context-actions');
   const contextActionsHelpEl = document.getElementById('org-context-actions-help');
   const contextSectionsWrapEl = document.getElementById('org-context-sections-wrap');
+  const contextRefinementWrapEl = document.getElementById('org-context-refinement-wrap');
+  const contextRefinementHelpEl = document.getElementById('org-context-refinement-help');
+  const contextRefinementHistoryEl = document.getElementById('org-context-refinement-history');
+  const contextFollowupEl = document.getElementById('org-context-followup');
+  const contextRefineStatusEl = document.getElementById('org-context-refine-status');
+  const contextRefinementHistory = [];
 
   function getSelectedNodeType() {
     return departmentEditorMode ? 'Department / function' : typeEl.value;
+  }
+
+  function getCurrentOrgCompanySections() {
+    return {
+      companySummary: document.getElementById('org-section-summary')?.value.trim() || '',
+      businessModel: document.getElementById('org-section-business-model')?.value.trim() || '',
+      operatingModel: document.getElementById('org-section-operating-model')?.value.trim() || '',
+      publicCommitments: document.getElementById('org-section-commitments')?.value.trim() || '',
+      keyRiskSignals: document.getElementById('org-section-risks')?.value.trim() || '',
+      obligations: document.getElementById('org-section-obligations')?.value.trim() || '',
+      sources: document.getElementById('org-section-sources')?.value.trim() || ''
+    };
+  }
+
+  function applyOrgCompanyContextResult(result = {}) {
+    const sections = buildCompanyContextSections(result);
+    const profileText = serialiseCompanyContextSections(sections);
+    profileEl.value = profileText;
+    document.getElementById('org-section-summary').value = sections.companySummary || '';
+    document.getElementById('org-section-business-model').value = sections.businessModel || '';
+    document.getElementById('org-section-operating-model').value = sections.operatingModel || '';
+    document.getElementById('org-section-commitments').value = sections.publicCommitments || '';
+    document.getElementById('org-section-risks').value = sections.keyRiskSignals || '';
+    document.getElementById('org-section-obligations').value = sections.obligations || '';
+    document.getElementById('org-section-sources').value = sections.sources || '';
+    return { sections, profileText };
+  }
+
+  function renderOrgContextRefinementHistory() {
+    if (!contextRefinementHistoryEl) return;
+    if (!contextRefinementHistory.length) {
+      contextRefinementHistoryEl.innerHTML = '<div class="form-help">No follow-up prompts yet. Build the first draft, then iterate here until the context feels right.</div>';
+      return;
+    }
+    contextRefinementHistoryEl.innerHTML = contextRefinementHistory.map(entry => `
+      <div class="card" style="padding:var(--sp-3);background:var(--bg-canvas)">
+        <div class="context-panel-title" style="font-size:.82rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${entry.role === 'user' ? 'Your prompt' : 'AI update'}</div>
+        <div style="margin-top:6px;color:var(--text-primary);line-height:1.55">${escapeHtml(entry.text || '')}</div>
+      </div>`).join('');
   }
 
   function refreshEntityEditorState() {
@@ -1751,12 +1809,18 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     websiteWrapEl.style.display = departmentEditorMode ? 'none' : '';
     contextActionsEl.style.display = '';
     contextSectionsWrapEl.style.display = departmentEditorMode ? 'none' : '';
+    if (contextRefinementWrapEl) contextRefinementWrapEl.style.display = '';
     const buildContextBtn = document.getElementById('btn-org-build-context');
     if (buildContextBtn) buildContextBtn.textContent = departmentEditorMode ? 'AI Assist Context' : 'Build Context from Website';
     if (contextActionsHelpEl) {
       contextActionsHelpEl.textContent = departmentEditorMode
         ? 'Use AI to derive a starter function context from the parent business unit and its retained context.'
         : 'Use AI to gather website and public-source context before saving.';
+    }
+    if (contextRefinementHelpEl) {
+      contextRefinementHelpEl.textContent = departmentEditorMode
+        ? 'Use follow-up prompts to keep shaping the function summary until it reflects the remit and dependencies correctly.'
+        : 'Use follow-up prompts to keep shaping the company context until it is ready to save.';
     }
     ownerLabelEl.textContent = departmentEditorMode ? 'Department Owner' : 'Business Unit Admin';
     ownerHelpEl.textContent = departmentEditorMode
@@ -1819,6 +1883,8 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     if (result.contextSummary) profileEl.value = result.contextSummary;
   }
 
+  renderOrgContextRefinementHistory();
+
   if (departmentEditorMode) {
     document.getElementById('btn-org-build-context').addEventListener('click', async () => {
       const btn = document.getElementById('btn-org-build-context');
@@ -1826,6 +1892,10 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       btn.textContent = 'Building context…';
       try {
         await buildDepartmentContextFromParent();
+        contextRefinementHistory.length = 0;
+        contextRefinementHistory.push({ role: 'assistant', text: 'Initial function context draft created. Use follow-up prompts below if you want to reshape it further.' });
+        renderOrgContextRefinementHistory();
+        if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
         UI.toast('Function context drafted from the parent business context.', 'success', 5000);
       } catch (error) {
         UI.toast('Context build failed: ' + error.message, 'danger', 6000);
@@ -1834,7 +1904,124 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         btn.textContent = 'AI Assist Context';
       }
     });
+  } else {
+    document.getElementById('btn-org-build-context').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-org-build-context');
+      const llmConfig = getAdminLLMConfig();
+      const targetUrl = websiteEl.value.trim();
+      if (!targetUrl) {
+        UI.toast('Enter a company website URL first.', 'warning');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Building context…';
+      try {
+        LLMService.setCompassConfig(llmConfig);
+        const result = await LLMService.buildCompanyContext(targetUrl);
+        applyOrgCompanyContextResult(result);
+        if (!nameEl.value.trim()) {
+          nameEl.value = inferCompanyNameFromUrl(targetUrl);
+        }
+        contextRefinementHistory.length = 0;
+        contextRefinementHistory.push({ role: 'assistant', text: 'Initial company context draft created. Use follow-up prompts below if you want to reshape it further.' });
+        renderOrgContextRefinementHistory();
+        if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
+        UI.toast('Company context built. Review the entity details and save it into the organisation tree.', 'success', 5000);
+      } catch (error) {
+        UI.toast('Company context build failed: ' + error.message, 'danger', 6000);
+        if (contextRefineStatusEl) contextRefineStatusEl.textContent = `Company context build failed: ${error.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Build Context from Website';
+      }
+    });
   }
+
+  document.getElementById('btn-org-refine-context').addEventListener('click', async () => {
+    const prompt = contextFollowupEl?.value.trim() || '';
+    if (!prompt) {
+      UI.toast('Enter a follow-up prompt first.', 'warning');
+      return;
+    }
+    const btn = document.getElementById('btn-org-refine-context');
+    btn.disabled = true;
+    btn.textContent = 'Refining…';
+    if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Refining the context using your latest instruction…';
+    contextRefinementHistory.push({ role: 'user', text: prompt });
+    renderOrgContextRefinementHistory();
+    try {
+      const llmConfig = getAdminLLMConfig();
+      LLMService.setCompassConfig(llmConfig);
+      if (departmentEditorMode) {
+        const settings = getAdminSettings();
+        const parentId = parentEl.value || node.parentId || seed.parentId || '';
+        const parentEntity = getEntityById(structure, parentId);
+        const parentLayer = parentEntity?.id ? getEntityLayerById(settings, parentEntity.id) : null;
+        const result = await LLMService.refineEntityContext({
+          entity: {
+            id: node.id || '',
+            name: nameEl.value.trim() || defaultDepartmentHint || 'New function',
+            type: 'Department / function',
+            profile: profileEl.value.trim(),
+            departmentHint: departmentTemplateEl.value || defaultDepartmentHint || '',
+            departmentRelationshipType: typeEl.value || defaultDepartmentRelationshipType,
+            ownerUsername: ownerEl.value || ''
+          },
+          parentEntity: parentEntity ? {
+            id: parentEntity.id,
+            name: parentEntity.name,
+            type: parentEntity.type,
+            profile: parentEntity.profile || '',
+            websiteUrl: parentEntity.websiteUrl || ''
+          } : null,
+          currentContext: {
+            geography: settings.geography || '',
+            contextSummary: profileEl.value.trim(),
+            applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
+            aiInstructions: settings.aiInstructions || '',
+            benchmarkStrategy: settings.benchmarkStrategy || '',
+            riskAppetiteStatement: settings.riskAppetiteStatement || ''
+          },
+          parentLayer: parentLayer || null,
+          adminSettings: {
+            geography: settings.geography || '',
+            applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
+            aiInstructions: settings.aiInstructions || '',
+            benchmarkStrategy: settings.benchmarkStrategy || '',
+            riskAppetiteStatement: settings.riskAppetiteStatement || ''
+          },
+          history: contextRefinementHistory,
+          userPrompt: prompt
+        });
+        if (result.contextSummary) profileEl.value = result.contextSummary;
+        contextRefinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the function context based on your latest prompt.' });
+      } else {
+        const settings = getAdminSettings();
+        const result = await LLMService.refineCompanyContext({
+          websiteUrl: websiteEl?.value.trim() || '',
+          currentSections: getCurrentOrgCompanySections(),
+          currentAiGuidance: settings.aiInstructions || '',
+          currentGeography: settings.geography || '',
+          currentRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
+          history: contextRefinementHistory,
+          userPrompt: prompt
+        });
+        applyOrgCompanyContextResult(result);
+        contextRefinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the company context based on your latest prompt.' });
+      }
+      renderOrgContextRefinementHistory();
+      if (contextFollowupEl) contextFollowupEl.value = '';
+      if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Latest refinement applied. Keep iterating until the context feels right.';
+      UI.toast(departmentEditorMode ? 'Function context refined.' : 'Entity context refined.', 'success', 5000);
+    } catch (error) {
+      UI.toast('Context refinement failed: ' + error.message, 'danger', 6000);
+      if (contextRefineStatusEl) contextRefineStatusEl.textContent = `Context refinement failed: ${error.message}`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Refine Context with AI';
+    }
+  });
+
   document.getElementById('org-save').addEventListener('click', () => {
     const selectedNodeType = getSelectedNodeType();
     const parentId = parentEl.value;

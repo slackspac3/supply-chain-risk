@@ -151,43 +151,6 @@ const AdminOrgSetupSection = (() => {
         UI.toast(`${node.name} saved to the organisation tree.`, 'success', 5000);
       }
     });
-    const buildContextBtn = document.getElementById('btn-org-build-context');
-    if (buildContextBtn && !departmentEditorMode) {
-      buildContextBtn.addEventListener('click', async () => {
-        const llmConfig = getAdminLLMConfig();
-        const targetUrl = document.getElementById('org-website-url').value.trim();
-        if (!targetUrl) {
-          UI.toast('Enter a company website URL first.', 'warning');
-          return;
-        }
-        buildContextBtn.disabled = true;
-        buildContextBtn.textContent = 'Building context…';
-        try {
-          LLMService.setCompassConfig(llmConfig);
-          const result = await LLMService.buildCompanyContext(targetUrl);
-          const sections = buildCompanyContextSections(result);
-          const profileText = serialiseCompanyContextSections(sections);
-          editor.setProfile(profileText);
-          editor.setSections(sections);
-          if (!document.getElementById('org-entity-name').value.trim()) {
-            editor.setName(inferCompanyNameFromUrl(targetUrl));
-          }
-          if (Array.isArray(result.regulatorySignals) && result.regulatorySignals.length && regsInput?.setTags) {
-            regsInput.setTags(Array.from(new Set([...(regsInput.getTags() || []), ...result.regulatorySignals])));
-          }
-          const adminAiInstructionsEl = document.getElementById('admin-ai-instructions');
-          if (result.aiGuidance && adminAiInstructionsEl) adminAiInstructionsEl.value = result.aiGuidance;
-          const adminGeoEl = document.getElementById('admin-geo');
-          if (result.suggestedGeography && adminGeoEl && !adminGeoEl.value.trim()) adminGeoEl.value = result.suggestedGeography;
-          UI.toast('Company context built. Review the entity details and save it into the organisation tree.', 'success', 5000);
-        } catch (error) {
-          UI.toast('Company context build failed: ' + error.message, 'danger', 6000);
-        } finally {
-          buildContextBtn.disabled = false;
-          buildContextBtn.textContent = 'Build Context from Website';
-        }
-      });
-    }
   }
 
   function _bindStructureActionHandlers() {
