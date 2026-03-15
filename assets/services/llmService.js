@@ -109,6 +109,11 @@ const LLMService = (() => {
     const directCompass = _isDirectCompassUrl(_compassApiUrl);
     if (directCompass && !_compassApiKey) return null; // fall through to stub
 
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller
+      ? setTimeout(() => controller.abort(new Error('LLM request timed out.')), 30000)
+      : null;
+
     try {
       const headers = {
         'Content-Type': 'application/json'
@@ -119,6 +124,7 @@ const LLMService = (() => {
       const res = await fetch(_compassApiUrl, {
         method: 'POST',
         headers,
+        signal: controller?.signal,
         body: JSON.stringify({
           model: _compassModel,
           max_completion_tokens: 1200,
@@ -136,7 +142,12 @@ const LLMService = (() => {
       const data = await res.json();
       return data.choices?.[0]?.message?.content || null;
     } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error('AI assist timed out. Try again, shorten the prompt, or check the model configuration.');
+      }
       throw _normaliseLLMError(error);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 
