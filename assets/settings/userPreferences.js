@@ -633,8 +633,8 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
           currentRegulations: regsInput.getTags(),
           history: [],
           userPrompt: 'Incorporate the uploaded strategy, policy, procedure, and operating-model material into this company context draft while keeping it concise and grounded.',
-          uploadedText: uploaded.text,
-          uploadedDocumentName: uploaded.name
+          uploadedText: '',
+          uploadedDocumentName: ''
         });
         applyUserCompanyContextResult(result);
       }
@@ -670,7 +670,6 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     renderUserCompanyRefinementHistory();
     try {
       LLMService.setCompassConfig(llmConfig);
-      const uploaded = await loadContextSupportSource('user-company-source-file', 'user-company-source-help');
       const refineInput = {
         websiteUrl,
         currentSections: getCurrentUserCompanySections(),
@@ -679,8 +678,8 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
         currentRegulations: regsInput.getTags(),
         history: companyRefinementHistory,
         userPrompt: prompt,
-        uploadedText: uploaded.text,
-        uploadedDocumentName: uploaded.name
+        uploadedText: '',
+        uploadedDocumentName: ''
       };
       const result = buildLocalUserCompanyContextFallback(refineInput);
       applyUserCompanyContextResult(result);

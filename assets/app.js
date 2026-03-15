@@ -1980,7 +1980,6 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         const parentId = parentEl.value || node.parentId || seed.parentId || '';
         const parentEntity = getEntityById(structure, parentId);
         const parentLayer = parentEntity?.id ? getEntityLayerById(settings, parentEntity.id) : null;
-        const uploaded = await loadContextSupportSource('org-context-source-file', 'org-context-source-help');
         const refineInput = {
           entity: {
             id: node.id || '',
@@ -2016,15 +2015,14 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
           },
           history: contextRefinementHistory,
           userPrompt: prompt,
-          uploadedText: uploaded.text,
-          uploadedDocumentName: uploaded.name
+          uploadedText: '',
+          uploadedDocumentName: ''
         };
         const result = buildLocalEntityContextFallback(refineInput);
         if (result.contextSummary) profileEl.value = result.contextSummary;
         contextRefinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the function context based on your latest prompt.' });
       } else {
         const settings = getAdminSettings();
-        const uploaded = await loadContextSupportSource('org-context-source-file', 'org-context-source-help');
         const refineInput = {
           websiteUrl: websiteEl?.value.trim() || '',
           currentSections: getCurrentOrgCompanySections(),
@@ -2033,8 +2031,8 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
           currentRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
           history: contextRefinementHistory,
           userPrompt: prompt,
-          uploadedText: uploaded.text,
-          uploadedDocumentName: uploaded.name
+          uploadedText: '',
+          uploadedDocumentName: ''
         };
         const result = buildLocalCompanyContextFallback(refineInput);
         applyOrgCompanyContextResult(result);
@@ -2282,8 +2280,8 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       const uploaded = await loadContextSupportSource('entity-layer-source-file', 'entity-layer-source-help');
       const result = await LLMService.buildEntityContext({
         ...contextRequest,
-        uploadedText: uploaded.text,
-        uploadedDocumentName: uploaded.name
+        uploadedText: '',
+        uploadedDocumentName: ''
       });
       applyContextResult(result, { onlyEmptyGeography: true });
       refinementHistory.push({ role: 'assistant', text: uploaded.text ? `Initial context draft created for ${entity.name} and grounded with the uploaded source material. Review it or use follow-up prompts below to shape it further.` : `Initial context draft created for ${entity.name}. Review it or use follow-up prompts below to shape it further.` });
@@ -2316,14 +2314,13 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
         model: llmConfig.model || 'gpt-5.1',
         apiKey: llmConfig.apiKey || ''
       });
-      const uploaded = await loadContextSupportSource('entity-layer-source-file', 'entity-layer-source-help');
       const refineInput = {
         ...contextRequest,
         currentContext: getCurrentContextDraft(),
         history: refinementHistory,
         userPrompt: prompt,
-        uploadedText: uploaded.text,
-        uploadedDocumentName: uploaded.name
+        uploadedText: '',
+        uploadedDocumentName: ''
       };
       const result = buildLocalEntityContextFallback(refineInput);
       applyContextResult(result);
@@ -4176,8 +4173,8 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
           currentRegulations: regsInput?.getTags ? regsInput.getTags() : [],
           history: [],
           userPrompt: 'Incorporate the uploaded strategy, policy, procedure, and operating-model material into this company context draft while keeping it concise and grounded.',
-          uploadedText: uploaded.text,
-          uploadedDocumentName: uploaded.name
+          uploadedText: '',
+          uploadedDocumentName: ''
         });
         ({ sections, profileText } = applyAdminCompanyContextResult(result));
       }
@@ -4225,7 +4222,6 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
     renderAdminCompanyRefinementHistory();
     try {
       LLMService.setCompassConfig(llmConfig);
-      const uploaded = await loadContextSupportSource('admin-company-source-file', 'admin-company-source-help');
       const refineInput = {
         websiteUrl,
         currentSections: getCurrentAdminCompanySections(),
@@ -4234,8 +4230,8 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
         currentRegulations: regsInput?.getTags ? regsInput.getTags() : [],
         history: adminCompanyRefinementHistory,
         userPrompt: prompt,
-        uploadedText: uploaded.text,
-        uploadedDocumentName: uploaded.name
+        uploadedText: '',
+        uploadedDocumentName: ''
       };
       const result = buildLocalCompanyContextFallback(refineInput);
       applyAdminCompanyContextResult(result);
