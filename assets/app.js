@@ -7192,29 +7192,31 @@ function renderAdminSettings(activeSection = 'org') {
     });
   });
   document.getElementById('btn-admin-logout').addEventListener('click', () => { performLogout(); });
-  document.getElementById('btn-refresh-audit-log')?.addEventListener('click', async () => {
-    try {
-      await loadAuditLog();
-      rememberSettingsScroll('admin-settings');
-      safeRenderAdminSettings(currentSettingsSection);
-    } catch (error) {
-      UI.toast(`Audit log refresh failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
+  if (currentSettingsSection === 'audit') {
+    document.getElementById('btn-refresh-audit-log')?.addEventListener('click', async () => {
+      try {
+        await loadAuditLog();
+        rememberSettingsScroll('admin-settings');
+        safeRenderAdminSettings(currentSettingsSection);
+      } catch (error) {
+        UI.toast(`Audit log refresh failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
+      }
+    });
+    if (!AppState.auditLogCache.loaded && !AppState.auditLogCache.loading) {
+      loadAuditLog().then(() => {
+        rememberSettingsScroll('admin-settings');
+        safeRenderAdminSettings(currentSettingsSection);
+      }).catch(() => {});
     }
-  });
-  if (!AppState.auditLogCache.loaded && !AppState.auditLogCache.loading) {
-    loadAuditLog().then(() => {
-      rememberSettingsScroll('admin-settings');
-      safeRenderAdminSettings(currentSettingsSection);
-    }).catch(() => {});
   }
-  const regsHost = document.getElementById('ti-admin-regulations');
+  const regsHost = currentSettingsSection === 'defaults' ? document.getElementById('ti-admin-regulations') : null;
   const regsInput = regsHost ? UI.tagInput('ti-admin-regulations', settings.applicableRegulations) : null;
-  const typicalDepartmentsHost = document.getElementById('ti-admin-typical-departments');
+  const typicalDepartmentsHost = currentSettingsSection === 'defaults' ? document.getElementById('ti-admin-typical-departments') : null;
   const typicalDepartmentsInput = typicalDepartmentsHost ? UI.tagInput('ti-admin-typical-departments', getTypicalDepartments(settings)) : null;
-  const structureSummaryEl = document.getElementById('admin-company-structure-summary');
-  const layerSummaryEl = document.getElementById('admin-layer-summary-list');
-  const profileEl = document.getElementById('admin-company-profile');
-  const websiteEl = document.getElementById('admin-company-url');
+  const structureSummaryEl = currentSettingsSection === 'org' ? document.getElementById('admin-company-structure-summary') : null;
+  const layerSummaryEl = currentSettingsSection === 'org' ? document.getElementById('admin-layer-summary-list') : null;
+  const profileEl = currentSettingsSection === 'company' ? document.getElementById('admin-company-profile') : null;
+  const websiteEl = currentSettingsSection === 'company' ? document.getElementById('admin-company-url') : null;
 
   function persistAdminTreeState() {
     saveAdminSettings({
@@ -7431,10 +7433,12 @@ function renderAdminSettings(activeSection = 'org') {
     });
   }
 
-  document.getElementById('btn-add-org-entity')?.addEventListener('click', () => openEntityEditor());
-  document.getElementById('btn-add-org-function')?.addEventListener('click', () => openEntityEditor(null, { type: 'Department / function' }));
-  bindStructureActionHandlers();
-  renderEntityLayerSummary();
+  if (currentSettingsSection === 'org') {
+    document.getElementById('btn-add-org-entity')?.addEventListener('click', () => openEntityEditor());
+    document.getElementById('btn-add-org-function')?.addEventListener('click', () => openEntityEditor(null, { type: 'Department / function' }));
+    bindStructureActionHandlers();
+    renderEntityLayerSummary();
+  }
   function buildAdminSettingsPayload() {
     const currentSettings = getAdminSettings();
     const getInputValue = (id, fallback = '') => {
@@ -7563,6 +7567,7 @@ function renderAdminSettings(activeSection = 'org') {
     return true;
   }
 
+
   document.getElementById('btn-assess-admin-impact')?.addEventListener('click', () => {
     assessAdminSettingsImpact();
     UI.toast('End-user impact review updated.', 'info');
@@ -7589,11 +7594,11 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
     if (!accessSaved) return;
     persistAdminSettings(true);
   });
-  document.getElementById('btn-build-company-context')?.addEventListener('click', async () => {
+  if (currentSettingsSection === 'company') document.getElementById('btn-build-company-context')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-build-company-context');
     const websiteUrl = websiteEl.value.trim();
     const llmConfig = {
-      apiUrl: document.getElementById('admin-compass-url').value.trim() || '${DEFAULT_COMPASS_PROXY_URL}',
+      apiUrl: document.getElementById('admin-compass-url').value.trim() || DEFAULT_COMPASS_PROXY_URL,
       model: document.getElementById('admin-compass-model').value.trim() || 'gpt-5.1',
       apiKey: document.getElementById('admin-compass-key').value.trim()
     };
@@ -7653,13 +7658,13 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
       btn.textContent = 'Build from Website';
     }
   });
-  document.getElementById('btn-save-session-llm')?.addEventListener('click', () => {
+  if (currentSettingsSection === 'access') document.getElementById('btn-save-session-llm')?.addEventListener('click', () => {
     const config = getAdminLLMConfig();
     saveSessionLLMConfig(config);
     LLMService.setCompassConfig(config);
     UI.toast(config.apiKey ? 'Compass session key loaded for this session.' : 'Compass proxy/session settings loaded for this session.', 'success');
   });
-  document.getElementById('btn-test-session-llm')?.addEventListener('click', async () => {
+  if (currentSettingsSection === 'access') document.getElementById('btn-test-session-llm')?.addEventListener('click', async () => {
     const btn = document.getElementById('btn-test-session-llm');
     const config = getAdminLLMConfig();
     btn.disabled = true;
@@ -7675,7 +7680,7 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
       btn.textContent = 'Test Connection';
     }
   });
-  document.getElementById('btn-clear-session-llm')?.addEventListener('click', () => {
+  if (currentSettingsSection === 'access') document.getElementById('btn-clear-session-llm')?.addEventListener('click', () => {
     localStorage.removeItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX));
     sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX));
     LLMService.clearCompassConfig();
@@ -7684,7 +7689,7 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
     UI.toast('Compass browser key cleared.', 'success');
   });
 
-  document.querySelectorAll('.btn-reset-user-account').forEach(button => {
+  if (currentSettingsSection === 'users') document.querySelectorAll('.btn-reset-user-account').forEach(button => {
     button.addEventListener('click', async () => {
       const username = button.dataset.username || '';
       const displayName = button.dataset.displayName || username;
@@ -7695,7 +7700,7 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
       safeRenderAdminSettings(currentSettingsSection);
     });
   });
-  document.querySelectorAll('.btn-reset-user-password').forEach(button => {
+  if (currentSettingsSection === 'users') document.querySelectorAll('.btn-reset-user-password').forEach(button => {
     button.addEventListener('click', async () => {
       const username = button.dataset.username || '';
       const displayName = button.dataset.displayName || username;
@@ -7715,7 +7720,7 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
     });
   });
 
-  document.querySelectorAll('.btn-apply-user-access').forEach(button => {
+  if (currentSettingsSection === 'users') document.querySelectorAll('.btn-apply-user-access').forEach(button => {
     button.addEventListener('click', async () => {
       const ok = await applyManagedAccountAccess(button);
       if (!ok) return;
@@ -7749,113 +7754,114 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
     if (!departments.some(entity => entity.id === currentValue)) departmentEl.value = '';
   }
 
-  document.getElementById('admin-new-user-bu')?.addEventListener('change', renderAdminNewUserDepartments);
-  document.getElementById('admin-new-user-role')?.addEventListener('change', renderAdminNewUserDepartments);
-  renderAdminNewUserDepartments();
-  document.querySelectorAll('.managed-account-row').forEach(row => {
-    const markDirty = () => {
-      row.dataset.dirty = 'true';
-      const button = row.querySelector('.btn-apply-user-access');
-      if (button) {
-        button.disabled = false;
-        button.textContent = 'Apply Access';
+  if (currentSettingsSection === 'users') {
+    document.getElementById('admin-new-user-bu')?.addEventListener('change', renderAdminNewUserDepartments);
+    document.getElementById('admin-new-user-role')?.addEventListener('change', renderAdminNewUserDepartments);
+    renderAdminNewUserDepartments();
+    document.querySelectorAll('.managed-account-row').forEach(row => {
+      const markDirty = () => {
+        row.dataset.dirty = 'true';
+        const button = row.querySelector('.btn-apply-user-access');
+        if (button) {
+          button.disabled = false;
+          button.textContent = 'Apply Access';
+        }
+      };
+      row.querySelector('.account-bu-select')?.addEventListener('change', () => { renderManagedAccountDepartmentOptions(row); markDirty(); });
+      row.querySelector('.account-role-select')?.addEventListener('change', () => { renderManagedAccountDepartmentOptions(row); markDirty(); });
+      row.querySelector('.account-department-select')?.addEventListener('change', markDirty);
+      row.dataset.dirty = 'false';
+      renderManagedAccountDepartmentOptions(row);
+    });
+    document.getElementById('btn-save-admin-secret')?.addEventListener('click', async () => {
+      const secret = document.getElementById('admin-api-secret')?.value || '';
+      AuthService.setAdminApiSecret(secret);
+      if (!secret) {
+        UI.toast('Admin API secret cleared.', 'success');
+        return;
       }
-    };
-    row.querySelector('.account-bu-select')?.addEventListener('change', () => { renderManagedAccountDepartmentOptions(row); markDirty(); });
-    row.querySelector('.account-role-select')?.addEventListener('change', () => { renderManagedAccountDepartmentOptions(row); markDirty(); });
-    row.querySelector('.account-department-select')?.addEventListener('change', markDirty);
-    row.dataset.dirty = 'false';
-    renderManagedAccountDepartmentOptions(row);
-  });
-  document.getElementById('btn-save-admin-secret')?.addEventListener('click', async () => {
-    const secret = document.getElementById('admin-api-secret')?.value || '';
-    AuthService.setAdminApiSecret(secret);
-    if (!secret) {
+      try {
+        await syncSharedAdminSettings(getAdminSettings());
+        UI.toast('Admin API secret saved and current admin settings synced.', 'success');
+      } catch (error) {
+        UI.toast(`Admin API secret saved, but settings sync failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
+      }
+    });
+    document.getElementById('btn-clear-admin-secret')?.addEventListener('click', () => {
+      AuthService.setAdminApiSecret('');
+      const input = document.getElementById('admin-api-secret');
+      if (input) input.value = '';
       UI.toast('Admin API secret cleared.', 'success');
-      return;
-    }
-    try {
-      await syncSharedAdminSettings(getAdminSettings());
-      UI.toast('Admin API secret saved and current admin settings synced.', 'success');
-    } catch (error) {
-      UI.toast(`Admin API secret saved, but settings sync failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
-    }
-  });
-  document.getElementById('btn-clear-admin-secret')?.addEventListener('click', () => {
-    AuthService.setAdminApiSecret('');
-    const input = document.getElementById('admin-api-secret');
-    if (input) input.value = '';
-    UI.toast('Admin API secret cleared.', 'success');
-  });
-
-  document.getElementById('btn-test-users-store')?.addEventListener('click', async () => {
-    const btn = document.getElementById('btn-test-users-store');
-    const statusEl = document.getElementById('admin-users-store-status');
-    if (!btn || !statusEl) return;
-    btn.disabled = true;
-    btn.textContent = 'Testing…';
-    statusEl.textContent = 'Checking shared Vercel user store…';
-    const result = await AuthService.testUsersStoreHealth();
-    if (result.ok) {
-      if (result.writable) {
-        statusEl.textContent = `Connected to shared user store at ${result.apiUrl} · writable · ${result.accountCount} account(s) available.`;
-        UI.toast('Shared user store is reachable and writable.', 'success');
+    });
+    document.getElementById('btn-test-users-store')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-test-users-store');
+      const statusEl = document.getElementById('admin-users-store-status');
+      if (!btn || !statusEl) return;
+      btn.disabled = true;
+      btn.textContent = 'Testing…';
+      statusEl.textContent = 'Checking shared user store…';
+      const result = await AuthService.testUsersStoreHealth();
+      if (result.ok) {
+        if (result.writable) {
+          statusEl.textContent = `Connected to shared user store · writable · ${result.accountCount} account(s) available.`;
+          UI.toast('Shared user store is reachable and writable.', 'success');
+        } else {
+          statusEl.textContent = `Shared user store is reachable, but it is running in ${result.mode} mode.`;
+          UI.toast('Shared user store is reachable but not writable.', 'warning');
+        }
       } else {
-        statusEl.textContent = `Connected to ${result.apiUrl}, but it is running in ${result.mode} mode. Check the shared store configuration in Vercel.`;
-        UI.toast('Shared user store is reachable but not writable.', 'warning');
+        statusEl.textContent = `Shared user store check failed: ${result.error}`;
+        UI.toast('Shared user store check failed.', 'warning');
       }
-    } else {
-      statusEl.textContent = `Shared user store check failed: ${result.error}`;
-      UI.toast('Shared user store check failed.', 'warning');
-    }
-    btn.disabled = false;
-    btn.textContent = 'Test Shared User Store';
-  });
-  document.getElementById('btn-admin-add-user')?.addEventListener('click', async () => {
-    const button = document.getElementById('btn-admin-add-user');
-    const resultEl = document.getElementById('admin-new-user-result');
-    const displayName = document.getElementById('admin-new-user-name').value.trim();
-    const role = document.getElementById('admin-new-user-role').value.trim() || 'user';
-    const businessUnitEntityId = document.getElementById('admin-new-user-bu').value.trim();
-    const departmentEntityId = document.getElementById('admin-new-user-department').value.trim();
-    if (!displayName) {
-      AppState.adminNewUserStatus = 'Enter a display name for the new user.';
-      resultEl.textContent = AppState.adminNewUserStatus;
-      UI.toast(AppState.adminNewUserStatus, 'warning');
-      return;
-    }
-    if (!businessUnitEntityId) {
-      AppState.adminNewUserStatus = role === 'bu_admin' ? 'Choose the business unit this BU admin will manage.' : 'Choose a business unit before creating the user.';
-      resultEl.textContent = AppState.adminNewUserStatus;
-      UI.toast(AppState.adminNewUserStatus, 'warning');
-      return;
-    }
-    if (role !== 'bu_admin' && !departmentEntityId) {
-      AppState.adminNewUserStatus = 'Choose a function or department before creating the user.';
-      resultEl.textContent = AppState.adminNewUserStatus;
-      UI.toast(AppState.adminNewUserStatus, 'warning');
-      return;
-    }
-    button.disabled = true;
-    button.textContent = 'Creating…';
-    resultEl.textContent = 'Creating shared user account…';
-    try {
-      const account = await AuthService.createManagedAccount({ displayName, role, businessUnitEntityId, departmentEntityId: role === 'bu_admin' ? '' : departmentEntityId });
-      const nextSettings = applyManagedAccountAssignmentToSettings(account, { role: account.role, businessUnitEntityId: account.businessUnitEntityId }, getAdminSettings());
-      saveAdminSettings(nextSettings);
-      AppState.adminVisiblePasswords[account.username] = account.password || '';
-      AppState.adminNewUserStatus = `Created ${account.displayName}: username ${account.username} / password ${account.password}`;
-      UI.toast(`Created ${account.username}.`, 'success');
-      rememberSettingsScroll('admin-settings');
-      safeRenderAdminSettings(currentSettingsSection);
-    } catch (error) {
-      AppState.adminNewUserStatus = `User creation failed: ${error instanceof Error ? error.message : String(error)}`;
-      resultEl.textContent = AppState.adminNewUserStatus;
-      UI.toast('User creation failed.', 'danger');
-      button.disabled = false;
-      button.textContent = 'Add User';
-    }
-  });
+      btn.disabled = false;
+      btn.textContent = 'Test Shared User Store';
+    });
+    document.getElementById('btn-admin-add-user')?.addEventListener('click', async () => {
+      const button = document.getElementById('btn-admin-add-user');
+      const resultEl = document.getElementById('admin-new-user-result');
+      const displayName = document.getElementById('admin-new-user-name').value.trim();
+      const role = document.getElementById('admin-new-user-role').value.trim() || 'user';
+      const businessUnitEntityId = document.getElementById('admin-new-user-bu').value.trim();
+      const departmentEntityId = document.getElementById('admin-new-user-department').value.trim();
+      if (!displayName) {
+        AppState.adminNewUserStatus = 'Enter a display name for the new user.';
+        resultEl.textContent = AppState.adminNewUserStatus;
+        UI.toast(AppState.adminNewUserStatus, 'warning');
+        return;
+      }
+      if (!businessUnitEntityId) {
+        AppState.adminNewUserStatus = role === 'bu_admin' ? 'Choose the business unit this BU admin will manage.' : 'Choose a business unit before creating the user.';
+        resultEl.textContent = AppState.adminNewUserStatus;
+        UI.toast(AppState.adminNewUserStatus, 'warning');
+        return;
+      }
+      if (role !== 'bu_admin' && !departmentEntityId) {
+        AppState.adminNewUserStatus = 'Choose a function or department before creating the user.';
+        resultEl.textContent = AppState.adminNewUserStatus;
+        UI.toast(AppState.adminNewUserStatus, 'warning');
+        return;
+      }
+      button.disabled = true;
+      button.textContent = 'Creating…';
+      resultEl.textContent = 'Creating shared user account…';
+      try {
+        const account = await AuthService.createManagedAccount({ displayName, role, businessUnitEntityId, departmentEntityId: role === 'bu_admin' ? '' : departmentEntityId });
+        const nextSettings = applyManagedAccountAssignmentToSettings(account, { role: account.role, businessUnitEntityId: account.businessUnitEntityId }, getAdminSettings());
+        saveAdminSettings(nextSettings);
+        AppState.adminVisiblePasswords[account.username] = account.password || '';
+        AppState.adminNewUserStatus = `Created ${account.displayName}: username ${account.username} / password ${account.password}`;
+        UI.toast(`Created ${account.username}.`, 'success');
+        rememberSettingsScroll('admin-settings');
+        safeRenderAdminSettings(currentSettingsSection);
+      } catch (error) {
+        AppState.adminNewUserStatus = `User creation failed: ${error instanceof Error ? error.message : String(error)}`;
+        resultEl.textContent = AppState.adminNewUserStatus;
+        UI.toast('User creation failed.', 'danger');
+        button.disabled = false;
+        button.textContent = 'Add User';
+      }
+    });
+  }
 
   document.getElementById('btn-reset-settings')?.addEventListener('click', async () => {
     if (await UI.confirm('Reset platform settings to defaults?')) {
