@@ -1718,7 +1718,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         <textarea class="form-textarea" id="org-context-followup" rows="3" placeholder="Tell the AI what to change, emphasise, shorten, or make more specific."></textarea>
       </div>
       <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
-        <button class="btn btn--secondary" id="btn-org-refine-context" type="button">Refine Context with AI</button>
+        <button class="btn btn--secondary" id="btn-org-refine-context" type="button">Apply Follow-Up Now</button>
         <span class="form-help" id="org-context-refine-status">The context fields above will update in place each time you refine them.</span>
       </div>
     </div>`;
@@ -1968,7 +1968,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     }
     const btn = document.getElementById('btn-org-refine-context');
     btn.disabled = true;
-    btn.textContent = 'Refining…';
+    btn.textContent = 'Applying…';
     if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Refining the context using your latest instruction…';
     contextRefinementHistory.push({ role: 'user', text: prompt });
     renderOrgContextRefinementHistory();
@@ -2049,7 +2049,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       if (contextRefineStatusEl) contextRefineStatusEl.textContent = `Context refinement failed: ${error.message}`;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Refine Context with AI';
+      btn.textContent = 'Apply Follow-Up Now';
     }
   });
 
@@ -2211,7 +2211,7 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
           <textarea class="form-textarea" id="entity-layer-followup" rows="3" placeholder="Tell the AI how you want to improve or reshape this context."></textarea>
         </div>
         <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
-          <button class="btn btn--secondary" id="btn-entity-layer-refine" type="button">Refine Context with AI</button>
+          <button class="btn btn--secondary" id="btn-entity-layer-refine" type="button">Apply Follow-Up Now</button>
           <span class="form-help" id="entity-layer-refine-status">The current context fields above will be updated in place each time you refine.</span>
         </div>
       </div>`,
@@ -2306,7 +2306,7 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
     const btn = document.getElementById('btn-entity-layer-refine');
     const llmConfig = getSessionLLMConfig();
     btn.disabled = true;
-    btn.textContent = 'Refining…';
+    btn.textContent = 'Applying…';
     if (refineStatusEl) refineStatusEl.textContent = 'Refining the context using your latest instruction…';
     refinementHistory.push({ role: 'user', text: prompt });
     renderRefinementHistory();
@@ -2337,7 +2337,7 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       if (refineStatusEl) refineStatusEl.textContent = `Context refinement failed: ${error.message}`;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Refine Context with AI';
+      btn.textContent = 'Apply Follow-Up Now';
     }
   });
   document.getElementById('entity-layer-save').addEventListener('click', () => {
@@ -3859,7 +3859,7 @@ function renderAdminSettings(activeSection = 'org') {
         <textarea class="form-textarea" id="admin-company-followup" rows="3" placeholder="Tell the AI what to change, emphasise, shorten, or make more specific."></textarea>
       </div>
       <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
-        <button class="btn btn--secondary" id="btn-refine-admin-company-context" type="button">Refine Context with AI</button>
+        <button class="btn btn--secondary" id="btn-refine-admin-company-context" type="button">Apply Follow-Up Now</button>
         <span class="form-help" id="admin-company-refine-status">The fields above will be updated in place each time you refine the context.</span>
       </div>
     </div>`
@@ -4219,7 +4219,7 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
     }
     const btn = document.getElementById('btn-refine-admin-company-context');
     btn.disabled = true;
-    btn.textContent = 'Refining…';
+    btn.textContent = 'Applying…';
     if (adminCompanyRefineStatusEl) adminCompanyRefineStatusEl.textContent = 'Refining the company context using your latest instruction…';
     adminCompanyRefinementHistory.push({ role: 'user', text: prompt });
     renderAdminCompanyRefinementHistory();
@@ -4249,7 +4249,7 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
       if (adminCompanyRefineStatusEl) adminCompanyRefineStatusEl.textContent = `Company context refinement failed: ${error.message}`;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Refine Context with AI';
+      btn.textContent = 'Apply Follow-Up Now';
     }
   });
   if (currentSettingsSection === 'access') {

@@ -178,7 +178,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
           <textarea class="form-textarea" id="user-company-followup" rows="3" placeholder="Tell the AI what to change, emphasise, shorten, or make more specific."></textarea>
         </div>
         <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
-          <button class="btn btn--secondary" id="btn-refine-user-context" type="button">Refine Context with AI</button>
+          <button class="btn btn--secondary" id="btn-refine-user-context" type="button">Apply Follow-Up Now</button>
           <span class="form-help" id="user-company-refine-status">The fields above will be updated in place each time you refine the context.</span>
         </div>
       </div>`
@@ -664,7 +664,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     }
     const btn = document.getElementById('btn-refine-user-context');
     btn.disabled = true;
-    btn.textContent = 'Refining…';
+    btn.textContent = 'Applying…';
     if (companyRefineStatusEl) companyRefineStatusEl.textContent = 'Refining the company context using your latest instruction…';
     companyRefinementHistory.push({ role: 'user', text: prompt });
     renderUserCompanyRefinementHistory();
@@ -694,7 +694,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       if (companyRefineStatusEl) companyRefineStatusEl.textContent = `Company context refinement failed: ${error.message}`;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Refine Context with AI';
+      btn.textContent = 'Apply Follow-Up Now';
     }
   });
 
