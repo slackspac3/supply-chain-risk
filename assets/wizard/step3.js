@@ -1,0 +1,361 @@
+function formatPlainCurrency(value, currency = 'USD') {
+  const displayValue = Math.round(convertUsdToDisplayCurrency(value, currency));
+  return `${getCurrencyPrefix(currency)}${displayValue.toLocaleString(currency === 'AED' ? 'en-AE' : 'en-US')}`;
+}
+
+function describeExposureBand(value) {
+  const num = Number(value || 0);
+  if (num <= 0.25) return 'low chance of succeeding';
+  if (num <= 0.5) return 'meaningful but not easy to pull off';
+  if (num <= 0.75) return 'plausible if the attacker is capable';
+  return 'highly plausible unless controls hold up well';
+}
+
+function buildEstimateExplainer(draft, bu, isAdv, currency) {
+  const p = draft.fairParams || {};
+  const hasAI = !!draft.llmAssisted;
+  const tef = [p.tefMin, p.tefLikely, p.tefMax].every(v => v != null)
+    ? `AI is currently assuming this could happen between ${p.tefMin} and ${p.tefMax} times per year, with ${p.tefLikely} as the most realistic planning case.`
+    : 'Use the range to describe how often this could happen in a quiet year, a typical year, and a severe but still plausible year.';
+  const exposure = isAdv && p.vulnDirect
+    ? ([p.vulnMin, p.vulnLikely, p.vulnMax].every(v => v != null)
+      ? `The direct exposure values mean the event has roughly a ${Math.round((p.vulnMin || 0) * 100)}% to ${Math.round((p.vulnMax || 0) * 100)}% chance of succeeding if attempted, with ${Math.round((p.vulnLikely || 0) * 100)}% as the working case.`
+      : 'Direct exposure means you are estimating the chance that the event succeeds if attempted.')
+    : ([p.threatCapLikely, p.controlStrLikely].every(v => v != null)
+      ? `In basic mode, these numbers are split into attacker capability and control strength. Right now the AI is saying the attacker looks ${describeExposureBand(p.threatCapLikely)} while your controls look ${describeExposureBand(1 - (p.controlStrLikely || 0)) === 'low chance of succeeding' ? 'stronger than average' : 'material but not absolute'}.`
+      : 'In basic mode, you do not estimate exposure directly. You describe attacker capability and how strong your controls are, and the model derives exposure from that.')
+  const likelyLoss = ['irLikely','biLikely','dbLikely','rlLikely','tpLikely','rcLikely'].reduce((sum, key) => sum + Number(p[key] || 0), 0);
+  const severeLoss = ['irMax','biMax','dbMax','rlMax','tpMax','rcMax'].reduce((sum, key) => sum + Number(p[key] || 0), 0);
+  const loss = likelyLoss || severeLoss
+    ? `Using the current values, the model reads this as roughly ${formatPlainCurrency(likelyLoss, currency)} in a realistic single-event case, rising to about ${formatPlainCurrency(severeLoss, currency)} in a severe case before annual frequency is applied.`
+    : 'Each cost row is a per-event estimate. The model adds those rows together to understand what one event might cost before frequency is applied across a year.';
+  const source = hasAI
+    ? `These starting numbers were pre-filled from the scenario narrative, selected risks, ${bu?.name ? `${bu.name} context and defaults, ` : ''}any linked internal citations, and FAIR-style benchmark logic. They are starting assumptions, not final answers.`
+    : `These are your working assumptions. If you have internal incident data, control evidence, or finance input, adjust the ranges to reflect that evidence.`;
+  return { source, tef, exposure, loss };
+}
+
+function renderEstimateExplainerCard(draft, bu, isAdv, currency) {
+  const explainer = buildEstimateExplainer(draft, bu, isAdv, currency);
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="context-panel-title">What These AI Values Mean</div>
+    <div style="display:flex;flex-direction:column;gap:var(--sp-4);margin-top:var(--sp-3)">
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Where the starting values came from</div>
+        <p class="context-panel-copy">${explainer.source}</p>
+      </div>
+      <div class="context-grid">
+        <div class="context-chip-panel">
+          <div class="context-panel-title">Frequency</div>
+          <p class="context-panel-copy">${explainer.tef}</p>
+        </div>
+        <div class="context-chip-panel">
+          <div class="context-panel-title">Exposure</div>
+          <p class="context-panel-copy">${explainer.exposure}</p>
+        </div>
+        <div class="context-chip-panel">
+          <div class="context-panel-title">Cost</div>
+          <p class="context-panel-copy">${explainer.loss}</p>
+        </div>
+      </div>
+      <div class="context-panel-foot">Read the three columns as: low case = quieter outcome, expected case = planning assumption, severe case = bad but still plausible outcome. You are not trying to predict one perfect number.</div>
+    </div>
+  </div>`;
+}
+
+function attachCitationHandlers() {
+  document.querySelectorAll('.citation-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const docId = btn.dataset.docId;
+      const doc = getDocList().find(d => d.id === docId) || AppState.draft.citations?.find(c => c.docId === docId);
+      if (doc) UI.citationModal({ title: doc.title, excerpt: doc.contentExcerpt || doc.excerpt, tags: doc.tags||[], lastUpdated: doc.lastUpdated, url: doc.url });
+    });
+  });
+}
+
+// ─── WIZARD 3 ─────────────────────────────────────────────────
+function renderWizard3() {
+  const draft = AppState.draft;
+  const p = draft.fairParams || {};
+  const bu = getBUList().find(b => b.id === draft.buId);
+  const da = bu?.defaultAssumptions || {};
+  const isAdv = AppState.mode === 'advanced';
+  const cur = AppState.currency;
+  const sym = cur;
+  const baselineAssessment = draft.comparisonBaselineId ? getAssessmentById(draft.comparisonBaselineId) : null;
+
+  const v = (key, def) => p[key] != null ? p[key] : def;
+
+  setPage(`
+    <main class="page">
+      <div class="wizard-layout container container--narrow">
+        <div class="wizard-header">
+          ${UI.renderStepper(3)}
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="wizard-step-title">Estimate the Scenario in Plain Language</h2>
+              <p class="form-help" style="margin-top:8px">Review the starting numbers, sense-check them against what you know, and adjust anything that feels too low, too high, or too uncertain.</p>
+              <p class="wizard-step-desc">Answer a few practical questions about how often this could happen, how exposed you are, and what the impact could cost. ${draft.llmAssisted?'<span style="color:var(--color-success-400)">✓ Pre-loaded from AI assist</span>':''}</p>
+            </div>
+            <div class="mode-toggle">
+              <button class="${!isAdv?'active':''}" id="mode-basic">Basic</button>
+              <button class="${isAdv?'active':''}" id="mode-advanced">Advanced</button>
+            </div>
+          </div>
+        </div>
+        <div class="wizard-body">
+          ${draft.learningNote ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Template learning</div><p class="context-panel-copy">${draft.learningNote}</p></div>` : ''}
+          ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Current assessment baseline</div><p class="context-panel-copy">You are working from <strong>${baselineAssessment.scenarioTitle || 'the original assessment'}</strong>. Adjust the assumptions below to reflect a stronger control position or better resilience, then rerun to compare the new result against the current baseline.</p><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Try stronger controls</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="frequency">Try lower event frequency</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="business-interruption">Try lower disruption cost</button></div><div class="form-group" style="margin-top:16px"><label class="form-label" for="treatment-improvement-request">Describe the better outcome you want to test</label><textarea class="form-textarea" id="treatment-improvement-request" rows="3" placeholder="e.g. stronger identity controls, lower business disruption, less financial loss, better containment">${draft.treatmentImprovementRequest || ''}</textarea><span class="form-help">Describe the improvement in plain language and let AI adjust the copied baseline values before you simulate the new case.</span></div><div class="flex items-center gap-3" style="margin-top:12px;flex-wrap:wrap"><button class="btn btn--secondary" id="btn-treatment-ai-assist" type="button">AI Assist This Better Outcome</button><span class="form-help" id="treatment-improvement-status">These are quick starting points. You can still adjust every number manually before rerunning the analysis.</span></div></div>` : ''}
+          ${draft.workflowGuidance?.length ? renderWorkflowGuidanceBlock(draft.workflowGuidance) : ''}
+          ${renderEvidenceQualityBlock(draft.confidenceLabel, draft.evidenceQuality, draft.evidenceSummary, draft.missingInformation)}
+          ${renderBenchmarkRationaleBlock(draft.benchmarkBasis, draft.inputRationale)}
+          ${renderEstimateExplainerCard(draft, bu, isAdv, cur)}
+
+          <div class="card card--elevated anim-fade-in">
+            <div class="context-panel-title">How to complete this step</div>
+            <div class="context-grid">
+              <div class="context-chip-panel">
+                <div class="context-panel-title">1. Start with the AI values</div>
+                <p class="context-panel-copy">If the AI suggestions look broadly right, adjust only the values you have evidence for.</p>
+              </div>
+              <div class="context-chip-panel">
+                <div class="context-panel-title">2. Think in ranges, not exact numbers</div>
+                <p class="context-panel-copy">Use a low, expected, and severe case. You do not need one perfect number.</p>
+              </div>
+              <div class="context-chip-panel">
+                <div class="context-panel-title">3. Stay in Basic unless needed</div>
+                <p class="context-panel-copy">Advanced mode is for direct probability inputs, correlations, and simulation tuning.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card anim-fade-in">
+            <h3 style="margin-bottom:var(--sp-2);font-size:var(--text-base)">How often could this happen? <span data-tooltip="How many times per year this type of event could realistically occur." style="cursor:help;color:var(--color-accent-300);font-size:.8rem">ⓘ</span></h3>
+            <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">Enter the number of events you think could happen in a year. Use a cautious low case, your expected case, and a severe but plausible high case.</p>
+            ${tripleInput('tef','Threat Event Frequency', v('tefMin',da.TEF?.min||0.5), v('tefLikely',da.TEF?.likely||2), v('tefMax',da.TEF?.max||8), { minLabel: 'Low case', likelyLabel: 'Expected case', maxLabel: 'High case' })}
+          </div>
+
+          <div class="card anim-fade-in anim-delay-1">
+            <h3 style="margin-bottom:var(--sp-2);font-size:var(--text-base)">How exposed are you if it happens? <span data-tooltip="This estimates how likely the event is to succeed given attacker capability and current controls." style="cursor:help;color:var(--color-accent-300);font-size:.8rem">ⓘ</span></h3>
+            <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">In Basic mode, answer this through attacker strength and control strength. In Advanced mode, you can enter vulnerability directly.</p>
+            ${isAdv?`<div class="flex items-center gap-3 mb-4"><label class="toggle"><input type="checkbox" id="vuln-direct-toggle" ${p.vulnDirect?'checked':''}><div class="toggle-track"></div></label><span class="toggle-label">Enter exposure directly</span></div>
+            <div id="vuln-direct-section" ${!p.vulnDirect?'class="hidden"':''}>
+              <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">Use a value between 0 and 1, where 0 means very unlikely to succeed and 1 means almost certain to succeed.</p>
+              ${tripleInput('vuln','Vulnerability', v('vulnMin',0.1), v('vulnLikely',0.35), v('vulnMax',0.7), { minLabel: 'Low success chance', likelyLabel: 'Expected success chance', maxLabel: 'High success chance' })}
+            </div>`:''}
+            <div id="vuln-derived-section" ${isAdv&&p.vulnDirect?'class="hidden"':''}>
+              <div class="grid-2">
+                <div>
+                  <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">How capable is the attacker or threat source? 0 means weak or opportunistic, 1 means very capable and well resourced.</p>
+                  ${tripleInput('threatCap','Threat capability', v('threatCapMin',da.threatCapability?.min||0.45), v('threatCapLikely',da.threatCapability?.likely||0.62), v('threatCapMax',da.threatCapability?.max||0.82), { minLabel: 'Low capability', likelyLabel: 'Expected capability', maxLabel: 'High capability' })}
+                </div>
+                <div>
+                  <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">How strong are your current preventive and detective controls? 0 means weak, 1 means strong and consistently effective.</p>
+                  ${tripleInput('controlStr','Control strength', v('controlStrMin',da.controlStrength?.min||0.5), v('controlStrLikely',da.controlStrength?.likely||0.68), v('controlStrMax',da.controlStrength?.max||0.85), { minLabel: 'Weak controls', likelyLabel: 'Expected control strength', maxLabel: 'Strong controls' })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card anim-fade-in anim-delay-2">
+            <h3 style="margin-bottom:var(--sp-2);font-size:var(--text-base)">What could this cost if it happens?</h3>
+            <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:var(--sp-5)">For each cost area, enter a low, expected, and severe per-event estimate in ${sym}. These values are added together in the simulation.</p>
+            <div style="display:flex;flex-direction:column;gap:var(--sp-5)">
+              ${lossRow('ir','Response and recovery cost', v('irMin',da.incidentResponse?.min||50000), v('irLikely',da.incidentResponse?.likely||180000), v('irMax',da.incidentResponse?.max||600000), 'Containment, forensics, internal recovery effort, and external incident response support.')}
+              ${lossRow('bi','Business disruption cost', v('biMin',da.businessInterruption?.min||100000), v('biLikely',da.businessInterruption?.likely||450000), v('biMax',da.businessInterruption?.max||2500000), 'Lost revenue, delayed operations, and productivity impact while the issue is active.')}
+              ${lossRow('db','Data remediation cost', v('dbMin',da.dataBreachRemediation?.min||30000), v('dbLikely',da.dataBreachRemediation?.likely||120000), v('dbMax',da.dataBreachRemediation?.max||500000), 'Notification, monitoring, remediation, and cleanup when data is affected.')}
+              ${lossRow('rl','Regulatory and legal cost', v('rlMin',da.regulatoryLegal?.min||0), v('rlLikely',da.regulatoryLegal?.likely||80000), v('rlMax',da.regulatoryLegal?.max||800000), 'Fines, legal support, regulatory response, and formal notices.')}
+              ${lossRow('tp','Third-party impact cost', v('tpMin',da.thirdPartyLiability?.min||0), v('tpLikely',da.thirdPartyLiability?.likely||50000), v('tpMax',da.thirdPartyLiability?.max||400000), 'Claims, service credits, or compensation for partners and customers.')}
+              ${lossRow('rc','Reputation and contract cost', v('rcMin',da.reputationContract?.min||50000), v('rcLikely',da.reputationContract?.likely||200000), v('rcMax',da.reputationContract?.max||1200000), 'Customer churn, commercial loss, and contract penalties after the event.')}
+            </div>
+          </div>
+
+          <div class="card anim-fade-in anim-delay-3">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3 style="font-size:var(--text-base)">Extra downstream impact <span class="badge badge--neutral" style="margin-left:6px">Optional</span></h3>
+                <p style="font-size:.78rem;color:var(--text-muted)">Use this only if the main event could trigger another follow-on loss, such as a lawsuit, major partner claim, or wider business consequence.</p>
+              </div>
+              <label class="toggle"><input type="checkbox" id="secondary-toggle" ${p.secondaryEnabled?'checked':''}><div class="toggle-track"></div></label>
+            </div>
+            <div id="secondary-inputs" ${!p.secondaryEnabled?'class="hidden"':''}>
+              <div class="grid-2">
+                <div><p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">How likely is the follow-on impact? Use 0 to 1.</p>${tripleInput('secProb','Secondary probability', v('secProbMin',0.1), v('secProbLikely',0.3), v('secProbMax',0.7), { minLabel: 'Low chance', likelyLabel: 'Expected chance', maxLabel: 'High chance' })}</div>
+                <div><p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">If it happens, how large could that extra impact be in ${sym}?</p>${tripleInput('secMag','Secondary magnitude', v('secMagMin',100000), v('secMagLikely',500000), v('secMagMax',2000000), { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'High cost', money: true, inputType: 'text' })}</div>
+              </div>
+            </div>
+          </div>
+
+          ${isAdv?`
+          <div class="card anim-fade-in">
+            <h3 style="margin-bottom:var(--sp-4);font-size:var(--text-base)">Advanced Simulation Settings</h3>
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label">Distribution Type <span data-tooltip="Triangular: intuitive. Lognormal: heavier right tail (better for cyber)." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
+                <select class="form-select" id="adv-dist">
+                  <option value="triangular" ${(p.distType||'triangular')==='triangular'?'selected':''}>Triangular</option>
+                  <option value="lognormal" ${p.distType==='lognormal'?'selected':''}>Lognormal</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Iterations</label>
+                <input class="form-input" id="adv-iter" type="number" min="1000" max="100000" step="1000" value="${p.iterations||10000}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Random Seed <span class="text-muted text-xs">(reproducibility)</span></label>
+                <input class="form-input" id="adv-seed" type="number" placeholder="Leave empty for random" value="${p.seed||''}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Correlations <span data-tooltip="BI-IR: Business Interruption & IR correlation. RL-RC: Regulatory & Reputation." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+                  <label style="font-size:.72rem;color:var(--text-muted)">BI↔IR</label>
+                  <input class="form-input" id="corr-bi-ir" type="number" min="-1" max="1" step="0.05" value="${p.corrBiIr||0.3}" style="width:72px">
+                  <label style="font-size:.72rem;color:var(--text-muted)">Reg↔Rep</label>
+                  <input class="form-input" id="corr-rl-rc" type="number" min="-1" max="1" step="0.05" value="${p.corrRlRc||0.2}" style="width:72px">
+                </div>
+              </div>
+            </div>
+          </div>`:''}
+
+        </div>
+        <div class="wizard-footer">
+          <button class="btn btn--ghost" id="btn-back-3">← Back</button>
+          <button class="btn btn--primary" id="btn-next-3">Continue to Results →</button>
+        </div>
+      </div>
+    </main>`);
+
+  document.getElementById('mode-basic')?.addEventListener('click', () => { AppState.mode='basic'; renderWizard3(); });
+  document.getElementById('mode-advanced')?.addEventListener('click', () => { AppState.mode='advanced'; renderWizard3(); });
+  document.getElementById('secondary-toggle').addEventListener('change', function() {
+    document.getElementById('secondary-inputs').classList.toggle('hidden', !this.checked);
+    AppState.draft.fairParams.secondaryEnabled = this.checked;
+  });
+  document.getElementById('vuln-direct-toggle')?.addEventListener('change', function() {
+    document.getElementById('vuln-direct-section')?.classList.toggle('hidden', !this.checked);
+    document.getElementById('vuln-derived-section')?.classList.toggle('hidden', this.checked);
+    AppState.draft.fairParams.vulnDirect = this.checked;
+  });
+  attachFormattedMoneyInputs();
+  function applySuggestedTreatmentInputs(suggestedInputs = {}) {
+    const p = AppState.draft.fairParams || (AppState.draft.fairParams = {});
+    const applyRange = (prefix, range) => {
+      if (!range) return;
+      if (Number.isFinite(Number(range.min))) p[`${prefix}Min`] = Number(range.min);
+      if (Number.isFinite(Number(range.likely))) p[`${prefix}Likely`] = Number(range.likely);
+      if (Number.isFinite(Number(range.max))) p[`${prefix}Max`] = Number(range.max);
+    };
+    applyRange('tef', suggestedInputs.TEF);
+    applyRange('controlStr', suggestedInputs.controlStrength);
+    applyRange('threatCap', suggestedInputs.threatCapability);
+    applyRange('ir', suggestedInputs.lossComponents?.incidentResponse);
+    applyRange('bi', suggestedInputs.lossComponents?.businessInterruption);
+    applyRange('db', suggestedInputs.lossComponents?.dataBreachRemediation);
+    applyRange('rl', suggestedInputs.lossComponents?.regulatoryLegal);
+    applyRange('tp', suggestedInputs.lossComponents?.thirdPartyLiability);
+    applyRange('rc', suggestedInputs.lossComponents?.reputationContract);
+  }
+  document.querySelectorAll('.treatment-prompt-chip').forEach(button => {
+    button.addEventListener('click', () => {
+      applyTreatmentPrompt(button.dataset.treatmentPrompt);
+      renderWizard3();
+      UI.toast('Treatment prompt applied. Review the numbers and rerun the scenario.', 'success');
+    });
+  });
+  document.getElementById('btn-treatment-ai-assist')?.addEventListener('click', async () => {
+    const requestEl = document.getElementById('treatment-improvement-request');
+    const statusEl = document.getElementById('treatment-improvement-status');
+    const request = requestEl?.value.trim() || '';
+    if (!baselineAssessment) return;
+    if (!request) {
+      UI.toast('Describe the better outcome you want to test first.', 'warning');
+      return;
+    }
+    AppState.draft.treatmentImprovementRequest = request;
+    if (statusEl) statusEl.textContent = 'Using AI to adjust the copied baseline values…';
+    const btn = document.getElementById('btn-treatment-ai-assist');
+    if (btn) { btn.disabled = true; btn.textContent = 'Adjusting…'; }
+    try {
+      const buContext = getBUList().find(b => b.id === draft.buId) || bu || null;
+      const citations = await RAGService.retrieveRelevantDocs(draft.buId, `${baselineAssessment.scenarioTitle || ''}
+${request}`, 5);
+      const result = await LLMService.suggestTreatmentImprovement({
+        baselineAssessment,
+        improvementRequest: request,
+        businessUnit: buContext,
+        citations
+      });
+      applySuggestedTreatmentInputs(result.suggestedInputs || {});
+      AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : (AppState.draft.workflowGuidance || []);
+      AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis || '';
+      AppState.draft.inputRationale = result.inputRationale || AppState.draft.inputRationale || null;
+      AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
+      AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
+      AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';
+      AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
+      AppState.draft.citations = normaliseCitations(result.citations || citations);
+      AppState.draft.learningNote = result.changesSummary || result.summary || '';
+      saveDraft();
+      renderWizard3();
+      UI.toast('The better-outcome case has been adjusted. Review the numbers before rerunning.', 'success');
+    } catch (error) {
+      if (statusEl) statusEl.textContent = `AI assist failed: ${error instanceof Error ? error.message : String(error)}`;
+      UI.toast(`AI assist failed: ${error instanceof Error ? error.message : String(error)}`, 'danger');
+      if (btn) { btn.disabled = false; btn.textContent = 'AI Assist This Better Outcome'; }
+    }
+  });
+  document.getElementById('btn-back-3').addEventListener('click', () => Router.navigate('/wizard/2'));
+  document.getElementById('btn-next-3').addEventListener('click', () => {
+    collectFairParams();
+    if (!validateFairParams()) return;
+    saveDraft(); Router.navigate('/wizard/4');
+  });
+}
+
+function tripleInput(prefix, label, min, likely, max, labels = {}) {
+  const minLabel = labels.minLabel || 'Min';
+  const likelyLabel = labels.likelyLabel || 'Most Likely';
+  const maxLabel = labels.maxLabel || 'Max';
+  const inputType = labels.inputType || 'number';
+  const inputClass = labels.money ? 'form-input fair-input money-input' : 'form-input fair-input';
+  const stepAttr = inputType === 'number' ? ' step="any"' : '';
+  const inputMode = labels.money ? 'decimal' : (labels.inputMode || 'decimal');
+  const formatValue = value => labels.money ? formatCurrencyInputValue(value) : value;
+  const currencyBadge = labels.money ? `<span class="range-col-currency">${getCurrencyPrefix()}</span>` : '';
+  return `<div class="range-group">
+    <div class="form-group"><div class="range-col-label">${minLabel}${currencyBadge}</div><input class="${inputClass}" id="${prefix}-min" data-key="${prefix}Min" data-money="${labels.money ? 'true' : 'false'}" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(min)}" aria-label="${label} min"></div>
+    <div class="form-group"><div class="range-col-label" style="color:var(--color-primary-300)">${likelyLabel}${currencyBadge}</div><input class="${inputClass}" id="${prefix}-likely" data-key="${prefix}Likely" data-money="${labels.money ? 'true' : 'false'}" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(likely)}" aria-label="${label} likely"></div>
+    <div class="form-group"><div class="range-col-label">${maxLabel}${currencyBadge}</div><input class="${inputClass}" id="${prefix}-max" data-key="${prefix}Max" data-money="${labels.money ? 'true' : 'false'}" type="${inputType}"${stepAttr} inputmode="${inputMode}" value="${formatValue(max)}" aria-label="${label} max"></div>
+  </div>`;
+}
+
+function lossRow(prefix, label, min, likely, max, tooltip) {
+  return `<div>
+    <div style="font-size:.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:6px">${label}<span data-tooltip="${tooltip}" style="cursor:help;color:var(--color-accent-300);font-size:.72rem">ⓘ</span></div>
+    ${tripleInput(prefix, label, min, likely, max, { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'Severe cost', money: true, inputType: 'text' })}
+  </div>`;
+}
+
+function collectFairParams() {
+  const p = AppState.draft.fairParams;
+  document.querySelectorAll('.fair-input').forEach(input => {
+    const rawValue = parseFlexibleNumber(input.value);
+    if (Number.isNaN(rawValue)) return;
+    const val = input.dataset.money === 'true'
+      ? convertDisplayCurrencyToUsd(rawValue)
+      : rawValue;
+    p[input.dataset.key] = val;
+  });
+  const dist = document.getElementById('adv-dist');
+  const iter = document.getElementById('adv-iter');
+  const seed = document.getElementById('adv-seed');
+  const cbir = document.getElementById('corr-bi-ir');
+  const crlr = document.getElementById('corr-rl-rc');
+  if (dist) p.distType = dist.value;
+  if (iter) p.iterations = parseInt(iter.value) || 10000;
+  if (seed) p.seed = seed.value ? parseInt(seed.value) : null;
+  if (cbir) p.corrBiIr = parseFloat(cbir.value) || 0.3;
+  if (crlr) p.corrRlRc = parseFloat(crlr.value) || 0.2;
+  p.secondaryEnabled = document.getElementById('secondary-toggle')?.checked || false;
+  p.distType = p.distType || 'triangular';
+}
