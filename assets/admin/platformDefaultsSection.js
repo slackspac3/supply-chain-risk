@@ -8,17 +8,17 @@ const AdminPlatformDefaultsSection = (() => {
       body: `<div class="grid-3">
         <div class="form-group">
           <label class="form-label" for="admin-warning-threshold">Warning Trigger (USD)</label>
-          <input class="form-input" id="admin-warning-threshold" type="number" min="0" step="100000" value="${settings.warningThresholdUsd}">
+          <input class="form-input money-input" id="admin-warning-threshold" type="text" inputmode="numeric" value="${formatCurrencyInputValue(settings.warningThresholdUsd, 'USD')}">
           <span class="form-help">Amber signal when per-event P90 reaches this value.</span>
         </div>
         <div class="form-group">
           <label class="form-label" for="admin-tolerance-threshold">Tolerance Threshold (USD)</label>
-          <input class="form-input" id="admin-tolerance-threshold" type="number" min="0" step="100000" value="${settings.toleranceThresholdUsd}">
+          <input class="form-input money-input" id="admin-tolerance-threshold" type="text" inputmode="numeric" value="${formatCurrencyInputValue(settings.toleranceThresholdUsd, 'USD')}">
           <span class="form-help">Red trigger when per-event P90 exceeds this value.</span>
         </div>
         <div class="form-group">
           <label class="form-label" for="admin-annual-threshold">Annual Review Trigger (USD)</label>
-          <input class="form-input" id="admin-annual-threshold" type="number" min="0" step="100000" value="${settings.annualReviewThresholdUsd}">
+          <input class="form-input money-input" id="admin-annual-threshold" type="text" inputmode="numeric" value="${formatCurrencyInputValue(settings.annualReviewThresholdUsd, 'USD')}">
           <span class="form-help">Used to flag high annual exposure in the results view.</span>
         </div>
       </div>
@@ -73,6 +73,7 @@ const AdminPlatformDefaultsSection = (() => {
   }
 
   function bind({ settings }) {
+    attachFormattedMoneyInputs();
     const regsHost = document.getElementById('ti-admin-regulations');
     const regsInput = regsHost ? UI.tagInput('ti-admin-regulations', settings.applicableRegulations) : null;
     const typicalDepartmentsHost = document.getElementById('ti-admin-typical-departments');

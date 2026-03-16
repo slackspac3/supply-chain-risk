@@ -4174,7 +4174,8 @@ function renderAdminSettings(activeSection = 'org') {
     };
     const getNumericValue = (id, fallback) => {
       const el = document.getElementById(id);
-      return Math.max(0, parseFloat(el?.value) || fallback);
+      const raw = String(el?.value || '').replace(/,/g, '').trim();
+      return Math.max(0, parseFloat(raw) || fallback);
     };
     const warningThresholdUsd = getNumericValue('admin-warning-threshold', currentSettings.warningThresholdUsd || DEFAULT_ADMIN_SETTINGS.warningThresholdUsd);
     const toleranceThresholdUsd = getNumericValue('admin-tolerance-threshold', currentSettings.toleranceThresholdUsd || TOLERANCE_THRESHOLD);
