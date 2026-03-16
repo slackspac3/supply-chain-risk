@@ -1291,12 +1291,24 @@ function saveBUList(list) {
   AppState.buList = getBUList();
   RAGService.init(getDocList(), AppState.buList);
 }
+function mergeDocCatalog(defaultDocs = [], storedDocs = []) {
+  const base = Array.isArray(defaultDocs) ? defaultDocs : [];
+  const overrides = Array.isArray(storedDocs) ? storedDocs : [];
+  const byId = new Map(base.map(doc => [doc.id, { ...doc }]));
+  overrides.forEach(doc => {
+    const id = String(doc?.id || '').trim();
+    if (!id) return;
+    byId.set(id, { ...(byId.get(id) || {}), ...doc });
+  });
+  return Array.from(byId.values());
+}
+
 function getDocList() {
   const settings = getAdminSettings();
-  if (Array.isArray(settings.docOverrides) && settings.docOverrides.length) return settings.docOverrides;
+  if (Array.isArray(settings.docOverrides) && settings.docOverrides.length) return mergeDocCatalog(AppState.docList, settings.docOverrides);
   try {
     const ov = JSON.parse(localStorage.getItem('rq_doc_override') || 'null');
-    return ov || AppState.docList;
+    return Array.isArray(ov) && ov.length ? mergeDocCatalog(AppState.docList, ov) : AppState.docList;
   } catch { return AppState.docList; }
 }
 function saveDocList(list) {
