@@ -8,8 +8,9 @@ SOURCE_BRANCH="$(git -C "${SOURCE_REPO}" rev-parse --abbrev-ref HEAD)"
 SOURCE_HEAD="$(git -C "${SOURCE_REPO}" rev-parse HEAD)"
 SOURCE_SHORT="$(git -C "${SOURCE_REPO}" rev-parse --short HEAD)"
 
-HISTORY_REPO="${HISTORY_REPO:-/Users/bhavuk.arora/Documents/GitHub/Internal-Risk-Calculator}"
-FRESH_REPO="${FRESH_REPO:-/Users/bhavuk.arora/Documents/GitHub/Internal-Risk-Calculator-fresh}"
+BASE_REPO_DIR="$(cd "${SOURCE_REPO}/.." && pwd)"
+HISTORY_REPO="${HISTORY_REPO:-${BASE_REPO_DIR}/Internal-Risk-Calculator}"
+FRESH_REPO="${FRESH_REPO:-${BASE_REPO_DIR}/Internal-Risk-Calculator-fresh}"
 FRESH_BRANCH="${FRESH_BRANCH:-master}"
 
 require_repo() {
