@@ -938,6 +938,28 @@ function applyEntityLayerToSettings(baseSettings, layer = null, node = null) {
   };
 }
 
+function applyBUOverrideToSettings(baseSettings, buOverride = null) {
+  if (!buOverride) return baseSettings;
+  const next = {
+    ...baseSettings,
+    geography: buOverride.geography || baseSettings.geography,
+    riskAppetiteStatement: buOverride.riskAppetiteStatement || baseSettings.riskAppetiteStatement,
+    applicableRegulations: Array.from(new Set([
+      ...(baseSettings.applicableRegulations || []),
+      ...(Array.isArray(buOverride.regulatoryTags) ? buOverride.regulatoryTags : [])
+    ])),
+    aiInstructions: buOverride.aiGuidance || baseSettings.aiInstructions,
+    benchmarkStrategy: buOverride.benchmarkStrategy || baseSettings.benchmarkStrategy,
+    adminContextSummary: buOverride.contextSummary || baseSettings.adminContextSummary,
+    escalationGuidance: buOverride.escalationGuidance || baseSettings.escalationGuidance
+  };
+  if (typeof buOverride.defaultLinkMode === 'boolean') next.defaultLinkMode = buOverride.defaultLinkMode;
+  if (Number.isFinite(Number(buOverride.warningThresholdUsd)) && Number(buOverride.warningThresholdUsd) > 0) next.warningThresholdUsd = Number(buOverride.warningThresholdUsd);
+  if (Number.isFinite(Number(buOverride.toleranceThresholdUsd)) && Number(buOverride.toleranceThresholdUsd) > 0) next.toleranceThresholdUsd = Number(buOverride.toleranceThresholdUsd);
+  if (Number.isFinite(Number(buOverride.annualReviewThresholdUsd)) && Number(buOverride.annualReviewThresholdUsd) > 0) next.annualReviewThresholdUsd = Number(buOverride.annualReviewThresholdUsd);
+  return next;
+}
+
 function getAssessments() {
   const cache = ensureUserStateCache();
   if (Array.isArray(cache.assessments)) return cache.assessments;
@@ -1395,10 +1417,14 @@ function getEffectiveSettings() {
   const departmentNode = getEntityById(globalSettings.companyStructure || [], selection.departmentEntityId);
   const companyLayer = getEntityLayerById(globalSettings, selection.businessUnitEntityId);
   const departmentLayer = getEntityLayerById(globalSettings, selection.departmentEntityId);
-  const organisationScopedDefaults = applyEntityLayerToSettings(
-    applyEntityLayerToSettings(globalSettings, companyLayer, companyNode),
-    departmentLayer,
-    departmentNode
+  const buOverride = getBUList().find(item => item.orgEntityId === selection.businessUnitEntityId) || null;
+  const organisationScopedDefaults = applyBUOverrideToSettings(
+    applyEntityLayerToSettings(
+      applyEntityLayerToSettings(globalSettings, companyLayer, companyNode),
+      departmentLayer,
+      departmentNode
+    ),
+    buOverride
   );
   return {
     ...organisationScopedDefaults,
@@ -1415,17 +1441,17 @@ function getEffectiveSettings() {
 }
 
 function getToleranceThreshold() {
-  const value = Number(getAdminSettings().toleranceThresholdUsd);
+  const value = Number(getEffectiveSettings().toleranceThresholdUsd);
   return Number.isFinite(value) && value > 0 ? value : TOLERANCE_THRESHOLD;
 }
 
 function getWarningThreshold() {
-  const value = Number(getAdminSettings().warningThresholdUsd);
+  const value = Number(getEffectiveSettings().warningThresholdUsd);
   return Number.isFinite(value) && value > 0 ? value : 3_000_000;
 }
 
 function getAnnualReviewThreshold() {
-  const value = Number(getAdminSettings().annualReviewThresholdUsd);
+  const value = Number(getEffectiveSettings().annualReviewThresholdUsd);
   return Number.isFinite(value) && value > 0 ? value : 12_000_000;
 }
 
@@ -1585,6 +1611,13 @@ function buildBUFromOrgEntity(entity, settings = getAdminSettings()) {
     ])],
     contextSummary: layer?.contextSummary || contextSections.companySummary || entity?.profile || '',
     aiGuidance: layer?.aiInstructions || '',
+    benchmarkStrategy: '',
+    defaultLinkMode: null,
+    riskAppetiteStatement: '',
+    escalationGuidance: '',
+    warningThresholdUsd: null,
+    toleranceThresholdUsd: null,
+    annualReviewThresholdUsd: null,
     notes: entity?.type ? `Mapped from organisation entity: ${entity.type}.` : '',
     defaultAssumptions: {
       tef: { min: 1, likely: 4, max: 10 },
@@ -4672,7 +4705,28 @@ function openBUEditor(bu) {
     <div class="form-group mt-4"><label class="form-label">Data Types</label><div class="tag-input-wrap" id="ti-datatypes"></div></div>
     <div class="form-group mt-4"><label class="form-label">Regulatory Tags</label><div class="tag-input-wrap" id="ti-regtags"></div></div>
     <div class="form-group mt-4"><label class="form-label">Business Unit Context Summary</label><textarea class="form-textarea" id="bu-context" rows="3">${bu?.contextSummary||''}</textarea></div>
+    <div class="grid-2 mt-4" style="gap:12px">
+      <div class="form-group">
+        <label class="form-label">BU Linked-Risk Default</label>
+        <select class="form-select" id="bu-link-mode">
+          <option value="inherit" ${typeof bu?.defaultLinkMode === 'boolean' ? '' : 'selected'}>Inherit platform default</option>
+          <option value="yes" ${bu?.defaultLinkMode === true ? 'selected' : ''}>Enabled</option>
+          <option value="no" ${bu?.defaultLinkMode === false ? 'selected' : ''}>Disabled</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">BU Benchmark Strategy</label>
+        <textarea class="form-textarea" id="bu-benchmark-strategy" rows="2">${bu?.benchmarkStrategy||''}</textarea>
+      </div>
+    </div>
     <div class="form-group mt-4"><label class="form-label">Business Unit AI Guidance</label><textarea class="form-textarea" id="bu-ai-guidance" rows="3">${bu?.aiGuidance||''}</textarea></div>
+    <div class="form-group mt-4"><label class="form-label">BU Risk Appetite Statement</label><textarea class="form-textarea" id="bu-risk-appetite" rows="3">${bu?.riskAppetiteStatement||''}</textarea></div>
+    <div class="form-group mt-4"><label class="form-label">BU Escalation Guidance</label><textarea class="form-textarea" id="bu-escalation-guidance" rows="3">${bu?.escalationGuidance||''}</textarea></div>
+    <div class="grid-3 mt-4" style="gap:12px">
+      <div class="form-group"><label class="form-label">BU Warning Trigger (USD)</label><input class="form-input money-input" id="bu-warning-threshold" type="text" inputmode="numeric" value="${bu?.warningThresholdUsd ? formatCurrencyInputValue(bu.warningThresholdUsd, 'USD') : ''}" placeholder="Inherit platform default"></div>
+      <div class="form-group"><label class="form-label">BU Tolerance Threshold (USD)</label><input class="form-input money-input" id="bu-tolerance-threshold" type="text" inputmode="numeric" value="${bu?.toleranceThresholdUsd ? formatCurrencyInputValue(bu.toleranceThresholdUsd, 'USD') : ''}" placeholder="Inherit platform default"></div>
+      <div class="form-group"><label class="form-label">BU Annual Review Trigger (USD)</label><input class="form-input money-input" id="bu-annual-threshold" type="text" inputmode="numeric" value="${bu?.annualReviewThresholdUsd ? formatCurrencyInputValue(bu.annualReviewThresholdUsd, 'USD') : ''}" placeholder="Inherit platform default"></div>
+    </div>
     <div class="form-group mt-4"><label class="form-label">Notes</label><textarea class="form-textarea" id="bu-notes" rows="2">${bu?.notes||''}</textarea></div>
     </form>`,
     footer: `<button class="btn btn--ghost" id="bu-cancel">Cancel</button><button class="btn btn--primary" id="bu-save">Save</button>`
@@ -4682,6 +4736,7 @@ function openBUEditor(bu) {
     ti.systems   = UI.tagInput('ti-systems',   bu?.keySystems||[]);
     ti.datatypes = UI.tagInput('ti-datatypes', bu?.dataTypes||[]);
     ti.regtags   = UI.tagInput('ti-regtags',   bu?.regulatoryTags||[]);
+    attachFormattedMoneyInputs();
   });
 
   function renderLinkedEntitySummary() {
@@ -4739,6 +4794,12 @@ function openBUEditor(bu) {
     const id = document.getElementById('bu-id').value.trim();
     const name = document.getElementById('bu-name').value.trim();
     if (!id||!name) { UI.toast('ID and Name required.','warning'); return; }
+    const parseMoney = (id) => {
+      const raw = String(document.getElementById(id)?.value || '').replace(/,/g, '').trim();
+      const value = parseFloat(raw);
+      return Number.isFinite(value) && value > 0 ? value : null;
+    };
+    const linkModeValue = document.getElementById('bu-link-mode').value;
     const updated = {
       id,
       name,
@@ -4750,6 +4811,13 @@ function openBUEditor(bu) {
       regulatoryTags: ti.regtags.getTags(),
       contextSummary: document.getElementById('bu-context').value.trim(),
       aiGuidance: document.getElementById('bu-ai-guidance').value.trim(),
+      benchmarkStrategy: document.getElementById('bu-benchmark-strategy').value.trim(),
+      defaultLinkMode: linkModeValue === 'inherit' ? null : linkModeValue === 'yes',
+      riskAppetiteStatement: document.getElementById('bu-risk-appetite').value.trim(),
+      escalationGuidance: document.getElementById('bu-escalation-guidance').value.trim(),
+      warningThresholdUsd: parseMoney('bu-warning-threshold'),
+      toleranceThresholdUsd: parseMoney('bu-tolerance-threshold'),
+      annualReviewThresholdUsd: parseMoney('bu-annual-threshold'),
       notes: document.getElementById('bu-notes').value,
       defaultAssumptions: bu?.defaultAssumptions||{},
       docIds: bu?.docIds||[]
