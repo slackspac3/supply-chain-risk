@@ -146,7 +146,12 @@ const AdminPlatformDefaultsSection = (() => {
         UI.toast('Choose a BU or linked entity first.', 'warning');
         return;
       }
-      openBUEditor(targetBu);
+      openBUEditor(targetBu, {
+        onSave: updated => {
+          if (targetEl) targetEl.value = updated.id;
+          updateSummary();
+        }
+      });
     });
     return { regsInput, typicalDepartmentsInput, updateScopedSummary: updateSummary };
   }

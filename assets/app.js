@@ -1412,12 +1412,14 @@ function getEffectiveSettings() {
     return globalSettings;
   }
   const userSettings = getUserSettings();
+  const draftBu = AppState.draft?.buId ? getBUList().find(item => item.id === AppState.draft.buId) : null;
   const selection = resolveUserOrganisationSelection(user, userSettings, globalSettings);
-  const companyNode = getEntityById(globalSettings.companyStructure || [], selection.businessUnitEntityId);
+  const scopedBusinessUnitEntityId = draftBu?.orgEntityId || selection.businessUnitEntityId;
+  const companyNode = getEntityById(globalSettings.companyStructure || [], scopedBusinessUnitEntityId);
   const departmentNode = getEntityById(globalSettings.companyStructure || [], selection.departmentEntityId);
-  const companyLayer = getEntityLayerById(globalSettings, selection.businessUnitEntityId);
+  const companyLayer = getEntityLayerById(globalSettings, scopedBusinessUnitEntityId);
   const departmentLayer = getEntityLayerById(globalSettings, selection.departmentEntityId);
-  const buOverride = getBUList().find(item => item.orgEntityId === selection.businessUnitEntityId) || null;
+  const buOverride = draftBu || getBUList().find(item => item.orgEntityId === scopedBusinessUnitEntityId) || null;
   const organisationScopedDefaults = applyBUOverrideToSettings(
     applyEntityLayerToSettings(
       applyEntityLayerToSettings(globalSettings, companyLayer, companyNode),
@@ -1426,18 +1428,43 @@ function getEffectiveSettings() {
     ),
     buOverride
   );
-  return {
+  const merged = {
     ...organisationScopedDefaults,
     ...userSettings,
-    applicableRegulations: Array.isArray(userSettings.applicableRegulations) ? userSettings.applicableRegulations : [...organisationScopedDefaults.applicableRegulations],
-    userProfile: normaliseUserProfile(userSettings.userProfile),
-    userProfileSummary: buildUserProfileSummary(normaliseUserProfile(userSettings.userProfile)),
+    geography: userSettings.geography || organisationScopedDefaults.geography,
+    geographyPrimary: userSettings.geographyPrimary || organisationScopedDefaults.geography,
+    geographySecondary: userSettings.geographySecondary || '',
+    geographyTertiary: userSettings.geographyTertiary || '',
+    companyWebsiteUrl: userSettings.companyWebsiteUrl || organisationScopedDefaults.companyWebsiteUrl,
+    companyContextProfile: userSettings.companyContextProfile || organisationScopedDefaults.companyContextProfile,
     companyContextSections: userSettings.companyContextSections && typeof userSettings.companyContextSections === 'object'
       ? userSettings.companyContextSections
       : organisationScopedDefaults.companyContextSections,
+    userProfile: normaliseUserProfile(userSettings.userProfile),
+    userProfileSummary: buildUserProfileSummary(normaliseUserProfile(userSettings.userProfile)),
     selectedBusinessEntity: companyNode,
     selectedDepartmentEntity: departmentNode
   };
+  const userEditableFields = ['riskAppetiteStatement', 'applicableRegulations', 'aiInstructions', 'benchmarkStrategy', 'defaultLinkMode', 'adminContextSummary'];
+  userEditableFields.forEach(key => {
+    const hasOwnValue = Object.prototype.hasOwnProperty.call(userSettings, key);
+    if (!hasOwnValue) return;
+    const value = userSettings[key];
+    if (Array.isArray(value)) {
+      merged[key] = value.length ? value : organisationScopedDefaults[key];
+      return;
+    }
+    if (typeof value === 'string') {
+      merged[key] = value.trim() ? value : organisationScopedDefaults[key];
+      return;
+    }
+    if (typeof value === 'boolean') {
+      merged[key] = value;
+      return;
+    }
+    merged[key] = value ?? organisationScopedDefaults[key];
+  });
+  return merged;
 }
 
 function getToleranceThreshold() {
@@ -4666,7 +4693,7 @@ function renderAdminBU() {
   });
 }
 
-function openBUEditor(bu) {
+function openBUEditor(bu, options = {}) {
   const isNew = !bu;
   const settings = getAdminSettings();
   const companyStructure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
@@ -4825,7 +4852,10 @@ function openBUEditor(bu) {
     const list = getBUList();
     const idx = list.findIndex(b=>b.id===id);
     if (idx>-1) list[idx]=updated; else list.push(updated);
-    saveBUList(list); m.close(); Router.resolve();
+    saveBUList(list);
+    options.onSave?.(updated);
+    m.close();
+    Router.resolve();
     UI.toast(`Context for "${name}" ${isNew?'added':'updated'}.`,'success');
   });
 }
