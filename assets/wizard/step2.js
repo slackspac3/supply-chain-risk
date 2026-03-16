@@ -100,6 +100,12 @@ async function runLLMAssist() {
     const aiContext = buildCurrentAIAssistContext({ buId: AppState.draft.buId });
     const scenarioText = buildScenarioNarrative(assistSeed);
     const citations = await RAGService.retrieveRelevantDocs(AppState.draft.buId, scenarioText);
+    const benchmarkCandidates = BenchmarkService.retrieveRelevantBenchmarks({
+      query: scenarioText,
+      geography: formatScenarioGeographies(getScenarioGeographies()),
+      businessUnit: aiContext.businessUnit || bu || null,
+      topK: 3
+    });
     const result = await LLMService.generateScenarioAndInputs(scenarioText, {
       ...(aiContext.businessUnit || bu || {}),
       regulatoryTags: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
@@ -109,7 +115,7 @@ async function runLLMAssist() {
       companyStructureContext: aiContext.adminSettings.companyStructureContext,
       userProfileSummary: aiContext.adminSettings.userProfileSummary,
       selectedDepartmentContext: aiContext.adminSettings.departmentContext
-    }, citations);
+    }, citations, benchmarkCandidates);
     AppState.draft.scenarioTitle = result.scenarioTitle;
     AppState.draft.structuredScenario = result.structuredScenario;
     AppState.draft.llmAssisted = true;
@@ -126,6 +132,7 @@ async function runLLMAssist() {
     AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
     AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
     AppState.draft.inputRationale = result.inputRationale || AppState.draft.inputRationale;
+    AppState.draft.benchmarkReferences = Array.isArray(result.benchmarkReferences) ? result.benchmarkReferences : (AppState.draft.benchmarkReferences || []);
     const s = result.suggestedInputs;
     if (s) {
       const currentFair = AppState.draft.fairParams || {};
@@ -171,7 +178,7 @@ async function runLLMAssist() {
         </div>
       </div>
       ${result.structuredScenario?`<div class="grid-2"><div><div class="form-label" style="font-size:.7rem">Threat Community</div><p style="font-size:.85rem;margin-top:4px">${result.structuredScenario.threatCommunity}</p></div><div><div class="form-label" style="font-size:.7rem">Attack Vector</div><p style="font-size:.85rem;margin-top:4px">${result.structuredScenario.attackType}</p></div></div>`:''}
-    </div>${renderWorkflowGuidanceBlock(AppState.draft.workflowGuidance, 'What AI thinks you should do next')}${renderEvidenceQualityBlock(AppState.draft.confidenceLabel, AppState.draft.evidenceQuality, AppState.draft.evidenceSummary, AppState.draft.missingInformation, 'How grounded this AI draft is', { primaryGrounding: AppState.draft.primaryGrounding, supportingReferences: AppState.draft.supportingReferences, inferredAssumptions: AppState.draft.inferredAssumptions })}${renderBenchmarkRationaleBlock(AppState.draft.benchmarkBasis, AppState.draft.inputRationale)}${renderCitationBlock(AppState.draft.citations)}`;
+    </div>${renderWorkflowGuidanceBlock(AppState.draft.workflowGuidance, 'What AI thinks you should do next')}${renderEvidenceQualityBlock(AppState.draft.confidenceLabel, AppState.draft.evidenceQuality, AppState.draft.evidenceSummary, AppState.draft.missingInformation, 'How grounded this AI draft is', { primaryGrounding: AppState.draft.primaryGrounding, supportingReferences: AppState.draft.supportingReferences, inferredAssumptions: AppState.draft.inferredAssumptions })}${renderBenchmarkRationaleBlock(AppState.draft.benchmarkBasis, AppState.draft.inputRationale, AppState.draft.benchmarkReferences)}${renderCitationBlock(AppState.draft.citations)}`;
     attachCitationHandlers();
   } catch(e) {
     output.innerHTML = `<div class="banner banner--danger mt-4"><span class="banner-icon">⚠</span><span class="banner-text">LLM Assist failed. Try again in a moment.</span></div>`;

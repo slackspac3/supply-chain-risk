@@ -622,7 +622,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
     });
   }
 
-  function _generateStub(narrative, buContext, citations) {
+  function _generateStub(narrative, buContext, citations, benchmarkCandidates = []) {
     const classification = _classifyScenario(narrative);
 
     let scenarioType = classification.scenarioType;
@@ -675,6 +675,14 @@ ${businessUnit.selectedDepartmentContext}` : ''
       ];
     }
 
+    const benchmarkDerived = Array.isArray(benchmarkCandidates) && benchmarkCandidates.length
+      ? BenchmarkService.deriveSuggestedInputs(benchmarkCandidates)
+      : null;
+
+    if (benchmarkDerived?.TEF) tef = benchmarkDerived.TEF;
+    if (benchmarkDerived?.controlStrength) cs = benchmarkDerived.controlStrength;
+    if (benchmarkDerived?.threatCapability) tc = benchmarkDerived.threatCapability;
+
     // Add BU context to defaults if available, but tolerate partial or older settings payloads.
     if (buContext && buContext.defaultAssumptions) {
       const da = buContext.defaultAssumptions || {};
@@ -689,6 +697,27 @@ ${businessUnit.selectedDepartmentContext}` : ''
       }
     }
 
+    const suggestedLossComponents = buContext?.defaultAssumptions ? {
+      incidentResponse: buContext.defaultAssumptions.incidentResponse,
+      businessInterruption: buContext.defaultAssumptions.businessInterruption,
+      dataBreachRemediation: buContext.defaultAssumptions.dataBreachRemediation,
+      regulatoryLegal: buContext.defaultAssumptions.regulatoryLegal,
+      thirdPartyLiability: buContext.defaultAssumptions.thirdPartyLiability,
+      reputationContract: buContext.defaultAssumptions.reputationContract
+    } : (benchmarkDerived?.lossComponents || {
+      incidentResponse:    { min: 50000, likely: 180000, max: 600000 },
+      businessInterruption: { min: 100000, likely: 450000, max: 2500000 },
+      dataBreachRemediation: { min: 30000, likely: 120000, max: 500000 },
+      regulatoryLegal:      { min: 0, likely: 80000, max: 800000 },
+      thirdPartyLiability:  { min: 0, likely: 50000, max: 400000 },
+      reputationContract:   { min: 50000, likely: 200000, max: 1200000 }
+    });
+
+    const benchmarkBasis = [
+      BenchmarkService.summariseBenchmarkBasis(benchmarkCandidates),
+      'The suggested values are intended as FAIR-style starting points and should still be challenged against internal incident history, control evidence, and finance input.'
+    ].filter(Boolean).join(' ');
+
     return {
       scenarioTitle: scenarioType,
       structuredScenario: {
@@ -702,7 +731,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
         'Review the suggested FAIR ranges against internal incident history, control evidence, and business criticality before accepting them.',
         'Validate any benchmark-based assumptions against FAIR logic, NIST CSF style control expectations, and your organisation-specific operating context.'
       ],
-      benchmarkBasis: 'The suggested values are intended as FAIR-style starting points. They prioritise relevant GCC and UAE cyber, privacy, and operational resilience context where credible local comparators are available, and otherwise fall back to mature global incident, control, and loss patterns that should be validated by the user.',
+      benchmarkBasis,
       inputRationale: {
         tef: 'Threat event frequency is anchored to the scenario type and then aligned to the business unit default assumptions where available.',
         vulnerability: 'Threat capability and control strength are balanced to reflect the expected attacker sophistication against the current control environment.',
@@ -712,24 +741,11 @@ ${businessUnit.selectedDepartmentContext}` : ''
         TEF: tef,
         controlStrength: cs,
         threatCapability: tc,
-        lossComponents: buContext?.defaultAssumptions ? {
-          incidentResponse:    buContext.defaultAssumptions.incidentResponse,
-          businessInterruption: buContext.defaultAssumptions.businessInterruption,
-          dataBreachRemediation: buContext.defaultAssumptions.dataBreachRemediation,
-          regulatoryLegal:      buContext.defaultAssumptions.regulatoryLegal,
-          thirdPartyLiability:  buContext.defaultAssumptions.thirdPartyLiability,
-          reputationContract:   buContext.defaultAssumptions.reputationContract
-        } : {
-          incidentResponse:    { min: 50000, likely: 180000, max: 600000 },
-          businessInterruption: { min: 100000, likely: 450000, max: 2500000 },
-          dataBreachRemediation: { min: 30000, likely: 120000, max: 500000 },
-          regulatoryLegal:      { min: 0, likely: 80000, max: 800000 },
-          thirdPartyLiability:  { min: 0, likely: 50000, max: 400000 },
-          reputationContract:   { min: 50000, likely: 200000, max: 1200000 }
-        }
+        lossComponents: suggestedLossComponents
       },
       recommendations: recommendations.slice(0, 6),
-      citations
+      citations,
+      benchmarkReferences: BenchmarkService.buildReferenceList(benchmarkCandidates)
     };
   }
 
@@ -876,7 +892,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
    * Main method: generate scenario and FAIR inputs
    * [LLM-INTEGRATION] Replace stub body with real API call + JSON parsing
    */
-  async function generateScenarioAndInputs(narrative, buContext, retrievedDocs) {
+  async function generateScenarioAndInputs(narrative, buContext, retrievedDocs, benchmarkCandidates = []) {
     const classification = _classifyScenario(narrative);
     if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
       await new Promise(r => setTimeout(r, 2200 + Math.random() * 800));
@@ -938,13 +954,16 @@ Risk narrative: ${narrative}
 Relevant citations:
 ${_buildCitationPromptBlock(retrievedDocs)}
 
+Structured numeric benchmarks:
+${BenchmarkService.buildPromptBlock(benchmarkCandidates)}
+
 Evidence quality context:
 ${evidenceMeta.promptBlock}`;
 
         const raw = await _callLLM(systemPrompt, userPrompt);
         if (raw) {
           const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
-          const fallback = _generateStub(narrative, buContext, retrievedDocs);
+          const fallback = _generateStub(narrative, buContext, retrievedDocs, benchmarkCandidates);
           const parsedInputs = parsed?.suggestedInputs || {};
           const fallbackInputs = fallback.suggestedInputs || {};
           const parsedLoss = parsedInputs.lossComponents || {};
@@ -974,6 +993,7 @@ ${evidenceMeta.promptBlock}`;
             })(),
             workflowGuidance: _normaliseGuidance(parsed.workflowGuidance?.length ? parsed.workflowGuidance : fallback.workflowGuidance),
             benchmarkBasis: _normaliseBenchmarkBasis(parsed.benchmarkBasis || fallback.benchmarkBasis || ''),
+            benchmarkReferences: BenchmarkService.buildReferenceList(benchmarkCandidates),
             inputRationale: _normaliseInputRationale({
               ...fallback.inputRationale,
               ...(parsed.inputRationale || {})
@@ -1005,7 +1025,7 @@ ${evidenceMeta.promptBlock}`;
     }
 
     // Fall back to stub
-    return _withEvidenceMeta(_generateStub(narrative, buContext, retrievedDocs), _buildEvidenceMeta({ citations: retrievedDocs, businessUnit: buContext, geography: buContext?.geography, applicableRegulations: buContext?.regulatoryTags || [], userProfile: buContext?.userProfileSummary, organisationContext: buContext?.companyStructureContext }));
+    return _withEvidenceMeta(_generateStub(narrative, buContext, retrievedDocs, benchmarkCandidates), _buildEvidenceMeta({ citations: retrievedDocs, businessUnit: buContext, geography: buContext?.geography, applicableRegulations: buContext?.regulatoryTags || [], userProfile: buContext?.userProfileSummary, organisationContext: buContext?.companyStructureContext }));
   }
 
   async function enhanceRiskContext(input) {

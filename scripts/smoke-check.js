@@ -23,6 +23,8 @@ const indexHtml = read('index.html');
 const appJs = read('assets/app.js');
 const exportJs = read('assets/services/exportService.js');
 const llmJs = read('assets/services/llmService.js');
+const benchmarkServiceJs = read('assets/services/benchmarkService.js');
+const benchmarkData = read('data/benchmarks.json');
 const settingsApi = read('api/settings.js');
 const usersApi = read('api/users.js');
 const authServiceJs = read('assets/services/authService.js');
@@ -34,6 +36,7 @@ const assessmentStateJs = read('assets/state/assessmentState.js');
 const versions = extractAssetVersions(indexHtml);
 expect(versions.length === 1, `Expected one frontend asset version, found: ${versions.join(', ') || 'none'}`);
 expect(indexHtml.includes('assets/services/reportPresentation.js'), 'index.html is missing reportPresentation.js');
+expect(indexHtml.includes('assets/services/benchmarkService.js'), 'index.html is missing benchmarkService.js');
 expect(indexHtml.indexOf('assets/services/reportPresentation.js') < indexHtml.indexOf('assets/services/exportService.js'), 'reportPresentation.js must load before exportService.js');
 expect(indexHtml.indexOf('assets/services/reportPresentation.js') < indexHtml.indexOf('assets/app.js'), 'reportPresentation.js must load before app.js');
 
@@ -49,10 +52,16 @@ expect(llmJs.includes('missingInformation'), 'AI evidence contract missing missi
 expect(llmJs.includes('primaryGrounding'), 'AI evidence contract missing primaryGrounding');
 expect(llmJs.includes('supportingReferences'), 'AI evidence contract missing supportingReferences');
 expect(llmJs.includes('inferredAssumptions'), 'AI evidence contract missing inferredAssumptions');
+expect(llmJs.includes('Structured numeric benchmarks:'), 'LLM prompts are missing structured numeric benchmark context');
+expect(llmJs.includes('benchmarkReferences'), 'LLM output is not carrying benchmarkReferences');
+expect(benchmarkServiceJs.includes('retrieveRelevantBenchmarks'), 'benchmark service is missing retrieveRelevantBenchmarks');
+expect(benchmarkServiceJs.includes('deriveSuggestedInputs'), 'benchmark service is missing deriveSuggestedInputs');
+expect(benchmarkData.includes('bm-databreach-regional-crosssector'), 'benchmark dataset is missing seeded regional data-breach profile');
 
 expect(assessmentStateJs.includes('primaryGrounding'), 'assessmentState is not persisting primaryGrounding');
 expect(assessmentStateJs.includes('supportingReferences'), 'assessmentState is not persisting supportingReferences');
 expect(assessmentStateJs.includes('inferredAssumptions'), 'assessmentState is not persisting inferredAssumptions');
+expect(assessmentStateJs.includes('benchmarkReferences'), 'assessmentState is not persisting benchmarkReferences');
 
 expect(usersApi.includes('Organisation assignment can only be changed by an admin.'), 'users API self-update scope restriction missing');
 expect(!authServiceJs.includes('businessUnitEntityId: payload.businessUnitEntityId'), 'authService self-update still sends businessUnitEntityId');

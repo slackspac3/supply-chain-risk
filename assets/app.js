@@ -8,7 +8,7 @@
 const TOLERANCE_THRESHOLD = 5_000_000;
 const DEFAULT_FX_RATE = 3.6725;
 const DEFAULT_COMPASS_PROXY_URL = resolveCompassProxyUrl();
-const APP_ASSET_VERSION = '20260312bm';
+const APP_ASSET_VERSION = '20260312bn';
 const GLOBAL_ADMIN_STORAGE_KEY = 'rq_admin_settings';
 const USER_SETTINGS_STORAGE_PREFIX = 'rq_user_settings';
 const ASSESSMENTS_STORAGE_PREFIX = 'rq_assessments';
@@ -94,6 +94,7 @@ const AppState = {
   draft: {},
   buList: [],
   docList: [],
+  benchmarkList: [],
   adminNewUserStatus: '',
   adminVisiblePasswords: {},
   settingsSectionState: {},
@@ -3408,18 +3409,20 @@ function renderWorkflowGuidanceBlock(items, title = 'AI Guidance Through the Wor
   </div>`;
 }
 
-function renderBenchmarkRationaleBlock(benchmarkBasis, inputRationale) {
-  if (!benchmarkBasis && !inputRationale) return '';
+function renderBenchmarkRationaleBlock(benchmarkBasis, inputRationale, benchmarkReferences = []) {
+  if (!benchmarkBasis && !inputRationale && !benchmarkReferences?.length) return '';
   const rows = [
     ['Benchmark basis', benchmarkBasis],
     ['Why TEF looks like this', inputRationale?.tef],
     ['Why vulnerability looks like this', inputRationale?.vulnerability],
     ['Why the loss ranges look like this', inputRationale?.lossComponents]
   ].filter(([, value]) => value);
+  const refs = Array.isArray(benchmarkReferences) ? benchmarkReferences : [];
   return `<div class="card card--elevated anim-fade-in">
     <div class="context-panel-title">Benchmark Logic and Number Rationale</div>
     <div style="display:flex;flex-direction:column;gap:var(--sp-4);margin-top:var(--sp-4)">
       ${rows.map(([label, value]) => `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${label}</div><div style="font-size:.85rem;color:var(--text-secondary);margin-top:6px;line-height:1.7">${value}</div></div>`).join('')}
+      ${refs.length ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Benchmark sources used</div><div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">${refs.map(ref => `<div><div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap"><strong style="font-size:.85rem;color:var(--text-primary)">${escapeHtml(String(ref.title || ref.sourceTitle || 'Benchmark source'))}</strong><span class="badge badge--neutral">${escapeHtml(String(ref.scope || 'benchmark'))}</span><span class="badge badge--gold">${escapeHtml(String(ref.sourceType || 'Reference'))}</span></div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(ref.sourceTitle || ''))}${ref.summary ? ` — ${escapeHtml(String(ref.summary))}` : ''}</div></div>`).join('')}</div></div>` : ''}
     </div>
   </div>`;
 }
@@ -4870,11 +4873,13 @@ async function init() {
     }
     AppState.buList  = await loadJSON('./data/bu.json');
     AppState.docList = await loadJSON('./data/docs.json');
+    AppState.benchmarkList = await loadJSON('./data/benchmarks.json');
   } catch(e) {
     console.error('Failed to load JSON data:', e);
-    AppState.buList = []; AppState.docList = [];
+    AppState.buList = []; AppState.docList = []; AppState.benchmarkList = [];
   }
   RAGService.init(getDocList(), getBUList());
+  BenchmarkService.init(AppState.benchmarkList);
   activateAuthenticatedState();
 
   Router

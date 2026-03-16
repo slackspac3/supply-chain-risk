@@ -562,7 +562,7 @@ function renderResults(id, isShared) {
       ${(assessment.workflowGuidance?.length || assessment.benchmarkBasis || assessment.inputRationale || assessment.evidenceSummary || assessment.confidenceLabel) ? `
       <div class="grid-2 mb-6 anim-fade-in">
         ${renderWorkflowGuidanceBlock(assessment.workflowGuidance || [], 'How AI guided this assessment')}
-        ${renderBenchmarkRationaleBlock(assessment.benchmarkBasis, assessment.inputRationale)}
+        ${renderBenchmarkRationaleBlock(assessment.benchmarkBasis, assessment.inputRationale, assessment.benchmarkReferences)}
       </div>
       ${renderEvidenceQualityBlock(assessment.confidenceLabel, assessment.evidenceQuality, assessment.evidenceSummary, assessment.missingInformation, 'How grounded the AI inputs were', { primaryGrounding: assessment.primaryGrounding, supportingReferences: assessment.supportingReferences, inferredAssumptions: assessment.inferredAssumptions })}` : ''}
 

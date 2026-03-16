@@ -202,6 +202,7 @@ function resetDraft() {
     linkAnalysis: '',
     workflowGuidance: [],
     benchmarkBasis: '',
+    benchmarkReferences: [],
     inputRationale: null,
     confidenceLabel: '',
     evidenceQuality: '',
