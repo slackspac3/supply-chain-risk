@@ -24,6 +24,12 @@ const appJs = read('assets/app.js');
 const exportJs = read('assets/services/exportService.js');
 const llmJs = read('assets/services/llmService.js');
 const settingsApi = read('api/settings.js');
+const usersApi = read('api/users.js');
+const authServiceJs = read('assets/services/authService.js');
+const resultsRouteJs = read('assets/results/resultsRoute.js');
+const userPreferencesJs = read('assets/settings/userPreferences.js');
+const userOnboardingJs = read('assets/settings/userOnboarding.js');
+const assessmentStateJs = read('assets/state/assessmentState.js');
 
 const versions = extractAssetVersions(indexHtml);
 expect(versions.length === 1, `Expected one frontend asset version, found: ${versions.join(', ') || 'none'}`);
@@ -40,6 +46,23 @@ expect(llmJs.includes('function _withEvidenceMeta('), 'AI evidence wrapper missi
 expect(llmJs.includes('confidenceLabel'), 'AI evidence contract missing confidenceLabel');
 expect(llmJs.includes('evidenceQuality'), 'AI evidence contract missing evidenceQuality');
 expect(llmJs.includes('missingInformation'), 'AI evidence contract missing missingInformation');
+expect(llmJs.includes('primaryGrounding'), 'AI evidence contract missing primaryGrounding');
+expect(llmJs.includes('supportingReferences'), 'AI evidence contract missing supportingReferences');
+expect(llmJs.includes('inferredAssumptions'), 'AI evidence contract missing inferredAssumptions');
+
+expect(assessmentStateJs.includes('primaryGrounding'), 'assessmentState is not persisting primaryGrounding');
+expect(assessmentStateJs.includes('supportingReferences'), 'assessmentState is not persisting supportingReferences');
+expect(assessmentStateJs.includes('inferredAssumptions'), 'assessmentState is not persisting inferredAssumptions');
+
+expect(usersApi.includes('Organisation assignment can only be changed by an admin.'), 'users API self-update scope restriction missing');
+expect(!authServiceJs.includes('businessUnitEntityId: payload.businessUnitEntityId'), 'authService self-update still sends businessUnitEntityId');
+expect(!authServiceJs.includes('departmentEntityId: payload.departmentEntityId'), 'authService self-update still sends departmentEntityId');
+
+expect(resultsRouteJs.includes('Confirm your organisation context'), 'results route is missing the updated organisation-context copy');
+expect(resultsRouteJs.includes('const canChooseDepartment = !!capability.canManageBusinessUnit;'), 'results route is missing BU-admin department chooser guard');
+
+expect(userPreferencesJs.includes('Your business-unit and function assignment is controlled by your current role.'), 'user preferences role guidance is missing');
+expect(userOnboardingJs.includes('Your organisation assignment is set by your current admin-managed role.'), 'user onboarding role guidance is missing');
 
 expect(exportJs.includes('ReportPresentation.buildExecutiveScenarioSummary'), 'exportService is not using shared ReportPresentation summary helper');
 expect(exportJs.includes('ReportPresentation.buildExecutiveThresholdModel'), 'exportService is not using shared ReportPresentation threshold helper');
@@ -47,6 +70,8 @@ expect(exportJs.includes('ReportPresentation.buildExecutiveDecisionSupport'), 'e
 
 expect(!appJs.includes("'${DEFAULT_COMPASS_PROXY_URL}'"), 'Literal DEFAULT_COMPASS_PROXY_URL placeholder leaked into app.js');
 expect(!appJs.includes("Cannot access 'settings' before initialization"), 'Static error text leaked into app.js');
+expect(appJs.includes('renderEvidenceDetails(supportingReferences'), 'supporting references evidence renderer missing');
+expect(appJs.includes('renderEvidenceDetails(inferredAssumptions'), 'inferred assumptions evidence renderer missing');
 
 if (!failures.length) {
   notes.push('Smoke check passed.');
