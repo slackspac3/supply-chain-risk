@@ -8,7 +8,7 @@
 const TOLERANCE_THRESHOLD = 5_000_000;
 const DEFAULT_FX_RATE = 3.6725;
 const DEFAULT_COMPASS_PROXY_URL = resolveCompassProxyUrl();
-const APP_ASSET_VERSION = '20260312bk';
+const APP_ASSET_VERSION = '20260312bl';
 const GLOBAL_ADMIN_STORAGE_KEY = 'rq_admin_settings';
 const USER_SETTINGS_STORAGE_PREFIX = 'rq_user_settings';
 const ASSESSMENTS_STORAGE_PREFIX = 'rq_assessments';
@@ -3435,14 +3435,15 @@ function renderEvidenceQualityBlock(confidenceLabel, evidenceQuality, evidenceSu
     const badge = typeof item === 'string' ? idx + 1 : (item.sourceType || 'Source');
     return `<div style="display:flex;gap:var(--sp-3);align-items:flex-start"><span class="badge badge--neutral" style="min-width:24px;justify-content:center">${escapeHtml(String(badge))}</span><div class="context-panel-copy" style="margin:0">${escapeHtml(String(text))}</div></div>`;
   }).join('')}</div></div>` : '';
+  const renderEvidenceDetails = (items, heading, summary) => items.length ? `<details style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)"><span>${heading}</span><span class="badge badge--neutral">${summary}</span></summary><div style="margin-top:var(--sp-3)">${renderEvidenceRows(items, heading).replace(/^<div style="background:var\(--bg-elevated\);padding:var\(--sp-4\);border-radius:var\(--radius-lg\)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var\(--text-muted\)">.*?<\/div>/, '').replace(/<\/div>$/, '')}</div></details>` : '';
   return `<div class="card card--elevated anim-fade-in">
     <div class="context-panel-title">${title}</div>
     <div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">
       ${confidenceLabel || evidenceQuality ? `<div class="citation-chips"><span class="badge badge--neutral">${confidenceLabel || 'AI confidence not stated'}</span><span class="badge badge--gold">${evidenceQuality || 'Evidence quality not stated'}</span></div>` : ''}
       ${evidenceSummary ? `<p class="context-panel-copy">${evidenceSummary}</p>` : ''}
       ${renderEvidenceRows(primaryGrounding, 'Primary grounding')}
-      ${renderEvidenceRows(supportingReferences, 'Supporting references')}
-      ${renderEvidenceRows(inferredAssumptions, 'Inferred without direct evidence')}
+      ${renderEvidenceDetails(supportingReferences, 'Supporting references', `${supportingReferences.length} source${supportingReferences.length === 1 ? '' : 's'}`)}
+      ${renderEvidenceDetails(inferredAssumptions, 'Inferred without direct evidence', `${inferredAssumptions.length} item${inferredAssumptions.length === 1 ? '' : 's'}`)}
       ${(missingInformation || []).length ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">What would make this stronger</div><div style="display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)">${missingInformation.map((item, idx) => `<div style="display:flex;gap:var(--sp-3);align-items:flex-start"><span class="badge badge--neutral" style="min-width:24px;justify-content:center">${idx + 1}</span><div class="context-panel-copy" style="margin:0">${escapeHtml(String(item))}</div></div>`).join('')}</div></div>` : ''}
     </div>
   </div>`;
