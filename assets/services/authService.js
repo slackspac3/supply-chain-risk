@@ -209,7 +209,11 @@ function resolveApiUrl(path) {
       }
       return { success: true, user: sanitiseAccount(data.user) };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Invalid username or password' };
+      const message = error instanceof Error ? error.message : '';
+      if (/too many login attempts/i.test(message)) {
+        return { success: false, error: 'Too many login attempts. Please wait and try again.' };
+      }
+      return { success: false, error: 'Invalid username or password' };
     }
   }
 

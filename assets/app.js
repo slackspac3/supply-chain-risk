@@ -3808,7 +3808,10 @@ function renderLogin() {
       }
     }
     else {
-      document.getElementById('login-err').textContent = `⚠ ${result.error || 'Invalid username or password'}`;
+      const loginMessage = /too many login attempts/i.test(String(result.error || ''))
+        ? 'Too many login attempts. Please wait and try again.'
+        : 'Invalid username or password';
+      document.getElementById('login-err').textContent = `⚠ ${loginMessage}`;
       document.getElementById('login-err').classList.remove('hidden');
       document.getElementById('login-user').classList.add('error');
       document.getElementById('login-pass').classList.add('error');
