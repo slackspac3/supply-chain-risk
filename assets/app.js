@@ -8,6 +8,7 @@
 const TOLERANCE_THRESHOLD = 5_000_000;
 const DEFAULT_FX_RATE = 3.6725;
 const DEFAULT_COMPASS_PROXY_URL = resolveCompassProxyUrl();
+const APP_ASSET_VERSION = '20260312az';
 const GLOBAL_ADMIN_STORAGE_KEY = 'rq_admin_settings';
 const USER_SETTINGS_STORAGE_PREFIX = 'rq_user_settings';
 const ASSESSMENTS_STORAGE_PREFIX = 'rq_assessments';
@@ -2817,7 +2818,8 @@ function setPage(html) {
 }
 
 async function loadJSON(path) {
-  const res = await fetch(path);
+  const separator = String(path).includes('?') ? '&' : '?';
+  const res = await fetch(`${path}${separator}v=${APP_ASSET_VERSION}`);
   return res.json();
 }
 
