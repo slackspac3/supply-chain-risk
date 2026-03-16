@@ -853,10 +853,10 @@ function getNonAdminCapabilityState(user = AuthService.getCurrentUser(), userSet
   const managedDepartment = structure.find(node => isDepartmentEntityType(node.type) && String(node.ownerUsername || '').trim().toLowerCase() === safeUsername) || null;
   const selectedBusiness = getEntityById(structure, selection.businessUnitEntityId);
   const selectedDepartment = getEntityById(structure, selection.departmentEntityId);
-  const canManageBusinessUnit = !!managedBusiness || (user?.role === 'bu_admin' && !!selection.businessUnitEntityId);
-  const canManageDepartment = !!managedDepartment || (!!selectedDepartment && String(selectedDepartment.ownerUsername || '').trim().toLowerCase() === safeUsername);
-  const managedBusinessId = managedBusiness?.id || selection.businessUnitEntityId || '';
-  const managedDepartmentId = managedDepartment?.id || (canManageDepartment ? selection.departmentEntityId : '');
+  const canManageBusinessUnit = !!managedBusiness;
+  const canManageDepartment = !!managedDepartment;
+  const managedBusinessId = managedBusiness?.id || '';
+  const managedDepartmentId = managedDepartment?.id || '';
   const roleKeys = [
     canManageBusinessUnit ? 'bu_admin' : null,
     canManageDepartment ? 'function_admin' : null,
