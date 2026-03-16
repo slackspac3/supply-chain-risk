@@ -421,6 +421,9 @@ async function runIntakeAssist() {
     AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
     AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
     AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';
+    AppState.draft.primaryGrounding = Array.isArray(result.primaryGrounding) ? result.primaryGrounding : (AppState.draft.primaryGrounding || []);
+    AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
+    AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
     AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
     appendRiskCandidates(result.risks || guessRisksFromText(narrative + '\n' + AppState.draft.registerFindings), { selectNew: true });
     AppState.draft.applicableRegulations = Array.from(new Set([...(deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()) || []), ...(result.regulations || [])]));
@@ -473,6 +476,9 @@ async function enhanceNarrativeWithAI() {
     AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
     AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
     AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';
+    AppState.draft.primaryGrounding = Array.isArray(result.primaryGrounding) ? result.primaryGrounding : (AppState.draft.primaryGrounding || []);
+    AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
+    AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
     AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
     AppState.draft.citations = normaliseCitations(result.citations || citations);
     appendRiskCandidates(result.risks || guessRisksFromText(nextNarrative), { selectNew: true });
@@ -524,6 +530,9 @@ async function analyseUploadedRegister() {
     AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
     AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
     AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';
+    AppState.draft.primaryGrounding = Array.isArray(result.primaryGrounding) ? result.primaryGrounding : (AppState.draft.primaryGrounding || []);
+    AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
+    AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
     AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
     saveDraft();
     renderWizard1();

@@ -8,7 +8,7 @@
 const TOLERANCE_THRESHOLD = 5_000_000;
 const DEFAULT_FX_RATE = 3.6725;
 const DEFAULT_COMPASS_PROXY_URL = resolveCompassProxyUrl();
-const APP_ASSET_VERSION = '20260312bi';
+const APP_ASSET_VERSION = '20260312bj';
 const GLOBAL_ADMIN_STORAGE_KEY = 'rq_admin_settings';
 const USER_SETTINGS_STORAGE_PREFIX = 'rq_user_settings';
 const ASSESSMENTS_STORAGE_PREFIX = 'rq_assessments';
@@ -912,6 +912,9 @@ function ensureDraftShape() {
     confidenceLabel: AppState.draft.confidenceLabel || '',
     evidenceQuality: AppState.draft.evidenceQuality || '',
     evidenceSummary: AppState.draft.evidenceSummary || '',
+    primaryGrounding: Array.isArray(AppState.draft.primaryGrounding) ? AppState.draft.primaryGrounding : [],
+    supportingReferences: Array.isArray(AppState.draft.supportingReferences) ? AppState.draft.supportingReferences : [],
+    inferredAssumptions: Array.isArray(AppState.draft.inferredAssumptions) ? AppState.draft.inferredAssumptions : [],
     missingInformation: Array.isArray(AppState.draft.missingInformation) ? AppState.draft.missingInformation : [],
     learningNote: AppState.draft.learningNote || '',
     treatmentImprovementRequest: AppState.draft.treatmentImprovementRequest || '',
@@ -3421,14 +3424,26 @@ function renderBenchmarkRationaleBlock(benchmarkBasis, inputRationale) {
   </div>`;
 }
 
-function renderEvidenceQualityBlock(confidenceLabel, evidenceQuality, evidenceSummary, missingInformation = [], title = 'AI Evidence Quality') {
-  if (!confidenceLabel && !evidenceQuality && !evidenceSummary && !(missingInformation || []).length) return '';
+function renderEvidenceQualityBlock(confidenceLabel, evidenceQuality, evidenceSummary, missingInformation = [], title = 'AI Evidence Quality', evidenceBreakdown = null) {
+  const breakdown = evidenceBreakdown || {};
+  const primaryGrounding = Array.isArray(breakdown.primaryGrounding) ? breakdown.primaryGrounding : [];
+  const supportingReferences = Array.isArray(breakdown.supportingReferences) ? breakdown.supportingReferences : [];
+  const inferredAssumptions = Array.isArray(breakdown.inferredAssumptions) ? breakdown.inferredAssumptions : [];
+  if (!confidenceLabel && !evidenceQuality && !evidenceSummary && !(missingInformation || []).length && !primaryGrounding.length && !supportingReferences.length && !inferredAssumptions.length) return '';
+  const renderEvidenceRows = (items, heading) => items.length ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${heading}</div><div style="display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)">${items.map((item, idx) => {
+    const text = typeof item === 'string' ? item : `${item.title || 'Untitled source'}${item.relevanceReason ? ` — ${item.relevanceReason}` : ''}`;
+    const badge = typeof item === 'string' ? idx + 1 : (item.sourceType || 'Source');
+    return `<div style="display:flex;gap:var(--sp-3);align-items:flex-start"><span class="badge badge--neutral" style="min-width:24px;justify-content:center">${escapeHtml(String(badge))}</span><div class="context-panel-copy" style="margin:0">${escapeHtml(String(text))}</div></div>`;
+  }).join('')}</div></div>` : '';
   return `<div class="card card--elevated anim-fade-in">
     <div class="context-panel-title">${title}</div>
     <div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">
       ${confidenceLabel || evidenceQuality ? `<div class="citation-chips"><span class="badge badge--neutral">${confidenceLabel || 'AI confidence not stated'}</span><span class="badge badge--gold">${evidenceQuality || 'Evidence quality not stated'}</span></div>` : ''}
       ${evidenceSummary ? `<p class="context-panel-copy">${evidenceSummary}</p>` : ''}
-      ${(missingInformation || []).length ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">What would make this stronger</div><div style="display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)">${missingInformation.map((item, idx) => `<div style="display:flex;gap:var(--sp-3);align-items:flex-start"><span class="badge badge--neutral" style="min-width:24px;justify-content:center">${idx + 1}</span><div class="context-panel-copy" style="margin:0">${item}</div></div>`).join('')}</div></div>` : ''}
+      ${renderEvidenceRows(primaryGrounding, 'Primary grounding')}
+      ${renderEvidenceRows(supportingReferences, 'Supporting references')}
+      ${renderEvidenceRows(inferredAssumptions, 'Inferred without direct evidence')}
+      ${(missingInformation || []).length ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">What would make this stronger</div><div style="display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)">${missingInformation.map((item, idx) => `<div style="display:flex;gap:var(--sp-3);align-items:flex-start"><span class="badge badge--neutral" style="min-width:24px;justify-content:center">${idx + 1}</span><div class="context-panel-copy" style="margin:0">${escapeHtml(String(item))}</div></div>`).join('')}</div></div>` : ''}
     </div>
   </div>`;
 }

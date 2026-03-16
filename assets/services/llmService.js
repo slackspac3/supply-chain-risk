@@ -336,11 +336,40 @@ const LLMService = (() => {
       ? `Evidence used: ${_joinList(evidenceParts)}.`
       : 'Evidence used: limited contextual inputs only.';
 
+    const rankedCitations = citations
+      .slice()
+      .sort((a, b) => Number(b?.score || 0) - Number(a?.score || 0));
+    const primaryGrounding = rankedCitations.slice(0, 3).map((item) => ({
+      title: String(item?.title || item?.note || 'Untitled source').trim(),
+      sourceType: String(item?.sourceType || _classifyEvidenceSource(item) || 'Source').trim(),
+      relevanceReason: String(item?.relevanceReason || '').trim()
+    }));
+    const supportingReferences = rankedCitations.slice(3, 6).map((item) => ({
+      title: String(item?.title || item?.note || 'Untitled source').trim(),
+      sourceType: String(item?.sourceType || _classifyEvidenceSource(item) || 'Source').trim(),
+      relevanceReason: String(item?.relevanceReason || '').trim()
+    }));
+    const inferredAssumptions = [
+      !hasGeography ? 'Geographic scope was inferred from current platform or business-unit defaults.' : null,
+      !hasRegulations ? 'Applicable regulations were inferred from selected geography and scenario type.' : null,
+      !hasBuContext ? 'Business-unit or function context was inferred from broader organisation context.' : null,
+      (!hasUploadedText && !hasRegisterText && counts.internal === 0) ? 'No direct internal evidence was provided, so the AI relied on existing platform context and retrieved references.' : null
+    ].filter(Boolean).slice(0, 4);
+
     const promptLines = [
       `Evidence quality: ${evidenceQuality}.`,
       `Confidence: ${confidenceLabel}.`,
       `Available evidence: ${summary}`
     ];
+    if (primaryGrounding.length) {
+      promptLines.push(`Primary grounding sources: ${_joinList(primaryGrounding.map(item => item.title))}`);
+    }
+    if (supportingReferences.length) {
+      promptLines.push(`Supporting references: ${_joinList(supportingReferences.map(item => item.title))}`);
+    }
+    if (inferredAssumptions.length) {
+      promptLines.push(`Inferred without direct evidence: ${_joinList(inferredAssumptions)}`);
+    }
     if (missingInformation.length) {
       promptLines.push(`Missing or weak evidence: ${_joinList(missingInformation.slice(0, 4))}`);
     }
@@ -405,6 +434,15 @@ ${businessUnit.selectedDepartmentContext}` : ''
       confidenceLabel: String(result.confidenceLabel || meta.confidenceLabel || 'Moderate confidence'),
       evidenceQuality: String(result.evidenceQuality || meta.evidenceQuality || 'Useful but incomplete evidence base'),
       evidenceSummary: String(result.evidenceSummary || meta.summary || 'Evidence used: limited contextual inputs only.'),
+      primaryGrounding: Array.isArray(result.primaryGrounding)
+        ? result.primaryGrounding.filter(Boolean).slice(0, 3)
+        : (Array.isArray(meta.primaryGrounding) ? meta.primaryGrounding.filter(Boolean).slice(0, 3) : []),
+      supportingReferences: Array.isArray(result.supportingReferences)
+        ? result.supportingReferences.filter(Boolean).slice(0, 3)
+        : (Array.isArray(meta.supportingReferences) ? meta.supportingReferences.filter(Boolean).slice(0, 3) : []),
+      inferredAssumptions: Array.isArray(result.inferredAssumptions)
+        ? result.inferredAssumptions.filter(Boolean).slice(0, 4)
+        : (Array.isArray(meta.inferredAssumptions) ? meta.inferredAssumptions.filter(Boolean).slice(0, 4) : []),
       missingInformation: Array.isArray(result.missingInformation)
         ? result.missingInformation.filter(Boolean).slice(0, 4)
         : (Array.isArray(meta.missingInformation) ? meta.missingInformation.filter(Boolean).slice(0, 4) : []),
