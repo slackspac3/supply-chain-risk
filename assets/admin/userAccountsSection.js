@@ -35,6 +35,7 @@ const AdminUserAccountsSection = (() => {
             <select class="form-select" id="admin-new-user-role">
               <option value="user">Standard user</option>
               <option value="bu_admin">BU admin</option>
+              <option value="function_admin">Function admin</option>
             </select>
           </div>
           <div class="form-group">
@@ -78,6 +79,7 @@ const AdminUserAccountsSection = (() => {
                   <select class="form-select form-select--sm account-role-select" data-username="${account.username}">
                     <option value="user" ${account.role === 'user' ? 'selected' : ''}>Standard user</option>
                     <option value="bu_admin" ${account.role === 'bu_admin' ? 'selected' : ''}>BU admin</option>
+                    <option value="function_admin" ${account.role === 'function_admin' ? 'selected' : ''}>Function admin</option>
                   </select>
                 </td>
                 <td>
@@ -141,18 +143,18 @@ const AdminUserAccountsSection = (() => {
     const businessUnitEntityId = row.querySelector('.account-bu-select')?.value || '';
     const departmentEntityId = row.querySelector('.account-department-select')?.value || '';
     if (!businessUnitEntityId) {
-      UI.toast(role === 'bu_admin' ? 'Choose the business unit this BU admin will manage.' : 'Choose a business unit for this user.', 'warning');
+      UI.toast(role === 'bu_admin' ? 'Choose the business unit this BU admin will manage.' : role === 'function_admin' ? 'Choose the business unit this function admin sits within.' : 'Choose a business unit for this user.', 'warning');
       return false;
     }
-    if (role !== 'bu_admin' && !departmentEntityId) {
-      UI.toast('Choose a function or department for this standard user.', 'warning');
+    if ((role === 'user' || role === 'function_admin') && !departmentEntityId) {
+      UI.toast(role === 'function_admin' ? 'Choose the function or department this function admin will own.' : 'Choose a function or department for this standard user.', 'warning');
       return false;
     }
     button.disabled = true;
     button.textContent = 'Applying…';
     const currentSettings = getAdminSettings();
     const currentAccount = getManagedAccountsForAdmin(currentSettings).find(account => account.username === username) || { username, role: 'user', businessUnitEntityId: '', departmentEntityId: '' };
-    const nextSettings = applyManagedAccountAssignmentToSettings(currentAccount, { role, businessUnitEntityId }, currentSettings);
+    const nextSettings = applyManagedAccountAssignmentToSettings(currentAccount, { role, businessUnitEntityId, departmentEntityId: role === 'bu_admin' ? '' : departmentEntityId }, currentSettings);
     try {
       await AuthService.adminUpdateManagedAccount(username, {
         role,
@@ -171,7 +173,7 @@ const AdminUserAccountsSection = (() => {
     }
     row.dataset.dirty = 'false';
     button.textContent = 'Applied';
-    AppState.adminNewUserStatus = `Applied ${role === 'bu_admin' ? 'BU admin' : 'standard user'} access for ${displayName}.`;
+    AppState.adminNewUserStatus = `Applied ${role === 'bu_admin' ? 'BU admin' : role === 'function_admin' ? 'function admin' : 'standard user'} access for ${displayName}.`;
     const resultEl = document.getElementById('admin-new-user-result');
     if (resultEl) resultEl.textContent = AppState.adminNewUserStatus;
     return true;
@@ -311,13 +313,13 @@ const AdminUserAccountsSection = (() => {
         return;
       }
       if (!businessUnitEntityId) {
-        AppState.adminNewUserStatus = role === 'bu_admin' ? 'Choose the business unit this BU admin will manage.' : 'Choose a business unit before creating the user.';
+        AppState.adminNewUserStatus = role === 'bu_admin' ? 'Choose the business unit this BU admin will manage.' : role === 'function_admin' ? 'Choose the business unit this function admin sits within.' : 'Choose a business unit before creating the user.';
         resultEl.textContent = AppState.adminNewUserStatus;
         UI.toast(AppState.adminNewUserStatus, 'warning');
         return;
       }
-      if (role !== 'bu_admin' && !departmentEntityId) {
-        AppState.adminNewUserStatus = 'Choose a function or department before creating the user.';
+      if ((role === 'user' || role === 'function_admin') && !departmentEntityId) {
+        AppState.adminNewUserStatus = role === 'function_admin' ? 'Choose the function or department this function admin will own.' : 'Choose a function or department before creating the user.';
         resultEl.textContent = AppState.adminNewUserStatus;
         UI.toast(AppState.adminNewUserStatus, 'warning');
         return;
@@ -327,7 +329,7 @@ const AdminUserAccountsSection = (() => {
       resultEl.textContent = 'Creating shared user account…';
       try {
         const account = await AuthService.createManagedAccount({ displayName, role, businessUnitEntityId, departmentEntityId: role === 'bu_admin' ? '' : departmentEntityId });
-        const nextSettings = applyManagedAccountAssignmentToSettings(account, { role: account.role, businessUnitEntityId: account.businessUnitEntityId }, getAdminSettings());
+        const nextSettings = applyManagedAccountAssignmentToSettings(account, { role: account.role, businessUnitEntityId: account.businessUnitEntityId, departmentEntityId: account.role === 'bu_admin' ? '' : account.departmentEntityId }, getAdminSettings());
         saveAdminSettings(nextSettings);
         AppState.adminVisiblePasswords[account.username] = account.password || '';
         AppState.adminNewUserStatus = `Created ${account.displayName}: username ${account.username} / password ${account.password}`;

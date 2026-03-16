@@ -828,6 +828,7 @@ function getManagedAccountsForAdmin(settings = getAdminSettings()) {
     if (ownedDepartment) {
       return {
         ...account,
+        role: 'function_admin',
         businessUnitEntityId: account.businessUnitEntityId || ownedDepartment.parentId || '',
         departmentEntityId: account.departmentEntityId || ownedDepartment.id
       };
@@ -1295,13 +1296,16 @@ function getAdminSettings() {
 function applyManagedAccountAssignmentToSettings(account, updates = {}, baseSettings = getAdminSettings()) {
   const nextRole = updates.role || account.role || 'user';
   const nextBusinessUnitEntityId = updates.businessUnitEntityId !== undefined ? updates.businessUnitEntityId : (account.businessUnitEntityId || '');
+  const nextDepartmentEntityId = updates.departmentEntityId !== undefined ? updates.departmentEntityId : (account.departmentEntityId || '');
   const nextStructure = (Array.isArray(baseSettings.companyStructure) ? baseSettings.companyStructure : []).map(node => {
-    if (!isCompanyEntityType(node.type)) return node;
-    if (node.ownerUsername !== account.username && !(nextRole === 'bu_admin' && node.id === nextBusinessUnitEntityId)) return node;
-    if (nextRole === 'bu_admin' && node.id === nextBusinessUnitEntityId) {
+    const ownsNodeNow = node.ownerUsername === account.username;
+    const shouldOwnBusiness = isCompanyEntityType(node.type) && nextRole === 'bu_admin' && node.id === nextBusinessUnitEntityId;
+    const shouldOwnDepartment = isDepartmentEntityType(node.type) && nextRole === 'function_admin' && node.id === nextDepartmentEntityId;
+    if (!ownsNodeNow && !shouldOwnBusiness && !shouldOwnDepartment) return node;
+    if (shouldOwnBusiness || shouldOwnDepartment) {
       return { ...node, ownerUsername: account.username };
     }
-    if (node.ownerUsername === account.username) {
+    if (ownsNodeNow) {
       return { ...node, ownerUsername: '' };
     }
     return node;

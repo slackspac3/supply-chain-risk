@@ -30,7 +30,7 @@ function normaliseAccount(account = {}) {
     username: String(account.username || '').trim().toLowerCase(),
     password: String(account.password || ''),
     displayName: String(account.displayName || '').trim() || 'User',
-    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : 'user'),
+    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
     departmentEntityId: String(account.departmentEntityId || '').trim()
   };
@@ -40,7 +40,7 @@ function sanitiseAccount(account = {}) {
   return {
     username: String(account.username || '').trim().toLowerCase(),
     displayName: String(account.displayName || '').trim() || 'User',
-    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : 'user'),
+    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
     departmentEntityId: String(account.departmentEntityId || '').trim()
   };

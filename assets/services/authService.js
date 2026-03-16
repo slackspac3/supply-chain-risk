@@ -60,7 +60,7 @@ function resolveApiUrl(path) {
       username: String(account.username || '').trim().toLowerCase(),
       password: String(account.password || ''),
       displayName: String(account.displayName || '').trim() || 'User',
-      role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : 'user'),
+      role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
       businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
       departmentEntityId: String(account.departmentEntityId || '').trim()
     };
@@ -256,7 +256,7 @@ function resolveApiUrl(path) {
       username,
       password,
       displayName,
-      role: role === 'bu_admin' ? 'bu_admin' : 'user',
+      role: role === 'bu_admin' ? 'bu_admin' : (role === 'function_admin' ? 'function_admin' : 'user'),
       businessUnitEntityId,
       departmentEntityId
     });
