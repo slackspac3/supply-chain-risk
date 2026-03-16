@@ -291,7 +291,7 @@ function renderUserDashboard() {
         Router.navigate('/wizard/1');
       }
     } catch (error) {
-      UI.toast(`Dashboard action failed: ${error instanceof Error ? error.message : String(error)}`, 'danger');
+      UI.toast('That action could not be completed. Try again in a moment.', 'danger');
     }
   });
 }

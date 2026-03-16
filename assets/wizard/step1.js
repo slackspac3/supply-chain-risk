@@ -482,7 +482,7 @@ async function enhanceNarrativeWithAI() {
     renderWizard1();
     UI.toast('Risk statement enhanced.', 'success');
   } catch (error) {
-    output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI enhancement error: ${error.message}</span></div>`;
+    output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI enhancement is unavailable right now. Try again in a moment.</span></div>`;
   } finally {
     button.disabled = false;
     button.textContent = 'Enhance with AI';

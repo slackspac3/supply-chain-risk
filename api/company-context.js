@@ -566,7 +566,13 @@ Instructions:
 
     if (!upstream.ok) {
       const text = await upstream.text();
-      res.status(upstream.status).send(text);
+      const response = {
+        error: 'Company context builder could not analyse the website.'
+      };
+      if (isAdminRequest(req)) {
+        response.detail = text;
+      }
+      res.status(upstream.status).json(response);
       return;
     }
 
@@ -578,9 +584,12 @@ Instructions:
     }
     res.status(200).json(normaliseContextPayload(parsed, canonicalUrl, pages, newsItems));
   } catch (error) {
-    res.status(502).json({
-      error: 'Company context builder could not fetch or analyse the website.',
-      detail: error instanceof Error ? error.message : String(error)
-    });
+    const response = {
+      error: 'Company context builder could not fetch or analyse the website.'
+    };
+    if (isAdminRequest(req)) {
+      response.detail = error instanceof Error ? error.message : String(error);
+    }
+    res.status(502).json(response);
   }
 };

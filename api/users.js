@@ -350,9 +350,10 @@ module.exports = async function handler(req, res) {
 
     res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
-    res.status(500).json({
-      error: 'User store request failed.',
-      detail: error instanceof Error ? error.message : String(error)
-    });
+    const response = { error: 'User store request failed.' };
+    if (isAdminRequest(req)) {
+      response.detail = error instanceof Error ? error.message : String(error);
+    }
+    res.status(500).json(response);
   }
 };

@@ -353,7 +353,7 @@ async function runSimulation() {
   } catch(e) {
     document.getElementById('sim-progress').classList.add('hidden');
     document.getElementById('run-area').classList.remove('hidden');
-    UI.toast('Simulation error: ' + e.message, 'danger');
+    UI.toast('The simulation could not be completed right now. Try again in a moment.', 'danger');
     console.error(e);
   }
 }
@@ -720,7 +720,7 @@ function renderResults(id, isShared) {
       renderResults(assessment.id, isShared || assessment._shared);
     } catch (error) {
       if (status) status.textContent = 'Challenge review could not be generated.';
-      UI.toast('Challenge review failed: ' + error.message, 'danger');
+      UI.toast('The challenge review is unavailable right now. Try again in a moment.', 'danger');
     } finally {
       challengeButton.disabled = false;
     }
