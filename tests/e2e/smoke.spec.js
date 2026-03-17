@@ -40,9 +40,10 @@ async function seedAuthenticatedUser(page, {
 async function mockSharedApis(page, {
   loginUser = null,
   userState = null,
-  settings = null
+  settings = null,
+  skipUsers = false
 } = {}) {
-  await page.route('**/api/users', async route => {
+  if (!skipUsers) await page.route('**/api/users', async route => {
     const request = route.request();
     if (request.method() === 'POST') {
       const payload = request.postDataJSON();
@@ -257,5 +258,137 @@ test('authenticated admin shell renders without crashing', async ({ page }) => {
     await expect(page.getByText(/platform control/i)).toBeVisible();
     await expect(page.getByRole('heading', { name: /organisation setup/i })).toBeVisible();
     await expect(page.locator('#btn-admin-logout')).toBeVisible();
+  });
+});
+
+
+test('dashboard archive and restore flow works through the real confirm modal', async ({ page }) => {
+  const seededUserSettings = {
+    userProfile: {
+      fullName: 'Alex Trafton',
+      jobTitle: 'Risk Manager',
+      businessUnit: 'G42',
+      department: 'Security',
+      focusAreas: ['Resilience'],
+      preferredOutputs: 'Executive summaries',
+      workingContext: 'Support regulated services.'
+    },
+    onboardedAt: '2026-03-17T00:00:00.000Z',
+    _overrideKeys: []
+  };
+  const activeAssessment = {
+    id: 'assess-1',
+    scenarioTitle: 'Ransomware on shared ERP',
+    buName: 'G42',
+    createdAt: '2026-03-15T00:00:00.000Z',
+    completedAt: '2026-03-16T00:00:00.000Z',
+    results: { toleranceBreached: false, nearTolerance: true, annualReviewTriggered: false }
+  };
+  await seedAuthenticatedUser(page, { userSettings: seededUserSettings });
+  await page.addInitScript(({ activeAssessment }) => {
+    localStorage.setItem('rq_assessments__alex.trafton', JSON.stringify([activeAssessment]));
+  }, { activeAssessment });
+  await mockSharedApis(page, {
+    settings: {},
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [activeAssessment],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
+    const activeRow = page.locator('.dashboard-assessment-row[data-assessment-id="assess-1"]').first();
+    await expect(activeRow).toBeVisible();
+    await activeRow.getByRole('button', { name: /^Archive$/ }).click();
+    await page.locator('#confirm-ok').click();
+    await expect(page.getByText(/assessment archived\./i)).toBeVisible();
+    const restoreButton = page.locator('.dashboard-restore-assessment[data-assessment-id="assess-1"]').first();
+    await expect(restoreButton).toBeVisible();
+    await restoreButton.click();
+    await expect(page.getByText(/archived assessment restored to your dashboard\./i)).toBeVisible();
+    const restoredRow = page.locator('.dashboard-assessment-row[data-assessment-id="assess-1"]').filter({ has: page.locator('.dashboard-archive-assessment[data-assessment-id="assess-1"]') }).first();
+    await expect(restoredRow).toBeVisible();
+    await expect(restoredRow).toContainText(/open result|close to tolerance|above tolerance/i);
+  });
+});
+
+test('admin can update user access and the request carries the expected role assignment', async ({ page }) => {
+  const settings = {
+    geography: 'United Arab Emirates',
+    companyStructure: [
+      { id: 'bu-g42', name: 'G42', type: 'Holding company', parentId: '', ownerUsername: '' },
+      { id: 'dept-sec', name: 'Security', type: 'Department / function', parentId: 'bu-g42', ownerUsername: '' }
+    ],
+    entityContextLayers: [],
+    applicableRegulations: ['UAE PDPL'],
+    aiInstructions: 'Use British English.',
+    benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+    typicalDepartments: ['Security']
+  };
+  const accounts = [
+    {
+      username: 'alex.trafton',
+      displayName: 'Alex Trafton',
+      role: 'user',
+      businessUnitEntityId: 'bu-g42',
+      departmentEntityId: 'dept-sec'
+    }
+  ];
+  let patchPayload = null;
+  await seedAuthenticatedUser(page, {
+    username: 'admin',
+    displayName: 'Global Admin',
+    role: 'admin',
+    adminSettings: settings,
+    preferredAdminSection: 'users'
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('rq_admin_api_secret', 'test-admin-secret');
+  });
+  await page.route('**/api/users', async route => {
+    const request = route.request();
+    if (request.method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ accounts, storage: { writable: true, mode: 'shared-kv' } })
+      });
+      return;
+    }
+    if (request.method() === 'PATCH') {
+      patchPayload = request.postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ accounts: [{ ...accounts[0], ...patchPayload.updates }] })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ accounts, storage: { writable: true, mode: 'shared-kv' } })
+    });
+  });
+  await mockSharedApis(page, { settings, skipUsers: true });
+
+  await expectNoClientCrashOnRoute(page, '/#/admin/settings/users', async () => {
+    await expect(page.locator('.managed-account-row')).toHaveCount(1);
+    const row = page.locator('.managed-account-row[data-username="alex.trafton"]');
+    const roleSelect = row.locator('.account-role-select');
+    await roleSelect.selectOption('function_admin', { force: true });
+    await row.locator('.account-bu-select').selectOption('bu-g42', { force: true });
+    await row.locator('.account-department-select').selectOption('dept-sec', { force: true });
+    await page.locator('.btn-apply-user-access[data-username="alex.trafton"]').evaluate(button => button.click());
+    await expect(page.getByText(/updated access for alex trafton\./i)).toBeVisible();
+    expect(patchPayload).toBeTruthy();
+    expect(patchPayload.action).toBe('admin-update');
+    expect(patchPayload.username).toBe('alex.trafton');
+    expect(patchPayload.updates.role).toBe('function_admin');
+    expect(patchPayload.updates.businessUnitEntityId).toBe('bu-g42');
+    expect(patchPayload.updates.departmentEntityId).toBe('dept-sec');
   });
 });
