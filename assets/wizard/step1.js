@@ -1,3 +1,17 @@
+function _setStep1ButtonBusy(button, busyLabel, idleLabel) {
+  if (!button) return () => {};
+  const originalLabel = idleLabel || button.dataset.idleLabel || button.textContent || '';
+  button.dataset.idleLabel = originalLabel;
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  button.textContent = busyLabel;
+  return () => {
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    button.textContent = originalLabel;
+  };
+}
+
 function renderWizard1() {
   ensureDraftShape();
   const draft = AppState.draft;
@@ -447,8 +461,7 @@ async function enhanceNarrativeWithAI() {
     return;
   }
   const button = document.getElementById('btn-enhance-risk-statement');
-  button.disabled = true;
-  button.textContent = 'Enhancing…';
+  const resetButton = _setStep1ButtonBusy(button, 'Enhancing…');
   output.innerHTML = `<div class="card">${UI.skeletonBlock(18)}<div class="mt-3">${UI.skeletonBlock(14, 4)}</div><div class="mt-3">${UI.skeletonBlock(90, 10)}</div></div>`;
   try {
     const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
@@ -490,8 +503,7 @@ async function enhanceNarrativeWithAI() {
   } catch (error) {
     output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI enhancement is unavailable right now. Try again in a moment.</span></div>`;
   } finally {
-    button.disabled = false;
-    button.textContent = 'Enhance with AI';
+    resetButton();
   }
 }
 
@@ -505,6 +517,8 @@ async function analyseUploadedRegister() {
     return;
   }
   const bu = getBUList().find(b => b.id === AppState.draft.buId);
+  const button = document.getElementById('btn-register-analyse');
+  const resetButton = _setStep1ButtonBusy(button, 'Uploading, extracting, and analysing…');
   try {
     const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
     const result = await LLMService.analyseRiskRegister({
@@ -539,5 +553,7 @@ async function analyseUploadedRegister() {
     UI.toast('Risk register analysed.', 'success');
   } catch (e2) {
     UI.toast('Register analysis failed: ' + e2.message, 'danger');
+  } finally {
+    resetButton();
   }
 }
