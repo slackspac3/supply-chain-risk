@@ -661,6 +661,28 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: .78rem;
   color: var(--text-muted);
 }
+.wizard-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.wizard-subsection-copy {
+  font-size: .78rem;
+  color: var(--text-muted);
+  min-height: 44px;
+}
+.range-group {
+  align-items: stretch;
+}
+.range-group .form-group {
+  justify-content: flex-end;
+}
+@media (max-width: 768px) {
+  .wizard-subsection-copy {
+    min-height: 0;
+  }
+}
 
 /* ── Modal ───────────────────────────────────────────────────── */
 .modal-backdrop {

@@ -259,12 +259,12 @@ function renderWizard3() {
             </div>`:''}
             <div id="vuln-derived-section" ${isAdv&&p.vulnDirect?'class="hidden"':''}>
               <div class="grid-2">
-                <div>
-                  <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">How capable is the attacker or threat source? 0 means weak or opportunistic, 1 means very capable and well resourced.</p>
+                <div class="wizard-subsection">
+                  <p class="wizard-subsection-copy">How capable is the attacker or threat source? 0 means weak or opportunistic, 1 means very capable and well resourced.</p>
                   ${tripleInput('threatCap','Threat capability', v('threatCapMin',da.threatCapability?.min||0.45), v('threatCapLikely',da.threatCapability?.likely||0.62), v('threatCapMax',da.threatCapability?.max||0.82), { minLabel: 'Low capability', likelyLabel: 'Expected capability', maxLabel: 'High capability' })}
                 </div>
-                <div>
-                  <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">How strong are your current preventive and detective controls? 0 means weak, 1 means strong and consistently effective.</p>
+                <div class="wizard-subsection">
+                  <p class="wizard-subsection-copy">How strong are your current preventive and detective controls? 0 means weak, 1 means strong and consistently effective.</p>
                   ${tripleInput('controlStr','Control strength', v('controlStrMin',da.controlStrength?.min||0.5), v('controlStrLikely',da.controlStrength?.likely||0.68), v('controlStrMax',da.controlStrength?.max||0.85), { minLabel: 'Weak controls', likelyLabel: 'Expected control strength', maxLabel: 'Strong controls' })}
                 </div>
               </div>
@@ -295,8 +295,8 @@ function renderWizard3() {
             </div>
             <div id="secondary-inputs" ${!p.secondaryEnabled?'class="hidden"':''}>
               <div class="grid-2">
-                <div><p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">How likely is the follow-on impact? Use 0 to 1.</p>${tripleInput('secProb','Secondary probability', v('secProbMin',0.1), v('secProbLikely',0.3), v('secProbMax',0.7), { minLabel: 'Low chance', likelyLabel: 'Expected chance', maxLabel: 'High chance' })}</div>
-                <div><p style="font-size:.78rem;color:var(--text-muted);margin-bottom:12px">If it happens, how large could that extra impact be in ${sym}?</p>${tripleInput('secMag','Secondary magnitude', v('secMagMin',100000), v('secMagLikely',500000), v('secMagMax',2000000), { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'High cost', money: true, inputType: 'text' })}</div>
+                <div class="wizard-subsection"><p class="wizard-subsection-copy">How likely is the follow-on impact? Use 0 to 1.</p>${tripleInput('secProb','Secondary probability', v('secProbMin',0.1), v('secProbLikely',0.3), v('secProbMax',0.7), { minLabel: 'Low chance', likelyLabel: 'Expected chance', maxLabel: 'High chance' })}</div>
+                <div class="wizard-subsection"><p class="wizard-subsection-copy">If it happens, how large could that extra impact be in ${sym}?</p>${tripleInput('secMag','Secondary magnitude', v('secMagMin',100000), v('secMagLikely',500000), v('secMagMax',2000000), { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'High cost', money: true, inputType: 'text' })}</div>
               </div>
             </div>
           </div>
