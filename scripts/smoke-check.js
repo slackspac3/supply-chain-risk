@@ -56,7 +56,9 @@ expect(llmJs.includes('Structured numeric benchmarks:'), 'LLM prompts are missin
 expect(llmJs.includes('benchmarkReferences'), 'LLM output is not carrying benchmarkReferences');
 expect(benchmarkServiceJs.includes('retrieveRelevantBenchmarks'), 'benchmark service is missing retrieveRelevantBenchmarks');
 expect(benchmarkServiceJs.includes('deriveSuggestedInputs'), 'benchmark service is missing deriveSuggestedInputs');
-expect(benchmarkData.includes('bm-databreach-regional-crosssector'), 'benchmark dataset is missing seeded regional data-breach profile');
+expect(benchmarkData.includes('bm-databreach-global-ibm-2025'), 'benchmark dataset is missing global IBM 2025 breach profile');
+expect(benchmarkData.includes('bm-ransomware-sophos-2024'), 'benchmark dataset is missing Sophos ransomware benchmark profile');
+expect(benchmarkData.includes('bm-thirdparty-verizon-2025'), 'benchmark dataset is missing Verizon third-party benchmark profile');
 
 expect(assessmentStateJs.includes('primaryGrounding'), 'assessmentState is not persisting primaryGrounding');
 expect(assessmentStateJs.includes('supportingReferences'), 'assessmentState is not persisting supportingReferences');

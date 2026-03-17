@@ -30,7 +30,7 @@ function buildEstimateExplainer(draft, bu, isAdv, currency) {
     ? `Using the current values, the model reads this as roughly ${formatPlainCurrency(likelyLoss, currency)} in a realistic single-event case, rising to about ${formatPlainCurrency(severeLoss, currency)} in a severe case before annual frequency is applied.`
     : 'Each cost row is a per-event estimate. The model adds those rows together to understand what one event might cost before frequency is applied across a year.';
   const source = hasAI
-    ? `These starting numbers were pre-filled from the scenario narrative, selected risks, ${bu?.name ? `${bu.name} context and defaults, ` : ''}linked internal citations, and structured regional or global benchmark profiles where relevant. They are starting assumptions, not final answers.`
+    ? `These starting numbers were pre-filled from the scenario narrative, selected risks, ${bu?.name ? `${bu.name} context and defaults, ` : ''}linked internal citations, and structured benchmark profiles built from published research and official reports where relevant. They are starting assumptions, not final answers.`
     : `These are your working assumptions. If you have internal incident data, control evidence, or finance input, adjust the ranges to reflect that evidence.`;
   return { source, tef, exposure, loss };
 }

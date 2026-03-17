@@ -1,7 +1,7 @@
 [
   {
-    "id": "bm-identity-regional-crosssector",
-    "title": "Middle East identity and business email compromise benchmark profile",
+    "id": "bm-identity-me-ibm-2023",
+    "title": "Middle East identity and credential compromise profile",
     "scenarioType": "identity",
     "geographies": [
       "United Arab Emirates",
@@ -16,10 +16,10 @@
     ],
     "scope": "regional",
     "sourceType": "Regional benchmark",
-    "sourceTitle": "IBM Cost of a Data Breach Report 2023 Middle East; Verizon DBIR 2025 ransomware and BEC trends",
+    "sourceTitle": "IBM Cost of a Data Breach 2023 Middle East",
     "sourceUrl": "https://mea.newsroom.ibm.com/IBM-Report-Total-Cost-of-a-Data-Breach-for-Businesses-in-the-Middle-East",
-    "lastUpdated": "2025-04-23",
-    "summary": "Regional breach-cost patterns with ransomware/BEC incident trend support.",
+    "lastUpdated": "2023-08-23",
+    "summary": "Middle East breach cost reached SAR 29.9M, with phishing, zero-days, and compromised credentials among leading causes.",
     "suggestedInputs": {
       "TEF": {
         "min": 1,
@@ -38,61 +38,64 @@
       },
       "lossComponents": {
         "incidentResponse": {
-          "min": 150000,
-          "likely": 450000,
-          "max": 1200000
+          "min": 180000,
+          "likely": 520000,
+          "max": 1350000
         },
         "businessInterruption": {
-          "min": 250000,
-          "likely": 900000,
-          "max": 2800000
+          "min": 300000,
+          "likely": 980000,
+          "max": 3000000
         },
         "dataBreachRemediation": {
-          "min": 100000,
-          "likely": 350000,
-          "max": 1000000
+          "min": 140000,
+          "likely": 420000,
+          "max": 1200000
         },
         "regulatoryLegal": {
-          "min": 50000,
-          "likely": 250000,
-          "max": 1200000
+          "min": 60000,
+          "likely": 260000,
+          "max": 1250000
         },
         "thirdPartyLiability": {
           "min": 0,
-          "likely": 120000,
-          "max": 600000
+          "likely": 130000,
+          "max": 650000
         },
         "reputationContract": {
-          "min": 100000,
-          "likely": 400000,
-          "max": 1500000
+          "min": 120000,
+          "likely": 460000,
+          "max": 1700000
         }
       }
     }
   },
   {
-    "id": "bm-identity-global-crosssector",
-    "title": "Global identity compromise benchmark profile",
+    "id": "bm-identity-verizon-2025-global",
+    "title": "Global identity and system-intrusion frequency profile",
     "scenarioType": "identity",
     "geographies": [
-      "Global"
+      "Global",
+      "EMEA",
+      "APAC"
     ],
     "industries": [
       "cross-sector",
       "technology",
-      "financial services"
+      "manufacturing",
+      "healthcare"
     ],
     "scope": "global",
     "sourceType": "Global benchmark",
-    "sourceTitle": "IBM Cost of a Data Breach 2024 global average; Verizon DBIR 2025",
-    "sourceUrl": "https://www.ibm.com/think/insights/whats-new-2024-cost-of-a-data-breach-report",
+    "sourceTitle": "Verizon Data Breach Investigations Report 2025",
+    "sourceUrl": "https://www.verizon.com/business/resources/reports/dbir/",
     "lastUpdated": "2025-04-23",
-    "summary": "Global breach-cost baseline with incident trend support.",
+    "summary": "Verizon reports ransomware in 44% of breaches globally, third-party involvement doubled, and vulnerability exploitation rose 34%.",
     "suggestedInputs": {
       "TEF": {
         "min": 1,
-        "likely": 2,
-        "max": 6
+        "likely": 2.5,
+        "max": 6.5
       },
       "controlStrength": {
         "min": 0.5,
@@ -100,47 +103,47 @@
         "max": 0.82
       },
       "threatCapability": {
-        "min": 0.52,
-        "likely": 0.68,
-        "max": 0.84
+        "min": 0.55,
+        "likely": 0.72,
+        "max": 0.88
       },
       "lossComponents": {
         "incidentResponse": {
-          "min": 120000,
-          "likely": 320000,
-          "max": 900000
+          "min": 140000,
+          "likely": 360000,
+          "max": 950000
         },
         "businessInterruption": {
-          "min": 220000,
-          "likely": 750000,
-          "max": 2200000
+          "min": 240000,
+          "likely": 820000,
+          "max": 2400000
         },
         "dataBreachRemediation": {
-          "min": 90000,
-          "likely": 280000,
-          "max": 850000
+          "min": 100000,
+          "likely": 300000,
+          "max": 900000
         },
         "regulatoryLegal": {
-          "min": 30000,
-          "likely": 180000,
-          "max": 900000
+          "min": 40000,
+          "likely": 190000,
+          "max": 950000
         },
         "thirdPartyLiability": {
           "min": 0,
-          "likely": 90000,
-          "max": 450000
+          "likely": 95000,
+          "max": 480000
         },
         "reputationContract": {
-          "min": 80000,
-          "likely": 320000,
-          "max": 1200000
+          "min": 90000,
+          "likely": 340000,
+          "max": 1300000
         }
       }
     }
   },
   {
-    "id": "bm-databreach-regional-crosssector",
-    "title": "Middle East data breach cost benchmark profile",
+    "id": "bm-databreach-me-ibm-2023",
+    "title": "Middle East data breach cost profile",
     "scenarioType": "data-breach",
     "geographies": [
       "United Arab Emirates",
@@ -155,10 +158,10 @@
     ],
     "scope": "regional",
     "sourceType": "Regional benchmark",
-    "sourceTitle": "IBM Cost of a Data Breach Report 2023 Middle East",
+    "sourceTitle": "IBM Cost of a Data Breach 2023 Middle East",
     "sourceUrl": "https://mea.newsroom.ibm.com/IBM-Report-Total-Cost-of-a-Data-Breach-for-Businesses-in-the-Middle-East",
     "lastUpdated": "2023-08-23",
-    "summary": "Middle East breach cost average SAR 29.9M with component split across lost business, response, detection, and notification.",
+    "summary": "Middle East average total breach cost reached SAR 29.9M; lost business, response, and detection were the largest cost drivers.",
     "suggestedInputs": {
       "TEF": {
         "min": 0.4,
@@ -177,41 +180,41 @@
       },
       "lossComponents": {
         "incidentResponse": {
-          "min": 300000,
-          "likely": 900000,
-          "max": 2400000
+          "min": 320000,
+          "likely": 980000,
+          "max": 2550000
         },
         "businessInterruption": {
-          "min": 400000,
-          "likely": 1200000,
-          "max": 3200000
+          "min": 420000,
+          "likely": 1280000,
+          "max": 3400000
         },
         "dataBreachRemediation": {
-          "min": 250000,
-          "likely": 800000,
-          "max": 2200000
+          "min": 260000,
+          "likely": 820000,
+          "max": 2250000
         },
         "regulatoryLegal": {
           "min": 120000,
-          "likely": 400000,
-          "max": 1800000
+          "likely": 420000,
+          "max": 1850000
         },
         "thirdPartyLiability": {
           "min": 0,
-          "likely": 150000,
-          "max": 700000
+          "likely": 155000,
+          "max": 720000
         },
         "reputationContract": {
-          "min": 150000,
-          "likely": 600000,
-          "max": 2000000
+          "min": 160000,
+          "likely": 620000,
+          "max": 2050000
         }
       }
     }
   },
   {
-    "id": "bm-databreach-global-crosssector",
-    "title": "Global data breach cost benchmark profile",
+    "id": "bm-databreach-global-ibm-2025",
+    "title": "Global data breach profile",
     "scenarioType": "data-breach",
     "geographies": [
       "Global"
@@ -223,77 +226,79 @@
     ],
     "scope": "global",
     "sourceType": "Global benchmark",
-    "sourceTitle": "IBM Cost of a Data Breach Report 2024 global average",
-    "sourceUrl": "https://www.ibm.com/think/insights/whats-new-2024-cost-of-a-data-breach-report",
-    "lastUpdated": "2024-07-01",
-    "summary": "Global average breach cost USD 4.88M used as cross-sector fallback.",
+    "sourceTitle": "IBM Cost of a Data Breach Report 2025",
+    "sourceUrl": "https://www.ibm.com/reports/data-breach",
+    "lastUpdated": "2025-07-30",
+    "summary": "IBM reports a global average breach cost of USD 4.4M in 2025, with AI security controls reducing cost by about USD 1.9M in high-maturity environments.",
     "suggestedInputs": {
       "TEF": {
         "min": 0.3,
-        "likely": 1,
-        "max": 2.5
+        "likely": 0.9,
+        "max": 2.4
       },
       "controlStrength": {
-        "min": 0.45,
-        "likely": 0.62,
+        "min": 0.46,
+        "likely": 0.64,
         "max": 0.8
       },
       "threatCapability": {
-        "min": 0.48,
-        "likely": 0.66,
-        "max": 0.82
+        "min": 0.5,
+        "likely": 0.68,
+        "max": 0.84
       },
       "lossComponents": {
         "incidentResponse": {
-          "min": 220000,
-          "likely": 650000,
-          "max": 1800000
+          "min": 200000,
+          "likely": 600000,
+          "max": 1650000
         },
         "businessInterruption": {
-          "min": 300000,
-          "likely": 1000000,
-          "max": 2800000
+          "min": 280000,
+          "likely": 930000,
+          "max": 2550000
         },
         "dataBreachRemediation": {
-          "min": 180000,
-          "likely": 600000,
-          "max": 1700000
+          "min": 170000,
+          "likely": 560000,
+          "max": 1550000
         },
         "regulatoryLegal": {
-          "min": 100000,
-          "likely": 320000,
-          "max": 1300000
+          "min": 90000,
+          "likely": 290000,
+          "max": 1180000
         },
         "thirdPartyLiability": {
           "min": 0,
-          "likely": 100000,
-          "max": 500000
+          "likely": 90000,
+          "max": 460000
         },
         "reputationContract": {
-          "min": 120000,
-          "likely": 450000,
-          "max": 1600000
+          "min": 110000,
+          "likely": 430000,
+          "max": 1500000
         }
       }
     }
   },
   {
-    "id": "bm-databreach-healthcare-global",
-    "title": "Global healthcare breach benchmark profile",
+    "id": "bm-healthcare-ibm-2024",
+    "title": "Global healthcare breach profile",
     "scenarioType": "data-breach",
     "geographies": [
-      "Global"
+      "Global",
+      "United Arab Emirates",
+      "GCC"
     ],
     "industries": [
       "healthcare",
       "life sciences"
     ],
-    "scope": "global",
+    "scope": "industry",
     "sourceType": "Industry benchmark",
-    "sourceTitle": "IBM healthcare breach cost analysis 2024",
+    "sourceTitle": "IBM Healthcare Industry Attack Trends 2024",
     "sourceUrl": "https://www.ibm.com/think/insights/healthcare-industry-attack-trends-2024",
     "lastUpdated": "2024-10-01",
-    "summary": "Healthcare remains the costliest sector at about USD 9.77M average breach impact.",
+    "summary": "IBM reports healthcare as the most expensive sector at about USD 9.77M average breach cost.",
     "suggestedInputs": {
       "TEF": {
         "min": 0.4,
@@ -306,62 +311,64 @@
         "max": 0.76
       },
       "threatCapability": {
-        "min": 0.52,
-        "likely": 0.72,
-        "max": 0.88
+        "min": 0.54,
+        "likely": 0.74,
+        "max": 0.9
       },
       "lossComponents": {
         "incidentResponse": {
-          "min": 350000,
-          "likely": 1100000,
-          "max": 2800000
+          "min": 360000,
+          "likely": 1150000,
+          "max": 2900000
         },
         "businessInterruption": {
-          "min": 500000,
-          "likely": 1600000,
-          "max": 4200000
+          "min": 520000,
+          "likely": 1680000,
+          "max": 4300000
         },
         "dataBreachRemediation": {
-          "min": 350000,
-          "likely": 1200000,
-          "max": 3000000
+          "min": 360000,
+          "likely": 1220000,
+          "max": 3050000
         },
         "regulatoryLegal": {
-          "min": 180000,
-          "likely": 650000,
-          "max": 2400000
+          "min": 190000,
+          "likely": 680000,
+          "max": 2450000
         },
         "thirdPartyLiability": {
           "min": 50000,
-          "likely": 180000,
-          "max": 700000
+          "likely": 190000,
+          "max": 720000
         },
         "reputationContract": {
-          "min": 200000,
-          "likely": 700000,
-          "max": 2500000
+          "min": 210000,
+          "likely": 730000,
+          "max": 2550000
         }
       }
     }
   },
   {
-    "id": "bm-databreach-finance-global",
-    "title": "Global financial-services breach benchmark profile",
+    "id": "bm-financial-ibm-2024",
+    "title": "Global financial-services breach profile",
     "scenarioType": "data-breach",
     "geographies": [
-      "Global"
+      "Global",
+      "United Arab Emirates",
+      "GCC"
     ],
     "industries": [
       "financial services",
       "banking",
       "payments"
     ],
-    "scope": "global",
+    "scope": "industry",
     "sourceType": "Industry benchmark",
-    "sourceTitle": "IBM Cost of a Data Breach 2024 financial industry",
+    "sourceTitle": "IBM Cost of a Data Breach 2024: Financial industry",
     "sourceUrl": "https://www.ibm.com/think/insights/cost-of-a-data-breach-2024-financial-industry",
     "lastUpdated": "2024-10-01",
-    "summary": "Financial-services breaches average about USD 6.08M globally.",
+    "summary": "IBM reports average breach cost of USD 6.08M for financial services, second only to healthcare.",
     "suggestedInputs": {
       "TEF": {
         "min": 0.4,
@@ -385,9 +392,9 @@
           "max": 2100000
         },
         "businessInterruption": {
-          "min": 350000,
-          "likely": 1200000,
-          "max": 3200000
+          "min": 360000,
+          "likely": 1220000,
+          "max": 3250000
         },
         "dataBreachRemediation": {
           "min": 220000,
@@ -413,8 +420,8 @@
     }
   },
   {
-    "id": "bm-ransomware-global-crosssector",
-    "title": "Global ransomware disruption benchmark profile",
+    "id": "bm-ransomware-sophos-2024",
+    "title": "Global ransomware recovery-cost profile",
     "scenarioType": "ransomware",
     "geographies": [
       "Global"
@@ -427,10 +434,10 @@
     ],
     "scope": "global",
     "sourceType": "Global benchmark",
-    "sourceTitle": "Verizon DBIR 2025 ransomware payment trend; IBM breach-cost disruption patterns",
-    "sourceUrl": "https://www.verizon.com/about/news/2025-data-breach-investigations-report",
-    "lastUpdated": "2025-04-23",
-    "summary": "Verizon reports median ransom payment around USD 115K, with larger disruption and recovery costs often dominating total impact.",
+    "sourceTitle": "Sophos State of Ransomware 2024",
+    "sourceUrl": "https://www.sophos.com/en-us/press/press-releases/2024/04/ransomware-payments-increase-500-last-year-finds-sophos-state",
+    "lastUpdated": "2024-04-24",
+    "summary": "Sophos reports average recovery cost of USD 2.73M and average ransom payment of USD 2M among paying organizations.",
     "suggestedInputs": {
       "TEF": {
         "min": 0.3,
@@ -449,41 +456,112 @@
       },
       "lossComponents": {
         "incidentResponse": {
-          "min": 250000,
-          "likely": 850000,
-          "max": 2400000
+          "min": 240000,
+          "likely": 820000,
+          "max": 2300000
         },
         "businessInterruption": {
-          "min": 500000,
-          "likely": 1800000,
-          "max": 5000000
+          "min": 520000,
+          "likely": 1750000,
+          "max": 4800000
         },
         "dataBreachRemediation": {
-          "min": 120000,
-          "likely": 450000,
-          "max": 1400000
+          "min": 100000,
+          "likely": 360000,
+          "max": 1200000
         },
         "regulatoryLegal": {
           "min": 50000,
-          "likely": 220000,
-          "max": 1000000
+          "likely": 210000,
+          "max": 950000
         },
         "thirdPartyLiability": {
           "min": 25000,
-          "likely": 140000,
-          "max": 650000
+          "likely": 130000,
+          "max": 620000
         },
         "reputationContract": {
-          "min": 150000,
-          "likely": 600000,
-          "max": 2200000
+          "min": 140000,
+          "likely": 560000,
+          "max": 2100000
         }
       }
     }
   },
   {
-    "id": "bm-cloud-global-crosssector",
-    "title": "Global cloud and multi-environment breach benchmark profile",
+    "id": "bm-ransomware-verizon-2025",
+    "title": "Global ransomware and system-intrusion frequency profile",
+    "scenarioType": "ransomware",
+    "geographies": [
+      "Global",
+      "APAC",
+      "EMEA"
+    ],
+    "industries": [
+      "cross-sector",
+      "manufacturing",
+      "healthcare",
+      "education"
+    ],
+    "scope": "global",
+    "sourceType": "Global benchmark",
+    "sourceTitle": "Verizon Data Breach Investigations Report 2025",
+    "sourceUrl": "https://www.verizon.com/business/resources/reports/dbir/",
+    "lastUpdated": "2025-04-23",
+    "summary": "Verizon reports ransomware in 44% of global breaches, 51% in APAC breaches, and median ransom payment around USD 115K.",
+    "suggestedInputs": {
+      "TEF": {
+        "min": 0.4,
+        "likely": 1,
+        "max": 2.7
+      },
+      "controlStrength": {
+        "min": 0.42,
+        "likely": 0.6,
+        "max": 0.8
+      },
+      "threatCapability": {
+        "min": 0.6,
+        "likely": 0.78,
+        "max": 0.92
+      },
+      "lossComponents": {
+        "incidentResponse": {
+          "min": 220000,
+          "likely": 700000,
+          "max": 2000000
+        },
+        "businessInterruption": {
+          "min": 450000,
+          "likely": 1500000,
+          "max": 4200000
+        },
+        "dataBreachRemediation": {
+          "min": 90000,
+          "likely": 320000,
+          "max": 1100000
+        },
+        "regulatoryLegal": {
+          "min": 40000,
+          "likely": 180000,
+          "max": 900000
+        },
+        "thirdPartyLiability": {
+          "min": 25000,
+          "likely": 120000,
+          "max": 580000
+        },
+        "reputationContract": {
+          "min": 120000,
+          "likely": 480000,
+          "max": 1800000
+        }
+      }
+    }
+  },
+  {
+    "id": "bm-cloud-ibm-2024-multienv",
+    "title": "Global cloud and multi-environment breach profile",
     "scenarioType": "cloud",
     "geographies": [
       "Global"
@@ -495,10 +573,10 @@
     ],
     "scope": "global",
     "sourceType": "Global benchmark",
-    "sourceTitle": "IBM Cost of a Data Breach 2024 multi-environment breach cost",
-    "sourceUrl": "https://www.ibm.com/think/insights/whats-new-2024-cost-of-a-data-breach-report",
-    "lastUpdated": "2024-07-01",
-    "summary": "Breaches spanning public cloud, private cloud, and on-prem averaged above USD 5M and took longest to contain.",
+    "sourceTitle": "IBM Cost of a Data Breach 2024 multi-environment findings",
+    "sourceUrl": "https://www.ibm.com/think/insights/2024-roundup-top-data-breach-stories-and-industry-trends",
+    "lastUpdated": "2024-12-01",
+    "summary": "IBM reports breaches spanning public cloud, private cloud, and on-prem averaged over USD 5M and about 283 days to identify and contain.",
     "suggestedInputs": {
       "TEF": {
         "min": 0.5,
@@ -550,11 +628,13 @@
     }
   },
   {
-    "id": "bm-thirdparty-global-crosssector",
-    "title": "Global third-party and supplier disruption benchmark profile",
+    "id": "bm-thirdparty-verizon-2025",
+    "title": "Global third-party breach profile",
     "scenarioType": "third-party",
     "geographies": [
-      "Global"
+      "Global",
+      "EMEA",
+      "APAC"
     ],
     "industries": [
       "cross-sector",
@@ -564,10 +644,10 @@
     ],
     "scope": "global",
     "sourceType": "Global benchmark",
-    "sourceTitle": "Verizon DBIR 2025 third-party breach trend; IBM breach-cost baseline",
-    "sourceUrl": "https://www.verizon.com/about/news/2025-data-breach-investigations-report",
+    "sourceTitle": "Verizon Data Breach Investigations Report 2025",
+    "sourceUrl": "https://www.verizon.com/business/resources/reports/dbir/",
     "lastUpdated": "2025-04-23",
-    "summary": "Verizon highlights a surge in cyberattacks through third parties; loss tends to concentrate in operational disruption, response, and downstream commercial impact.",
+    "summary": "Verizon reports third-party involvement doubled in 2025, highlighting supplier and partner ecosystem risk.",
     "suggestedInputs": {
       "TEF": {
         "min": 0.4,
@@ -614,6 +694,352 @@
           "min": 120000,
           "likely": 450000,
           "max": 1500000
+        }
+      }
+    }
+  },
+  {
+    "id": "bm-supplychain-enisa-2021",
+    "title": "EU supply-chain attack escalation profile",
+    "scenarioType": "third-party",
+    "geographies": [
+      "Global",
+      "EMEA",
+      "United Arab Emirates",
+      "GCC"
+    ],
+    "industries": [
+      "cross-sector",
+      "technology",
+      "critical infrastructure"
+    ],
+    "scope": "regional",
+    "sourceType": "Regulatory / research",
+    "sourceTitle": "ENISA Threat Landscape for Supply Chain Attacks 2021",
+    "sourceUrl": "https://www.enisa.europa.eu/publications/threat-landscape-for-supply-chain-attacks",
+    "lastUpdated": "2021-07-29",
+    "summary": "ENISA estimated four times more supply-chain attacks in 2021 than in 2020, with increasing sophistication and APT involvement.",
+    "suggestedInputs": {
+      "TEF": {
+        "min": 0.5,
+        "likely": 1.2,
+        "max": 3
+      },
+      "controlStrength": {
+        "min": 0.43,
+        "likely": 0.6,
+        "max": 0.78
+      },
+      "threatCapability": {
+        "min": 0.55,
+        "likely": 0.74,
+        "max": 0.9
+      },
+      "lossComponents": {
+        "incidentResponse": {
+          "min": 200000,
+          "likely": 600000,
+          "max": 1750000
+        },
+        "businessInterruption": {
+          "min": 320000,
+          "likely": 1100000,
+          "max": 3200000
+        },
+        "dataBreachRemediation": {
+          "min": 130000,
+          "likely": 420000,
+          "max": 1250000
+        },
+        "regulatoryLegal": {
+          "min": 80000,
+          "likely": 260000,
+          "max": 1050000
+        },
+        "thirdPartyLiability": {
+          "min": 120000,
+          "likely": 380000,
+          "max": 1500000
+        },
+        "reputationContract": {
+          "min": 140000,
+          "likely": 500000,
+          "max": 1700000
+        }
+      }
+    }
+  },
+  {
+    "id": "bm-supplychain-enisa-2023-practice",
+    "title": "EU supplier cybersecurity practice profile",
+    "scenarioType": "third-party",
+    "geographies": [
+      "Global",
+      "EMEA"
+    ],
+    "industries": [
+      "cross-sector",
+      "critical infrastructure",
+      "technology"
+    ],
+    "scope": "regional",
+    "sourceType": "Regulatory / research",
+    "sourceTitle": "ENISA Good Practices for Supply Chain Cybersecurity 2023",
+    "sourceUrl": "https://www.enisa.europa.eu/publications/good-practices-for-supply-chain-cybersecurity",
+    "lastUpdated": "2023-06-13",
+    "summary": "ENISA documents real-world supplier-risk practices and budget focus areas across essential and important entities in the EU.",
+    "suggestedInputs": {
+      "TEF": {
+        "min": 0.4,
+        "likely": 0.95,
+        "max": 2.2
+      },
+      "controlStrength": {
+        "min": 0.48,
+        "likely": 0.65,
+        "max": 0.82
+      },
+      "threatCapability": {
+        "min": 0.5,
+        "likely": 0.68,
+        "max": 0.84
+      },
+      "lossComponents": {
+        "incidentResponse": {
+          "min": 170000,
+          "likely": 500000,
+          "max": 1450000
+        },
+        "businessInterruption": {
+          "min": 280000,
+          "likely": 920000,
+          "max": 2700000
+        },
+        "dataBreachRemediation": {
+          "min": 110000,
+          "likely": 360000,
+          "max": 1100000
+        },
+        "regulatoryLegal": {
+          "min": 70000,
+          "likely": 230000,
+          "max": 900000
+        },
+        "thirdPartyLiability": {
+          "min": 90000,
+          "likely": 300000,
+          "max": 1250000
+        },
+        "reputationContract": {
+          "min": 110000,
+          "likely": 420000,
+          "max": 1400000
+        }
+      }
+    }
+  },
+  {
+    "id": "bm-availability-enisa-2024",
+    "title": "EU cyber availability and disruption profile",
+    "scenarioType": "ransomware",
+    "geographies": [
+      "Global",
+      "EMEA"
+    ],
+    "industries": [
+      "cross-sector",
+      "critical infrastructure",
+      "public sector"
+    ],
+    "scope": "regional",
+    "sourceType": "Regulatory / research",
+    "sourceTitle": "ENISA Threat Landscape 2024",
+    "sourceUrl": "https://www.enisa.europa.eu/publications/enisa-threat-landscape-2024",
+    "lastUpdated": "2024-09-19",
+    "summary": "ENISA identified threats against availability as the top threat category in 2024, followed by ransomware and threats against data.",
+    "suggestedInputs": {
+      "TEF": {
+        "min": 0.5,
+        "likely": 1.1,
+        "max": 2.8
+      },
+      "controlStrength": {
+        "min": 0.43,
+        "likely": 0.6,
+        "max": 0.78
+      },
+      "threatCapability": {
+        "min": 0.58,
+        "likely": 0.76,
+        "max": 0.9
+      },
+      "lossComponents": {
+        "incidentResponse": {
+          "min": 210000,
+          "likely": 650000,
+          "max": 1850000
+        },
+        "businessInterruption": {
+          "min": 420000,
+          "likely": 1450000,
+          "max": 3900000
+        },
+        "dataBreachRemediation": {
+          "min": 90000,
+          "likely": 300000,
+          "max": 950000
+        },
+        "regulatoryLegal": {
+          "min": 60000,
+          "likely": 220000,
+          "max": 900000
+        },
+        "thirdPartyLiability": {
+          "min": 30000,
+          "likely": 130000,
+          "max": 620000
+        },
+        "reputationContract": {
+          "min": 130000,
+          "likely": 500000,
+          "max": 1850000
+        }
+      }
+    }
+  },
+  {
+    "id": "bm-ukgov-breach-survey-2025",
+    "title": "UK organisational cyber breach survey profile",
+    "scenarioType": "data-breach",
+    "geographies": [
+      "Global",
+      "United Kingdom"
+    ],
+    "industries": [
+      "cross-sector",
+      "small-business",
+      "charity"
+    ],
+    "scope": "official-statistic",
+    "sourceType": "Government statistic",
+    "sourceTitle": "UK Cyber Security Breaches Survey 2025",
+    "sourceUrl": "https://www.gov.uk/government/statistics/cyber-security-breaches-survey-2025/cyber-security-breaches-survey-2025",
+    "lastUpdated": "2025-06-19",
+    "summary": "UK official statistics report average cost of the most disruptive breach at GBP 1,600 for businesses overall, or GBP 3,550 excluding zero-cost cases.",
+    "suggestedInputs": {
+      "TEF": {
+        "min": 0.2,
+        "likely": 0.8,
+        "max": 2
+      },
+      "controlStrength": {
+        "min": 0.5,
+        "likely": 0.68,
+        "max": 0.84
+      },
+      "threatCapability": {
+        "min": 0.4,
+        "likely": 0.58,
+        "max": 0.76
+      },
+      "lossComponents": {
+        "incidentResponse": {
+          "min": 5000,
+          "likely": 25000,
+          "max": 150000
+        },
+        "businessInterruption": {
+          "min": 10000,
+          "likely": 40000,
+          "max": 250000
+        },
+        "dataBreachRemediation": {
+          "min": 3000,
+          "likely": 15000,
+          "max": 80000
+        },
+        "regulatoryLegal": {
+          "min": 0,
+          "likely": 8000,
+          "max": 50000
+        },
+        "thirdPartyLiability": {
+          "min": 0,
+          "likely": 5000,
+          "max": 35000
+        },
+        "reputationContract": {
+          "min": 3000,
+          "likely": 12000,
+          "max": 90000
+        }
+      }
+    }
+  },
+  {
+    "id": "bm-supplychain-state-of-union-2024",
+    "title": "EU supply-chain security maturity profile",
+    "scenarioType": "third-party",
+    "geographies": [
+      "Global",
+      "EMEA"
+    ],
+    "industries": [
+      "cross-sector",
+      "critical infrastructure"
+    ],
+    "scope": "regulatory",
+    "sourceType": "Regulatory / research",
+    "sourceTitle": "ENISA 2024 Report on the State of Cybersecurity in the Union",
+    "sourceUrl": "https://enisa.europa.eu/sites/default/files/2024-11/2024%20Report%20on%20the%20State%20of%20Cybersecurity%20in%20the%20Union%20-%20Condensed%20version.pdf",
+    "lastUpdated": "2024-11-01",
+    "summary": "ENISA reported 74% of Member States had defined supply-chain security measures in national legislation by 2024.",
+    "suggestedInputs": {
+      "TEF": {
+        "min": 0.35,
+        "likely": 0.9,
+        "max": 2.1
+      },
+      "controlStrength": {
+        "min": 0.5,
+        "likely": 0.68,
+        "max": 0.84
+      },
+      "threatCapability": {
+        "min": 0.45,
+        "likely": 0.62,
+        "max": 0.8
+      },
+      "lossComponents": {
+        "incidentResponse": {
+          "min": 160000,
+          "likely": 460000,
+          "max": 1350000
+        },
+        "businessInterruption": {
+          "min": 260000,
+          "likely": 860000,
+          "max": 2500000
+        },
+        "dataBreachRemediation": {
+          "min": 100000,
+          "likely": 320000,
+          "max": 980000
+        },
+        "regulatoryLegal": {
+          "min": 70000,
+          "likely": 220000,
+          "max": 850000
+        },
+        "thirdPartyLiability": {
+          "min": 90000,
+          "likely": 280000,
+          "max": 1150000
+        },
+        "reputationContract": {
+          "min": 100000,
+          "likely": 380000,
+          "max": 1300000
         }
       }
     }
