@@ -206,6 +206,47 @@ const UI = (() => {
     </div>`;
   }
 
+
+  function aiAssistCard({ title = 'AI Assist', notesId, notesLabel, notesPlaceholder = '', fileId, fileLabel, fileAccept = '', fileHelpId = '', fileHelp = '', buttonId, buttonLabel, helperText = '', className = 'card mt-4', style = 'padding:var(--sp-4);background:var(--bg-elevated)' }) {
+    return `<div class="${className}" style="${style}">
+      <div class="context-panel-title">${title}</div>
+      <div class="form-group mt-3">
+        <label class="form-label" for="${notesId}">${notesLabel}</label>
+        <textarea class="form-textarea" id="${notesId}" rows="3" placeholder="${notesPlaceholder}"></textarea>
+      </div>
+      <div class="form-group mt-3">
+        <label class="form-label" for="${fileId}">${fileLabel}</label>
+        <input class="form-input" id="${fileId}" type="file" accept="${fileAccept}">
+        ${fileHelp ? `<div class="form-help" id="${fileHelpId}">${fileHelp}</div>` : ''}
+      </div>
+      <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
+        <button class="btn btn--secondary" id="${buttonId}" type="button">${buttonLabel}</button>
+        ${helperText ? `<span class="form-help">${helperText}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function aiRefinementCard({ title = 'Refine This Context With AI', intro = '', historyId = '', fileId, fileLabel, fileAccept = '', fileHelpId = '', fileHelp = '', promptId, promptLabel = 'Follow-up prompt', promptPlaceholder = '', buttonId, buttonLabel, statusId = '', statusText = '', className = 'card mt-4', style = 'padding:var(--sp-4);background:var(--bg-elevated)' }) {
+    return `<div class="${className}" style="${style}">
+      <div class="context-panel-title">${title}</div>
+      ${intro ? `<p class="form-help" style="margin-top:6px">${intro}</p>` : ''}
+      ${historyId ? `<div id="${historyId}" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>` : ''}
+      <div class="form-group mt-4">
+        <label class="form-label" for="${fileId}">${fileLabel}</label>
+        <input class="form-input" id="${fileId}" type="file" accept="${fileAccept}">
+        ${fileHelp ? `<div class="form-help" id="${fileHelpId}">${fileHelp}</div>` : ''}
+      </div>
+      <div class="form-group mt-4">
+        <label class="form-label" for="${promptId}">${promptLabel}</label>
+        <textarea class="form-textarea" id="${promptId}" rows="3" placeholder="${promptPlaceholder}"></textarea>
+      </div>
+      <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
+        <button class="btn btn--secondary" id="${buttonId}" type="button">${buttonLabel}</button>
+        ${statusText ? `<span class="form-help" id="${statusId}">${statusText}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
   // ─── Tag Input ────────────────────────────────────────────
   function tagInput(containerId, initialTags = [], onChange = null) {
     const wrap = document.getElementById(containerId);
@@ -474,5 +515,5 @@ const UI = (() => {
     return `${_getCurrencyPrefix(currency)}${displayValue.toLocaleString(currency === 'AED' ? 'en-AE' : 'en-US')}`;
   }
 
-  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, wizardInputSection, contextInfoPanel, contextInfoGrid, tagInput, confirm, drawHistogram, drawLEC };
+  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, wizardInputSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC };
 })();

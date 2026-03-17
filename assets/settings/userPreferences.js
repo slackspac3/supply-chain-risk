@@ -166,24 +166,21 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
         <button class="btn btn--secondary" id="btn-build-user-context">Build from Website</button>
         <span class="form-help">Builds a personal context draft for this account only.</span>
       </div>
-      <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-elevated)">
-        <div class="context-panel-title">Refine This Context With AI</div>
-        <p class="form-help" style="margin-top:6px">Use follow-up prompts to reshape the company context until it reflects the framing you want for this account.</p>
-        <div id="user-company-refinement-history" style="display:flex;flex-direction:column;gap:10px;margin-top:12px"></div>
-        <div class="form-group mt-4">
-          <label class="form-label" for="user-company-source-file">Upload supporting documents</label>
-          <input class="form-input" id="user-company-source-file" type="file" accept=".txt,.csv,.json,.md,.tsv,.xlsx,.xls,.doc,.docx,.pdf">
-          <div class="form-help" id="user-company-source-help">Recommended: upload strategy, policy, procedure, or operating-model documents to ground the AI context.</div>
-        </div>
-        <div class="form-group mt-4">
-          <label class="form-label" for="user-company-followup">Follow-up prompt</label>
-          <textarea class="form-textarea" id="user-company-followup" rows="3" placeholder="Tell the AI what to change, emphasise, shorten, or make more specific."></textarea>
-        </div>
-        <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
-          <button class="btn btn--secondary" id="btn-refine-user-context" type="button">Apply Follow-Up Now</button>
-          <span class="form-help" id="user-company-refine-status">The fields above will be updated in place each time you refine the context.</span>
-        </div>
-      </div>`
+      ${UI.aiRefinementCard({
+        intro: 'Use follow-up prompts to reshape the company context until it reflects the framing you want for this account.',
+        historyId: 'user-company-refinement-history',
+        fileId: 'user-company-source-file',
+        fileLabel: 'Upload supporting documents',
+        fileAccept: '.txt,.csv,.json,.md,.tsv,.xlsx,.xls,.doc,.docx,.pdf',
+        fileHelpId: 'user-company-source-help',
+        fileHelp: 'Recommended: upload strategy, policy, procedure, or operating-model documents to ground the AI context.',
+        promptId: 'user-company-followup',
+        promptPlaceholder: 'Tell the AI what to change, emphasise, shorten, or make more specific.',
+        buttonId: 'btn-refine-user-context',
+        buttonLabel: 'Apply Follow-Up Now',
+        statusId: 'user-company-refine-status',
+        statusText: 'The fields above will be updated in place each time you refine the context.'
+      })}`
   });
   const roleManagementSection = `${businessOwner ? renderSettingsSection({
     title: 'Business Unit Admin Controls',

@@ -92,22 +92,19 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
             <label class="form-label" for="onboard-working-context">Anything important about your working context?</label>
             <textarea class="form-textarea" id="onboard-working-context" rows="4" placeholder="e.g. I mostly support regulated services and need outputs that balance resilience, compliance, and board reporting.">${draftSettings.userProfile.workingContext || ''}</textarea>
           </div>
-          <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-elevated)">
-            <div class="context-panel-title">AI Assist</div>
-            <div class="form-group mt-3">
-              <label class="form-label" for="onboard-answer-notes">Notes for AI assist</label>
-              <textarea class="form-textarea" id="onboard-answer-notes" rows="3" placeholder="Paste role notes, writing preferences, reporting expectations, board-facing requirements, or any other helpful context."></textarea>
-            </div>
-            <div class="form-group mt-3">
-              <label class="form-label" for="onboard-answer-file">Upload source material</label>
-              <input class="form-input" id="onboard-answer-file" type="file" accept=".txt,.csv,.json,.md,.tsv,.xlsx,.xls,.doc,.docx,.pdf">
-              <div class="form-help" id="onboard-answer-file-help">Upload TXT, CSV, TSV, JSON, Markdown, Excel, DOC, DOCX, or PDF. The extracted text will be used only to draft this step.</div>
-            </div>
-            <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
-              <button class="btn btn--secondary" id="btn-onboard-answer-ai" type="button">AI Assist This Step</button>
-              <span class="form-help">Drafts your working context and preferred output style from your role, BU, and uploaded material.</span>
-            </div>
-          </div>`
+          ${UI.aiAssistCard({
+            notesId: 'onboard-answer-notes',
+            notesLabel: 'Notes for AI assist',
+            notesPlaceholder: 'Paste role notes, writing preferences, reporting expectations, board-facing requirements, or any other helpful context.',
+            fileId: 'onboard-answer-file',
+            fileLabel: 'Upload source material',
+            fileAccept: '.txt,.csv,.json,.md,.tsv,.xlsx,.xls,.doc,.docx,.pdf',
+            fileHelpId: 'onboard-answer-file-help',
+            fileHelp: 'Upload TXT, CSV, TSV, JSON, Markdown, Excel, DOC, DOCX, or PDF. The extracted text will be used only to draft this step.',
+            buttonId: 'btn-onboard-answer-ai',
+            buttonLabel: 'AI Assist This Step',
+            helperText: 'Drafts your working context and preferred output style from your role, BU, and uploaded material.'
+          })}`
       },
       {
         title: 'Seed your personal defaults',
