@@ -3490,6 +3490,24 @@ function renderEvidenceQualityBlock(confidenceLabel, evidenceQuality, evidenceSu
   </div>`;
 }
 
+
+function renderScenarioAssistSummaryBlock({ workflowGuidance = [], confidenceLabel = '', evidenceQuality = '', evidenceSummary = '', missingInformation = [], benchmarkBasis = '', inputProvenance = [], citations = [] } = {}) {
+  const guidance = Array.isArray(workflowGuidance) ? workflowGuidance.filter(Boolean).slice(0, 2) : [];
+  const topInputs = Array.isArray(inputProvenance) ? inputProvenance.filter(Boolean).slice(0, 2) : [];
+  const topSources = normaliseCitations(citations).slice(0, 3);
+  if (!guidance.length && !confidenceLabel && !evidenceQuality && !evidenceSummary && !(missingInformation || []).length && !benchmarkBasis && !topInputs.length && !topSources.length) return '';
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="context-panel-title">AI draft summary</div>
+    <div style="display:flex;flex-direction:column;gap:var(--sp-4);margin-top:var(--sp-3)">
+      ${guidance.length ? `<div><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">What to check next</div><div style="display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)">${guidance.map((item, idx) => `<div style="display:flex;gap:var(--sp-3);align-items:flex-start"><span class="badge badge--gold" style="min-width:24px;justify-content:center">${idx + 1}</span><div class="context-panel-copy" style="margin:0">${escapeHtml(String(item))}</div></div>`).join('')}</div></div>` : ''}
+      ${(confidenceLabel || evidenceQuality || evidenceSummary) ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)">${confidenceLabel || evidenceQuality ? `<div class="citation-chips"><span class="badge badge--neutral">${escapeHtml(confidenceLabel || 'AI confidence not stated')}</span>${evidenceQuality ? `<span class="badge badge--gold">${escapeHtml(evidenceQuality)}</span>` : ''}</div>` : ''}${evidenceSummary ? `<p class="context-panel-copy" style="margin-top:${confidenceLabel || evidenceQuality ? '10px' : '0'}">${escapeHtml(String(evidenceSummary))}</p>` : ''}${(missingInformation || []).length ? `<div class="form-help" style="margin-top:8px">Best next evidence: ${escapeHtml(String(missingInformation[0]))}</div>` : ''}</div>` : ''}
+      ${benchmarkBasis ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Benchmark approach</div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(truncateText(benchmarkBasis, 220))}</div></div>` : ''}
+      ${topInputs.length ? `<div><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Main number drivers</div><div style="display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)">${topInputs.map(item => `<div style="background:var(--bg-elevated);padding:var(--sp-3);border-radius:var(--radius-md)"><div style="font-size:.82rem;font-weight:600;color:var(--text-primary)">${escapeHtml(String(item.label || 'Input'))}</div><div class="form-help" style="margin-top:4px">${escapeHtml(String(item.origin || 'Inference'))}${item.scope ? ` · ${escapeHtml(String(item.scope))}` : ''}${item.lastUpdated ? ` · ${escapeHtml(String(item.lastUpdated))}` : ''}</div></div>`).join('')}</div></div>` : ''}
+      ${topSources.length ? `<div><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Top references used</div><div style="display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3)">${topSources.map(source => `<div style="background:var(--bg-elevated);padding:var(--sp-3);border-radius:var(--radius-md)"><div style="font-size:.82rem;font-weight:600;color:var(--text-primary)">${escapeHtml(String(source.title || 'Untitled source'))}</div>${source.relevanceReason ? `<div class="form-help" style="margin-top:4px">${escapeHtml(String(source.relevanceReason))}</div>` : ''}</div>`).join('')}</div></div>` : ''}
+    </div>
+  </div>`;
+}
+
 function averageRange(min, likely, max) {
   const values = [min, likely, max].map(Number).filter(Number.isFinite);
   if (!values.length) return 0;
