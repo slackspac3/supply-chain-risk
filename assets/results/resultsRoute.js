@@ -36,8 +36,8 @@ function renderExecutiveImpactMix(mix) {
 }
 
 function renderExecutiveSignalCard(results) {
-  const breach = clampNumber((Number(results?.toleranceDetail?.lmExceedProb || 0) * 100), 0, 100);
-  const annualStress = clampNumber(((Number(results?.ale?.p90 || 0) / Math.max(Number(results?.annualReviewThreshold || getAnnualReviewThreshold() || 1), 1)) * 100), 0, 180);
+  const breach = ReportPresentation.clampNumber((Number(results?.toleranceDetail?.lmExceedProb || 0) * 100), 0, 100);
+  const annualStress = ReportPresentation.clampNumber(((Number(results?.ale?.p90 || 0) / Math.max(Number(results?.annualReviewThreshold || getAnnualReviewThreshold() || 1), 1)) * 100), 0, 180);
   return UI.resultsVisualCard({
     title: 'Risk signal at a glance',
     body: `<div class="results-signal-stack">
