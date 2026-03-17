@@ -53,12 +53,14 @@
   --color-white:         #ffffff;
 
   /* ── Surface / Background ───────────────────────────────── */
-  --bg-base:             #06090d;
-  --bg-surface:          #0d141b;
-  --bg-elevated:         #111a24;
-  --bg-canvas:           #0a0f15;
-  --bg-overlay:          rgba(255,255,255,0.05);
-  --bg-overlay-hover:    rgba(255,255,255,0.085);
+  --bg-base:             #07101a;
+  --bg-surface:          rgba(13, 22, 33, 0.74);
+  --bg-elevated:         rgba(18, 29, 42, 0.88);
+  --bg-canvas:           #0a1320;
+  --bg-overlay:          rgba(255,255,255,0.06);
+  --bg-overlay-hover:    rgba(255,255,255,0.1);
+  --bg-glass:            rgba(255,255,255,0.055);
+  --bg-glass-strong:     rgba(255,255,255,0.085);
 
   /* ── Text ───────────────────────────────────────────────── */
   --text-primary:        #f5f7f8;
@@ -69,9 +71,9 @@
   --text-link-hover:     #f0d9a0;
 
   /* ── Border ─────────────────────────────────────────────── */
-  --border-subtle:       rgba(193,209,224,0.09);
-  --border-default:      rgba(193,209,224,0.16);
-  --border-strong:       rgba(193,209,224,0.28);
+  --border-subtle:       rgba(214,225,238,0.1);
+  --border-default:      rgba(214,225,238,0.18);
+  --border-strong:       rgba(214,225,238,0.32);
   --border-focus:        var(--color-gold-400);
 
   /* ── Typography ─────────────────────────────────────────── */
@@ -101,6 +103,7 @@
   --sp-4:  1rem;
   --sp-5:  1.25rem;
   --sp-6:  1.5rem;
+  --sp-7:  1.75rem;
   --sp-8:  2rem;
   --sp-10: 2.5rem;
   --sp-12: 3rem;
@@ -109,19 +112,19 @@
   --sp-24: 6rem;
 
   /* ── Radius ─────────────────────────────────────────────── */
-  --radius-sm:   4px;
-  --radius-md:   8px;
-  --radius-lg:   12px;
-  --radius-xl:   16px;
-  --radius-2xl:  24px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   18px;
+  --radius-xl:   24px;
+  --radius-2xl:  32px;
   --radius-full: 9999px;
 
   /* ── Shadows ────────────────────────────────────────────── */
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.28);
-  --shadow-md:  0 12px 28px rgba(0,0,0,0.24);
-  --shadow-lg:  0 24px 52px rgba(0,0,0,0.3);
-  --shadow-xl:  0 32px 72px rgba(0,0,0,0.34);
-  --shadow-glow:0 0 32px rgba(180,138,70,0.22);
+  --shadow-sm:  0 12px 24px rgba(1,6,15,0.16);
+  --shadow-md:  0 22px 50px rgba(1,8,18,0.22);
+  --shadow-lg:  0 30px 76px rgba(1,8,18,0.3);
+  --shadow-xl:  0 42px 100px rgba(1,8,18,0.34);
+  --shadow-glow:0 16px 44px rgba(180,138,70,0.16);
 
   /* ── Transitions ────────────────────────────────────────── */
   --transition-fast:   150ms ease;
