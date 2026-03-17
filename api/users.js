@@ -15,6 +15,7 @@ function getBootstrapAccounts() {
 }
 
 const USERS_KEY = process.env.USER_STORE_KEY || 'risk_calculator_users';
+const USER_STATE_PREFIX = process.env.USER_STATE_PREFIX || 'risk_calculator_user_state';
 const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || '';
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 10;
@@ -186,6 +187,16 @@ async function writeAccounts(accounts) {
   return accounts.map(normaliseAccount);
 }
 
+
+function buildUserStateKey(username = '') {
+  return `${USER_STATE_PREFIX}__${String(username || '').trim().toLowerCase()}`;
+}
+
+async function deleteUserState(username) {
+  if (!hasWritableKv()) return;
+  await runKvCommand(['DEL', buildUserStateKey(username)]);
+}
+
 module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const body = typeof req.body === 'string'
@@ -336,6 +347,7 @@ module.exports = async function handler(req, res) {
       if (body.action === 'delete-user') {
         const removed = accounts.splice(index, 1)[0];
         await writeAccounts(accounts);
+        await deleteUserState(removed.username);
         await appendAuditEvent({ category: 'user_admin', eventType: 'user_deleted', actorUsername: 'admin', actorRole: 'admin', target: removed.username, status: 'success', source: 'server' });
         res.status(200).json({ accounts: accounts.map(sanitiseAccount) });
         return;

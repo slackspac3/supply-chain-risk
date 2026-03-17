@@ -69,6 +69,7 @@ expect(assessmentStateJs.includes('inferredAssumptions'), 'assessmentState is no
 expect(assessmentStateJs.includes('benchmarkReferences'), 'assessmentState is not persisting benchmarkReferences');
 
 expect(usersApi.includes('Organisation assignment can only be changed by an admin.'), 'users API self-update scope restriction missing');
+expect(usersApi.includes('await deleteUserState(removed.username);'), 'users API delete-user is not clearing shared user state');
 expect(!authServiceJs.includes('businessUnitEntityId: payload.businessUnitEntityId'), 'authService self-update still sends businessUnitEntityId');
 expect(!authServiceJs.includes('departmentEntityId: payload.departmentEntityId'), 'authService self-update still sends departmentEntityId');
 
