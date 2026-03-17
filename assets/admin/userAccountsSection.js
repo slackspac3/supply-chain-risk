@@ -3,17 +3,17 @@ const AdminUserAccountsSection = (() => {
 
   function renderSection({ settings, companyEntities, companyStructure, managedAccounts }) {
     return renderSettingsSection({
-      title: 'User Account Control',
+      title: 'User Accounts',
       scope: 'admin-settings',
-      description: 'Create users, assign them to a BU and function, and check that account changes are available across the platform.',
+      description: 'Create users, assign access, and keep role changes aligned with the rest of the platform.',
       meta: `${managedAccounts.length} managed accounts`,
       body: `<div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)">
-        <div class="context-panel-title">Shared User Store</div>
+        <div class="context-panel-title">Admin account access</div>
         <div class="grid-2 mt-3">
           <div class="form-group">
-            <label class="form-label" for="admin-api-secret">Admin API Secret</label>
-            <input class="form-input" id="admin-api-secret" type="password" placeholder="Paste the Vercel admin secret for this browser" value="${AuthService.getAdminApiSecret() || ''}">
-            <span class="form-help">Stored in this browser for the PoC. Required for admin-only user actions.</span>
+            <label class="form-label" for="admin-api-secret">Admin action secret</label>
+            <input class="form-input" id="admin-api-secret" type="password" placeholder="Paste the admin action secret for this browser" value="${AuthService.getAdminApiSecret() || ''}">
+            <span class="form-help">Saved only in this browser. Used for protected account-management actions in this admin session.</span>
           </div>
         </div>
         <div class="flex items-center gap-3 mt-3" style="flex-wrap:wrap">
@@ -24,7 +24,7 @@ const AdminUserAccountsSection = (() => {
         </div>
       </div>
       <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-canvas)">
-        <div class="context-panel-title">Add User</div>
+        <div class="context-panel-title">Create a user</div>
         <div class="grid-4 mt-3">
           <div class="form-group">
             <label class="form-label" for="admin-new-user-name">Display name</label>
@@ -52,11 +52,14 @@ const AdminUserAccountsSection = (() => {
         </div>
         <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
           <button class="btn btn--secondary" id="btn-admin-add-user">Add User</button>
-          <span class="form-help" id="admin-new-user-result">${AppState.adminNewUserStatus || 'A username and password will be generated automatically. Passwords are shown only when first issued or reset in this admin session.'}</span>
+          <span class="form-help" id="admin-new-user-result">${AppState.adminNewUserStatus || 'A username and password are generated automatically. New or reset passwords are shown only in this admin session.'}</span>
         </div>
       </div>
-      <div class="table-wrap mt-4">
-        <table>
+      <div class="card mt-4" style="padding:var(--sp-5);background:var(--bg-canvas)">
+        <div class="context-panel-title">Current users</div>
+        <div class="form-help" style="margin-top:6px">Review assigned role, business unit, and function before applying access changes.</div>
+        <div class="table-wrap mt-4">
+        <table class="data-table">
           <thead>
             <tr>
               <th>User</th>
@@ -105,6 +108,7 @@ const AdminUserAccountsSection = (() => {
             }).join('')}
           </tbody>
         </table>
+      </div>
       </div>
       <div class="form-help mt-3">Reset clears this user's saved working state and returns them to a first-time setup experience.</div>`
     });

@@ -35,8 +35,8 @@ const AdminPlatformDefaultsSection = (() => {
       description: 'Set the global fallback first, then choose a business unit or linked entity below if you want scoped defaults and governance for that slice of the organisation.',
       meta: `${settings.geography} default geography`,
       body: `<div class="card" style="padding:var(--sp-4);background:var(--bg-canvas);margin-bottom:var(--sp-4)">
-        <div class="context-panel-title">1. Platform-Wide Defaults</div>
-        <div class="form-help" style="margin-top:6px">These apply everywhere unless a scoped BU or entity override is defined below.</div>
+        <div class="context-panel-title">Platform-wide defaults</div>
+        <div class="form-help" style="margin-top:6px">These are the default governance settings for the whole platform unless you override them for a specific BU or linked entity below.</div>
       </div>
       <div class="grid-3">
         <div class="form-group">
@@ -99,11 +99,11 @@ const AdminPlatformDefaultsSection = (() => {
         <span class="form-help">Explain whether the AI should prefer GCC or UAE references first, and how it should justify any global fallback.</span>
       </div>
       <div class="card mt-5" style="padding:var(--sp-5);background:var(--bg-elevated)">
-        <div class="context-panel-title">2. Scoped Defaults For A BU Or Entity</div>
-        <div class="form-help" style="margin-top:6px">Choose a business unit or linked entity here when you want defaults and governance that differ from the platform-wide values above.</div>
+        <div class="context-panel-title">Scoped defaults for a BU or entity</div>
+        <div class="form-help" style="margin-top:6px">Choose a BU or linked entity when that part of the organisation needs different thresholds, guidance, or regulatory defaults.</div>
         <div class="grid-2 mt-4" style="gap:12px">
           <div class="form-group">
-            <label class="form-label" for="admin-scoped-default-target">Choose BU / entity</label>
+            <label class="form-label" for="admin-scoped-default-target">Choose a BU or linked entity</label>
             <select class="form-select" id="admin-scoped-default-target">
               <option value="">Select a BU or linked entity</option>
               ${buList.map(bu => {

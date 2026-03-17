@@ -3,10 +3,10 @@ const AdminAuditLogSection = (() => {
     const auditSummary = auditCache.summary || {};
     const auditEntries = Array.isArray(auditCache.entries) ? auditCache.entries.slice(0, 25) : [];
     return renderSettingsSection({
-      title: 'Audit Log',
+      title: 'Activity Log',
       scope: 'admin-settings',
-      description: 'Short-retention PoC audit trail for login activity, user management, and shared settings changes.',
-      meta: auditSummary.total ? `${auditSummary.total} retained events` : 'Demo retention only',
+      description: 'Recent platform activity for sign-in events, user changes, and shared settings updates.',
+      meta: auditSummary.total ? `${auditSummary.total} recent events` : 'Recent activity only',
       body: `<div class="admin-overview-grid">
         <div class="admin-overview-card"><div class="admin-overview-label">Login Success</div><div class="admin-overview-value">${auditSummary.loginSuccessCount || 0}</div></div>
         <div class="admin-overview-card"><div class="admin-overview-label">Login Failure</div><div class="admin-overview-value">${auditSummary.loginFailureCount || 0}</div></div>
@@ -16,14 +16,18 @@ const AdminAuditLogSection = (() => {
         <div class="admin-overview-card"><div class="admin-overview-label">User Actions</div><div class="admin-overview-value">${auditSummary.userActionCount || 0}</div></div>
       </div>
       <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
-        <button class="btn btn--secondary" id="btn-refresh-audit-log" type="button">${auditCache.loading ? 'Refreshing…' : 'Refresh Audit Log'}</button>
-        <span class="form-help" id="audit-log-status">${auditCache.error || `Retention is capped at ${auditSummary.retainedCapacity || 200} recent events and older entries are overwritten.`}</span>
+        <button class="btn btn--secondary" id="btn-refresh-audit-log" type="button">${auditCache.loading ? 'Refreshing…' : 'Refresh Activity'}</button>
+        <span class="form-help" id="audit-log-status">${auditCache.error || `Shows up to ${auditSummary.retainedCapacity || 200} recent events. Older activity rolls off automatically.`}</span>
       </div>
-      <div class="table-wrap mt-4">
-        <table>
-          <thead><tr><th>Time</th><th>Actor</th><th>Role</th><th>Event</th><th>Target</th><th>Status</th><th>Details</th></tr></thead>
-          <tbody>${auditEntries.length ? auditEntries.map(entry => `<tr><td>${new Date(entry.ts).toLocaleString()}</td><td>${entry.actorUsername || 'system'}</td><td>${entry.actorRole || 'system'}</td><td>${entry.eventType || 'event'}</td><td>${entry.target || '—'}</td><td>${entry.status || 'success'}</td><td>${formatAuditDetails(entry.details) || '—'}</td></tr>`).join('') : '<tr><td colspan="7">No audit activity has been loaded yet.</td></tr>'}</tbody>
+      <div class="card mt-4" style="padding:var(--sp-5);background:var(--bg-canvas)">
+        <div class="context-panel-title">Recent activity</div>
+        <div class="form-help" style="margin-top:6px">Use this view to confirm sign-ins, user changes, and shared-setting updates.</div>
+        <div class="table-wrap mt-4">
+        <table class="data-table">
+          <thead><tr><th>Time</th><th>User</th><th>Role</th><th>Activity</th><th>Target</th><th>Outcome</th><th>Details</th></tr></thead>
+          <tbody>${auditEntries.length ? auditEntries.map(entry => `<tr><td>${new Date(entry.ts).toLocaleString()}</td><td>${entry.actorUsername || 'system'}</td><td>${entry.actorRole || 'system'}</td><td>${entry.eventType || 'event'}</td><td>${entry.target || '—'}</td><td>${entry.status || 'success'}</td><td>${formatAuditDetails(entry.details) || '—'}</td></tr>`).join('') : '<tr><td colspan="7">No activity has been loaded yet.</td></tr>'}</tbody>
         </table>
+      </div>
       </div>`
     });
   }
