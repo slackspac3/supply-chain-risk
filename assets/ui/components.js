@@ -159,6 +159,22 @@ const UI = (() => {
     </div>`;
   }
 
+
+  function resultsVisualCard({ title, body, wide = false }) {
+    return `<div class="results-visual-card${wide ? ' results-visual-card--wide' : ''}">
+      <div class="results-section-heading">${title}</div>
+      ${body}
+    </div>`;
+  }
+
+  function resultsBriefCard({ label, value, copy }) {
+    return `<div class="results-brief-card">
+      <div class="results-brief-label">${label}</div>
+      <div class="results-brief-value">${value}</div>
+      <div class="results-brief-copy">${copy}</div>
+    </div>`;
+  }
+
   // ─── Tag Input ────────────────────────────────────────────
   function tagInput(containerId, initialTags = [], onChange = null) {
     const wrap = document.getElementById(containerId);
@@ -427,5 +443,5 @@ const UI = (() => {
     return `${_getCurrencyPrefix(currency)}${displayValue.toLocaleString(currency === 'AED' ? 'en-AE' : 'en-US')}`;
   }
 
-  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, tagInput, confirm, drawHistogram, drawLEC };
+  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, tagInput, confirm, drawHistogram, drawLEC };
 })();

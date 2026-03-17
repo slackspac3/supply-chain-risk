@@ -17,34 +17,30 @@ function renderExecutiveThresholdTracks(model) {
       </div>
       <div class="results-comparison-foot" style="margin-top:var(--sp-3)">${item.summary}</div>
     </div>`;
-  return `<div class="results-visual-card results-visual-card--wide">
-    <div class="results-section-heading">Against governance limits</div>
-    <div class="results-track-grid">
-      ${renderCard(model.single)}
-      ${renderCard(model.annual)}
-    </div>
-  </div>`;
+  return UI.resultsVisualCard({
+    title: 'Against governance limits',
+    wide: true,
+    body: `<div class="results-track-grid">${renderCard(model.single)}${renderCard(model.annual)}</div>`
+  });
 }
 
 function renderExecutiveImpactMix(mix) {
-  if (!mix.length) return `<div class="results-visual-card">
-    <div class="results-section-heading">What is driving the cost</div>
-    <div class="results-comparison-foot">No meaningful loss-component mix is available for this scenario yet.</div>
-  </div>`;
-  return `<div class="results-visual-card">
-    <div class="results-section-heading">What is driving the cost</div>
-    <div class="results-impact-mix">
-      ${mix.map(item => `<div class="results-impact-mix-row"><div class="results-impact-mix-head"><span>${item.label}</span><strong>${fmtCurrency(item.value)}</strong></div><div class="results-impact-mix-bar"><span style="width:${item.width}%"></span></div></div>`).join('')}
-    </div>
-  </div>`;
+  if (!mix.length) return UI.resultsVisualCard({
+    title: 'What is driving the cost',
+    body: '<div class="results-comparison-foot">No meaningful loss-component mix is available for this scenario yet.</div>'
+  });
+  return UI.resultsVisualCard({
+    title: 'What is driving the cost',
+    body: `<div class="results-impact-mix">${mix.map(item => `<div class="results-impact-mix-row"><div class="results-impact-mix-head"><span>${item.label}</span><strong>${fmtCurrency(item.value)}</strong></div><div class="results-impact-mix-bar"><span style="width:${item.width}%"></span></div></div>`).join('')}</div>`
+  });
 }
 
 function renderExecutiveSignalCard(results) {
   const breach = clampNumber((Number(results?.toleranceDetail?.lmExceedProb || 0) * 100), 0, 100);
   const annualStress = clampNumber(((Number(results?.ale?.p90 || 0) / Math.max(Number(results?.annualReviewThreshold || getAnnualReviewThreshold() || 1), 1)) * 100), 0, 180);
-  return `<div class="results-visual-card">
-    <div class="results-section-heading">Risk signal at a glance</div>
-    <div class="results-signal-stack">
+  return UI.resultsVisualCard({
+    title: 'Risk signal at a glance',
+    body: `<div class="results-signal-stack">
       <div class="results-signal-metric">
         <div class="results-driver-label">Tolerance breach likelihood</div>
         <div class="results-signal-bar"><span style="width:${breach}%"></span></div>
@@ -55,28 +51,28 @@ function renderExecutiveSignalCard(results) {
         <div class="results-signal-bar warning"><span style="width:${Math.min(annualStress, 100)}%"></span></div>
         <div class="results-comparison-foot">${annualStress >= 100 ? 'At or above' : 'Below'} the annual review trigger</div>
       </div>
-    </div>
-  </div>`;
+    </div>`
+  });
 }
 
 function renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView) {
   const nextStep = executiveAction || executiveDecision?.priority || 'Confirm the next management step for this scenario.';
   return `<div class="results-executive-brief">
-    <div class="results-brief-card">
-      <div class="results-brief-label">Current position</div>
-      <div class="results-brief-value">${statusTitle}</div>
-      <div class="results-brief-copy">${executiveAnnualView}</div>
-    </div>
-    <div class="results-brief-card">
-      <div class="results-brief-label">Management posture</div>
-      <div class="results-brief-value">${executiveDecision?.decision || 'Review'}</div>
-      <div class="results-brief-copy">${executiveDecision?.rationale || ''}</div>
-    </div>
-    <div class="results-brief-card">
-      <div class="results-brief-label">Immediate next step</div>
-      <div class="results-brief-value">Act now</div>
-      <div class="results-brief-copy">${nextStep}</div>
-    </div>
+    ${UI.resultsBriefCard({
+      label: 'Current position',
+      value: statusTitle,
+      copy: executiveAnnualView
+    })}
+    ${UI.resultsBriefCard({
+      label: 'Management posture',
+      value: executiveDecision?.decision || 'Review',
+      copy: executiveDecision?.rationale || ''
+    })}
+    ${UI.resultsBriefCard({
+      label: 'Immediate next step',
+      value: 'Act now',
+      copy: nextStep
+    })}
   </div>`;
 }
 
