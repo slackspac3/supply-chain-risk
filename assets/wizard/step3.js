@@ -116,6 +116,7 @@ function renderWizard3() {
           ${draft.workflowGuidance?.length ? renderWorkflowGuidanceBlock(draft.workflowGuidance) : ''}
           ${renderEvidenceQualityBlock(draft.confidenceLabel, draft.evidenceQuality, draft.evidenceSummary, draft.missingInformation, 'AI Evidence Quality', { primaryGrounding: draft.primaryGrounding, supportingReferences: draft.supportingReferences, inferredAssumptions: draft.inferredAssumptions })}
           ${renderBenchmarkRationaleBlock(draft.benchmarkBasis, draft.inputRationale, draft.benchmarkReferences)}
+          ${renderInputProvenanceBlock(draft.inputProvenance)}
           ${renderEstimateExplainerCard(draft, bu, isAdv, cur)}
 
           <div class="card card--elevated anim-fade-in">

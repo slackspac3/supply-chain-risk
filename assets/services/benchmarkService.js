@@ -125,12 +125,28 @@ const BenchmarkService = (() => {
     }));
   }
 
+  function buildInputProvenance(entries = []) {
+    const primary = Array.isArray(entries) && entries.length ? entries[0] : null;
+    if (!primary) return [];
+    const origin = primary.scope === 'regional' ? 'Regional benchmark' : primary.scope === 'global' ? 'Global benchmark' : primary.scope === 'industry' ? 'Industry benchmark' : 'Official benchmark';
+    const reason = primary.summary || 'Starting values aligned to the closest structured benchmark profile for this scenario.';
+    const sourceTitle = primary.sourceTitle || '';
+    const lastUpdated = primary.lastUpdated || '';
+    return [
+      { label: 'Event frequency', origin, scope: primary.scope, reason, sourceTitle, lastUpdated },
+      { label: 'Threat capability and control strength', origin, scope: primary.scope, reason: 'Exposure starting points were aligned to the same benchmark profile before BU and user context were applied.', sourceTitle, lastUpdated },
+      { label: 'Business disruption cost', origin, scope: primary.scope, reason: 'The business interruption range was seeded from the closest published benchmark profile for this scenario type.', sourceTitle, lastUpdated },
+      { label: 'Regulatory and legal cost', origin, scope: primary.scope, reason: 'The regulatory and legal range was seeded from the same benchmark profile and is intended as a challengeable starting point.', sourceTitle, lastUpdated }
+    ];
+  }
+
   return {
     init,
     retrieveRelevantBenchmarks,
     deriveSuggestedInputs,
     summariseBenchmarkBasis,
     buildPromptBlock,
-    buildReferenceList
+    buildReferenceList,
+    buildInputProvenance
   };
 })();

@@ -3427,6 +3427,17 @@ function renderBenchmarkRationaleBlock(benchmarkBasis, inputRationale, benchmark
   </div>`;
 }
 
+function renderInputProvenanceBlock(inputProvenance = []) {
+  const items = Array.isArray(inputProvenance) ? inputProvenance.filter(Boolean) : [];
+  if (!items.length) return '';
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="context-panel-title">Where the key numbers came from</div>
+    <div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">
+      ${items.map(item => `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap"><strong style="font-size:.85rem;color:var(--text-primary)">${escapeHtml(String(item.label || 'Input'))}</strong><span class="badge badge--neutral">${escapeHtml(String(item.origin || 'Inference'))}</span>${item.scope ? `<span class="badge badge--gold">${escapeHtml(String(item.scope))}</span>` : ''}</div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(item.reason || 'Starting point generated from current scenario context.'))}</div>${item.sourceTitle ? `<div class="form-help" style="margin-top:6px">${escapeHtml(String(item.sourceTitle))}${item.lastUpdated ? ` · ${escapeHtml(String(item.lastUpdated))}` : ''}</div>` : ''}</div>`).join('')}
+    </div>
+  </div>`;
+}
+
 function renderEvidenceQualityBlock(confidenceLabel, evidenceQuality, evidenceSummary, missingInformation = [], title = 'AI Evidence Quality', evidenceBreakdown = null) {
   const breakdown = evidenceBreakdown || {};
   const primaryGrounding = Array.isArray(breakdown.primaryGrounding) ? breakdown.primaryGrounding : [];

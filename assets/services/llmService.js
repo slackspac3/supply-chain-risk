@@ -745,7 +745,8 @@ ${businessUnit.selectedDepartmentContext}` : ''
       },
       recommendations: recommendations.slice(0, 6),
       citations,
-      benchmarkReferences: BenchmarkService.buildReferenceList(benchmarkCandidates)
+      benchmarkReferences: BenchmarkService.buildReferenceList(benchmarkCandidates),
+      inputProvenance: BenchmarkService.buildInputProvenance(benchmarkCandidates)
     };
   }
 
@@ -994,6 +995,7 @@ ${evidenceMeta.promptBlock}`;
             workflowGuidance: _normaliseGuidance(parsed.workflowGuidance?.length ? parsed.workflowGuidance : fallback.workflowGuidance),
             benchmarkBasis: _normaliseBenchmarkBasis(parsed.benchmarkBasis || fallback.benchmarkBasis || ''),
             benchmarkReferences: BenchmarkService.buildReferenceList(benchmarkCandidates),
+            inputProvenance: BenchmarkService.buildInputProvenance(benchmarkCandidates),
             inputRationale: _normaliseInputRationale({
               ...fallback.inputRationale,
               ...(parsed.inputRationale || {})
