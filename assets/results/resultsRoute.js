@@ -460,6 +460,13 @@ function renderResults(id, isShared) {
   const completedLabel = new Date(assessment.completedAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' });
   const scenarioNarrative = ReportPresentation.buildExecutiveScenarioSummary(assessment) || 'No scenario narrative available.';
   const technicalInputs = r.inputs || assessment.fairParams || {};
+  const workflowGuidance = Array.isArray(assessment.workflowGuidance) ? assessment.workflowGuidance : [];
+  const recommendations = Array.isArray(assessment.recommendations) ? assessment.recommendations : [];
+  const citations = Array.isArray(assessment.citations) ? assessment.citations : [];
+  const primaryGrounding = Array.isArray(assessment.primaryGrounding) ? assessment.primaryGrounding : [];
+  const supportingReferences = Array.isArray(assessment.supportingReferences) ? assessment.supportingReferences : [];
+  const inferredAssumptions = Array.isArray(assessment.inferredAssumptions) ? assessment.inferredAssumptions : [];
+  const missingInformation = Array.isArray(assessment.missingInformation) ? assessment.missingInformation : [];
   const assessmentIntelligence = assessment.assessmentIntelligence || buildAssessmentIntelligence(assessment, r, technicalInputs, r.portfolioMeta || {});
   const assessmentChallenge = assessment.assessmentChallenge || null;
   const executiveDecision = ReportPresentation.buildExecutiveDecisionSupport(assessment, r, assessmentIntelligence);
@@ -476,11 +483,11 @@ function renderResults(id, isShared) {
   const activeComparisonId = AppState.resultsComparisonId || assessment.comparisonBaselineId || '';
   const baselineAssessment = activeComparisonId ? getAssessmentById(activeComparisonId) : null;
   const comparison = baselineAssessment ? buildAssessmentComparison(assessment, baselineAssessment) : null;
-  const recommendationCards = assessment.recommendations?.length ? `
+  const recommendationCards = recommendations.length ? `
     <section class="results-section-stack">
       <div class="results-section-heading">Priority actions</div>
       <div class="results-recommendations-grid">
-        ${assessment.recommendations.slice(0, 3).map((rec, idx) => `
+        ${recommendations.slice(0, 3).map((rec, idx) => `
           <div class="results-priority-card">
             <div class="results-priority-index">${idx + 1}</div>
             <div>
@@ -589,13 +596,13 @@ function renderResults(id, isShared) {
 
   const technicalTab = `
     <section class="results-technical-view ${activeTab === 'technical' ? '' : 'hidden'}" id="results-tab-technical">
-      ${(assessment.workflowGuidance?.length || assessment.benchmarkBasis || assessment.inputRationale || assessment.evidenceSummary || assessment.confidenceLabel) ? `
+      ${(workflowGuidance.length || assessment.benchmarkBasis || assessment.inputRationale || assessment.evidenceSummary || assessment.confidenceLabel) ? `
       <div class="grid-2 mb-6 anim-fade-in">
-        ${renderWorkflowGuidanceBlock(assessment.workflowGuidance || [], 'How AI guided this assessment')}
+        ${renderWorkflowGuidanceBlock(workflowGuidance, 'How AI guided this assessment')}
         ${renderBenchmarkRationaleBlock(assessment.benchmarkBasis, assessment.inputRationale, assessment.benchmarkReferences)}
         ${renderInputProvenanceBlock(assessment.inputProvenance)}
       </div>
-      ${renderEvidenceQualityBlock(assessment.confidenceLabel, assessment.evidenceQuality, assessment.evidenceSummary, assessment.missingInformation, 'How grounded the AI inputs were', { primaryGrounding: assessment.primaryGrounding, supportingReferences: assessment.supportingReferences, inferredAssumptions: assessment.inferredAssumptions })}` : ''}
+      ${renderEvidenceQualityBlock(assessment.confidenceLabel, assessment.evidenceQuality, assessment.evidenceSummary, missingInformation, 'How grounded the AI inputs were', { primaryGrounding: primaryGrounding, supportingReferences: supportingReferences, inferredAssumptions: inferredAssumptions })}` : ''}
 
       <div class="results-decision-grid mb-6 anim-fade-in">
         ${renderAssessmentConfidenceBlock(assessmentIntelligence.confidence)}
@@ -667,13 +674,13 @@ function renderResults(id, isShared) {
         <div class="mt-4" style="font-size:.78rem;color:var(--text-muted)">Iterations: <strong>${r.iterations.toLocaleString()}</strong> · Distribution: <strong>${r.distType || assessment.fairParams?.distType || 'triangular'}</strong> · Threshold: <strong>${fmtCurrency(r.threshold)}</strong></div>
       </div>
 
-      ${assessment.citations?.length ? renderCitationBlock(assessment.citations) : ''}
+      ${citations.length ? renderCitationBlock(citations) : ''}
 
-      ${assessment.recommendations?.length ? `
+      ${recommendations.length ? `
       <div class="mb-8 anim-fade-in">
         <h3 style="font-size:var(--text-xl);margin-bottom:var(--sp-5)">Recommended Risk Treatments</h3>
         <div style="display:flex;flex-direction:column;gap:var(--sp-4)">
-          ${assessment.recommendations.map((rec, i) => `
+          ${recommendations.map((rec, i) => `
             <div class="rec-card">
               <div class="flex items-start gap-4">
                 <div class="rec-number">${i + 1}</div>
@@ -766,7 +773,7 @@ function renderResults(id, isShared) {
         confidence: assessmentIntelligence.confidence,
         drivers: assessmentIntelligence.drivers,
         assumptions: assessmentIntelligence.assumptions,
-        missingInformation: assessment.missingInformation || [],
+        missingInformation: missingInformation || [],
         applicableRegulations: assessment.applicableRegulations || [],
         citations: assessment.citations || []
       });
@@ -795,7 +802,7 @@ function renderResults(id, isShared) {
         <div class="container container--narrow" style="padding:var(--sp-12) var(--sp-6)">
           <div class="card">
             <h2 style="margin-bottom:var(--sp-3)">This result could not be opened cleanly</h2>
-            <p style="color:var(--text-muted);margin-bottom:var(--sp-5)">The saved assessment data is missing something the results page expected. The assessment is still stored, but this view needed a safer fallback.</p>
+            <p style="color:var(--text-muted);margin-bottom:var(--sp-5)">The saved assessment data is missing something the results page expected. The assessment is still stored, but this view needed a safer fallback.${error?.message ? ' Error: ' + String(error.message) : ''}</p>
             <div class="flex items-center gap-3" style="flex-wrap:wrap">
               <a href="#/" class="btn btn--primary">Go to dashboard</a>
               <button class="btn btn--secondary" id="btn-results-retry" type="button">Try again</button>
