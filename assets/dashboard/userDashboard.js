@@ -71,20 +71,20 @@ function renderUserDashboard() {
 
   setPage(`
     <main class="page">
-      <div class="container container--wide" style="padding:var(--sp-10) var(--sp-6)">
-        <section class="card card--elevated" style="padding:var(--sp-8);background:linear-gradient(135deg, rgba(11,15,28,.98), rgba(18,27,49,.96));border-color:rgba(244,193,90,.18)">
-          <div class="flex items-start justify-between" style="gap:var(--sp-6);flex-wrap:wrap">
-            <div style="max-width:760px">
+      <div class="container container--wide dashboard-shell">
+        <section class="card card--elevated dashboard-hero">
+          <div class="dashboard-hero-grid">
+            <div class="dashboard-hero-main">
               <div class="landing-badge">Personal Dashboard</div>
               <h2 style="margin-top:var(--sp-4)">Welcome back, ${user?.displayName || 'there'}.</h2>
               <p style="margin-top:10px;color:rgba(255,255,255,.74);max-width:680px">This is your main working space. Start a new assessment, resume unfinished work, or review completed results from here.</p>
-              <div class="flex items-center gap-3 mt-6" style="flex-wrap:wrap">
+              <div class="dashboard-hero-actions flex items-center gap-3 mt-6" style="flex-wrap:wrap">
                 <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment">Start a New Risk Assessment</button>
                 <button class="btn btn--secondary" id="btn-dashboard-continue-draft" ${hasDraft ? '' : 'disabled'}>Resume Draft</button>
                 <button class="btn btn--ghost" id="btn-dashboard-open-settings">Open Personal Settings</button>
               </div>
             </div>
-            <div class="card" style="min-width:280px;max-width:360px;padding:var(--sp-5);background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08)">
+            <div class="card dashboard-hero-side">
               <div class="context-panel-title">What to do next</div>
               <div class="context-panel-copy" style="margin-top:8px">${quickStatus}</div>
               <div class="form-help" style="margin-top:10px;color:rgba(255,255,255,.65)">Current access: ${capability.roleSummary}</div>
@@ -111,9 +111,9 @@ function renderUserDashboard() {
           </div>
         </section>
 
-        <section class="grid-2" style="margin-top:var(--sp-8);align-items:start">
-          <div style="display:flex;flex-direction:column;gap:var(--sp-5)">
-            <div class="card card--elevated" style="padding:var(--sp-6)">
+        <section class="grid-2 dashboard-main-grid">
+          <div class="dashboard-column">
+            <div class="card card--elevated dashboard-section-card">
               <div class="flex items-center justify-between" style="gap:var(--sp-3);flex-wrap:wrap">
                 <div>
                   <div class="context-panel-title">Next up</div>
@@ -123,7 +123,7 @@ function renderUserDashboard() {
               </div>
               <div style="display:flex;flex-direction:column;gap:12px;margin-top:var(--sp-5)">
                 ${openAssessmentRows.length ? openAssessmentRows.map(item => `
-                  <div class="card dashboard-assessment-row" data-assessment-id="${item.action}" style="padding:var(--sp-4);background:var(--bg-elevated);text-align:left">
+                  <div class="card dashboard-assessment-row" data-assessment-id="${item.action}">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
                       <div>
                         <div style="font-weight:600;color:var(--text-primary)">${item.title}</div>
@@ -140,7 +140,7 @@ function renderUserDashboard() {
               </div>
             </div>
 
-            <div class="card card--elevated" style="padding:var(--sp-6)">
+            <div class="card card--elevated dashboard-section-card">
               <div class="flex items-center justify-between" style="gap:var(--sp-3);flex-wrap:wrap">
                 <div>
                   <div class="context-panel-title">Recent assessments</div>
@@ -150,7 +150,7 @@ function renderUserDashboard() {
               </div>
               <div style="display:flex;flex-direction:column;gap:12px;margin-top:var(--sp-5)">
                 ${recentAssessments.length ? recentAssessments.map(assessment => `
-                  <div class="card dashboard-assessment-row" data-assessment-id="${assessment.id}" style="padding:var(--sp-4);background:var(--bg-elevated);text-align:left">
+                  <div class="card dashboard-assessment-row" data-assessment-id="${assessment.id}">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
                       <div>
                         <div style="font-weight:600;color:var(--text-primary)">${assessment.scenarioTitle || 'Untitled assessment'}</div>
@@ -169,10 +169,10 @@ function renderUserDashboard() {
             </div>
           </div>
 
-          <div style="display:flex;flex-direction:column;gap:var(--sp-5)">
+          <div class="dashboard-column">
             ${renderNonAdminHowToGuide(capability)}
 
-            <div class="card card--elevated" style="padding:var(--sp-6)">
+            <div class="card card--elevated dashboard-section-card">
               <div class="context-panel-title">Your saved context</div>
               <div class="context-panel-copy" style="margin-top:10px">${profile.jobTitle || 'Role not yet set'} · ${profile.businessUnit || user?.businessUnit || 'Business unit not yet set'}${profile.department || user?.department ? ` · ${profile.department || user?.department}` : ''}</div>
               <div class="form-help" style="margin-top:12px">${focusAreas.length ? `Focus areas: ${focusAreas.join(', ')}` : 'No focus areas saved yet.'}</div>
@@ -182,7 +182,7 @@ function renderUserDashboard() {
               </div>
             </div>
 
-            <div class="card card--elevated" style="padding:var(--sp-6)">
+            <div class="card card--elevated dashboard-section-card">
               <div class="flex items-center justify-between" style="gap:var(--sp-3);flex-wrap:wrap">
                 <div>
                   <div class="context-panel-title">Archived items</div>
@@ -192,7 +192,7 @@ function renderUserDashboard() {
               </div>
               <div style="display:flex;flex-direction:column;gap:12px;margin-top:var(--sp-5)">
                 ${archivedAssessments.length ? archivedAssessments.map(assessment => `
-                  <div class="card dashboard-assessment-row" style="padding:var(--sp-4);background:var(--bg-elevated);text-align:left">
+                  <div class="card dashboard-assessment-row">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
                       <div>
                         <div style="font-weight:600;color:var(--text-primary)">${assessment.scenarioTitle || 'Untitled scenario'}</div>
