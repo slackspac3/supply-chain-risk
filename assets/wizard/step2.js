@@ -179,37 +179,44 @@ function _buildAiInputAssignments(result, benchmarkCandidates = [], citations = 
 
 function _buildAiFairInputPayload(result, benchmarkCandidates = [], citations = []) {
   const currentFair = AppState.draft.fairParams || {};
+  const bu = getBUList().find(candidate => candidate.id === AppState.draft.buId);
+  const defaults = bu?.defaultAssumptions || {};
   const suggested = result?.suggestedInputs || {};
   const lossComponents = suggested.lossComponents || {};
+  const fallbackRange = (prefix, defaultRange) => ({
+    min: Number(currentFair[`${prefix}Min`] ?? defaultRange?.min ?? 0),
+    likely: Number(currentFair[`${prefix}Likely`] ?? defaultRange?.likely ?? defaultRange?.min ?? 0),
+    max: Number(currentFair[`${prefix}Max`] ?? defaultRange?.max ?? defaultRange?.likely ?? defaultRange?.min ?? 0)
+  });
   const fairParams = {
     ...currentFair,
-    tefMin: _normaliseSuggestedRange(suggested.TEF, currentFair).min,
-    tefLikely: _normaliseSuggestedRange(suggested.TEF, currentFair).likely,
-    tefMax: _normaliseSuggestedRange(suggested.TEF, currentFair).max,
-    controlStrMin: _normaliseSuggestedRange(suggested.controlStrength, currentFair).min,
-    controlStrLikely: _normaliseSuggestedRange(suggested.controlStrength, currentFair).likely,
-    controlStrMax: _normaliseSuggestedRange(suggested.controlStrength, currentFair).max,
-    threatCapMin: _normaliseSuggestedRange(suggested.threatCapability, currentFair).min,
-    threatCapLikely: _normaliseSuggestedRange(suggested.threatCapability, currentFair).likely,
-    threatCapMax: _normaliseSuggestedRange(suggested.threatCapability, currentFair).max,
-    irMin: _normaliseSuggestedRange(lossComponents.incidentResponse, currentFair).min,
-    irLikely: _normaliseSuggestedRange(lossComponents.incidentResponse, currentFair).likely,
-    irMax: _normaliseSuggestedRange(lossComponents.incidentResponse, currentFair).max,
-    biMin: _normaliseSuggestedRange(lossComponents.businessInterruption, currentFair).min,
-    biLikely: _normaliseSuggestedRange(lossComponents.businessInterruption, currentFair).likely,
-    biMax: _normaliseSuggestedRange(lossComponents.businessInterruption, currentFair).max,
-    dbMin: _normaliseSuggestedRange(lossComponents.dataBreachRemediation, currentFair).min,
-    dbLikely: _normaliseSuggestedRange(lossComponents.dataBreachRemediation, currentFair).likely,
-    dbMax: _normaliseSuggestedRange(lossComponents.dataBreachRemediation, currentFair).max,
-    rlMin: _normaliseSuggestedRange(lossComponents.regulatoryLegal, currentFair).min,
-    rlLikely: _normaliseSuggestedRange(lossComponents.regulatoryLegal, currentFair).likely,
-    rlMax: _normaliseSuggestedRange(lossComponents.regulatoryLegal, currentFair).max,
-    tpMin: _normaliseSuggestedRange(lossComponents.thirdPartyLiability, currentFair).min,
-    tpLikely: _normaliseSuggestedRange(lossComponents.thirdPartyLiability, currentFair).likely,
-    tpMax: _normaliseSuggestedRange(lossComponents.thirdPartyLiability, currentFair).max,
-    rcMin: _normaliseSuggestedRange(lossComponents.reputationContract, currentFair).min,
-    rcLikely: _normaliseSuggestedRange(lossComponents.reputationContract, currentFair).likely,
-    rcMax: _normaliseSuggestedRange(lossComponents.reputationContract, currentFair).max
+    tefMin: _normaliseSuggestedRange(suggested.TEF, fallbackRange('tef', defaults.TEF || { min: 0.5, likely: 2, max: 8 })).min,
+    tefLikely: _normaliseSuggestedRange(suggested.TEF, fallbackRange('tef', defaults.TEF || { min: 0.5, likely: 2, max: 8 })).likely,
+    tefMax: _normaliseSuggestedRange(suggested.TEF, fallbackRange('tef', defaults.TEF || { min: 0.5, likely: 2, max: 8 })).max,
+    controlStrMin: _normaliseSuggestedRange(suggested.controlStrength, fallbackRange('controlStr', defaults.controlStrength || { min: 0.5, likely: 0.68, max: 0.85 })).min,
+    controlStrLikely: _normaliseSuggestedRange(suggested.controlStrength, fallbackRange('controlStr', defaults.controlStrength || { min: 0.5, likely: 0.68, max: 0.85 })).likely,
+    controlStrMax: _normaliseSuggestedRange(suggested.controlStrength, fallbackRange('controlStr', defaults.controlStrength || { min: 0.5, likely: 0.68, max: 0.85 })).max,
+    threatCapMin: _normaliseSuggestedRange(suggested.threatCapability, fallbackRange('threatCap', defaults.threatCapability || { min: 0.45, likely: 0.62, max: 0.82 })).min,
+    threatCapLikely: _normaliseSuggestedRange(suggested.threatCapability, fallbackRange('threatCap', defaults.threatCapability || { min: 0.45, likely: 0.62, max: 0.82 })).likely,
+    threatCapMax: _normaliseSuggestedRange(suggested.threatCapability, fallbackRange('threatCap', defaults.threatCapability || { min: 0.45, likely: 0.62, max: 0.82 })).max,
+    irMin: _normaliseSuggestedRange(lossComponents.incidentResponse, fallbackRange('ir', defaults.incidentResponse || { min: 50000, likely: 180000, max: 600000 })).min,
+    irLikely: _normaliseSuggestedRange(lossComponents.incidentResponse, fallbackRange('ir', defaults.incidentResponse || { min: 50000, likely: 180000, max: 600000 })).likely,
+    irMax: _normaliseSuggestedRange(lossComponents.incidentResponse, fallbackRange('ir', defaults.incidentResponse || { min: 50000, likely: 180000, max: 600000 })).max,
+    biMin: _normaliseSuggestedRange(lossComponents.businessInterruption, fallbackRange('bi', defaults.businessInterruption || { min: 100000, likely: 450000, max: 2500000 })).min,
+    biLikely: _normaliseSuggestedRange(lossComponents.businessInterruption, fallbackRange('bi', defaults.businessInterruption || { min: 100000, likely: 450000, max: 2500000 })).likely,
+    biMax: _normaliseSuggestedRange(lossComponents.businessInterruption, fallbackRange('bi', defaults.businessInterruption || { min: 100000, likely: 450000, max: 2500000 })).max,
+    dbMin: _normaliseSuggestedRange(lossComponents.dataBreachRemediation, fallbackRange('db', defaults.dataBreachRemediation || { min: 30000, likely: 120000, max: 500000 })).min,
+    dbLikely: _normaliseSuggestedRange(lossComponents.dataBreachRemediation, fallbackRange('db', defaults.dataBreachRemediation || { min: 30000, likely: 120000, max: 500000 })).likely,
+    dbMax: _normaliseSuggestedRange(lossComponents.dataBreachRemediation, fallbackRange('db', defaults.dataBreachRemediation || { min: 30000, likely: 120000, max: 500000 })).max,
+    rlMin: _normaliseSuggestedRange(lossComponents.regulatoryLegal, fallbackRange('rl', defaults.regulatoryLegal || { min: 0, likely: 80000, max: 800000 })).min,
+    rlLikely: _normaliseSuggestedRange(lossComponents.regulatoryLegal, fallbackRange('rl', defaults.regulatoryLegal || { min: 0, likely: 80000, max: 800000 })).likely,
+    rlMax: _normaliseSuggestedRange(lossComponents.regulatoryLegal, fallbackRange('rl', defaults.regulatoryLegal || { min: 0, likely: 80000, max: 800000 })).max,
+    tpMin: _normaliseSuggestedRange(lossComponents.thirdPartyLiability, fallbackRange('tp', defaults.thirdPartyLiability || { min: 0, likely: 50000, max: 400000 })).min,
+    tpLikely: _normaliseSuggestedRange(lossComponents.thirdPartyLiability, fallbackRange('tp', defaults.thirdPartyLiability || { min: 0, likely: 50000, max: 400000 })).likely,
+    tpMax: _normaliseSuggestedRange(lossComponents.thirdPartyLiability, fallbackRange('tp', defaults.thirdPartyLiability || { min: 0, likely: 50000, max: 400000 })).max,
+    rcMin: _normaliseSuggestedRange(lossComponents.reputationContract, fallbackRange('rc', defaults.reputationContract || { min: 50000, likely: 200000, max: 1200000 })).min,
+    rcLikely: _normaliseSuggestedRange(lossComponents.reputationContract, fallbackRange('rc', defaults.reputationContract || { min: 50000, likely: 200000, max: 1200000 })).likely,
+    rcMax: _normaliseSuggestedRange(lossComponents.reputationContract, fallbackRange('rc', defaults.reputationContract || { min: 50000, likely: 200000, max: 1200000 })).max
   };
   const inputAssignments = _buildAiInputAssignments(result, benchmarkCandidates, citations);
   const keyOrigins = {
