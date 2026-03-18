@@ -602,14 +602,6 @@ function renderResults(id, isShared) {
 
   const technicalTab = `
     <section class="results-technical-view ${activeTab === 'technical' ? '' : 'hidden'}" id="results-tab-technical">
-      ${(workflowGuidance.length || assessment.benchmarkBasis || assessment.inputRationale || assessment.evidenceSummary || assessment.confidenceLabel) ? `
-      <div class="grid-2 mb-6 anim-fade-in">
-        ${renderWorkflowGuidanceBlock(workflowGuidance, 'How AI guided this assessment')}
-        ${renderBenchmarkRationaleBlock(assessment.benchmarkBasis, assessment.inputRationale, assessment.benchmarkReferences)}
-        ${renderInputProvenanceBlock(assessment.inputProvenance)}
-      </div>
-      ${renderEvidenceQualityBlock(assessment.confidenceLabel, assessment.evidenceQuality, assessment.evidenceSummary, missingInformation, 'How grounded the AI inputs were', { primaryGrounding: primaryGrounding, supportingReferences: supportingReferences, inferredAssumptions: inferredAssumptions })}` : ''}
-
       <div class="results-decision-grid mb-6 anim-fade-in">
         ${renderAssessmentConfidenceBlock(assessmentIntelligence.confidence)}
         ${renderAssessmentDriversBlock(assessmentIntelligence.drivers)}
@@ -628,77 +620,103 @@ function renderResults(id, isShared) {
 
       ${assessmentChallenge ? renderAssessmentChallengeBlock(assessmentChallenge) : ''}
 
+      <details class="results-detail-disclosure" open>
+        <summary>Show core model outputs</summary>
+        <div class="results-detail-disclosure-copy">These are the main event and annual exposure outputs most teams review first.</div>
+        <div class="results-disclosure-stack">
+          <div class="grid-3 mb-6 anim-fade-in">
+            <div class="metric-card"><div class="metric-label">Typical event cost</div><div class="metric-value">${fmtCurrency(r.lm.p50)}</div><div class="metric-sub">Midpoint single-event view</div></div>
+            <div class="metric-card"><div class="metric-label">Severe event cost</div><div class="metric-value ${r.toleranceBreached ? 'danger' : ''}">${fmtCurrency(r.lm.p90)}</div><div class="metric-sub">Used for tolerance check</div></div>
+            <div class="metric-card"><div class="metric-label">Expected event cost</div><div class="metric-value">${fmtCurrency(r.lm.mean)}</div><div class="metric-sub">Average single-event loss</div></div>
+          </div>
+          <div class="grid-3 anim-fade-in anim-delay-1">
+            <div class="metric-card"><div class="metric-label">Typical annual exposure</div><div class="metric-value">${fmtCurrency(r.ale.p50)}</div><div class="metric-sub">Midpoint annual view</div></div>
+            <div class="metric-card"><div class="metric-label">Severe annual exposure</div><div class="metric-value warning">${fmtCurrency(r.ale.p90)}</div><div class="metric-sub">Annual severe-but-plausible view</div></div>
+            <div class="metric-card"><div class="metric-label">Expected annual exposure</div><div class="metric-value">${fmtCurrency(r.ale.mean)}</div><div class="metric-sub">Average annual loss</div></div>
+          </div>
+        </div>
+      </details>
+
+      ${(workflowGuidance.length || assessment.benchmarkBasis || assessment.inputRationale || assessment.evidenceSummary || assessment.confidenceLabel || assessment.inputProvenance?.length) ? `
+      <details class="results-detail-disclosure">
+        <summary>Show AI reasoning and evidence quality</summary>
+        <div class="results-detail-disclosure-copy">Use this when you need to review how the AI formed the inputs and how grounded those inputs were.</div>
+        <div class="results-disclosure-stack">
+          <div class="grid-2 anim-fade-in">
+            ${renderWorkflowGuidanceBlock(workflowGuidance, 'How AI guided this assessment')}
+            ${renderBenchmarkRationaleBlock(assessment.benchmarkBasis, assessment.inputRationale, assessment.benchmarkReferences)}
+            ${renderInputProvenanceBlock(assessment.inputProvenance)}
+          </div>
+          ${renderEvidenceQualityBlock(assessment.confidenceLabel, assessment.evidenceQuality, assessment.evidenceSummary, missingInformation, 'How grounded the AI inputs were', { primaryGrounding: primaryGrounding, supportingReferences: supportingReferences, inferredAssumptions: inferredAssumptions })}
+        </div>
+      </details>` : ''}
+
       ${renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, comparison)}
 
-      ${renderAssessmentAssumptionsBlock(assessmentIntelligence.assumptions)}
+      <details class="results-detail-disclosure">
+        <summary>Show scenario details, assumptions, and charts</summary>
+        <div class="results-detail-disclosure-copy">Use this for deeper validation, peer review, or committee-level challenge.</div>
+        <div class="results-disclosure-stack">
+          ${renderAssessmentAssumptionsBlock(assessmentIntelligence.assumptions)}
+          <div class="grid-2 anim-fade-in anim-delay-2">
+            <div class="chart-wrap">
+              <div class="chart-title">ALE Distribution</div>
+              <div class="chart-subtitle">Annual Loss Exposure · ${r.iterations.toLocaleString()} iterations · ${AppState.currency}</div>
+              <canvas id="chart-hist"></canvas>
+            </div>
+            <div class="chart-wrap">
+              <div class="chart-title">Loss Exceedance Curve</div>
+              <div class="chart-subtitle">P(Annual Loss &gt; x) · orange line = ${fmtCurrency(r.threshold)} threshold</div>
+              <canvas id="chart-lec"></canvas>
+            </div>
+          </div>
 
-      <div class="grid-3 mb-6 anim-fade-in">
-        <div class="metric-card"><div class="metric-label">Typical event cost</div><div class="metric-value">${fmtCurrency(r.lm.p50)}</div><div class="metric-sub">Midpoint single-event view</div></div>
-        <div class="metric-card"><div class="metric-label">Severe event cost</div><div class="metric-value ${r.toleranceBreached ? 'danger' : ''}">${fmtCurrency(r.lm.p90)}</div><div class="metric-sub">Used for tolerance check</div></div>
-        <div class="metric-card"><div class="metric-label">Expected event cost</div><div class="metric-value">${fmtCurrency(r.lm.mean)}</div><div class="metric-sub">Average single-event loss</div></div>
-      </div>
+          ${assessment.structuredScenario ? `
+          <div class="card anim-fade-in">
+            <h3 style="font-size:var(--text-base);margin-bottom:var(--sp-4)">Scenario details</h3>
+            <div class="grid-2">
+              ${Object.entries({
+                'Asset / Service': assessment.structuredScenario.assetService,
+                'Threat Community': assessment.structuredScenario.threatCommunity,
+                'Attack Type': assessment.structuredScenario.attackType,
+                'Effect': assessment.structuredScenario.effect
+              }).map(([k, v]) => `<div style="background:var(--bg-elevated);padding:var(--sp-3) var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${k}</div><div style="font-size:.85rem;color:var(--text-secondary);margin-top:4px">${v || '—'}</div></div>`).join('')}
+            </div>
+          </div>` : ''}
 
-      <div class="grid-3 mb-8 anim-fade-in anim-delay-1">
-        <div class="metric-card"><div class="metric-label">Typical annual exposure</div><div class="metric-value">${fmtCurrency(r.ale.p50)}</div><div class="metric-sub">Midpoint annual view</div></div>
-        <div class="metric-card"><div class="metric-label">Severe annual exposure</div><div class="metric-value warning">${fmtCurrency(r.ale.p90)}</div><div class="metric-sub">Annual severe-but-plausible view</div></div>
-        <div class="metric-card"><div class="metric-label">Expected annual exposure</div><div class="metric-value">${fmtCurrency(r.ale.mean)}</div><div class="metric-sub">Average annual loss</div></div>
-      </div>
-
-      <div class="grid-2 mb-8 anim-fade-in anim-delay-2">
-        <div class="chart-wrap">
-          <div class="chart-title">ALE Distribution</div>
-          <div class="chart-subtitle">Annual Loss Exposure · ${r.iterations.toLocaleString()} iterations · ${AppState.currency}</div>
-          <canvas id="chart-hist"></canvas>
+          <div class="card anim-fade-in">
+            <h3 style="font-size:var(--text-base);margin-bottom:var(--sp-4)">Simulation context</h3>
+            <div class="grid-3">
+              <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.7rem;text-transform:uppercase;color:var(--text-muted)">Event frequency</div><div style="font-size:.9rem;font-weight:600;margin-top:4px">${technicalInputs.tefMin ?? '—'}–${technicalInputs.tefLikely ?? '—'}–${technicalInputs.tefMax ?? '—'}</div><div style="font-size:.7rem;color:var(--text-muted)">events/year</div></div>
+              <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.7rem;text-transform:uppercase;color:var(--text-muted)">Threat capability</div><div style="font-size:.9rem;font-weight:600;margin-top:4px">${technicalInputs.threatCapMin ?? '—'}–${technicalInputs.threatCapLikely ?? '—'}–${technicalInputs.threatCapMax ?? '—'}</div><div style="font-size:.7rem;color:var(--text-muted)">0–1 scale</div></div>
+              <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.7rem;text-transform:uppercase;color:var(--text-muted)">Control strength</div><div style="font-size:.9rem;font-weight:600;margin-top:4px">${technicalInputs.controlStrMin ?? '—'}–${technicalInputs.controlStrLikely ?? '—'}–${technicalInputs.controlStrMax ?? '—'}</div><div style="font-size:.7rem;color:var(--text-muted)">0–1 scale</div></div>
+            </div>
+            <div class="mt-4" style="font-size:.78rem;color:var(--text-muted)">Iterations: <strong>${r.iterations.toLocaleString()}</strong> · Distribution: <strong>${r.distType || assessment.fairParams?.distType || 'triangular'}</strong> · Threshold: <strong>${fmtCurrency(r.threshold)}</strong></div>
+          </div>
         </div>
-        <div class="chart-wrap">
-          <div class="chart-title">Loss Exceedance Curve</div>
-          <div class="chart-subtitle">P(Annual Loss &gt; x) · orange line = ${fmtCurrency(r.threshold)} threshold</div>
-          <canvas id="chart-lec"></canvas>
-        </div>
-      </div>
+      </details>
 
-      ${assessment.structuredScenario ? `
-      <div class="card mb-6 anim-fade-in">
-        <h3 style="font-size:var(--text-base);margin-bottom:var(--sp-4)">Scenario Details</h3>
-        <div class="grid-2">
-          ${Object.entries({
-            'Asset / Service': assessment.structuredScenario.assetService,
-            'Threat Community': assessment.structuredScenario.threatCommunity,
-            'Attack Type': assessment.structuredScenario.attackType,
-            'Effect': assessment.structuredScenario.effect
-          }).map(([k, v]) => `<div style="background:var(--bg-elevated);padding:var(--sp-3) var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${k}</div><div style="font-size:.85rem;color:var(--text-secondary);margin-top:4px">${v || '—'}</div></div>`).join('')}
-        </div>
-      </div>` : ''}
-
-      <div class="card mb-6 anim-fade-in">
-        <h3 style="font-size:var(--text-base);margin-bottom:var(--sp-4)">Simulation context</h3>
-        <div class="grid-3">
-          <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.7rem;text-transform:uppercase;color:var(--text-muted)">Event frequency</div><div style="font-size:.9rem;font-weight:600;margin-top:4px">${technicalInputs.tefMin ?? '—'}–${technicalInputs.tefLikely ?? '—'}–${technicalInputs.tefMax ?? '—'}</div><div style="font-size:.7rem;color:var(--text-muted)">events/year</div></div>
-          <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.7rem;text-transform:uppercase;color:var(--text-muted)">Threat capability</div><div style="font-size:.9rem;font-weight:600;margin-top:4px">${technicalInputs.threatCapMin ?? '—'}–${technicalInputs.threatCapLikely ?? '—'}–${technicalInputs.threatCapMax ?? '—'}</div><div style="font-size:.7rem;color:var(--text-muted)">0–1 scale</div></div>
-          <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.7rem;text-transform:uppercase;color:var(--text-muted)">Control strength</div><div style="font-size:.9rem;font-weight:600;margin-top:4px">${technicalInputs.controlStrMin ?? '—'}–${technicalInputs.controlStrLikely ?? '—'}–${technicalInputs.controlStrMax ?? '—'}</div><div style="font-size:.7rem;color:var(--text-muted)">0–1 scale</div></div>
-        </div>
-        <div class="mt-4" style="font-size:.78rem;color:var(--text-muted)">Iterations: <strong>${r.iterations.toLocaleString()}</strong> · Distribution: <strong>${r.distType || assessment.fairParams?.distType || 'triangular'}</strong> · Threshold: <strong>${fmtCurrency(r.threshold)}</strong></div>
-      </div>
-
-      ${citations.length ? renderCitationBlock(citations) : ''}
+      ${citations.length ? `<details class="results-detail-disclosure"><summary>Show references used</summary><div class="results-disclosure-stack">${renderCitationBlock(citations)}</div></details>` : ''}
 
       ${recommendations.length ? `
-      <div class="mb-8 anim-fade-in">
-        <h3 style="font-size:var(--text-xl);margin-bottom:var(--sp-5)">Recommended Risk Treatments</h3>
-        <div style="display:flex;flex-direction:column;gap:var(--sp-4)">
-          ${recommendations.map((rec, i) => `
-            <div class="rec-card">
-              <div class="flex items-start gap-4">
-                <div class="rec-number">${i + 1}</div>
-                <div style="flex:1">
-                  <div class="rec-title">${rec.title}</div>
-                  <div class="rec-why">${rec.why}</div>
-                  <div class="rec-impact">↑ ${rec.impact}</div>
+      <details class="results-detail-disclosure">
+        <summary>Show all recommended risk treatments</summary>
+        <div class="results-disclosure-stack">
+          <div style="display:flex;flex-direction:column;gap:var(--sp-4)">
+            ${recommendations.map((rec, i) => `
+              <div class="rec-card">
+                <div class="flex items-start gap-4">
+                  <div class="rec-number">${i + 1}</div>
+                  <div style="flex:1">
+                    <div class="rec-title">${rec.title}</div>
+                    <div class="rec-why">${rec.why}</div>
+                    <div class="rec-impact">↑ ${rec.impact}</div>
+                  </div>
                 </div>
-              </div>
-            </div>`).join('')}
+              </div>`).join('')}
+          </div>
         </div>
-      </div>` : ''}
+      </details>` : ''}
     </section>`;
 
   setPage(`
