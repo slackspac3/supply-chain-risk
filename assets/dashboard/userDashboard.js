@@ -27,8 +27,6 @@ function renderUserDashboard() {
     .slice(0, 6);
   const recentAssessments = assessments.slice(0, 4);
   const latestAssessment = recentAssessments[0] || null;
-  const learningStore = getLearningStore();
-  const templateLoads = Object.values(learningStore.templates || {}).reduce((sum, item) => sum + Number(item.loads || 0), 0);
   const draftTitle = String(AppState.draft?.scenarioTitle || AppState.draft?.narrative || '').trim();
   const hasDraft = Boolean(draftTitle);
   const focusAreas = Array.isArray(profile.focusAreas) ? profile.focusAreas.filter(Boolean) : [];
@@ -51,23 +49,21 @@ function renderUserDashboard() {
       action: a.id
     }))
   ].slice(0, 4);
-  const dashboardPriorities = [
-    focusAreas.length
-      ? `Your saved focus areas are ${focusAreas.slice(0, 3).join(', ')}${focusAreas.length > 3 ? ', and related topics.' : '.'}`
-      : 'Add focus areas in Personal Settings so AI outputs reflect what matters most in your role.',
-    latestAssessment
-      ? `Your latest completed assessment is ${latestAssessment.scenarioTitle || 'an untitled scenario'} from ${new Date(latestAssessment.completedAt || latestAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.`
-      : 'You have not completed a risk assessment yet. Start one to establish a baseline view for your area.',
-    profile.workingContext
-      ? 'Your working context is saved and will be reused automatically in AI-assisted steps.'
-      : 'Your working context is still thin. Add a few lines in Personal Settings to improve the usefulness of generated outputs.'
-  ];
-
   const quickStatus = hasDraft
     ? 'You have a draft in progress and can resume it immediately.'
     : assessmentsNeedingReview.length
       ? 'You have completed assessments that need review.'
       : 'You are ready to start a new assessment.';
+
+
+  const workspaceSummary = [
+    profile.jobTitle || 'Role not yet set',
+    profile.businessUnit || user?.businessUnit || 'Business unit not yet set',
+    profile.department || user?.department || ''
+  ].filter(Boolean).join(' · ');
+  const guidanceSummary = focusAreas.length
+    ? `Focus areas: ${focusAreas.slice(0, 3).join(', ')}${focusAreas.length > 3 ? ', and more.' : '.'}`
+    : 'No focus areas saved yet.';
 
   setPage(`
     <main class="page">
@@ -149,20 +145,32 @@ function renderUserDashboard() {
                 `
               })).join('') : `<div class="empty-state">No completed assessments yet. Finished assessments will appear here with quick access to results and follow-up actions.</div>`
             })}
+
+            <details class="dashboard-disclosure card card--elevated dashboard-section-card">
+              <summary>Your settings and saved context <span class="badge badge--neutral">${focusAreas.length ? 'Ready' : 'Needs setup'}</span></summary>
+              <div class="dashboard-disclosure-copy">Reference information that shapes AI-assisted output and your default working context.</div>
+              <div class="dashboard-disclosure-body">
+                <div class="card card--elevated dashboard-context-card dashboard-context-card--nested">
+                  <div class="results-section-heading">Current profile</div>
+                  <div class="context-panel-copy" style="margin-top:10px">${workspaceSummary}</div>
+                  <div class="form-help" style="margin-top:12px">${guidanceSummary}</div>
+                  <div class="form-help" style="margin-top:8px">${profile.workingContext ? 'Working context is saved and will be reused in AI-assisted steps.' : 'Add working context in Personal Settings to improve AI-assisted outputs.'}</div>
+                  <div class="flex items-center gap-3 mt-5" style="flex-wrap:wrap">
+                    <button class="btn btn--secondary" id="btn-dashboard-settings-secondary">Open Settings</button>
+                  </div>
+                </div>
+              </div>
+            </details>
           </div>
 
           <div class="dashboard-column">
-            ${renderNonAdminHowToGuide(capability)}
-
-            <div class="card card--elevated dashboard-section-card dashboard-context-card">
-              <div class="results-section-heading">Saved context</div>
-              <div class="context-panel-copy" style="margin-top:10px">${profile.jobTitle || 'Role not yet set'} · ${profile.businessUnit || user?.businessUnit || 'Business unit not yet set'}${profile.department || user?.department ? ` · ${profile.department || user?.department}` : ''}</div>
-              <div class="form-help" style="margin-top:12px">${focusAreas.length ? `Focus areas: ${focusAreas.join(', ')}` : 'No focus areas saved yet.'}</div>
-              <div class="form-help" style="margin-top:8px">${profile.workingContext ? 'Working context is saved and will be reused in AI-assisted steps.' : 'Add working context in Personal Settings to improve AI-assisted outputs.'}</div>
-              <div class="flex items-center gap-3 mt-5" style="flex-wrap:wrap">
-                <button class="btn btn--secondary" id="btn-dashboard-settings-secondary">Open Settings</button>
+            <details class="dashboard-disclosure card card--elevated dashboard-section-card" open>
+              <summary>How to use this platform <span class="badge badge--neutral">${capability.roleSummary}</span></summary>
+              <div class="dashboard-disclosure-copy">Guidance matched to the access and responsibilities you currently have.</div>
+              <div class="dashboard-disclosure-body">
+                ${renderNonAdminHowToGuide(capability)}
               </div>
-            </div>
+            </details>
 
             <details class="dashboard-disclosure card card--elevated dashboard-section-card" ${archivedAssessments.length ? '' : ''}>
               <summary>Archived items <span class="badge badge--neutral">${archivedAssessments.length}</span></summary>

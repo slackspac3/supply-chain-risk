@@ -2008,6 +2008,8 @@ canvas { display: block; width: 100%; }
   gap: var(--sp-5);
 }
 .dashboard-section-card { padding: var(--sp-6); }
+.dashboard-context-card--nested { padding: var(--sp-5); background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015)); }
+.dashboard-disclosure[open] > summary { margin-bottom: var(--sp-3); }
 .dashboard-assessment-row {
   padding: var(--sp-5);
   background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
@@ -2052,6 +2054,10 @@ canvas { display: block; width: 100%; }
 }
 .results-hero-side { gap: var(--sp-5); }
 .results-executive-brief, .results-exec-metrics { gap: var(--sp-5); }
+.results-summary-grid--primary { margin-top: var(--sp-6); }
+.results-decision-card--compact { align-self: start; }
+.results-detail-disclosure-copy { margin-top: var(--sp-3); color: var(--text-muted); font-size: var(--text-sm); line-height: 1.65; }
+.results-disclosure-stack { display: flex; flex-direction: column; gap: var(--sp-5); margin-top: var(--sp-5); }
 
 /* ── Wizard Shell ──────────────────────────────────────────── */
 .wizard-layout {

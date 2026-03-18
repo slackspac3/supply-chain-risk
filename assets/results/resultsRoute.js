@@ -541,15 +541,6 @@ function renderResults(id, isShared) {
         </div>
       </div>
 
-      <details class="results-detail-disclosure">
-        <summary>Show deeper benchmark and threshold signals</summary>
-        <div class="results-visual-grid">
-          ${renderExecutiveThresholdTracks(thresholdModel)}
-          ${renderExecutiveSignalCard(r)}
-          ${renderExecutiveImpactMix(impactMix)}
-        </div>
-      </details>
-
       <div class="results-decision-grid">
         <div class="results-decision-card">
           <div class="results-section-heading">Recommended management decision</div>
@@ -572,7 +563,7 @@ function renderResults(id, isShared) {
             </div>
           </div>
         </div>
-        <div class="results-decision-card">
+        <div class="results-decision-card results-decision-card--compact">
           <div class="results-section-heading">Threshold position</div>
           <div class="results-threshold-stack">
             <div class="results-threshold-row"><span>Warning</span><strong>${fmtCurrency(r.warningThreshold || getWarningThreshold())}</strong></div>
@@ -586,15 +577,27 @@ function renderResults(id, isShared) {
         </div>
       </div>
 
-      <div class="results-summary-grid">
+      ${recommendationCards}
+
+      <div class="results-summary-grid results-summary-grid--primary">
         <div class="results-summary-card results-summary-card--wide">
           <div class="results-section-heading">What this scenario means in practice</div>
           <p class="results-summary-copy">${scenarioNarrative}</p>
         </div>
-        ${renderExecutiveDriversSummary(assessmentIntelligence.drivers, assessment)}
       </div>
 
-      ${recommendationCards}
+      <details class="results-detail-disclosure">
+        <summary>Show why the result looks this way</summary>
+        <div class="results-detail-disclosure-copy">Use this when you need the supporting reasoning, threshold context, and benchmark signals behind the headline view.</div>
+        <div class="results-disclosure-stack">
+          ${renderExecutiveDriversSummary(assessmentIntelligence.drivers, assessment)}
+          <div class="results-visual-grid">
+            ${renderExecutiveThresholdTracks(thresholdModel)}
+            ${renderExecutiveSignalCard(r)}
+            ${renderExecutiveImpactMix(impactMix)}
+          </div>
+        </div>
+      </details>
     </section>`;
 
   const technicalTab = `
