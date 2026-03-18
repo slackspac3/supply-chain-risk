@@ -525,6 +525,9 @@ async function runSimulation() {
 
 // ─── RESULTS ──────────────────────────────────────────────────
 function renderResults(id, isShared) {
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }));
+  }
   if (!isShared) {
     const shared = ShareService.parseShareFromURL();
     if (shared && shared.id === id && shared.results) {
