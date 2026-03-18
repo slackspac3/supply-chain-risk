@@ -2363,7 +2363,16 @@ canvas { display: block; width: 100%; }
 .results-detail-disclosure summary,
 .results-actions-disclosure summary {
   position: relative;
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: 28px;
   padding-right: 28px;
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
 }
 
 .wizard-disclosure summary::after,
@@ -2393,4 +2402,9 @@ canvas { display: block; width: 100%; }
   flex-direction: column;
   gap: var(--sp-4);
   margin-top: var(--sp-4);
+}
+
+.wizard-section-badge {
+  white-space: nowrap;
+  flex-shrink: 0;
 }

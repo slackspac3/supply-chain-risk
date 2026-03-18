@@ -12,22 +12,27 @@ function renderWizard2() {
           <div class="form-help" data-draft-save-state style="margin-top:10px">Draft will save automatically</div>
         </div>
         <div class="wizard-body">
-          ${UI.contextInfoGrid({
+          ${UI.disclosureSection({
             title: 'What to do on this step',
-            panels: [
-              UI.contextInfoPanel({
-                title: '1. Read the draft',
-                copy: 'Check that the scenario describes the event, the affected asset, the likely cause, and the impact you care about.'
-              }),
-              UI.contextInfoPanel({
-                title: '2. Improve if needed',
-                copy: 'Edit the wording in plain English. You do not need formal risk language.'
-              }),
-              UI.contextInfoPanel({
-                title: '3. Use AI assist if useful',
-                copy: 'AI assist will structure the scenario and prepare FAIR inputs for the next step.'
-              })
-            ]
+            badgeLabel: 'Optional guide',
+            badgeTone: 'neutral',
+            body: UI.contextInfoGrid({
+              panels: [
+                UI.contextInfoPanel({
+                  title: '1. Read the draft',
+                  copy: 'Check that the scenario describes the event, the affected asset, the likely cause, and the impact you care about.'
+                }),
+                UI.contextInfoPanel({
+                  title: '2. Improve if needed',
+                  copy: 'Edit the wording in plain English. You do not need formal risk language.'
+                }),
+                UI.contextInfoPanel({
+                  title: '3. Use AI assist if useful',
+                  copy: 'AI assist will structure the scenario and prepare FAIR inputs for the next step.'
+                })
+              ]
+            }),
+            open: false
           })}
           ${renderScenarioAssistSummaryBlock({
             workflowGuidance: draft.workflowGuidance,
@@ -39,17 +44,34 @@ function renderWizard2() {
             inputProvenance: draft.inputProvenance,
             citations: draft.citations
           })}
-          ${selectedRisks.length ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Selected Risks</div><div class="citation-chips">${selectedRisks.map(r => `<span class="badge badge--neutral">${r.title}</span>`).join('')}</div><div class="context-panel-foot">${draft.linkedRisks && selectedRisks.length > 1 ? 'Linked scenario uplift will be applied in the simulation.' : 'Risks will be assessed as a combined scenario without linked uplift.'}</div></div>` : ''}
-          ${draft.benchmarkBasis ? `<div class="card anim-fade-in"><div class="context-panel-title">Benchmark Approach</div><p class="context-panel-copy">${draft.benchmarkBasis}</p></div>` : ''}
-          <div class="card anim-fade-in">
-            <div class="form-group">
-              <label class="form-label" for="narrative">Risk Scenario Narrative <span class="required">*</span></label>
-              <textarea class="form-textarea" id="narrative" rows="5" placeholder="Describe the risk: What could happen? Who might cause it? What assets are at risk? What are the potential impacts?" style="min-height:160px">${draft.enhancedNarrative || draft.narrative || ''}</textarea>
-            </div>
-          </div>
-          <div class="card anim-fade-in anim-delay-1">
-            <div style="font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:var(--sp-4)">Optional Structured Fields</div>
-            <div class="grid-2">
+          ${selectedRisks.length ? UI.disclosureSection({
+            title: 'Selected risks in scope',
+            badgeLabel: 'Required',
+            badgeTone: 'gold',
+            open: true,
+            body: `<div class="citation-chips">${selectedRisks.map(r => `<span class="badge badge--neutral">${r.title}</span>`).join('')}</div><div class="context-panel-foot">${draft.linkedRisks && selectedRisks.length > 1 ? 'Linked scenario uplift will be applied in the simulation.' : 'Risks will be assessed as a combined scenario without linked uplift.'}</div>`
+          }) : ''}
+          ${draft.benchmarkBasis ? UI.disclosureSection({
+            title: 'Benchmark approach',
+            badgeLabel: 'Optional context',
+            badgeTone: 'neutral',
+            body: `<p class="context-panel-copy">${draft.benchmarkBasis}</p>`,
+            open: false
+          }) : ''}
+          ${UI.wizardInputSection({
+            title: 'Risk scenario narrative <span class="required">*</span>',
+            description: 'This is the main required input on this step. Keep the wording to one coherent assessment scope before you continue.',
+            className: 'card anim-fade-in',
+            headerExtras: UI.sectionStatusBadge('Required', 'gold'),
+            body: `<div class="form-group"><textarea class="form-textarea" id="narrative" rows="5" placeholder="Describe the risk: What could happen? Who might cause it? What assets are at risk? What are the potential impacts?" style="min-height:160px">${draft.enhancedNarrative || draft.narrative || ''}</textarea></div>`
+          })}
+          ${UI.disclosureSection({
+            title: 'Optional structured fields',
+            badgeLabel: 'Optional',
+            badgeTone: 'neutral',
+            open: false,
+            className: 'wizard-disclosure card anim-fade-in anim-delay-1',
+            body: `<div class="grid-2">
               <div class="form-group">
                 <label class="form-label" for="asset-service">Asset / Service</label>
                 <input class="form-input" id="asset-service" type="text" placeholder="e.g. Payment gateway" value="${draft.structuredScenario?.assetService||''}">
@@ -61,10 +83,17 @@ function renderWizard2() {
                   ${['Ransomware','Data Breach / Exfiltration','Phishing / BEC','Cloud Misconfiguration','Insider Threat','Supply Chain','DDoS','Zero-day Exploit'].map(t=>`<option value="${t}">${t}</option>`).join('')}
                 </select>
               </div>
+            </div>`
+          })}
+          <div class="card anim-fade-in anim-delay-2">
+            <div class="wizard-section-head">
+              <div class="wizard-section-copy">
+                <h3 class="wizard-section-title">AI assist</h3>
+                <p class="wizard-section-description">Use this only if you want the platform to structure the scenario and suggest starting FAIR inputs for the next step.</p>
+              </div>
+              ${UI.sectionStatusBadge('Optional', 'neutral')}
             </div>
-          </div>
-          <div class="anim-fade-in anim-delay-2">
-            <button class="btn btn--primary" id="btn-llm-assist" style="width:100%;justify-content:center;padding:14px">
+            <button class="btn btn--primary" id="btn-llm-assist" style="width:100%;justify-content:center;padding:14px;margin-top:var(--sp-4)">
               <span id="llm-btn-text">🤖 LLM Assist — Draft Scenario &amp; Suggest FAIR Inputs</span>
             </button>
             <p style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:8px">Retrieves relevant internal docs and uses AI to suggest FAIR inputs with citations.</p>

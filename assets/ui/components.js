@@ -189,6 +189,17 @@ const UI = (() => {
     </div>`;
   }
 
+  function sectionStatusBadge(label = 'Optional', tone = 'neutral') {
+    return `<span class="badge badge--${tone} wizard-section-badge">${label}</span>`;
+  }
+
+  function disclosureSection({ title, body, badgeLabel = 'Optional', badgeTone = 'neutral', open = false, className = 'wizard-disclosure card anim-fade-in', bodyClassName = 'wizard-disclosure-body' }) {
+    return `<details class="${className}" ${open ? 'open' : ''}>
+      <summary><span>${title}</span>${sectionStatusBadge(badgeLabel, badgeTone)}</summary>
+      <div class="${bodyClassName}">${body}</div>
+    </details>`;
+  }
+
 
   function contextInfoPanel({ title, copy, foot = '' }) {
     return `<div class="context-chip-panel">
@@ -515,5 +526,5 @@ const UI = (() => {
     return `${_getCurrencyPrefix(currency)}${displayValue.toLocaleString(currency === 'AED' ? 'en-AE' : 'en-US')}`;
   }
 
-  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, wizardInputSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC };
+  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, wizardInputSection, sectionStatusBadge, disclosureSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC };
 })();
