@@ -74,6 +74,8 @@ function renderWizard1() {
   const scenarioGeographies = getScenarioGeographies();
   const regs = deriveApplicableRegulations(buList.find(b => b.id === draft.buId), selectedRisks, scenarioGeographies);
   const recommendation = getStep1RecommendedAction(draft, selectedRisks);
+  const hasScenarioDraft = !!String(draft.narrative || draft.sourceNarrative || '').trim();
+  const hasImportedSource = !!String(draft.uploadedRegisterName || '').trim() || (riskCandidates || []).some(risk => risk.source === 'register' || risk.source === 'ai+register');
 
   setPage(`
     <main class="page">
@@ -175,41 +177,47 @@ function renderWizard1() {
             </div>
           </div>
 
-          <div class="card anim-fade-in anim-delay-1">
-            <div class="form-group">
-              <label class="form-label" for="intake-risk-statement">Scenario Draft</label>
-              <textarea class="form-textarea" id="intake-risk-statement" rows="6" placeholder="If you already know the scenario, describe it here in plain English. Include what could happen, what is affected, likely triggers, and the business or regulatory impact.">${draft.narrative || ''}</textarea>
+          <details class="wizard-disclosure anim-fade-in anim-delay-1" ${hasScenarioDraft ? 'open' : ''}>
+            <summary>Use your own scenario draft instead <span class="badge badge--neutral">Optional</span></summary>
+            <div class="wizard-disclosure-body">
+              <div class="form-help">Open this only if you already know the scenario and want to write or paste it yourself instead of relying on the guided builder.</div>
+              <div class="form-group">
+                <label class="form-label" for="intake-risk-statement">Scenario Draft</label>
+                <textarea class="form-textarea" id="intake-risk-statement" rows="6" placeholder="If you already know the scenario, describe it here in plain English. Include what could happen, what is affected, likely triggers, and the business or regulatory impact.">${draft.narrative || ''}</textarea>
+              </div>
+              <div class="flex items-center gap-3" style="flex-wrap:wrap">
+                <button class="btn btn--secondary" id="btn-enhance-risk-statement" type="button">Use AI to Refine This Draft</button>
+                <span class="form-help">Best when you already have a rough statement and want AI to sharpen it and suggest risks from it.</span>
+              </div>
             </div>
-            <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
-              <button class="btn btn--secondary" id="btn-enhance-risk-statement" type="button">Use AI to Refine This Draft</button>
-              <span class="form-help">Best when you already have a rough statement and want AI to sharpen it and suggest risks from it.</span>
-            </div>
-            <details class="wizard-disclosure" style="margin-top:var(--sp-5)">
-              <summary>Import from a risk register or add risks manually <span class="badge badge--neutral">Advanced</span></summary>
-              <div class="wizard-disclosure-body">
-                <div class="grid-2">
-                  <div class="form-group">
-                    <label class="form-label" for="risk-register-file">Risk Register Upload</label>
-                    <input class="form-input" id="risk-register-file" type="file" accept=".txt,.csv,.json,.md,.tsv,.xlsx,.xls">
-                    <div class="form-help">${draft.uploadedRegisterName ? `Current file: ${draft.uploadedRegisterName}${draft.registerMeta?.sheetCount ? ` · ${draft.registerMeta.sheetCount} sheet(s)` : ''}` : 'Upload TXT, CSV, TSV, JSON, Markdown, or Excel. Word and PDF still need conversion before upload.'}</div>
-                    <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
-                      <button class="btn btn--secondary" id="btn-register-analyse">Upload, Extract, Analyse &amp; Enhance Risks</button>
-                      <span class="form-help">Use this when the source material already exists in a register or spreadsheet.</span>
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="manual-risk-add">Add Risk Manually</label>
-                    <div class="inline-action-row">
-                      <input class="form-input" id="manual-risk-add" type="text" placeholder="e.g. Export control screening failure">
-                      <button class="btn btn--secondary" id="btn-add-manual-risk" type="button">Add</button>
-                    </div>
-                    <div class="form-help" style="margin-top:10px">Manual risks are added to the same candidate list and selected by default.</div>
+          </details>
+
+          <details class="wizard-disclosure anim-fade-in anim-delay-1" ${hasImportedSource ? 'open' : ''}>
+            <summary>Import from a risk register or add risks manually <span class="badge badge--neutral">Advanced</span></summary>
+            <div class="wizard-disclosure-body">
+              <div class="form-help">Use this only when your source material already exists in a register, spreadsheet, or known risk list.</div>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="form-label" for="risk-register-file">Risk Register Upload</label>
+                  <input class="form-input" id="risk-register-file" type="file" accept=".txt,.csv,.json,.md,.tsv,.xlsx,.xls">
+                  <div class="form-help">${draft.uploadedRegisterName ? `Current file: ${draft.uploadedRegisterName}${draft.registerMeta?.sheetCount ? ` · ${draft.registerMeta.sheetCount} sheet(s)` : ''}` : 'Upload TXT, CSV, TSV, JSON, Markdown, or Excel. Word and PDF still need conversion before upload.'}</div>
+                  <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
+                    <button class="btn btn--secondary" id="btn-register-analyse">Upload, Extract, Analyse &amp; Enhance Risks</button>
+                    <span class="form-help">AI will turn the uploaded material into candidate risks you can review and trim down.</span>
                   </div>
                 </div>
-                <p class="form-help mt-4">Uses runtime AI if a key has been set with <code>LLMService.setOpenAIKey(...)</code>. Otherwise the local extraction stub is used.</p>
+                <div class="form-group">
+                  <label class="form-label" for="manual-risk-add">Add Risk Manually</label>
+                  <div class="inline-action-row">
+                    <input class="form-input" id="manual-risk-add" type="text" placeholder="e.g. Export control screening failure">
+                    <button class="btn btn--secondary" id="btn-add-manual-risk" type="button">Add</button>
+                  </div>
+                  <div class="form-help" style="margin-top:10px">Manual risks are added to the same candidate list and selected by default.</div>
+                </div>
               </div>
-            </details>
-          </div>
+              <p class="form-help">Uses runtime AI if a key has been set with <code>LLMService.setOpenAIKey(...)</code>. Otherwise the local extraction stub is used.</p>
+            </div>
+          </details>
 
           <div id="intake-output">
             ${draft.intakeSummary ? `<div class="card card--glow anim-fade-in"><div class="context-panel-title">AI Intake Summary</div><p class="context-panel-copy">${draft.intakeSummary}</p>${draft.linkAnalysis ? `<div class="context-panel-foot">${draft.linkAnalysis}</div>` : ''}</div>` : ''}

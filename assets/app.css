@@ -2305,3 +2305,48 @@ canvas { display: block; width: 100%; }
   box-shadow: var(--shadow-lg);
   z-index: 10;
 }
+
+
+.wizard-disclosure {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: rgba(255,255,255,0.02);
+  padding: var(--sp-4) var(--sp-5);
+}
+
+.wizard-disclosure summary,
+.dashboard-disclosure summary,
+.results-detail-disclosure summary,
+.results-actions-disclosure summary {
+  position: relative;
+  padding-right: 28px;
+}
+
+.wizard-disclosure summary::after,
+.dashboard-disclosure summary::after,
+.results-detail-disclosure summary::after,
+.results-actions-disclosure summary::after {
+  content: '▾';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 180ms ease, color 180ms ease;
+}
+
+.wizard-disclosure[open] summary::after,
+.dashboard-disclosure[open] summary::after,
+.results-detail-disclosure[open] summary::after,
+.results-actions-disclosure[open] summary::after {
+  transform: translateY(-50%) rotate(180deg);
+  color: var(--text-primary);
+}
+
+.wizard-disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+}
