@@ -54,6 +54,26 @@ function renderStep1StartCard(recommendation) {
   </div>`;
 }
 
+
+function seedRisksFromScenarioDraft(narrative, { force = false } = {}) {
+  const draftText = String(narrative || '').trim();
+  if (!draftText) return 0;
+  const existingCandidates = getRiskCandidates();
+  const selectedRisks = getSelectedRisks();
+  if (!force && (selectedRisks.length || existingCandidates.length)) return 0;
+  const extractedRisks = guessRisksFromText(draftText)
+    .filter(risk => !isNoiseRiskText(risk.title))
+    .map(risk => ({
+      ...risk,
+      source: risk.source || 'scenario-draft',
+      description: risk.description || 'Generated from the current scenario draft to give you a clear shortlist for the next step.'
+    }));
+  if (!extractedRisks.length) return 0;
+  appendRiskCandidates(extractedRisks, { selectNew: true });
+  if (!AppState.draft.scenarioTitle && getSelectedRisks()[0]) AppState.draft.scenarioTitle = getSelectedRisks()[0].title;
+  return extractedRisks.length;
+}
+
 function renderWizard1() {
   ensureDraftShape();
   const draft = AppState.draft;
@@ -187,7 +207,8 @@ function renderWizard1() {
               </div>
               <div class="flex items-center gap-3" style="flex-wrap:wrap">
                 <button class="btn btn--secondary" id="btn-enhance-risk-statement" type="button">Use AI to Refine This Draft</button>
-                <span class="form-help">Best when you already have a rough statement and want AI to sharpen it and suggest risks from it.</span>
+                <button class="btn btn--ghost" id="btn-generate-risks-from-draft" type="button">Generate Risks From This Draft</button>
+                <span class="form-help">Use AI when you want drafting help. Use the generate button when you just want a shortlist to carry into the next step.</span>
               </div>
             </div>
           </details>
@@ -298,8 +319,10 @@ function renderWizard1() {
     AppState.draft.narrative = composed;
     AppState.draft.sourceNarrative = composed;
     document.getElementById('intake-risk-statement').value = composed;
+    const seededCount = seedRisksFromScenarioDraft(composed, { force: !getRiskCandidates().length });
     saveDraft();
-    UI.toast('Scenario draft created from guided answers.', 'success');
+    renderWizard1();
+    UI.toast(seededCount ? `Scenario draft created and ${seededCount} risk${seededCount === 1 ? '' : 's'} added to the shortlist.` : 'Scenario draft created from guided answers.', 'success');
   });
   document.querySelectorAll('.guided-prompt-chip').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -328,11 +351,24 @@ function renderWizard1() {
   });
   document.getElementById('risk-register-file').addEventListener('change', handleRegisterUpload);
   document.getElementById('btn-enhance-risk-statement').addEventListener('click', enhanceNarrativeWithAI);
+  document.getElementById('btn-generate-risks-from-draft')?.addEventListener('click', () => {
+    const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
+    if (!narrative) {
+      UI.toast('Enter or build a scenario draft first.', 'warning');
+      return;
+    }
+    const seededCount = seedRisksFromScenarioDraft(narrative, { force: true });
+    AppState.draft.narrative = narrative;
+    AppState.draft.sourceNarrative = AppState.draft.sourceNarrative || narrative;
+    saveDraft();
+    renderWizard1();
+    UI.toast(seededCount ? `Added ${seededCount} risk${seededCount === 1 ? '' : 's'} from the scenario draft.` : 'No additional risks were generated from that draft.', seededCount ? 'success' : 'warning');
+  });
   document.getElementById('btn-register-analyse').addEventListener('click', analyseUploadedRegister);
   document.getElementById('btn-next-1').addEventListener('click', () => {
     const buId = document.getElementById('wizard-bu').value;
-    const narrative = document.getElementById('intake-risk-statement').value.trim();
-    const selected = getSelectedRisks();
+    let narrative = document.getElementById('intake-risk-statement').value.trim();
+    let selected = getSelectedRisks();
     if (!buId) { UI.toast('Please select a business unit.', 'warning'); return; }
     if (!narrative) {
       const composed = composeGuidedNarrative(AppState.draft.guidedInput);
@@ -340,9 +376,14 @@ function renderWizard1() {
         AppState.draft.narrative = composed;
         AppState.draft.sourceNarrative = composed;
         document.getElementById('intake-risk-statement').value = composed;
+        narrative = composed;
       }
     }
-    if (!AppState.draft.narrative.trim() && !selected.length) { UI.toast('Please complete the guided questions, enter a risk statement, or select at least one risk.', 'warning'); return; }
+    if (narrative && !selected.length && !getRiskCandidates().length) {
+      seedRisksFromScenarioDraft(narrative, { force: true });
+      selected = getSelectedRisks();
+    }
+    if (!String(AppState.draft.narrative || narrative || '').trim() && !selected.length) { UI.toast('Please complete the guided questions, enter a risk statement, or select at least one risk.', 'warning'); return; }
     AppState.draft.geographies = normaliseScenarioGeographies(wizardGeographyInput.getTags(), settings.geography);
     AppState.draft.geography = formatScenarioGeographies(AppState.draft.geographies, settings.geography);
     AppState.draft.narrative = AppState.draft.narrative.trim();
@@ -468,7 +509,8 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
   const cleanedRisks = (riskCandidates || []).filter(risk => !isNoiseRiskText(risk.title) && risk.title !== '-');
   const selectedIds = new Set((selectedRisks || []).map(risk => risk.id));
   if (!cleanedRisks.length) {
-    return `<div class="empty-state">No candidate risks yet. Start with the guided builder, refine a scenario draft with AI, or import a register to build your shortlist.</div>`;
+    const hasDraft = !!String(AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || '').trim();
+    return `<div class="empty-state"><div>No candidate risks yet. Start with the guided builder, refine a scenario draft with AI, or import a register to build your shortlist.</div>${hasDraft ? `<div style="margin-top:var(--sp-4)"><button class="btn btn--secondary" id="btn-generate-risks-empty-state" type="button">Generate Risks From Current Draft</button></div>` : ''}</div>`;
   }
   const linkedRecommendations = getLinkedRiskRecommendations(selectedRisks || []);
   const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeGuidedNarrative(AppState.draft.guidedInput) || '';
@@ -499,6 +541,13 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
 }
 
 function bindRiskCardActions() {
+  document.getElementById('btn-generate-risks-empty-state')?.addEventListener('click', () => {
+    const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeGuidedNarrative(AppState.draft.guidedInput) || '';
+    const seededCount = seedRisksFromScenarioDraft(narrative, { force: true });
+    saveDraft();
+    renderWizard1();
+    UI.toast(seededCount ? `Added ${seededCount} risk${seededCount === 1 ? '' : 's'} from the current draft.` : 'No additional risks were generated from that draft.', seededCount ? 'success' : 'warning');
+  });
   document.querySelectorAll('.risk-select-checkbox').forEach(box => {
     box.addEventListener('change', () => {
       const selectedIds = new Set(Array.isArray(AppState.draft.selectedRiskIds) ? AppState.draft.selectedRiskIds : []);
