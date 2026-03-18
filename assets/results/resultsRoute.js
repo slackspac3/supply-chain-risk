@@ -76,6 +76,65 @@ function renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, e
   </div>`;
 }
 
+
+function renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, confidence, rolePresentation) {
+  const confidenceValue = confidence?.label || 'Moderate confidence';
+  const confidenceCopy = confidence?.summary || 'Use this result as a management starting point, then challenge the biggest assumptions.';
+  return `<div class="results-executive-brief">
+    ${UI.resultsBriefCard({ label: 'Current position', value: statusTitle, copy: statusDetail })}
+    ${UI.resultsBriefCard({ label: 'Recommended action', value: executiveDecision?.decision || 'Review', copy: executiveAction || executiveDecision?.priority || '' })}
+    ${UI.resultsBriefCard({ label: 'Confidence', value: confidenceValue, copy: confidenceCopy })}
+    ${UI.resultsBriefCard({ label: 'Role focus', value: rolePresentation.executiveNoteTitle, copy: rolePresentation.executiveNote })}
+  </div>`;
+}
+
+function buildResultsActionBuckets(recommendations, executiveAction, missingInformation) {
+  const doNow = recommendations?.[0]?.title || executiveAction || 'Confirm the immediate management response for this scenario.';
+  const validateNext = missingInformation?.[0] || recommendations?.[1]?.why || 'Challenge the main assumption driving the current result.';
+  const monitor = recommendations?.[2]?.title || 'Watch for changes in threat conditions, controls, or business dependence.';
+  return { doNow, validateNext, monitor };
+}
+
+function renderResultsActionBlock(recommendations, executiveAction, missingInformation) {
+  const actions = buildResultsActionBuckets(recommendations, executiveAction, missingInformation);
+  return `<section class="results-section-stack">
+    <div class="results-section-heading">What to do next</div>
+    <div class="results-recommendations-grid">
+      <div class="results-priority-card"><div><div class="results-priority-title">Do now</div><div class="results-priority-copy">${actions.doNow}</div></div></div>
+      <div class="results-priority-card"><div><div class="results-priority-title">Validate next</div><div class="results-priority-copy">${actions.validateNext}</div></div></div>
+      <div class="results-priority-card"><div><div class="results-priority-title">Monitor over time</div><div class="results-priority-copy">${actions.monitor}</div></div></div>
+    </div>
+  </section>`;
+}
+
+function renderResultsConfidenceNeedsBlock(confidence, evidenceQuality, missingInformation = [], citations = []) {
+  const topGap = missingInformation[0] || 'No major evidence gap has been recorded yet.';
+  return `<section class="results-section-stack">
+    <div class="results-section-heading">Confidence and evidence needs</div>
+    <div class="results-summary-grid results-summary-grid--primary">
+      <div class="results-summary-card"><div class="results-driver-label">Confidence level</div><p class="results-summary-copy"><strong>${confidence?.label || 'Moderate confidence'}</strong></p><div class="results-comparison-foot">${confidence?.summary || 'Use this as a working decision view, then challenge the largest assumptions.'}</div></div>
+      <div class="results-summary-card"><div class="results-driver-label">Evidence quality</div><p class="results-summary-copy"><strong>${evidenceQuality || 'Useful but incomplete evidence base'}</strong></p><div class="results-comparison-foot">${citations.length} supporting reference${citations.length === 1 ? '' : 's'} attached</div></div>
+      <div class="results-summary-card results-summary-card--wide"><div class="results-driver-label">Best next evidence to collect</div><p class="results-summary-copy">${topGap}</p></div>
+    </div>
+  </section>`;
+}
+
+function renderResultsComparisonHighlight(comparison) {
+  if (!comparison) return '';
+  return `<section class="results-section-stack">
+    <div class="results-section-heading">What changed versus the baseline</div>
+    <div class="results-comparison-card">
+      <div class="results-comparison-banner"><strong>Baseline:</strong> ${comparison.baselineTitle} · ${comparison.baselineDate}</div>
+      <p class="results-summary-copy" style="margin-top:var(--sp-3)">${comparison.summary}</p>
+      <div class="results-comparison-grid">
+        <div class="results-comparison-metric ${comparison.severeEvent.direction}"><div class="results-impact-label">Severe single event</div><div class="results-comparison-value">${comparison.severeEvent.formatted}</div><div class="results-comparison-foot">${comparison.statusShift}</div></div>
+        <div class="results-comparison-metric ${comparison.annualExposure.direction}"><div class="results-impact-label">Expected annual exposure</div><div class="results-comparison-value">${comparison.annualExposure.formatted}</div><div class="results-comparison-foot">Average-year delta</div></div>
+        <div class="results-comparison-metric ${comparison.severeAnnual.direction}"><div class="results-impact-label">Severe annual exposure</div><div class="results-comparison-value">${comparison.severeAnnual.formatted}</div><div class="results-comparison-foot">${comparison.keyDriver}</div></div>
+      </div>
+    </div>
+  </section>`;
+}
+
 function buildAssessmentComparison(currentAssessment, baselineAssessment) {
   if (!currentAssessment?.results || !baselineAssessment?.results) return null;
 
@@ -562,21 +621,9 @@ function renderResults(id, isShared) {
   const activeComparisonId = AppState.resultsComparisonId || assessment.comparisonBaselineId || '';
   const baselineAssessment = activeComparisonId ? getAssessmentById(activeComparisonId) : null;
   const comparison = baselineAssessment ? buildAssessmentComparison(assessment, baselineAssessment) : null;
-  const recommendationCards = recommendations.length ? `
-    <section class="results-section-stack">
-      <div class="results-section-heading">Priority actions</div>
-      <div class="results-recommendations-grid">
-        ${recommendations.slice(0, 3).map((rec, idx) => `
-          <div class="results-priority-card">
-            <div class="results-priority-index">${idx + 1}</div>
-            <div>
-              <div class="results-priority-title">${rec.title}</div>
-              <div class="results-priority-copy">${rec.why}</div>
-              <div class="results-priority-impact">${rec.impact}</div>
-            </div>
-          </div>`).join('')}
-      </div>
-    </section>` : '';
+  const recommendationCards = renderResultsActionBlock(recommendations, executiveAction, missingInformation);
+  const confidenceNeedsBlock = renderResultsConfidenceNeedsBlock(assessmentIntelligence.confidence, assessment.evidenceQuality, missingInformation, citations);
+  const comparisonHighlight = renderResultsComparisonHighlight(comparison);
 
   const executiveTab = `
     <section class="results-executive-view" id="results-tab-executive">
@@ -600,14 +647,7 @@ function renderResults(id, isShared) {
         </div>
       </div>
 
-      ${renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView)}
-
-      <div class="results-summary-grid results-summary-grid--primary">
-        <div class="results-summary-card results-summary-card--wide">
-          <div class="results-section-heading">${rolePresentation.executiveNoteTitle}</div>
-          <p class="results-summary-copy">${rolePresentation.executiveNote}</p>
-        </div>
-      </div>
+      ${renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, assessmentIntelligence.confidence, rolePresentation)}
 
       <div class="results-exec-metrics">
         <div class="results-impact-card">
@@ -635,18 +675,8 @@ function renderResults(id, isShared) {
             <span class="badge ${r.toleranceBreached ? 'badge--danger' : r.nearTolerance ? 'badge--warning' : 'badge--success'}">${statusTitle}</span>
           </div>
           <div class="results-decision-points">
-            <div class="results-decision-point">
-              <span class="results-decision-label">Why now</span>
-              <div class="results-decision-copy">${executiveDecision.rationale}</div>
-            </div>
-            <div class="results-decision-point">
-              <span class="results-decision-label">What should happen now</span>
-              <div class="results-decision-copy">${executiveAction}</div>
-            </div>
-            <div class="results-decision-point">
-              <span class="results-decision-label">Main priority</span>
-              <div class="results-decision-copy">${executiveDecision.priority}</div>
-            </div>
+            <div class="results-decision-point"><span class="results-decision-label">Why this matters</span><div class="results-decision-copy">${executiveDecision.rationale}</div></div>
+            <div class="results-decision-point"><span class="results-decision-label">Main management priority</span><div class="results-decision-copy">${executiveDecision.priority}</div></div>
           </div>
         </div>
         <div class="results-decision-card results-decision-card--compact">
@@ -656,14 +686,13 @@ function renderResults(id, isShared) {
             <div class="results-threshold-row"><span>Tolerance</span><strong>${fmtCurrency(r.threshold)}</strong></div>
             <div class="results-threshold-row"><span>Annual review</span><strong>${fmtCurrency(r.annualReviewThreshold || getAnnualReviewThreshold())}</strong></div>
           </div>
-          <div class="results-decision-row">
-            <span class="results-decision-label">Current position</span>
-            <div class="results-decision-copy">${executiveAnnualView}</div>
-          </div>
+          <div class="results-decision-row"><span class="results-decision-label">Current position</span><div class="results-decision-copy">${executiveAnnualView}</div></div>
         </div>
       </div>
 
       ${recommendationCards}
+      ${confidenceNeedsBlock}
+      ${comparisonHighlight}
 
       <div class="results-summary-grid results-summary-grid--primary">
         <div class="results-summary-card results-summary-card--wide">
@@ -674,14 +703,14 @@ function renderResults(id, isShared) {
 
       <details class="results-detail-disclosure">
         <summary>Show why the result looks this way</summary>
-        <div class="results-detail-disclosure-copy">Use this when you need the supporting reasoning, threshold context, and benchmark signals behind the headline view.</div>
+        <div class="results-detail-disclosure-copy">Use this when you need the drivers, benchmark logic, and supporting signals behind the headline view.</div>
         <div class="results-disclosure-stack">
           ${renderExecutiveDriversSummary(assessmentIntelligence.drivers, assessment)}
           <div class="results-visual-grid">
-            ${renderExecutiveThresholdTracks(thresholdModel)}
-            ${renderExecutiveSignalCard(r)}
             ${renderExecutiveImpactMix(impactMix)}
+            ${renderExecutiveThresholdTracks(thresholdModel)}
           </div>
+          ${renderExecutiveSignalCard(r)}
         </div>
       </details>
     </section>`;
@@ -695,10 +724,14 @@ function renderResults(id, isShared) {
         </div>
       </div>
 
+      ${confidenceNeedsBlock}
+
       <div class="results-decision-grid mb-6 anim-fade-in">
         ${renderAssessmentConfidenceBlock(assessmentIntelligence.confidence)}
         ${renderAssessmentDriversBlock(assessmentIntelligence.drivers)}
       </div>
+
+      ${comparisonHighlight}
 
       <div class="card mb-6 anim-fade-in">
         <div class="flex items-center justify-between" style="gap:var(--sp-4);flex-wrap:wrap">
@@ -744,10 +777,9 @@ function renderResults(id, isShared) {
         </div>
       </details>` : ''}
 
-      ${renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, comparison)}
 
       <details class="results-detail-disclosure">
-        <summary>Show scenario details, assumptions, and charts</summary>
+        <summary>Show deeper model detail and charts</summary>
         <div class="results-detail-disclosure-copy">Use this for deeper validation, peer review, or committee-level challenge.</div>
         <div class="results-disclosure-stack">
           ${renderAssessmentAssumptionsBlock(assessmentIntelligence.assumptions)}
@@ -789,11 +821,11 @@ function renderResults(id, isShared) {
         </div>
       </details>
 
-      ${citations.length ? `<details class="results-detail-disclosure"><summary>Show references used</summary><div class="results-disclosure-stack">${renderCitationBlock(citations)}</div></details>` : ''}
+      ${citations.length ? `<details class="results-detail-disclosure"><summary>Show key references used</summary><div class="results-disclosure-stack">${renderCitationBlock(citations)}</div></details>` : ''}
 
       ${recommendations.length ? `
       <details class="results-detail-disclosure">
-        <summary>Show all recommended risk treatments</summary>
+        <summary>Show full treatment list</summary>
         <div class="results-disclosure-stack">
           <div style="display:flex;flex-direction:column;gap:var(--sp-4)">
             ${recommendations.map((rec, i) => `

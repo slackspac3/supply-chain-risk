@@ -298,6 +298,7 @@ test('wizard step 1 clear all keeps manually added risks unselected after rerend
   });
 
   await expectNoClientCrashOnRoute(page, '/#/wizard/1', async () => {
+    await page.locator('details').filter({ hasText: 'Import from a risk register or add risks manually' }).evaluate(node => { node.open = true; });
     const manualInput = page.getByRole('textbox', { name: 'Add Risk Manually' });
     await manualInput.fill('Cloud storage exposure');
     await page.getByRole('button', { name: /^Add$/ }).click();
