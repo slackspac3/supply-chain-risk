@@ -396,8 +396,8 @@ function renderWizard3() {
   document.getElementById('mode-basic')?.addEventListener('click', () => { AppState.mode='basic'; renderWizard3(); });
   document.getElementById('mode-advanced')?.addEventListener('click', () => { AppState.mode='advanced'; renderWizard3(); });
   updateWizardSaveState();
-  document.getElementById('secondary-toggle').addEventListener('change', function() {
-    document.getElementById('secondary-inputs').classList.toggle('hidden', !this.checked);
+  document.getElementById('secondary-toggle')?.addEventListener('change', function() {
+    document.getElementById('secondary-inputs')?.classList.toggle('hidden', !this.checked);
     AppState.draft.fairParams.secondaryEnabled = this.checked;
     markDraftDirty();
     scheduleDraftAutosave();
