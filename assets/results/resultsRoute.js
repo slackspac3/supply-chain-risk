@@ -407,7 +407,7 @@ function renderResults(id, isShared) {
   }
   const assessment = getAssessmentById(id);
   if (!assessment || !assessment.results) {
-    setPage(`<div class="container" style="padding:var(--sp-12)"><h2>Assessment not found</h2><p style="margin-top:var(--sp-4);color:var(--text-muted)">ID "${id}" not found in local storage.</p><a href="#/" class="btn btn--primary" style="margin-top:var(--sp-6)">← Home</a></div>`);
+    setPage(`<div class="container" style="padding:var(--sp-12)"><h2>Assessment not found</h2><p style="margin-top:var(--sp-4);color:var(--text-muted)">ID "${id}" not found in local storage.</p><a href="#/dashboard" class="btn btn--primary" style="margin-top:var(--sp-6)">← Dashboard</a></div>`);
     return;
   }
 
@@ -840,7 +840,7 @@ function renderResults(id, isShared) {
         ${technicalTab}
 
         <div class="flex items-center gap-4 mt-8 pt-6" style="border-top:1px solid var(--border-subtle)">
-          <a href="#/" class="btn btn--ghost">← Home</a>
+          <a href="#/dashboard" class="btn btn--ghost">← Dashboard</a>
           <button class="btn btn--secondary" id="btn-new-assess">New Assessment</button>
           <div class="bar-spacer"></div>
           <span style="font-size:.72rem;color:var(--text-muted)">ID: ${assessment.id} · ${r.iterations.toLocaleString()} iterations</span>
@@ -921,7 +921,7 @@ function renderResults(id, isShared) {
             <h2 style="margin-bottom:var(--sp-3)">This result could not be opened cleanly</h2>
             <p style="color:var(--text-muted);margin-bottom:var(--sp-5)">The saved assessment data is missing something the results page expected. The assessment is still stored, but this view needed a safer fallback.${error?.message ? ' Error: ' + String(error.message) : ''}</p>
             <div class="flex items-center gap-3" style="flex-wrap:wrap">
-              <a href="#/" class="btn btn--primary">Go to dashboard</a>
+              <a href="#/dashboard" class="btn btn--primary">Go to dashboard</a>
               <button class="btn btn--secondary" id="btn-results-retry" type="button">Try again</button>
             </div>
           </div>

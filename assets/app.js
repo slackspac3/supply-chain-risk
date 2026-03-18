@@ -5025,7 +5025,13 @@ async function init() {
 
   Router
     .on('/login', renderLogin)
-    .on('/', withAuth(renderLanding))
+    .on('/', () => {
+      if (!AuthService.isAuthenticated()) {
+        Router.navigate('/login');
+        return;
+      }
+      Router.navigate('/dashboard');
+    })
     .on('/dashboard', renderUserDashboard)
     .on('/wizard/1', withAuth(renderWizard1))
     .on('/wizard/2', withAuth(renderWizard2))
@@ -5048,7 +5054,7 @@ async function init() {
         Router.navigate('/login');
         return;
       }
-      setPage(`<div class="container" style="padding:var(--sp-12)"><h2>Page Not Found</h2><a href="#/" class="btn btn--primary" style="margin-top:var(--sp-4)">← Home</a></div>`);
+      setPage(`<div class="container" style="padding:var(--sp-12)"><h2>Page Not Found</h2><a href="#/dashboard" class="btn btn--primary" style="margin-top:var(--sp-4)">← Dashboard</a></div>`);
     });
 
   Router.init();
