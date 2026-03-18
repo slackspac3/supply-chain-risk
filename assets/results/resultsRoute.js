@@ -418,6 +418,95 @@ function renderResults(id, isShared) {
       <span class="banner-text"><strong>Shared view.</strong> This assessment was shared with you. <a href="#/" style="color:var(--color-accent-300)">Start your own →</a></span>
     </div>` : '';
 
+  const currentUser = AuthService.getCurrentUser();
+  const capability = (!isShared && currentUser && currentUser.role !== 'admin')
+    ? getNonAdminCapabilityState(currentUser, getUserSettings(), getAdminSettings())
+    : null;
+  const roleMode = capability?.canManageBusinessUnit && capability?.canManageDepartment
+    ? 'bu_and_function'
+    : capability?.canManageBusinessUnit
+      ? 'bu_admin'
+      : capability?.canManageDepartment
+        ? 'function_admin'
+        : 'standard_user';
+  const rolePresentation = {
+    standard_user: {
+      executiveHeadline: r => r.toleranceBreached
+        ? 'This result needs attention now and should be reviewed with the person who owns the response.'
+        : r.nearTolerance
+          ? 'This result is close to tolerance and should be reviewed before it worsens.'
+          : 'This result is within tolerance today, so the main task is to monitor and revisit it if conditions change.',
+      executiveAction: r => r.toleranceBreached
+        ? 'Review the result with your manager or risk owner and confirm the next response step.'
+        : r.nearTolerance
+          ? 'Check the main assumptions and agree the next improvement step with the owner of this area.'
+          : 'Keep monitoring the scenario and update it when the threat, scope, or controls change.',
+      annualView: r => r.annualReviewTriggered ? 'Annual review is worth scheduling.' : 'No annual review trigger is currently indicated.',
+      executiveNoteTitle: 'What this means for you',
+      executiveNote: 'Use the executive summary first. Open deeper detail only if you need to challenge the assumptions or explain the result to someone else.',
+      technicalNoteTitle: 'How to use the technical view',
+      technicalNote: 'Use this tab only when you need to understand the ranges, evidence, or model assumptions in more detail.',
+      coreSummary: 'Show core numbers',
+      aiSummary: 'Show how AI built this result'
+    },
+    function_admin: {
+      executiveHeadline: r => r.toleranceBreached
+        ? 'This function-level scenario is above tolerance and needs action from the function owner now.'
+        : r.nearTolerance
+          ? 'This function-level scenario is close to tolerance and should be actively managed.'
+          : 'This function-level scenario is within tolerance, but the owned function context should stay current.',
+      executiveAction: r => r.toleranceBreached
+        ? 'Confirm the immediate function-level response, owner, and control actions for this scenario.'
+        : r.nearTolerance
+          ? 'Review the main drivers for your function and agree a targeted reduction action.'
+          : 'Keep the function context and assumptions current so future assessments stay grounded.',
+      annualView: r => r.annualReviewTriggered ? 'A function-level annual review is warranted.' : 'No annual function review trigger is currently indicated.',
+      executiveNoteTitle: 'What this means for your function',
+      executiveNote: 'Focus first on what this result means for the function or department you own, then open deeper detail only when you need to validate the assumptions.',
+      technicalNoteTitle: 'Function review view',
+      technicalNote: 'Use this tab to validate drivers, assumptions, and evidence that affect the function context you own.',
+      coreSummary: 'Show core function outputs',
+      aiSummary: 'Show AI reasoning for this function result'
+    },
+    bu_admin: {
+      executiveHeadline: r => r.toleranceBreached
+        ? 'This business-unit scenario is above tolerance and needs management action now.'
+        : r.nearTolerance
+          ? 'This business-unit scenario is close to tolerance and should be managed before it escalates.'
+          : 'This business-unit scenario is within tolerance, but should stay under active review.',
+      executiveAction: r => r.toleranceBreached
+        ? 'Confirm the BU owner, escalation path, and immediate treatment actions for this scenario.'
+        : r.nearTolerance
+          ? 'Review the main drivers across the business unit and agree a targeted management response.'
+          : 'Keep the BU context aligned and review again if conditions change materially.',
+      annualView: r => r.annualReviewTriggered ? 'A business-unit annual review is warranted.' : 'No business-unit annual review trigger is currently indicated.',
+      executiveNoteTitle: 'What this means for the business unit',
+      executiveNote: 'Use this view to decide whether the business unit needs review, escalation, or updated context before more work starts.',
+      technicalNoteTitle: 'Business unit review view',
+      technicalNote: 'Use this tab for management review, challenge, and comparison across scenarios in the business unit.',
+      coreSummary: 'Show core business-unit outputs',
+      aiSummary: 'Show AI reasoning for this BU result'
+    },
+    bu_and_function: {
+      executiveHeadline: r => r.toleranceBreached
+        ? 'This scenario is above tolerance and needs both business-unit oversight and function-level action now.'
+        : r.nearTolerance
+          ? 'This scenario is close to tolerance and should be managed across the business unit and the owned function.'
+          : 'This scenario is within tolerance, but both the BU and function context should stay aligned.',
+      executiveAction: r => r.toleranceBreached
+        ? 'Confirm the BU-level decision, then agree the immediate function-level response and control actions.'
+        : r.nearTolerance
+          ? 'Review the main drivers from both the BU and function perspective and agree the next action.'
+          : 'Keep both the BU and function context current so new assessments stay aligned.',
+      annualView: r => r.annualReviewTriggered ? 'A BU and function-level annual review is warranted.' : 'No annual review trigger is currently indicated for the BU or owned function.',
+      executiveNoteTitle: 'What this means across your role',
+      executiveNote: 'Use this view first for the BU-level decision, then check whether the owned function needs a more direct follow-up action.',
+      technicalNoteTitle: 'Oversight and execution view',
+      technicalNote: 'Use this tab when you need to challenge the assumptions from both the management and owned-function perspective.',
+      coreSummary: 'Show core oversight outputs',
+      aiSummary: 'Show AI reasoning and evidence'
+    }
+  }[roleMode];
   const rawResults = assessment.results || {};
   const r = {
     ...rawResults,
@@ -440,19 +529,9 @@ function renderResults(id, isShared) {
     : r.nearTolerance
       ? `Per-event P90 ${fmtCurrency(r.lm.p90)} is above the warning trigger of ${fmtCurrency(r.warningThreshold)} but still below tolerance.`
       : `Per-event P90 ${fmtCurrency(r.lm.p90)} remains below the warning trigger of ${fmtCurrency(r.warningThreshold)}.`;
-  const executiveHeadline = r.toleranceBreached
-    ? `This scenario is above tolerance and needs leadership attention now.`
-    : r.nearTolerance
-      ? `This scenario is close to tolerance and should be actively managed before it escalates.`
-      : `This scenario is within tolerance today, but should stay under active monitoring.`;
-  const executiveAction = r.toleranceBreached
-    ? 'Escalate to the accountable executive, confirm an owner, and agree immediate treatment actions.'
-    : r.nearTolerance
-      ? 'Agree targeted reduction actions and management review before the scenario moves above tolerance.'
-      : 'Maintain controls, monitor change signals, and revisit the scenario if threat, exposure, or scope changes.';
-  const executiveAnnualView = r.annualReviewTriggered
-    ? `Annual leadership review is warranted.`
-    : `Annual review is not currently triggered.`;
+  const executiveHeadline = rolePresentation.executiveHeadline(r);
+  const executiveAction = rolePresentation.executiveAction(r);
+  const executiveAnnualView = rolePresentation.annualView(r);
   const scenarioScopeSummary = r.portfolioMeta?.linked
     ? `${r.selectedRiskCount || assessment.selectedRisks?.length || 1} linked risks are being treated as one connected scenario.`
     : `${r.selectedRiskCount || assessment.selectedRisks?.length || 1} risks are being assessed together without linked uplift.`;
@@ -522,6 +601,13 @@ function renderResults(id, isShared) {
       </div>
 
       ${renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView)}
+
+      <div class="results-summary-grid results-summary-grid--primary">
+        <div class="results-summary-card results-summary-card--wide">
+          <div class="results-section-heading">${rolePresentation.executiveNoteTitle}</div>
+          <p class="results-summary-copy">${rolePresentation.executiveNote}</p>
+        </div>
+      </div>
 
       <div class="results-exec-metrics">
         <div class="results-impact-card">
@@ -602,6 +688,13 @@ function renderResults(id, isShared) {
 
   const technicalTab = `
     <section class="results-technical-view ${activeTab === 'technical' ? '' : 'hidden'}" id="results-tab-technical">
+      <div class="results-summary-grid results-summary-grid--primary">
+        <div class="results-summary-card results-summary-card--wide">
+          <div class="results-section-heading">${rolePresentation.technicalNoteTitle}</div>
+          <p class="results-summary-copy">${rolePresentation.technicalNote}</p>
+        </div>
+      </div>
+
       <div class="results-decision-grid mb-6 anim-fade-in">
         ${renderAssessmentConfidenceBlock(assessmentIntelligence.confidence)}
         ${renderAssessmentDriversBlock(assessmentIntelligence.drivers)}
@@ -621,7 +714,7 @@ function renderResults(id, isShared) {
       ${assessmentChallenge ? renderAssessmentChallengeBlock(assessmentChallenge) : ''}
 
       <details class="results-detail-disclosure" open>
-        <summary>Show core model outputs</summary>
+        <summary>${rolePresentation.coreSummary}</summary>
         <div class="results-detail-disclosure-copy">These are the main event and annual exposure outputs most teams review first.</div>
         <div class="results-disclosure-stack">
           <div class="grid-3 mb-6 anim-fade-in">
@@ -639,7 +732,7 @@ function renderResults(id, isShared) {
 
       ${(workflowGuidance.length || assessment.benchmarkBasis || assessment.inputRationale || assessment.evidenceSummary || assessment.confidenceLabel || assessment.inputProvenance?.length) ? `
       <details class="results-detail-disclosure">
-        <summary>Show AI reasoning and evidence quality</summary>
+        <summary>${rolePresentation.aiSummary}</summary>
         <div class="results-detail-disclosure-copy">Use this when you need to review how the AI formed the inputs and how grounded those inputs were.</div>
         <div class="results-disclosure-stack">
           <div class="grid-2 anim-fade-in">
