@@ -1021,17 +1021,18 @@ async function runSimulation() {
     if (progressText) progressText.textContent = 'Saving the assessment and opening results…';
     await yieldToUI();
     await new Promise(requestAnimationFrame);
-    saveAssessment(assessment, {
+    const savedAssessment = saveAssessment(assessment, {
       targetStatus: needsReview(assessment)
         ? ASSESSMENT_LIFECYCLE_STATUS.READY_FOR_REVIEW
         : isTreatmentVariantAssessment(assessment)
           ? ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT
           : ASSESSMENT_LIFECYCLE_STATUS.SIMULATED
     });
-    recordLearningFromAssessment(assessment);
+    recordLearningFromAssessment(savedAssessment);
+    resetDraft();
     saveDraft();
     completeSimulationState();
-    Router.navigate('/results/' + AppState.draft.id);
+    Router.navigate('/results/' + savedAssessment.id);
   } catch(e) {
     AppState.simulationRunToken = null;
     document.getElementById('sim-progress').classList.add('hidden');
