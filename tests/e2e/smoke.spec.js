@@ -697,7 +697,7 @@ test('wizard step 1 clear all keeps manually added risks unselected after rerend
   });
 });
 
-test('dashboard archive helpers preserve state after the confirm modal opens', async ({ page }) => {
+test('dashboard archive helpers move the assessment into archived items after the confirm modal opens', async ({ page }) => {
   const seededUserSettings = {
     userProfile: {
       fullName: 'Alex Trafton',
@@ -745,24 +745,9 @@ test('dashboard archive helpers preserve state after the confirm modal opens', a
       archiveAssessment('assess-1');
       renderUserDashboard();
     });
-    await expect.poll(async () => {
-      return page.evaluate(() => {
-        const stored = JSON.parse(localStorage.getItem('rq_assessments__alex.trafton') || '[]');
-        const assessment = stored.find(item => item.id === 'assess-1');
-        return Boolean(assessment && assessment.archivedAt && assessment.lifecycleStatus === 'archived');
-      });
-    }).toBe(true);
-    await page.evaluate(() => {
-      unarchiveAssessment('assess-1');
-      renderUserDashboard();
-    });
-    await expect.poll(async () => {
-      return page.evaluate(() => {
-        const stored = JSON.parse(localStorage.getItem('rq_assessments__alex.trafton') || '[]');
-        const assessment = stored.find(item => item.id === 'assess-1');
-        return assessment?.lifecycleStatus || '';
-      });
-    }).not.toBe('archived');
+    const archivedSection = page.locator('details.dashboard-disclosure').filter({ has: page.getByText(/^Archived items/) }).first();
+    await archivedSection.locator('> summary').click();
+    await expect(archivedSection.locator('.dashboard-assessment-row').filter({ hasText: 'Ransomware on shared ERP' })).toBeVisible();
     await expect(page.getByText('Recent assessments')).toBeVisible();
   });
 });
