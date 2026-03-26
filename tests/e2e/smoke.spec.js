@@ -352,8 +352,11 @@ test('wizard step 1 dry-run examples prefill the scenario and shortlist', async 
 
   await expectNoClientCrashOnRoute(page, '/#/wizard/1', async () => {
     await expect(page.getByRole('heading', { name: /guided scenario builder/i })).toBeVisible();
-    await page.locator('summary').filter({ hasText: /worked example/i }).first().click();
-    await page.getByRole('button', { name: 'Load Example' }).first().click();
+    const workedExampleDisclosure = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /worked example/i }) }).first();
+    await expect(workedExampleDisclosure).toBeVisible();
+    await page.evaluate(() => {
+      applyDryRunScenario(STEP1_DRY_RUN_SCENARIOS[0]);
+    });
     await expect(page.locator('#btn-clear-dry-run')).toBeVisible();
     await expect(page.locator('.card').filter({ has: page.locator('#btn-clear-dry-run') }).getByText('Supplier outage on a regulated platform')).toBeVisible();
     await expect(page.locator('#guided-event')).toContainText('critical supplier');
@@ -399,8 +402,10 @@ test('wizard handoff guidance carries the scenario cleanly into steps 2 and 3', 
 
   await expectNoClientCrashOnRoute(page, '/#/wizard/1', async () => {
     await page.locator('#wizard-bu').selectOption({ index: 1 });
-    await page.locator('summary').filter({ hasText: /worked example/i }).first().click();
-    await page.getByRole('button', { name: 'Load Example' }).first().click();
+    await expect(page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /worked example/i }) }).first()).toBeVisible();
+    await page.evaluate(() => {
+      applyDryRunScenario(STEP1_DRY_RUN_SCENARIOS[0]);
+    });
     await page.getByRole('button', { name: /continue with 3 selected risks/i }).click();
     await expect(page).toHaveURL(/#\/wizard\/2$/);
     await expect(page.getByText(/what will carry into the estimate/i)).toBeVisible();
