@@ -319,12 +319,8 @@ function renderUserDashboard() {
                   <strong>${settings.geographyPrimary || settings.geography || globalSettings.geography}</strong>
                   <div class="context-panel-copy">This geography and your saved profile shape default wording, guidance, and assisted suggestions.</div>
                 </div>
-                <div class="dashboard-focus-card dashboard-focus-card--spotlight">
-                  <span class="dashboard-focus-card__label">${roleFrontDoor.spotlightTitle}</span>
-                  <strong>${isOversightUser ? primarySettingsLabel : (recommendedTemplate ? 'Worked example ready' : 'Template-ready workspace')}</strong>
-                  <div class="context-panel-copy">${roleFrontDoor.spotlightCopy}</div>
-                </div>
               </div>
+              <div class="form-help" style="margin-top:var(--sp-4);color:rgba(255,255,255,.68)">${roleFrontDoor.spotlightTitle}: ${roleFrontDoor.spotlightCopy}</div>
             </div>
           </div>
         </section>
