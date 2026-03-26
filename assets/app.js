@@ -179,6 +179,7 @@ const AppState = {
   userSettingsSavedAt: 0,
   auditLogCache: { loaded: false, loading: false, entries: [], summary: null, error: '' },
   clientRuntimeErrors: [],
+  stateTransitionLog: [],
   draftLastSavedAt: 0,
   draftDirty: false,
   draftSaveTimer: null,
@@ -537,16 +538,16 @@ function updateWizardSaveState() {
 }
 
 function markDraftDirty() {
-  updateDraftAssessmentState({ draftDirty: true });
+  dispatchDraftAction('MARK_DRAFT_DIRTY');
   persistDraftRecoverySnapshot();
   updateWizardSaveState();
 }
 
 function scheduleDraftAutosave(delay = 700) {
   if (AppState.draftSaveTimer) window.clearTimeout(AppState.draftSaveTimer);
-  updateDraftAssessmentState({
-    draftSaveTimer: window.setTimeout(() => {
-      updateDraftAssessmentState({ draftSaveTimer: null });
+  dispatchDraftAction('SET_DRAFT_SAVE_TIMER', {
+    timer: window.setTimeout(() => {
+      dispatchDraftAction('SET_DRAFT_SAVE_TIMER', { timer: null });
       saveDraft();
     }, delay)
   });
@@ -554,7 +555,7 @@ function scheduleDraftAutosave(delay = 700) {
 
 function clearDraftAutosaveTimer() {
   if (AppState.draftSaveTimer) window.clearTimeout(AppState.draftSaveTimer);
-  updateDraftAssessmentState({ draftSaveTimer: null });
+  dispatchDraftAction('SET_DRAFT_SAVE_TIMER', { timer: null });
 }
 
 function getCurrentSimulationState() {
@@ -562,27 +563,27 @@ function getCurrentSimulationState() {
 }
 
 function resetSimulationState() {
-  applyWorkspaceRuntimeState(applySimulationState(AppState, createSimulationState()));
+  dispatchSimulationAction('RESET_SIMULATION');
 }
 
 function startSimulationState(total = 0) {
-  applyWorkspaceRuntimeState(applySimulationStartedTransition(AppState, total));
+  dispatchSimulationAction('START_SIMULATION', { total, at: Date.now() });
 }
 
 function updateSimulationProgressState({ completed = 0, total = 0, ratio = 0, message = '' } = {}) {
-  applyWorkspaceRuntimeState(applySimulationProgressTransition(AppState, { completed, total, ratio, message }));
+  dispatchSimulationAction('UPDATE_SIMULATION_PROGRESS', { completed, total, ratio, message });
 }
 
 function completeSimulationState() {
-  applyWorkspaceRuntimeState(applySimulationCompletedTransition(AppState));
+  dispatchSimulationAction('COMPLETE_SIMULATION');
 }
 
 function failSimulationState(error) {
-  applyWorkspaceRuntimeState(applySimulationFailedTransition(AppState, error));
+  dispatchSimulationAction('FAIL_SIMULATION', { error });
 }
 
 function cancelSimulationState(message = 'Cancellation requested…') {
-  applyWorkspaceRuntimeState(applySimulationCancelledTransition(AppState, message));
+  dispatchSimulationAction('CANCEL_SIMULATION', { message });
 }
 
 function openShortcutHelpModal() {

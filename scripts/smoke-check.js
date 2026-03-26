@@ -36,6 +36,7 @@ const resultsRouteJs = read('assets/results/resultsRoute.js');
 const userPreferencesJs = read('assets/settings/userPreferences.js');
 const userOnboardingJs = read('assets/settings/userOnboarding.js');
 const assessmentStateJs = read('assets/state/assessmentState.js');
+const appStateStoreJs = read('assets/state/appStateStore.js');
 const workspaceStateModelJs = read('assets/state/workspaceStateModel.js');
 const auditLogSectionJs = read('assets/admin/auditLogSection.js');
 const e2eSmokeSpecJs = read('tests/e2e/smoke.spec.js');
@@ -67,6 +68,8 @@ expect(appJs.includes('function safeRenderAdminSettings('), 'safeRenderAdminSett
 expect(appJs.includes('function rerenderCurrentAdminSection()'), 'rerenderCurrentAdminSection helper missing from admin renderer');
 expect(appJs.includes('function normaliseAdminSettings('), 'frontend normaliseAdminSettings helper missing');
 expect(settingsApi.includes('function normaliseSettings('), 'backend normaliseSettings helper missing');
+expect(appStateStoreJs.includes('function dispatchDraftAction('), 'appStateStore is missing draft action dispatch support');
+expect(appStateStoreJs.includes('function dispatchSimulationAction('), 'appStateStore is missing simulation action dispatch support');
 
 expect(llmJs.includes('function _withEvidenceMeta('), 'AI evidence wrapper missing');
 expect(llmJs.includes('confidenceLabel'), 'AI evidence contract missing confidenceLabel');

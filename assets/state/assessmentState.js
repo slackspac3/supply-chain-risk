@@ -81,7 +81,9 @@ function restoreArchivedDraftToWorkspace(id) {
   if (!archived || archived.results) return null;
   const restored = JSON.parse(JSON.stringify(archived));
   delete restored.archivedAt;
-  AppState.draft = { ...ensureDraftShape(), ...restored, results: null, completedAt: null };
+  dispatchDraftAction('SET_DRAFT', {
+    draft: { ...ensureDraftShape(), ...restored, results: null, completedAt: null }
+  });
   deleteAssessment(id);
   saveDraft();
   return AppState.draft;
@@ -102,7 +104,9 @@ function duplicateAssessmentToDraft(id) {
   duplicate.id = 'a_' + Date.now();
   duplicate.scenarioTitle = `${duplicate.scenarioTitle || 'Untitled assessment'} copy`;
   duplicate.treatmentImprovementRequest = '';
-  AppState.draft = { ...ensureDraftShape(), ...duplicate };
+  dispatchDraftAction('SET_DRAFT', {
+    draft: { ...ensureDraftShape(), ...duplicate }
+  });
   saveDraft();
   return AppState.draft;
 }
@@ -182,10 +186,7 @@ function saveDraft() {
   if (typeof persistDraftRecoverySnapshot === 'function') persistDraftRecoverySnapshot(AppState.draft);
   const cache = ensureUserStateCache();
   cache.draft = { ...AppState.draft };
-  updateDraftAssessmentState({
-    draftLastSavedAt: Date.now(),
-    draftDirty: false
-  });
+  dispatchDraftAction('MARK_DRAFT_SAVED', { at: Date.now() });
   if (typeof updateWizardSaveState === 'function') updateWizardSaveState();
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     window.dispatchEvent(new CustomEvent('rq:draft-saved', { detail: { at: AppState.draftLastSavedAt } }));
@@ -199,7 +200,7 @@ function loadDraft() {
   });
   const cache = ensureUserStateCache();
   if (cache.draft && typeof cache.draft === 'object') {
-    updateDraftAssessmentState({
+    dispatchDraftAction('SET_DRAFT', {
       draft: {
         ...(AppState.draft || {}),
         ...withDraftIdentity(cache.draft)
@@ -210,7 +211,7 @@ function loadDraft() {
   try {
     const d = JSON.parse(sessionStorage.getItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX)) || 'null');
     if (d && typeof d === 'object' && Object.keys(d).length) {
-      updateDraftAssessmentState({
+      dispatchDraftAction('SET_DRAFT', {
         draft: {
           ...(AppState.draft || {}),
           ...withDraftIdentity(d)
@@ -222,7 +223,7 @@ function loadDraft() {
   try {
     const recovered = typeof readDraftRecoverySnapshot === 'function' ? readDraftRecoverySnapshot() : null;
     if (recovered?.draft) {
-      updateDraftAssessmentState({
+      dispatchDraftAction('SET_DRAFT', {
         draft: {
           ...(AppState.draft || {}),
           ...withDraftIdentity(recovered.draft)
@@ -236,7 +237,7 @@ function loadDraft() {
   } catch {}
 }
 function resetDraft() {
-  updateDraftAssessmentState({
+  dispatchDraftAction('RESET_DRAFT', {
     draft: {
     id: 'a_' + Date.now(),
     templateId: null,

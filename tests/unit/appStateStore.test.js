@@ -10,7 +10,9 @@ const {
   applyUserStateCache,
   applyAdminSettingsState,
   applyDraftAssessmentState,
-  applySimulationState
+  applySimulationState,
+  reduceDraftAction,
+  reduceSimulationAction
 } = require('../../assets/state/appStateStore.js');
 
 test('createEmptyUserStateCache normalises the username and default collections', () => {
@@ -108,4 +110,53 @@ test('applySimulationState preserves prior values when partial updates are appli
   assert.equal(next.simulation.progress.ratio, 0.6);
   assert.equal(next.simulation.progress.message, '');
   assert.equal(next.simulation.lastRunAt, 50);
+});
+
+test('reduceDraftAction applies named draft lifecycle transitions and records them', () => {
+  const base = {
+    draft: { id: 'a1', scenarioTitle: 'Draft 1' },
+    draftDirty: false,
+    draftLastSavedAt: 0,
+    draftSaveTimer: null,
+    stateTransitionLog: []
+  };
+  const merged = reduceDraftAction(base, 'MERGE_DRAFT', {
+    patch: { narrative: 'Updated narrative' },
+    draftDirty: true
+  });
+  assert.equal(merged.draft.narrative, 'Updated narrative');
+  assert.equal(merged.draftDirty, true);
+  assert.equal(merged.stateTransitionLog[0].scope, 'draft');
+  assert.equal(merged.stateTransitionLog[0].action, 'MERGE_DRAFT');
+
+  const saved = reduceDraftAction(merged, 'MARK_DRAFT_SAVED', { at: 123 });
+  assert.equal(saved.draftDirty, false);
+  assert.equal(saved.draftLastSavedAt, 123);
+  assert.equal(saved.stateTransitionLog[0].action, 'MARK_DRAFT_SAVED');
+});
+
+test('reduceSimulationAction applies named simulation lifecycle transitions and records them', () => {
+  const base = {
+    simulation: createSimulationState(),
+    stateTransitionLog: []
+  };
+  const started = reduceSimulationAction(base, 'START_SIMULATION', { total: 5000, at: 50 });
+  assert.equal(started.simulation.status, 'running');
+  assert.equal(started.simulation.progress.total, 5000);
+  assert.equal(started.stateTransitionLog[0].scope, 'simulation');
+  assert.equal(started.stateTransitionLog[0].action, 'START_SIMULATION');
+
+  const progressed = reduceSimulationAction(started, 'UPDATE_SIMULATION_PROGRESS', {
+    completed: 2500,
+    total: 5000,
+    ratio: 0.5,
+    message: 'Halfway'
+  });
+  assert.equal(progressed.simulation.progress.completed, 2500);
+  assert.equal(progressed.simulation.progress.message, 'Halfway');
+
+  const cancelled = reduceSimulationAction(progressed, 'CANCEL_SIMULATION', { message: 'Stopping' });
+  assert.equal(cancelled.simulation.status, 'cancelling');
+  assert.equal(cancelled.simulation.cancelRequested, true);
+  assert.equal(cancelled.simulation.progress.message, 'Stopping');
 });

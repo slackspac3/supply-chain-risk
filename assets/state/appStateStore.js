@@ -1,6 +1,8 @@
 'use strict';
 
 (function attachAppStateStore(globalScope) {
+  const STATE_TRANSITION_LOG_LIMIT = 40;
+
   function createEmptyUserStateCache(username = '') {
     return {
       username: String(username || '').trim().toLowerCase(),
@@ -38,6 +40,25 @@
         ...base.progress,
         ...progress
       }
+    };
+  }
+
+  function createStateTransitionEntry(scope, action, detail = {}) {
+    return {
+      ts: Date.now(),
+      scope: String(scope || 'state'),
+      action: String(action || 'UNKNOWN'),
+      detail: detail && typeof detail === 'object' ? { ...detail } : {}
+    };
+  }
+
+  function appendStateTransitionLog(state, scope, action, detail = {}) {
+    const nextLog = Array.isArray(state?.stateTransitionLog) ? state.stateTransitionLog.slice() : [];
+    nextLog.unshift(createStateTransitionEntry(scope, action, detail));
+    if (nextLog.length > STATE_TRANSITION_LOG_LIMIT) nextLog.length = STATE_TRANSITION_LOG_LIMIT;
+    return {
+      ...state,
+      stateTransitionLog: nextLog
     };
   }
 
@@ -97,8 +118,141 @@
     };
   }
 
+  function reduceDraftAction(state, type, payload = {}) {
+    const actionType = String(type || '').trim().toUpperCase();
+    const safePayload = payload && typeof payload === 'object' ? payload : {};
+    if (actionType === 'SET_DRAFT') {
+      return appendStateTransitionLog(applyDraftAssessmentState(state, {
+        draft: safePayload.draft,
+        draftDirty: safePayload.draftDirty,
+        draftLastSavedAt: safePayload.draftLastSavedAt,
+        draftSaveTimer: safePayload.draftSaveTimer
+      }), 'draft', actionType, {
+        keys: Object.keys(safePayload.draft || {})
+      });
+    }
+    if (actionType === 'MERGE_DRAFT') {
+      return appendStateTransitionLog(applyDraftAssessmentState(state, {
+        draft: {
+          ...(state?.draft || {}),
+          ...(safePayload.patch || {})
+        },
+        draftDirty: safePayload.draftDirty,
+        draftLastSavedAt: safePayload.draftLastSavedAt,
+        draftSaveTimer: safePayload.draftSaveTimer
+      }), 'draft', actionType, {
+        keys: Object.keys(safePayload.patch || {})
+      });
+    }
+    if (actionType === 'MARK_DRAFT_DIRTY') {
+      return appendStateTransitionLog(applyDraftAssessmentState(state, { draftDirty: true }), 'draft', actionType);
+    }
+    if (actionType === 'MARK_DRAFT_SAVED') {
+      return appendStateTransitionLog(applyDraftAssessmentState(state, {
+        draftDirty: false,
+        draftLastSavedAt: Number(safePayload.at || Date.now())
+      }), 'draft', actionType, {
+        at: Number(safePayload.at || Date.now())
+      });
+    }
+    if (actionType === 'SET_DRAFT_SAVE_TIMER') {
+      return appendStateTransitionLog(applyDraftAssessmentState(state, {
+        draftSaveTimer: safePayload.timer ?? null
+      }), 'draft', actionType, {
+        active: !!safePayload.timer
+      });
+    }
+    if (actionType === 'RESET_DRAFT') {
+      return appendStateTransitionLog(applyDraftAssessmentState(state, {
+        draft: safePayload.draft && typeof safePayload.draft === 'object' ? safePayload.draft : {},
+        draftDirty: false,
+        draftLastSavedAt: 0,
+        draftSaveTimer: null
+      }), 'draft', actionType, {
+        id: safePayload.draft?.id || ''
+      });
+    }
+    return state;
+  }
+
+  function reduceSimulationAction(state, type, payload = {}) {
+    const actionType = String(type || '').trim().toUpperCase();
+    const safePayload = payload && typeof payload === 'object' ? payload : {};
+    if (actionType === 'RESET_SIMULATION') {
+      return appendStateTransitionLog(applySimulationState(state, createSimulationState()), 'simulation', actionType);
+    }
+    if (actionType === 'START_SIMULATION') {
+      return appendStateTransitionLog(applySimulationState(state, {
+        status: 'running',
+        canCancel: true,
+        cancelRequested: false,
+        lastRunAt: Number(safePayload.at || Date.now()),
+        lastError: '',
+        progress: {
+          completed: 0,
+          total: Number(safePayload.total || 0),
+          ratio: 0,
+          message: ''
+        }
+      }), 'simulation', actionType, {
+        total: Number(safePayload.total || 0)
+      });
+    }
+    if (actionType === 'UPDATE_SIMULATION_PROGRESS') {
+      return appendStateTransitionLog(applySimulationState(state, {
+        status: 'running',
+        canCancel: true,
+        progress: {
+          completed: Number(safePayload.completed || 0),
+          total: Number(safePayload.total || 0),
+          ratio: Number(safePayload.ratio || 0),
+          message: String(safePayload.message || '').trim()
+        }
+      }), 'simulation', actionType, {
+        completed: Number(safePayload.completed || 0),
+        total: Number(safePayload.total || 0)
+      });
+    }
+    if (actionType === 'COMPLETE_SIMULATION') {
+      return appendStateTransitionLog(applySimulationState(state, {
+        status: 'completed',
+        canCancel: false,
+        cancelRequested: false,
+        lastError: ''
+      }), 'simulation', actionType);
+    }
+    if (actionType === 'FAIL_SIMULATION') {
+      return appendStateTransitionLog(applySimulationState(state, {
+        status: 'failed',
+        canCancel: false,
+        cancelRequested: false,
+        lastError: String(safePayload.error?.message || safePayload.error || '').trim()
+      }), 'simulation', actionType, {
+        error: String(safePayload.error?.message || safePayload.error || '').trim()
+      });
+    }
+    if (actionType === 'CANCEL_SIMULATION') {
+      return appendStateTransitionLog(applySimulationState(state, {
+        status: 'cancelling',
+        canCancel: false,
+        cancelRequested: true,
+        progress: {
+          ...(state?.simulation?.progress || {}),
+          message: String(safePayload.message || 'Cancellation requested…').trim()
+        }
+      }), 'simulation', actionType, {
+        message: String(safePayload.message || 'Cancellation requested…').trim()
+      });
+    }
+    return state;
+  }
+
   function writeAppState(nextState) {
     Object.assign(AppState, nextState);
+    const latestTransition = Array.isArray(nextState?.stateTransitionLog) ? nextState.stateTransitionLog[0] : null;
+    if (latestTransition && globalScope.__RQ_DEBUG_STATE__ && typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug('[rq-state]', latestTransition.scope, latestTransition.action, latestTransition.detail || {});
+    }
     return AppState;
   }
 
@@ -133,8 +287,16 @@
     return writeAppState(applyDraftAssessmentState(AppState, updates));
   }
 
+  function dispatchDraftAction(type, payload = {}) {
+    return writeAppState(reduceDraftAction(AppState, type, payload));
+  }
+
   function updateSimulationLifecycleState(updates = {}) {
     return writeAppState(applySimulationState(AppState, updates));
+  }
+
+  function dispatchSimulationAction(type, payload = {}) {
+    return writeAppState(reduceSimulationAction(AppState, type, payload));
   }
 
   function resetSimulationLifecycleState() {
@@ -149,6 +311,8 @@
     applyAdminSettingsState,
     applyDraftAssessmentState,
     applySimulationState,
+    reduceDraftAction,
+    reduceSimulationAction,
     updateAuthSessionState,
     resetAuthSessionState,
     updateUserStateCache,
@@ -156,7 +320,9 @@
     updateAdminSettingsState,
     clearAdminSettingsState,
     updateDraftAssessmentState,
+    dispatchDraftAction,
     updateSimulationLifecycleState,
+    dispatchSimulationAction,
     resetSimulationLifecycleState
   };
 
