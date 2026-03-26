@@ -3592,7 +3592,7 @@ async function parseRegisterFile(file) {
     }
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
-    const sheetSummaries = workbook.SheetNames.map(sheetName => {
+    const allSheetSummaries = workbook.SheetNames.map(sheetName => {
       const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: false });
       const rows = normaliseWorksheetRows(rawRows);
       return {
@@ -3601,13 +3601,26 @@ async function parseRegisterFile(file) {
         text: rowsToStructuredRegisterText(sheetName, rows)
       };
     });
+    const selectedWorkbookSheets = typeof selectRegisterWorkbookSheets === 'function'
+      ? selectRegisterWorkbookSheets(allSheetSummaries)
+      : {
+          selectedSheets: allSheetSummaries,
+          ignoredSheets: [],
+          selectionMode: 'all_sheets'
+        };
+    const sheetSummaries = selectedWorkbookSheets.selectedSheets.length
+      ? selectedWorkbookSheets.selectedSheets
+      : allSheetSummaries;
     return {
       text: sanitizeAiUploadText(sheetSummaries.map(s => s.text).join('\n\n')),
       meta: {
         type: 'spreadsheet',
         extension: ext,
-        sheetCount: workbook.SheetNames.length,
-        sheets: sheetSummaries.map(s => ({ sheetName: s.sheetName, rowCount: s.rowCount }))
+        sheetCount: sheetSummaries.length,
+        workbookSheetCount: workbook.SheetNames.length,
+        sheetSelectionMode: selectedWorkbookSheets.selectionMode || 'all_sheets',
+        sheets: sheetSummaries.map(s => ({ sheetName: s.sheetName, rowCount: s.rowCount })),
+        ignoredSheets: (selectedWorkbookSheets.ignoredSheets || []).map(s => ({ sheetName: s.sheetName, rowCount: s.rowCount }))
       }
     };
   }
