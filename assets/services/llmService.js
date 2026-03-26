@@ -254,12 +254,12 @@ const LLMService = (() => {
             throw new Error(`LLM API error ${res.status}: ${errText}`);
           }
           const data = await res.json();
-          const extracted = typeof extractLlmTextResponse === 'function'
-            ? extractLlmTextResponse(data)
-            : data.choices?.[0]?.message?.content || null;
+          const responseInfo = typeof describeLlmResponse === 'function'
+            ? describeLlmResponse(data)
+            : { text: data.choices?.[0]?.message?.content || null, diagnostic: '' };
+          const extracted = responseInfo?.text || null;
           if (!extracted) {
-            const keys = Object.keys(data || {}).slice(0, 8).join(', ');
-            throw new Error(`AI response shape was not usable. Top-level keys: ${keys || '(none)'}`);
+            throw new Error(`AI response shape was not usable. ${String(responseInfo?.diagnostic || '').trim()}`.trim());
           }
           return extracted;
         })();

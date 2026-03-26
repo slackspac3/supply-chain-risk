@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { extractLlmTextResponse } = require('../../assets/state/llmResponseExtractor.js');
+const { extractLlmTextResponse, describeLlmResponse } = require('../../assets/state/llmResponseExtractor.js');
 
 test('extractLlmTextResponse reads chat-completions style content', () => {
   const text = extractLlmTextResponse({
@@ -38,4 +38,19 @@ test('extractLlmTextResponse returns null for unusable payloads', () => {
     result: {}
   });
   assert.equal(text, null);
+});
+
+test('describeLlmResponse includes inner choice diagnostics when content is empty', () => {
+  const response = describeLlmResponse({
+    choices: [
+      {
+        finish_reason: 'stop',
+        index: 0,
+        message: { role: 'assistant', content: null, refusal: null }
+      }
+    ]
+  });
+  assert.equal(response.text, null);
+  assert.match(response.diagnostic, /finish_reason: stop/i);
+  assert.match(response.diagnostic, /message keys: role, content, refusal/i);
 });

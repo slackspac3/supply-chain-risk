@@ -21,21 +21,45 @@
     return null;
   }
 
-  function extractLlmTextResponse(data = {}) {
+  function describeLlmResponse(data = {}) {
     const choices = Array.isArray(data?.choices) ? data.choices : [];
     for (const choice of choices) {
       const directMessage = coerceTextContent(choice?.message?.content);
-      if (directMessage) return directMessage;
+      if (directMessage) return {
+        text: directMessage,
+        diagnostic: 'assistant message content found'
+      };
 
       const directOutput = coerceTextContent(choice?.content);
-      if (directOutput) return directOutput;
+      if (directOutput) return {
+        text: directOutput,
+        diagnostic: 'choice content found'
+      };
 
       const textField = coerceTextContent(choice?.text);
-      if (textField) return textField;
+      if (textField) return {
+        text: textField,
+        diagnostic: 'choice text found'
+      };
+
+      const finishReason = String(choice?.finish_reason || '').trim();
+      const messageKeys = choice?.message && typeof choice.message === 'object'
+        ? Object.keys(choice.message).slice(0, 8).join(', ')
+        : '';
+      const choiceKeys = choice && typeof choice === 'object'
+        ? Object.keys(choice).slice(0, 8).join(', ')
+        : '';
+      return {
+        text: null,
+        diagnostic: `choices[0] had no usable text${finishReason ? `; finish_reason: ${finishReason}` : ''}${messageKeys ? `; message keys: ${messageKeys}` : ''}${choiceKeys ? `; choice keys: ${choiceKeys}` : ''}`.trim()
+      };
     }
 
     const outputText = coerceTextContent(data?.output_text);
-    if (outputText) return outputText;
+    if (outputText) return {
+      text: outputText,
+      diagnostic: 'output_text found'
+    };
 
     const responsesOutput = Array.isArray(data?.output) ? data.output : [];
     for (const item of responsesOutput) {
@@ -45,14 +69,26 @@
         .filter(Boolean)
         .join('\n')
         .trim();
-      if (joined) return joined;
+      if (joined) return {
+        text: joined,
+        diagnostic: 'responses output content found'
+      };
     }
 
-    return null;
+    const topKeys = Object.keys(data || {}).slice(0, 8).join(', ');
+    return {
+      text: null,
+      diagnostic: `no supported content fields found; top-level keys: ${topKeys || '(none)'}`
+    };
+  }
+
+  function extractLlmTextResponse(data = {}) {
+    return describeLlmResponse(data).text;
   }
 
   const api = {
     coerceTextContent,
+    describeLlmResponse,
     extractLlmTextResponse
   };
 
