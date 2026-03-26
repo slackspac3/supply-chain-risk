@@ -10,9 +10,11 @@ function renderWizard2() {
           <h2 class="wizard-step-title">Refine the Scenario</h2>
           <p class="form-help" style="margin-top:8px">Use this step to turn the selected risk into one clear assessment scope. The AI assist should help draft the scenario and suggest starting FAIR inputs.</p>
           <p class="wizard-step-desc">Review the AI-built context, refine the narrative, and confirm how the selected risks should be quantified together.</p>
-          <div class="form-help" data-draft-save-state style="margin-top:10px">Draft will save automatically</div>
-          ${renderPilotWarningBanner('ai', { compact: true })}
-          ${renderStep2ReadinessBanner(draft, selectedRisks, scenarioGeographies)}
+          <div class="wizard-status-stack">
+            <div class="form-help" data-draft-save-state>Draft will save automatically</div>
+            ${renderPilotWarningBanner('ai', { compact: true })}
+            ${renderStep2ReadinessBanner(draft, selectedRisks, scenarioGeographies)}
+          </div>
         </div>
         <div class="wizard-body">
           ${renderStep2FocusStrip(draft, selectedRisks, scenarioGeographies)}
