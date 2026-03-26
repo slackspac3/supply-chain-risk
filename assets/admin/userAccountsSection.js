@@ -62,9 +62,14 @@ const AdminUserAccountsSection = (() => {
                 <td><code>${AppState.adminVisiblePasswords[account.username] || 'Reset to issue'}</code></td>
                 <td style="text-align:right">
                   <button class="btn btn--secondary btn--sm btn-apply-user-access" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Apply Access</button>
-                  <button class="btn btn--ghost btn--sm btn-reset-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset User</button>
-                  <button class="btn btn--secondary btn--sm btn-reset-user-password" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset Password</button>
-                  <button class="btn btn--ghost btn--sm btn-delete-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Delete User</button>
+                  <details class="results-actions-disclosure dashboard-row-overflow" style="display:inline-flex;margin-left:8px">
+                    <summary class="btn btn--ghost btn--sm">More</summary>
+                    <div class="results-actions-disclosure-menu">
+                      <button class="btn btn--secondary btn--sm btn-reset-user-password" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset Password</button>
+                      <button class="btn btn--secondary btn--sm btn-reset-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset User</button>
+                      <button class="btn btn--secondary btn--sm btn-delete-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Delete User</button>
+                    </div>
+                  </details>
                 </td>
               </tr>`;
             }).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>No managed users yet.</strong><div style="margin-top:8px">Create the first pilot user below, then return here to assign their role, business-unit scope, and function ownership.</div></div></td></tr>'}

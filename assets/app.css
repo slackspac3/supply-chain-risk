@@ -1671,6 +1671,12 @@ canvas { display: block; width: 100%; }
   gap: var(--sp-3);
   margin-top: var(--sp-4);
 }
+.dashboard-disclosure--nested {
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,0.02);
+}
 .results-detail-disclosure {
   margin-bottom: var(--sp-6);
   padding: var(--sp-4) var(--sp-5);

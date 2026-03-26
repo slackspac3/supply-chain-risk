@@ -8,7 +8,14 @@ const AdminDocumentLibrarySection = (() => {
       ${UI.adminSectionHeader({
         title: 'Document Library',
         description: 'Maintain the internal references used for AI retrieval, citation chips, and richer scenario grounding.',
-        actions: `<button class="btn btn--ghost btn--sm" id="btn-reset-docs">Reset Defaults</button><button class="btn btn--secondary btn--sm" id="btn-reindex">Re-index Library</button><button class="btn btn--primary" id="btn-add-doc">Add Document</button>`
+        actions: `<button class="btn btn--primary" id="btn-add-doc">Add Document</button>
+          <details class="results-actions-disclosure admin-footer-overflow">
+            <summary class="btn btn--ghost btn--sm">More</summary>
+            <div class="results-actions-disclosure-menu">
+              <button class="btn btn--secondary btn--sm" id="btn-reindex">Re-index Library</button>
+              <button class="btn btn--secondary btn--sm" id="btn-reset-docs">Reset Defaults</button>
+            </div>
+          </details>`
       })}
       <div class="admin-overview-grid mb-6">
         <div class="admin-overview-card">
@@ -36,7 +43,15 @@ const AdminDocumentLibrarySection = (() => {
               <td><strong style="color:var(--text-primary);font-size:.875rem">${doc.title}</strong><br><span style="font-size:.68rem;color:var(--text-muted)">${doc.id}</span></td>
               <td>${(doc.tags || []).slice(0, 3).map(t => `<span class="badge badge--primary" style="font-size:.6rem;margin:2px">${t}</span>`).join('')}</td>
               <td style="font-size:.8rem;white-space:nowrap">${doc.lastUpdated || '—'}</td>
-              <td><button class="btn btn--ghost btn--sm" data-id="${doc.id}" id="edit-doc-${doc.id}">Edit</button> <button class="btn btn--ghost btn--sm" data-id="${doc.id}" id="del-doc-${doc.id}" style="color:var(--color-danger-400)">Delete</button></td>
+              <td>
+                <button class="btn btn--ghost btn--sm" data-id="${doc.id}" id="edit-doc-${doc.id}">Edit</button>
+                <details class="results-actions-disclosure dashboard-row-overflow" style="display:inline-flex;margin-left:8px">
+                  <summary class="btn btn--ghost btn--sm">More</summary>
+                  <div class="results-actions-disclosure-menu">
+                    <button class="btn btn--secondary btn--sm" data-id="${doc.id}" id="del-doc-${doc.id}">Delete</button>
+                  </div>
+                </details>
+              </td>
             </tr>`).join('')}</tbody>
           </table>`
       })}`));

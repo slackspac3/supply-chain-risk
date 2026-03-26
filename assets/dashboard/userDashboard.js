@@ -403,19 +403,18 @@ function renderUserDashboard() {
                     <button class="btn btn--secondary" id="btn-dashboard-settings-secondary">Open Settings</button>
                   </div>
                 </div>
+                <details class="dashboard-disclosure dashboard-disclosure--nested">
+                  <summary>${roleFrontDoor.playbookTitle} <span class="badge badge--neutral">${capability.roleSummary}</span></summary>
+                  <div class="dashboard-disclosure-copy">${roleFrontDoor.playbookDescription}</div>
+                  <div class="dashboard-disclosure-body">
+                    ${renderNonAdminHowToGuide(capability)}
+                  </div>
+                </details>
               </div>
             </details>
           </div>
 
           <div class="dashboard-column">
-            <details class="dashboard-disclosure card card--elevated dashboard-section-card">
-              <summary>${roleFrontDoor.playbookTitle} <span class="badge badge--neutral">${capability.roleSummary}</span></summary>
-              <div class="dashboard-disclosure-copy">${roleFrontDoor.playbookDescription}</div>
-              <div class="dashboard-disclosure-body">
-                ${renderNonAdminHowToGuide(capability)}
-              </div>
-            </details>
-
             <details class="dashboard-disclosure card card--elevated dashboard-section-card" ${archivedAssessments.length ? '' : ''}>
               <summary>Archived items <span class="badge badge--neutral">${archivedAssessments.length}</span></summary>
               <div class="dashboard-disclosure-copy">Stored out of the way, but still available if you need them again.</div>

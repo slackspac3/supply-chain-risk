@@ -352,6 +352,7 @@ test('wizard step 1 dry-run examples prefill the scenario and shortlist', async 
 
   await expectNoClientCrashOnRoute(page, '/#/wizard/1', async () => {
     await expect(page.getByText(/current context shaping this assessment/i)).toBeVisible();
+    await page.getByText(/need a worked example first\?/i).click();
     await page.getByRole('button', { name: 'Load Example' }).first().click();
     await expect(page.locator('#btn-clear-dry-run')).toBeVisible();
     await expect(page.locator('.card').filter({ has: page.locator('#btn-clear-dry-run') }).getByText('Supplier outage on a regulated platform')).toBeVisible();
@@ -398,6 +399,7 @@ test('wizard handoff guidance carries the scenario cleanly into steps 2 and 3', 
 
   await expectNoClientCrashOnRoute(page, '/#/wizard/1', async () => {
     await page.locator('#wizard-bu').selectOption({ index: 1 });
+    await page.getByText(/need a worked example first\?/i).click();
     await page.getByRole('button', { name: 'Load Example' }).first().click();
     await page.getByRole('button', { name: /continue with 3 selected risks/i }).click();
     await expect(page).toHaveURL(/#\/wizard\/2$/);
@@ -699,6 +701,7 @@ test('authenticated admin document library renders without crashing', async ({ p
   await expectNoClientCrashOnRoute(page, '/#/admin/docs', async () => {
     await expect(page.getByRole('heading', { name: /document library/i })).toBeVisible();
     await expect(page.locator('#btn-add-doc')).toBeVisible();
+    await page.getByText(/^more$/i).first().click();
     await expect(page.locator('#btn-reindex')).toBeVisible();
   });
 });
@@ -741,14 +744,17 @@ test('wizard step 1 clear all keeps manually added risks unselected after rerend
 
   await expectNoClientCrashOnRoute(page, '/#/wizard/1', async () => {
     const advancedSummary = page.getByText('Other ways to start');
+    const importSummary = page.getByText('Import or add risks directly');
     const manualInput = page.locator('#manual-risk-add');
     const addManualRisk = page.locator('#btn-add-manual-risk');
 
     await advancedSummary.click();
+    await importSummary.click();
     await manualInput.fill('Cloud storage exposure');
     await addManualRisk.click();
 
     await advancedSummary.click();
+    await importSummary.click();
     await manualInput.fill('Privileged access misuse');
     await addManualRisk.click();
 

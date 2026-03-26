@@ -64,24 +64,21 @@ function renderStep1StartCard(recommendation) {
 
 function renderStep1FeaturedExampleCard(example) {
   if (!example) return '';
-  return `<div class="card card--elevated anim-fade-in">
-    <div class="wizard-premium-head">
-      <div>
-        <div class="context-panel-title">Need a worked example first?</div>
-        <p class="context-panel-copy" style="margin-top:var(--sp-2)">Load one polished example to see what a good first draft and shortlist look like before you enter your own case.</p>
+  return `<details class="wizard-disclosure card card--elevated anim-fade-in">
+    <summary>Need a worked example first? <span class="badge badge--neutral">Fast demo path</span></summary>
+    <div class="wizard-disclosure-body">
+      <div class="form-help">Load one polished example to see what a good first draft and shortlist look like before you enter your own case.</div>
+      <div class="wizard-focus-card wizard-focus-card--wide" style="margin-top:var(--sp-4)">
+        <span class="wizard-focus-card__label">Featured example</span>
+        <strong>${escapeHtml(example.title)}</strong>
+        <span>${escapeHtml(example.summary)} Best for: ${escapeHtml(example.bestFor)}.</span>
       </div>
-      <span class="badge badge--neutral">Fast demo path</span>
+      <div class="admin-inline-actions" style="margin-top:var(--sp-4)">
+        <button class="btn btn--secondary btn-load-dry-run" data-dry-run-id="${escapeHtml(example.id)}" type="button">Load Example</button>
+        <span class="form-help">${escapeHtml(example.nextStep)}</span>
+      </div>
     </div>
-    <div class="wizard-focus-card wizard-focus-card--wide" style="margin-top:var(--sp-4)">
-      <span class="wizard-focus-card__label">Featured example</span>
-      <strong>${escapeHtml(example.title)}</strong>
-      <span>${escapeHtml(example.summary)} Best for: ${escapeHtml(example.bestFor)}.</span>
-    </div>
-    <div class="admin-inline-actions" style="margin-top:var(--sp-4)">
-      <button class="btn btn--secondary btn-load-dry-run" data-dry-run-id="${escapeHtml(example.id)}" type="button">Load Example</button>
-      <span class="form-help">${escapeHtml(example.nextStep)}</span>
-    </div>
-  </div>`;
+  </details>`;
 }
 
 function renderStep1GuidedBuilderCard(draft) {
@@ -165,49 +162,53 @@ function renderStep1OtherWaysToStart(draft, hasScenarioDraft, hasImportedSource)
           <button class="btn btn--ghost" id="btn-generate-risks-from-draft" type="button">Generate shortlist from this draft</button>
         </div>
       </div>
-      <div class="card" style="padding:var(--sp-5);background:var(--bg-elevated)">
-        <div class="context-panel-title">Import or add risks directly</div>
-        <div class="form-help" style="margin-top:6px">Use this only when your source material already exists in a register, spreadsheet, or known risk list.</div>
-        <div class="grid-2" style="margin-top:var(--sp-4)">
-          <div class="form-group">
-            <label class="form-label" for="risk-register-file">Risk register upload</label>
-            <input class="form-input" id="risk-register-file" type="file" accept=".txt,.csv,.json,.md,.tsv,.xlsx,.xls">
-            <div class="form-help">${draft.uploadedRegisterName ? `Current file: ${draft.uploadedRegisterName}${draft.registerMeta?.sheetCount ? ` · ${draft.registerMeta.sheetCount} sheet(s)` : ''}` : 'Upload TXT, CSV, TSV, JSON, Markdown, or Excel. Word and PDF still need conversion before upload.'}</div>
-            <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
-              <button class="btn btn--secondary" id="btn-register-analyse">Upload, extract, analyse and enhance risks</button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="manual-risk-add">Add risk manually</label>
-            <div class="inline-action-row">
-              <input class="form-input" id="manual-risk-add" type="text" placeholder="e.g. Export control screening failure">
-              <button class="btn btn--secondary" id="btn-add-manual-risk" type="button">Add</button>
-            </div>
-            <div class="form-help" style="margin-top:10px">Manual risks are added to the same candidate list and selected by default.</div>
-          </div>
-        </div>
-        <p class="form-help" style="margin-top:var(--sp-4)">Uses runtime AI if a key has been set with <code>LLMService.setOpenAIKey(...)</code>. Otherwise the local extraction stub is used.</p>
-      </div>
-      <div class="card" style="padding:var(--sp-5);background:var(--bg-elevated)">
-        <div class="context-panel-title">More worked examples</div>
-        <p class="context-panel-copy" style="margin-top:6px">Use these when you want a fast, high-quality starting point for a common cyber or resilience case.</p>
-        <div class="risk-selection-grid" style="margin-top:var(--sp-4)">
-          ${STEP1_DRY_RUN_SCENARIOS.map(example => `<div class="risk-pick-card">
-            <div class="risk-pick-head" style="align-items:flex-start">
-              <div style="flex:1">
-                <div class="risk-pick-title">${example.title}</div>
-                <div class="form-help" style="margin-top:6px">${example.summary}</div>
-                <div class="form-help" style="margin-top:6px"><strong>Best for:</strong> ${example.bestFor}</div>
+      <details class="wizard-disclosure wizard-disclosure--compact">
+        <summary>Import or add risks directly <span class="badge badge--neutral">Advanced start</span></summary>
+        <div class="wizard-disclosure-body">
+          <div class="form-help">Use this only when your source material already exists in a register, spreadsheet, or known risk list.</div>
+          <div class="grid-2" style="margin-top:var(--sp-4)">
+            <div class="form-group">
+              <label class="form-label" for="risk-register-file">Risk register upload</label>
+              <input class="form-input" id="risk-register-file" type="file" accept=".txt,.csv,.json,.md,.tsv,.xlsx,.xls">
+              <div class="form-help">${draft.uploadedRegisterName ? `Current file: ${draft.uploadedRegisterName}${draft.registerMeta?.sheetCount ? ` · ${draft.registerMeta.sheetCount} sheet(s)` : ''}` : 'Upload TXT, CSV, TSV, JSON, Markdown, or Excel. Word and PDF still need conversion before upload.'}</div>
+              <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
+                <button class="btn btn--secondary" id="btn-register-analyse">Upload, extract, analyse and enhance risks</button>
               </div>
-              <button class="btn btn--ghost btn--sm btn-load-dry-run" data-dry-run-id="${example.id}" type="button">Load Example</button>
             </div>
-            <div class="citation-chips" style="margin-top:var(--sp-3)">
-              ${(example.geographies || []).map(geo => `<span class="badge badge--neutral">${geo}</span>`).join('')}
-              <span class="badge badge--neutral">${example.risks.length} starter risks</span>
+            <div class="form-group">
+              <label class="form-label" for="manual-risk-add">Add risk manually</label>
+              <div class="inline-action-row">
+                <input class="form-input" id="manual-risk-add" type="text" placeholder="e.g. Export control screening failure">
+                <button class="btn btn--secondary" id="btn-add-manual-risk" type="button">Add</button>
+              </div>
+              <div class="form-help" style="margin-top:10px">Manual risks are added to the same candidate list and selected by default.</div>
             </div>
-          </div>`).join('')}
+          </div>
+          <p class="form-help" style="margin-top:var(--sp-4)">Uses runtime AI if a key has been set with <code>LLMService.setOpenAIKey(...)</code>. Otherwise the local extraction stub is used.</p>
         </div>
-      </div>
+      </details>
+      <details class="wizard-disclosure wizard-disclosure--compact">
+        <summary>Browse more worked examples <span class="badge badge--neutral">Optional</span></summary>
+        <div class="wizard-disclosure-body">
+          <div class="form-help">Use these when you want a fast, high-quality starting point for a common cyber or resilience case.</div>
+          <div class="risk-selection-grid" style="margin-top:var(--sp-4)">
+            ${STEP1_DRY_RUN_SCENARIOS.map(example => `<div class="risk-pick-card">
+              <div class="risk-pick-head" style="align-items:flex-start">
+                <div style="flex:1">
+                  <div class="risk-pick-title">${example.title}</div>
+                  <div class="form-help" style="margin-top:6px">${example.summary}</div>
+                  <div class="form-help" style="margin-top:6px"><strong>Best for:</strong> ${example.bestFor}</div>
+                </div>
+                <button class="btn btn--ghost btn--sm btn-load-dry-run" data-dry-run-id="${example.id}" type="button">Load Example</button>
+              </div>
+              <div class="citation-chips" style="margin-top:var(--sp-3)">
+                ${(example.geographies || []).map(geo => `<span class="badge badge--neutral">${geo}</span>`).join('')}
+                <span class="badge badge--neutral">${example.risks.length} starter risks</span>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>
+      </details>
     </div>
   </details>`;
 }
