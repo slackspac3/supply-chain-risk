@@ -28,6 +28,7 @@ global.fetch = async (url, options = {}) => {
 };
 
 const { writeUserState, patchUserState } = require('../../api/user-state');
+const { materializeSavedAssessments } = require('../../assets/state/userWorkspacePersistence.js');
 const { writeSettings } = require('../../api/settings');
 
 test.beforeEach(() => {
@@ -74,6 +75,24 @@ test('patchUserState updates only the requested section and increments revision'
   assert.deepEqual(patched.state.userSettings, { geography: 'UAE' });
   assert.deepEqual(patched.state.assessments, [{ id: 'a-1', scenarioTitle: 'Initial' }]);
   assert.equal(patched.state.draft.id, 'draft-2');
+});
+
+test('user-state persistence stores bounded draft and saved-assessment sections while keeping legacy reads compatible', async () => {
+  const initial = await writeUserState('alex', {
+    userSettings: { geography: 'UAE' },
+    assessments: [{ id: 'a-1', scenarioTitle: 'Initial', lifecycleStatus: 'draft' }],
+    learningStore: { templates: {} },
+    draft: { id: 'draft-1', scenarioTitle: 'Draft one' }
+  }, { revision: 0 });
+
+  const rawStored = JSON.parse(Array.from(kvStore.values())[0]);
+  assert.equal(Boolean(rawStored.savedAssessments && rawStored.savedAssessments.itemsById), true);
+  assert.equal(Boolean(rawStored.draftWorkspace && rawStored.draftWorkspace.draft), true);
+  assert.equal(Object.prototype.hasOwnProperty.call(rawStored, 'assessments'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(rawStored, 'draft'), false);
+
+  assert.equal(initial.state.draft.id, 'draft-1');
+  assert.deepEqual(materializeSavedAssessments(initial.state.savedAssessments), initial.state.assessments);
 });
 
 test('writeSettings rejects stale revisions and preserves the latest settings', async () => {

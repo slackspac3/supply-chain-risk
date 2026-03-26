@@ -37,6 +37,7 @@ const userPreferencesJs = read('assets/settings/userPreferences.js');
 const userOnboardingJs = read('assets/settings/userOnboarding.js');
 const assessmentStateJs = read('assets/state/assessmentState.js');
 const assessmentLifecycleJs = read('assets/state/assessmentLifecycle.js');
+const workspacePersistenceJs = read('assets/state/userWorkspacePersistence.js');
 const appStateStoreJs = read('assets/state/appStateStore.js');
 const workspaceStateModelJs = read('assets/state/workspaceStateModel.js');
 const auditLogSectionJs = read('assets/admin/auditLogSection.js');
@@ -64,6 +65,7 @@ expect(indexHtml.includes('assets/admin/documentLibrarySection.js'), 'index.html
 expect(indexHtml.indexOf('assets/services/reportPresentation.js') < indexHtml.indexOf('assets/services/exportService.js'), 'reportPresentation.js must load before exportService.js');
 expect(indexHtml.indexOf('assets/services/reportPresentation.js') < indexHtml.indexOf('assets/app.js'), 'reportPresentation.js must load before app.js');
 expect(indexHtml.includes('assets/state/workspaceStateModel.js'), 'index.html is missing workspaceStateModel.js');
+expect(indexHtml.includes('assets/state/userWorkspacePersistence.js'), 'index.html is missing userWorkspacePersistence.js');
 expect(indexHtml.includes('assets/state/assessmentLifecycle.js'), 'index.html is missing assessmentLifecycle.js');
 
 expect(appJs.includes('function safeRenderAdminSettings('), 'safeRenderAdminSettings helper missing');
@@ -100,6 +102,10 @@ expect(assessmentStateJs.includes('benchmarkReferences'), 'assessmentState is no
 expect(assessmentLifecycleJs.includes('ASSESSMENT_LIFECYCLE_STATUS'), 'assessmentLifecycle is missing lifecycle status constants');
 expect(assessmentLifecycleJs.includes('transitionAssessmentLifecycle'), 'assessmentLifecycle is missing centralized transition rules');
 expect(assessmentStateJs.includes('prepareAssessmentForSave'), 'assessmentState is not using lifecycle-aware assessment persistence');
+expect(workspacePersistenceJs.includes('normaliseUserWorkspaceState'), 'userWorkspacePersistence is missing the workspace normalizer');
+expect(workspacePersistenceJs.includes('savedAssessments'), 'userWorkspacePersistence is missing the savedAssessments bounded object');
+expect(workspacePersistenceJs.includes('draftWorkspace'), 'userWorkspacePersistence is missing the draftWorkspace bounded object');
+expect(assessmentStateJs.includes('persistSavedAssessmentsCollection'), 'assessmentState is not using the savedAssessments persistence helper');
 expect(workspaceStateModelJs.includes('applyWorkspaceSyncStartedTransition'), 'workspace state model is missing explicit sync-start transition');
 expect(workspaceStateModelJs.includes('applySimulationStartedTransition'), 'workspace state model is missing explicit simulation-start transition');
 

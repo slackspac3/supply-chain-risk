@@ -1,6 +1,11 @@
 const USER_STATE_PREFIX = process.env.USER_STATE_PREFIX || 'risk_calculator_user_state';
 const { appendAuditEvent } = require('./_audit');
 const { sendApiError, requireSession, sendConflictError } = require('./_apiAuth');
+const {
+  normaliseUserWorkspaceState,
+  applyUserWorkspacePatch,
+  serializeUserWorkspaceState
+} = require('../assets/state/userWorkspacePersistence.js');
 
 function getKvUrl() {
   return process.env.APPLE_CAT || process.env.FOO_URL_TEST || process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
@@ -34,16 +39,7 @@ function buildStateKey(username = '') {
 }
 
 function normaliseState(state = {}) {
-  return {
-    userSettings: state.userSettings && typeof state.userSettings === 'object' ? state.userSettings : null,
-    assessments: Array.isArray(state.assessments) ? state.assessments : [],
-    learningStore: state.learningStore && typeof state.learningStore === 'object' ? state.learningStore : { templates: {} },
-    draft: state.draft && typeof state.draft === 'object' ? state.draft : null,
-    _meta: {
-      revision: Number(state._meta?.revision || 0),
-      updatedAt: Number(state._meta?.updatedAt || 0)
-    }
-  };
+  return normaliseUserWorkspaceState(state);
 }
 
 async function readUserState(username) {
@@ -82,20 +78,7 @@ function buildNextState(current, candidateState) {
 }
 
 function applyStatePatch(current, patch = {}) {
-  const next = normaliseState(current);
-  if (Object.prototype.hasOwnProperty.call(patch, 'userSettings')) {
-    next.userSettings = patch.userSettings && typeof patch.userSettings === 'object' ? patch.userSettings : null;
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'assessments')) {
-    next.assessments = Array.isArray(patch.assessments) ? patch.assessments : [];
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'learningStore')) {
-    next.learningStore = patch.learningStore && typeof patch.learningStore === 'object' ? patch.learningStore : { templates: {} };
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'draft')) {
-    next.draft = patch.draft && typeof patch.draft === 'object' ? patch.draft : null;
-  }
-  return next;
+  return applyUserWorkspacePatch(current, patch);
 }
 
 async function writeUserState(username, state, expectedMeta = {}) {
@@ -108,7 +91,7 @@ async function writeUserState(username, state, expectedMeta = {}) {
     };
   }
   const next = buildNextState(current, state);
-  await runKvCommand(['SET', buildStateKey(username), JSON.stringify(next)]);
+  await runKvCommand(['SET', buildStateKey(username), JSON.stringify(serializeUserWorkspaceState(next))]);
   return {
     ok: true,
     conflict: false,
@@ -127,7 +110,7 @@ async function patchUserState(username, patch, expectedMeta = {}) {
   }
   const patched = applyStatePatch(current, patch);
   const next = buildNextState(current, patched);
-  await runKvCommand(['SET', buildStateKey(username), JSON.stringify(next)]);
+  await runKvCommand(['SET', buildStateKey(username), JSON.stringify(serializeUserWorkspaceState(next))]);
   return {
     ok: true,
     conflict: false,

@@ -8,8 +8,10 @@
       username: String(username || '').trim().toLowerCase(),
       userSettings: null,
       assessments: [],
+      savedAssessments: null,
       learningStore: { templates: {} },
       draft: null,
+      draftWorkspace: null,
       _meta: {
         revision: 0,
         updatedAt: 0
@@ -80,8 +82,10 @@
         ...source,
         username: String(source.username || fallback.username || '').trim().toLowerCase(),
         assessments: Array.isArray(source.assessments) ? source.assessments : fallback.assessments,
+        savedAssessments: source.savedAssessments && typeof source.savedAssessments === 'object' ? source.savedAssessments : fallback.savedAssessments,
         learningStore: source.learningStore && typeof source.learningStore === 'object' ? source.learningStore : fallback.learningStore,
         draft: source.draft && typeof source.draft === 'object' ? source.draft : fallback.draft,
+        draftWorkspace: source.draftWorkspace && typeof source.draftWorkspace === 'object' ? source.draftWorkspace : fallback.draftWorkspace,
         _meta: {
           revision: Number(source._meta?.revision || fallback._meta.revision || 0),
           updatedAt: Number(source._meta?.updatedAt || fallback._meta.updatedAt || 0)

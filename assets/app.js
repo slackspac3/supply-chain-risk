@@ -242,13 +242,16 @@ function applySharedSettingsLocally(settings = {}) {
 function applyUserStateSnapshotLocally(username, state = {}) {
   const safeUsername = String(username || AuthService.getCurrentUser()?.username || '').trim().toLowerCase();
   if (!safeUsername) return null;
+  const normalizedWorkspace = normaliseUserWorkspaceState(state);
   const nextCache = {
     username: safeUsername,
-    userSettings: state.userSettings || null,
-    assessments: Array.isArray(state.assessments) ? state.assessments : [],
-    learningStore: state.learningStore && typeof state.learningStore === 'object' ? state.learningStore : { templates: {} },
-    draft: state.draft && typeof state.draft === 'object' ? state.draft : null,
-    _meta: buildExpectedMeta(state._meta)
+    userSettings: normalizedWorkspace.userSettings || null,
+    assessments: Array.isArray(normalizedWorkspace.assessments) ? normalizedWorkspace.assessments : [],
+    savedAssessments: normalizedWorkspace.savedAssessments,
+    learningStore: normalizedWorkspace.learningStore && typeof normalizedWorkspace.learningStore === 'object' ? normalizedWorkspace.learningStore : { templates: {} },
+    draft: normalizedWorkspace.draft && typeof normalizedWorkspace.draft === 'object' ? normalizedWorkspace.draft : null,
+    draftWorkspace: normalizedWorkspace.draftWorkspace,
+    _meta: buildExpectedMeta(normalizedWorkspace._meta)
   };
   updateUserStateCache(nextCache);
   AppState.userSettingsSavedAt = Number(nextCache._meta?.updatedAt || AppState.userSettingsSavedAt || 0);
@@ -1036,8 +1039,10 @@ function ensureUserStateCache(username = AuthService.getCurrentUser()?.username 
       username: safeUsername,
       userSettings: null,
       assessments: null,
+      savedAssessments: null,
       learningStore: null,
       draft: null,
+      draftWorkspace: null,
       _meta: { revision: 0, updatedAt: 0 }
     });
   }

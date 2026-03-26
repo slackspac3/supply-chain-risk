@@ -273,10 +273,7 @@ function renderUserDashboard() {
             if (!acc.find(existingItem => existingItem.id === item.id)) acc.push(item);
             return acc;
           }, []);
-        const cache = ensureUserStateCache();
-        cache.assessments = merged;
-        localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX), JSON.stringify(merged));
-        queueSharedUserStateSync({ assessments: merged });
+        persistSavedAssessmentsCollection(merged);
         renderUserDashboard();
         UI.toast('Assessments imported.', 'success');
       },

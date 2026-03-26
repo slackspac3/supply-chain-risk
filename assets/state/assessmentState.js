@@ -4,17 +4,34 @@
 
 function getAssessments() {
   const cache = ensureUserStateCache();
+  if (cache.savedAssessments && typeof cache.savedAssessments === 'object') {
+    cache.savedAssessments = normaliseSavedAssessmentsSection(cache.savedAssessments, cache.assessments || []);
+    cache.assessments = materializeSavedAssessments(cache.savedAssessments).map(item => normaliseAssessmentRecord(item));
+    return cache.assessments;
+  }
   if (Array.isArray(cache.assessments)) {
     cache.assessments = cache.assessments.map(item => normaliseAssessmentRecord(item));
+    cache.savedAssessments = buildSavedAssessmentsSection(cache.assessments);
     return cache.assessments;
   }
   try {
     const saved = JSON.parse(localStorage.getItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX)) || '[]');
     cache.assessments = Array.isArray(saved) ? saved.map(item => normaliseAssessmentRecord(item)) : [];
+    cache.savedAssessments = buildSavedAssessmentsSection(cache.assessments);
   } catch {
     cache.assessments = [];
+    cache.savedAssessments = buildSavedAssessmentsSection([]);
   }
   return cache.assessments;
+}
+function persistSavedAssessmentsCollection(list) {
+  const cache = ensureUserStateCache();
+  const normalizedList = Array.isArray(list) ? list.map(item => normaliseAssessmentRecord(item)) : [];
+  cache.assessments = normalizedList;
+  cache.savedAssessments = buildSavedAssessmentsSection(normalizedList);
+  localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX), JSON.stringify(normalizedList));
+  queueSharedUserStateSync({ savedAssessments: cache.savedAssessments });
+  return normalizedList;
 }
 function saveAssessment(a, options = {}) {
   const list = getAssessments().slice();
@@ -26,10 +43,7 @@ function saveAssessment(a, options = {}) {
     at: options.at
   });
   if (idx > -1) list[idx] = nextAssessment; else list.unshift(nextAssessment);
-  const cache = ensureUserStateCache();
-  cache.assessments = list;
-  localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX), JSON.stringify(list));
-  queueSharedUserStateSync({ assessments: list });
+  persistSavedAssessmentsCollection(list);
   return nextAssessment;
 }
 function updateAssessmentRecord(id, updater, options = {}) {
@@ -44,20 +58,14 @@ function updateAssessmentRecord(id, updater, options = {}) {
     at: options.at
   });
   list[idx] = next;
-  const cache = ensureUserStateCache();
-  cache.assessments = list;
-  localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX), JSON.stringify(list));
-  queueSharedUserStateSync({ assessments: list });
+  persistSavedAssessmentsCollection(list);
   return next;
 }
 function deleteAssessment(id) {
   const existing = getAssessments().slice();
   const list = existing.filter(item => item.id !== id);
   if (list.length === existing.length) return false;
-  const cache = ensureUserStateCache();
-  cache.assessments = list;
-  localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX), JSON.stringify(list));
-  queueSharedUserStateSync({ assessments: list });
+  persistSavedAssessmentsCollection(list);
   return true;
 }
 function archiveAssessment(id) {
@@ -211,11 +219,15 @@ function saveDraft() {
   const cache = ensureUserStateCache();
   cache.draft = { ...AppState.draft };
   dispatchDraftAction('MARK_DRAFT_SAVED', { at: Date.now() });
+  cache.draftWorkspace = buildDraftWorkspaceSection(cache.draft, {
+    lastSavedAt: Number(AppState.draftLastSavedAt || 0),
+    recoverySnapshotAt: Date.now()
+  });
   if (typeof updateWizardSaveState === 'function') updateWizardSaveState();
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     window.dispatchEvent(new CustomEvent('rq:draft-saved', { detail: { at: AppState.draftLastSavedAt } }));
   }
-  queueSharedUserStateSync({ draft: cache.draft });
+  queueSharedUserStateSync({ draftWorkspace: cache.draftWorkspace });
 }
 function loadDraft() {
   const withDraftIdentity = draft => ({
@@ -224,11 +236,14 @@ function loadDraft() {
     lifecycleStatus: deriveAssessmentLifecycleStatus(draft || {})
   });
   const cache = ensureUserStateCache();
-  if (cache.draft && typeof cache.draft === 'object') {
+  const cachedDraft = cache.draftWorkspace?.draft && typeof cache.draftWorkspace.draft === 'object'
+    ? cache.draftWorkspace.draft
+    : cache.draft;
+  if (cachedDraft && typeof cachedDraft === 'object') {
     dispatchDraftAction('SET_DRAFT', {
       draft: {
         ...(AppState.draft || {}),
-        ...withDraftIdentity(cache.draft)
+        ...withDraftIdentity(cachedDraft)
       }
     });
     return;
@@ -325,6 +340,7 @@ Object.assign(window, {
   restoreArchivedDraftToWorkspace,
   getAssessmentById,
   duplicateAssessmentToDraft,
+  persistSavedAssessmentsCollection,
   getLearningStore,
   saveLearningStore,
   getTemplateLearningProfile,
