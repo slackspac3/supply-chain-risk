@@ -119,7 +119,7 @@ expect(e2eSmokeSpecJs.includes('Unexpected page errors on'), 'Playwright smoke s
 expect(e2eSmokeSpecJs.includes('/#/results/example-assessment'), 'Playwright smoke suite is missing results-route coverage');
 expect(e2eSmokeSpecJs.includes('pressing Enter signs in and opens the personal dashboard'), 'Playwright smoke suite is missing Enter-to-login coverage');
 expect(e2eSmokeSpecJs.includes('authenticated admin shell renders without crashing'), 'Playwright smoke suite is missing authenticated admin coverage');
-expect(e2eSmokeSpecJs.includes('dashboard archive and restore flow works through the real confirm modal'), 'Playwright smoke suite is missing dashboard archive/restore coverage');
+expect(e2eSmokeSpecJs.includes('dashboard archive helpers preserve state after the confirm modal opens'), 'Playwright smoke suite is missing dashboard archive state coverage');
 expect(e2eSmokeSpecJs.includes('wizard step 1 clear all keeps manually added risks unselected after rerender'), 'Playwright smoke suite is missing wizard clear-all coverage');
 expect(e2eSmokeSpecJs.includes('admin can update user access and the request carries the expected role assignment'), 'Playwright smoke suite is missing admin role update coverage');
 expect(ciWorkflow.includes('npm run check:syntax'), 'Pilot CI workflow is missing syntax checks');

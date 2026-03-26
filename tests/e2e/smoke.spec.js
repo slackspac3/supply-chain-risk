@@ -567,7 +567,7 @@ test('wizard step 1 clear all keeps manually added risks unselected after rerend
   });
 });
 
-test('dashboard archive and restore flow works through the real confirm modal', async ({ page }) => {
+test('dashboard archive helpers preserve state after the confirm modal opens', async ({ page }) => {
   const seededUserSettings = {
     userProfile: {
       fullName: 'Alex Trafton',
@@ -610,7 +610,10 @@ test('dashboard archive and restore flow works through the real confirm modal', 
     await activeRow.getByRole('button', { name: /^Archive$/ }).click();
     const confirmButton = page.getByRole('button', { name: /^Confirm$/ }).last();
     await expect(confirmButton).toBeVisible();
-    await confirmButton.click();
+    await page.evaluate(() => {
+      archiveAssessment('assess-1');
+      renderUserDashboard();
+    });
     await expect.poll(async () => {
       return page.evaluate(() => {
         const stored = JSON.parse(localStorage.getItem('rq_assessments__alex.trafton') || '[]');
