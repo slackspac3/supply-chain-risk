@@ -269,6 +269,12 @@ function renderStep1ContextCard(settings, draft, scenarioGeographies, regs, buLi
   </div>`;
 }
 
+function getRegisterFallbackToastCopy(result = {}) {
+  const title = String(result.fallbackReasonTitle || 'Fallback register analysis loaded').trim();
+  const detail = String(result.fallbackReasonMessage || '').trim();
+  return detail ? `${title}. ${detail} Review the suggested risks before continuing.` : `${title}. Review the suggested risks before continuing.`;
+}
+
 function renderStep1ReadinessBanner(draft, selectedRisks) {
   const warnings = [];
   const narrative = String(draft.narrative || draft.sourceNarrative || '').trim();
@@ -1142,7 +1148,7 @@ async function analyseUploadedRegister() {
     AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
     saveDraft();
     renderWizard1();
-    UI.toast(result.usedFallback ? 'Fallback register analysis loaded. Review the suggested risks before continuing.' : 'Suggested draft register analysis loaded.', result.usedFallback ? 'warning' : 'success', 5000);
+    UI.toast(result.usedFallback ? getRegisterFallbackToastCopy(result) : 'Suggested draft register analysis loaded.', result.usedFallback ? 'warning' : 'success', 7000);
   } catch (e2) {
     UI.toast('Register analysis failed: ' + e2.message, 'danger');
   } finally {

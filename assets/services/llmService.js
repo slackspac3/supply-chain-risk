@@ -592,6 +592,51 @@ ${businessUnit.selectedDepartmentContext}` : ''
     });
   }
 
+  function _classifyAiFallbackReason(error = null) {
+    const message = String(error?.message || error || '').trim();
+    const safeMessage = _sanitizeAiText(message, { maxChars: 220 });
+    if (!safeMessage) {
+      return {
+        code: 'no_ai_response',
+        title: 'AI analysis unavailable',
+        message: 'The AI register-analysis service did not return a usable response, so the platform used local extraction instead.'
+      };
+    }
+    if (/Missing COMPASS_API_KEY secret/i.test(safeMessage)) {
+      return {
+        code: 'proxy_missing_secret',
+        title: 'AI analysis unavailable',
+        message: 'The hosted AI proxy is missing its server-side key, so the platform used local extraction instead.'
+      };
+    }
+    if (/Vercel proxy could not reach Compass|Compass preflight\/CORS blocked|Failed to fetch|NetworkError/i.test(safeMessage)) {
+      return {
+        code: 'proxy_unreachable',
+        title: 'AI analysis unavailable',
+        message: 'The hosted AI service could not be reached, so the platform used local extraction instead.'
+      };
+    }
+    if (/Compass rejected the request|401|403/i.test(safeMessage)) {
+      return {
+        code: 'ai_access_rejected',
+        title: 'AI analysis unavailable',
+        message: 'The AI service rejected the request, so the platform used local extraction instead.'
+      };
+    }
+    if (/Unexpected token|JSON|schema|parse/i.test(safeMessage)) {
+      return {
+        code: 'invalid_ai_output',
+        title: 'AI analysis incomplete',
+        message: 'The AI service returned an unusable structured response, so the platform used local extraction instead.'
+      };
+    }
+    return {
+      code: 'ai_runtime_error',
+      title: 'AI analysis unavailable',
+      message: 'The AI register-analysis step failed at runtime, so the platform used local extraction instead.'
+    };
+  }
+
   function _classifyScenario(narrative = '') {
     const n = String(narrative || '').toLowerCase();
     const isRansomware = n.includes('ransomware') || n.includes('encrypt') || n.includes('ransom');
@@ -1272,6 +1317,7 @@ ${evidenceMeta.promptBlock}`;
       .map(line => line.trim())
       .filter(line => line.length > 10)
       .slice(0, 20);
+    let fallbackReason = null;
     const evidenceMeta = _buildEvidenceMeta({
       citations: input.citations || [],
       businessUnit: input.businessUnit,
@@ -1345,9 +1391,11 @@ ${evidenceMeta.promptBlock}`;
             fallbackUsed: false
           });
         }
+        fallbackReason = _classifyAiFallbackReason();
       } catch (e) {
         await _auditAiFallback('analyseRiskRegister', e);
         console.warn('analyseRiskRegister fallback:', e.message);
+        fallbackReason = _classifyAiFallbackReason(e);
       }
     }
     const stub = _generateRiskBuilderStub({ ...input, riskStatement: lines.slice(0, 4).join('. ') });
@@ -1367,7 +1415,12 @@ ${evidenceMeta.promptBlock}`;
         'Ask AI assist to translate the selected scope into FAIR inputs with GCC-first benchmark logic.'
       ];
     }
-    return _decorateAiResult(_withEvidenceMeta(stub, evidenceMeta), evidenceMeta, {
+    return _decorateAiResult(_withEvidenceMeta({
+      ...stub,
+      fallbackReasonCode: fallbackReason?.code || 'local_register_fallback',
+      fallbackReasonTitle: fallbackReason?.title || 'Fallback register analysis loaded',
+      fallbackReasonMessage: fallbackReason?.message || 'The platform used local extraction instead of live AI analysis for this upload.'
+    }, evidenceMeta), evidenceMeta, {
       contentFields: ['summary', 'linkAnalysis', 'benchmarkBasis'],
       fallbackUsed: true
     });
