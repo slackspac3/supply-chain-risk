@@ -3704,18 +3704,36 @@ function composeGuidedNarrative(guidedInput = {}) {
 // ─── APP BAR ──────────────────────────────────────────────────
 function renderAppBar() {
   const currentUser = AuthService.getCurrentUser();
-  const homeHref = currentUser?.role === 'admin' ? '#/admin/settings' : currentUser ? '#/dashboard' : '#/';
-  const settingsHref = currentUser?.role === 'admin' ? '#/admin/settings' : '#/settings';
+  const currentHash = String(window.location.hash || '#/');
+  const homeHref = currentUser?.role === 'admin' ? '#/admin/settings/org' : currentUser ? '#/dashboard' : '#/';
+  const settingsHref = currentUser?.role === 'admin' ? '#/admin/settings/org' : '#/settings';
+  const nonAdminCapability = currentUser && currentUser.role !== 'admin'
+    ? getNonAdminCapabilityState(currentUser, getUserSettings(), getAdminSettings())
+    : null;
+  const isOversightUser = !!(nonAdminCapability?.canManageBusinessUnit || nonAdminCapability?.canManageDepartment);
+  const navLinks = currentUser?.role === 'admin'
+    ? [
+        { href: '#/admin/settings/org', label: 'Platform Home', active: currentHash.startsWith('#/admin/settings/org') || currentHash === '#/admin/settings' },
+        { href: '#/admin/settings/users', label: 'User Access', active: currentHash.startsWith('#/admin/settings/users') },
+        { href: '#/admin/settings/defaults', label: 'Defaults', active: currentHash.startsWith('#/admin/settings/defaults') }
+      ]
+    : currentUser
+      ? [
+          { href: '#/dashboard', label: isOversightUser ? 'Workspace' : 'Dashboard', active: currentHash.startsWith('#/dashboard') },
+          { href: '#/settings', label: isOversightUser ? (nonAdminCapability?.experience?.primaryActionLabel || 'Role Context') : 'Personal Settings', active: currentHash.startsWith('#/settings') }
+        ]
+      : [
+          { href: '#/', label: 'Home', active: currentHash === '#/' || currentHash === '' }
+        ];
   const bar = document.getElementById('app-bar');
   bar.innerHTML = `
     <div class="bar-inner">
       <a href="${homeHref}" class="bar-logo">Risk <span>Intelligence</span> Platform</a>
       <nav class="flex items-center gap-3">
-        <a href="${homeHref}" class="bar-nav-link">${currentUser?.role === 'admin' ? 'Global Admin' : currentUser ? 'Dashboard' : 'Home'}</a>
+        ${navLinks.map(link => `<a href="${link.href}" class="bar-nav-link${link.active ? ' active' : ''}">${link.label}</a>`).join('')}
       </nav>
       <div class="bar-spacer"></div>
       ${currentUser ? `
-        <a href="${settingsHref}" class="bar-nav-link bar-nav-link--admin">${currentUser.role === 'admin' ? 'Global Admin' : 'Personal Settings'}</a>
         <button type="button" class="btn btn--ghost btn--sm" id="btn-open-shortcuts">Shortcuts</button>
         <span class="bar-nav-link" style="pointer-events:none">${currentUser.displayName}</span>
         <button type="button" class="btn btn--ghost btn--sm" id="btn-sign-out">Sign Out</button>
@@ -4646,6 +4664,33 @@ function renderAdminSettings(activeSection = 'org') {
             <p style="margin-top:6px">${settingsSectionMeta[currentSettingsSection].description}</p>
           </div>
           <div class="admin-shell-note">Keep the main operating action simple: assess likely downstream impact, then save only when the end-user effect is clear.</div>
+        </div>
+        <div class="admin-frontdoor-nav">
+          <a href="#/admin/settings/org" class="admin-frontdoor-link ${currentSettingsSection === 'org' ? 'active' : ''}">
+            <span class="admin-frontdoor-link__label">Primary lane</span>
+            <strong>Organisation Setup</strong>
+            <span>Keep ownership, structure, and context foundations clear first.</span>
+          </a>
+          <a href="#/admin/settings/users" class="admin-frontdoor-link ${currentSettingsSection === 'users' ? 'active' : ''}">
+            <span class="admin-frontdoor-link__label">Primary lane</span>
+            <strong>User Access</strong>
+            <span>Review who has access, what they own, and where role scope needs correction.</span>
+          </a>
+          <a href="#/admin/settings/defaults" class="admin-frontdoor-link ${currentSettingsSection === 'defaults' ? 'active' : ''}">
+            <span class="admin-frontdoor-link__label">Primary lane</span>
+            <strong>Platform Defaults</strong>
+            <span>Adjust thresholds and guidance only when the downstream user effect is understood.</span>
+          </a>
+          <details class="results-actions-disclosure admin-frontdoor-overflow">
+            <summary class="btn btn--ghost btn--sm">Advanced admin areas</summary>
+            <div class="results-actions-disclosure-menu">
+              <a href="#/admin/settings/company" class="btn btn--secondary btn--sm">AI Company Builder</a>
+              <a href="#/admin/settings/access" class="btn btn--secondary btn--sm">System Access</a>
+              <a href="#/admin/settings/audit" class="btn btn--secondary btn--sm">Audit Log</a>
+              <a href="#/admin/bu" class="btn btn--secondary btn--sm">Org Customisation</a>
+              <a href="#/admin/docs" class="btn btn--secondary btn--sm">Document Library</a>
+            </div>
+          </details>
         </div>
         <div class="admin-focus-strip">
           <div class="admin-focus-pill">

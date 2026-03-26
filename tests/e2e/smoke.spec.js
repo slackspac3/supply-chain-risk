@@ -409,7 +409,7 @@ test('wizard handoff guidance carries the scenario cleanly into steps 2 and 3', 
   });
 });
 
-test('pressing Enter signs in and opens the personal dashboard', async ({ page }) => {
+test('pressing Enter signs in and opens the personal workspace', async ({ page }) => {
   await mockSharedApis(page, {
     loginUser: {
       username: 'alex.trafton',
@@ -445,8 +445,8 @@ test('pressing Enter signs in and opens the personal dashboard', async ({ page }
     await page.getByLabel(/password/i).fill('secret');
     await page.getByLabel(/password/i).press('Enter');
     await expect(page).toHaveURL(/#\/dashboard$/);
-    await expect(page.getByText(/personal dashboard/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /start a new risk assessment/i })).toBeVisible();
+    await expect(page.getByText(/personal workspace/i)).toBeVisible();
+    await expect(page.locator('#btn-dashboard-new-assessment')).toBeVisible();
   });
 });
 
@@ -478,11 +478,72 @@ test('authenticated user dashboard renders without crashing', async ({ page }) =
 
   await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
     await expect(page).toHaveURL(/#\/dashboard$/);
-    await expect(page.getByRole('button', { name: /start a new risk assessment/i })).toBeVisible();
+    await expect(page.getByText(/personal workspace/i)).toBeVisible();
+    await expect(page.locator('#btn-dashboard-new-assessment')).toBeVisible();
     await page.getByText(/more workspace tools/i).click();
     await expect(page.locator('#btn-dashboard-start-template')).toBeVisible();
     await expect(page.locator('#btn-dashboard-start-sample')).toBeVisible();
     await expect(page.locator('#btn-dashboard-open-settings')).toBeVisible();
+  });
+});
+
+test('business-unit oversight dashboard prioritises review and context actions', async ({ page }) => {
+  const seededUserSettings = {
+    userProfile: {
+      fullName: 'Taylor BU',
+      jobTitle: 'BU Risk Lead',
+      businessUnit: 'Digital Platforms',
+      department: 'Security',
+      focusAreas: ['Operational resilience'],
+      preferredOutputs: 'Executive summaries',
+      workingContext: 'Oversee resilience posture across the business unit.'
+    },
+    onboardedAt: '2026-03-17T00:00:00.000Z',
+    _overrideKeys: []
+  };
+  await seedAuthenticatedUser(page, {
+    username: 'taylor.bu',
+    displayName: 'Taylor BU',
+    role: 'user'
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [
+        { id: 'bu_digital', type: 'business_unit', name: 'Digital Platforms', ownerUsername: 'taylor.bu' }
+      ],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [
+        {
+          id: 'a_review',
+          scenarioTitle: 'Critical supplier outage',
+          buName: 'Digital Platforms',
+          createdAt: '2026-03-20T00:00:00.000Z',
+          completedAt: '2026-03-21T00:00:00.000Z',
+          results: {
+            nearTolerance: true,
+            toleranceBreached: false,
+            annualReviewTriggered: false
+          }
+        }
+      ],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
+    await expect(page.getByText(/bu oversight workspace/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /review priority item/i })).toBeVisible();
+    await expect(page.getByText(/business context and defaults/i)).toBeVisible();
   });
 });
 
@@ -602,6 +663,7 @@ test('authenticated admin shell renders without crashing', async ({ page }) => {
   await expectNoClientCrashOnRoute(page, '/#/admin/settings/org', async () => {
     await expect(page.getByText(/platform control/i)).toBeVisible();
     await expect(page.getByRole('heading', { name: /organisation setup/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /platform home/i })).toBeVisible();
     await expect(page.locator('#btn-admin-logout')).toBeVisible();
   });
 });

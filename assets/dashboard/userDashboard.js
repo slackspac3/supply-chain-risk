@@ -96,9 +96,88 @@ function renderUserDashboard() {
   const primarySettingsLabel = capability.canManageBusinessUnit || capability.canManageDepartment
     ? capability.experience.primaryActionLabel
     : 'Personal Settings';
-  const roleHeroHint = capability.canManageBusinessUnit || capability.canManageDepartment
-    ? 'Keep the main path focused on review and context management. Everything else is still available under workspace tools.'
-    : 'Use the guided path first. Templates, imports, and sample paths are still available when you need them.'
+  const isOversightUser = capability.canManageBusinessUnit || capability.canManageDepartment;
+  const roleFrontDoor = isOversightUser
+    ? {
+        badge: capability.canManageBusinessUnit ? 'BU Oversight Workspace' : 'Function Oversight Workspace',
+        heroCopy: capability.canManageBusinessUnit
+          ? 'A focused oversight space for reviewing flagged business-unit work, maintaining context, and starting new assessments only when needed.'
+          : 'A focused oversight space for reviewing function-level work, maintaining context, and starting new assessments only when needed.',
+        roleLaneCopy: hasDraft
+          ? 'Continue the active draft, then bring it back into the review lane once the scenario is management-ready.'
+          : assessmentsNeedingReview.length
+            ? 'Open the highest-priority completed scenario and decide whether the business context, function context, or next action needs to change.'
+            : 'No item currently needs escalation, so keep the context current and start new work only when it is materially useful.',
+        quickStatus: hasDraft
+          ? 'A draft is in flight and should be either completed or archived before new work starts.'
+          : assessmentsNeedingReview.length
+            ? 'There are completed scenarios that need BU or function-level judgement.'
+            : 'No urgent review item is currently competing for attention.',
+        primaryActionLabel: assessmentsNeedingReview.length ? 'Review Priority Item' : hasDraft ? 'Resume Draft' : primarySettingsLabel,
+        heroHint: 'Keep the front door focused on attention, context, and oversight. Templates, imports, and other utilities stay available only when you need them.',
+        overviewCards: [
+          {
+            label: 'Needs attention',
+            value: openAssessmentRows.length,
+            foot: assessmentsNeedingReview.length ? 'Flagged scenarios or active drafts are ready for oversight review.' : 'No flagged scenario is currently competing for your attention.'
+          },
+          {
+            label: capability.canManageBusinessUnit ? 'Active BU work' : 'Active function work',
+            value: assessments.length,
+            foot: latestAssessment ? `Latest reviewed: ${new Date(latestAssessment.completedAt || latestAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'No completed assessments are currently saved'
+          },
+          {
+            label: 'Context coverage',
+            value: contextReadinessLabel,
+            foot: contextReadinessScore >= 5 ? 'Saved context is strong enough to support grounded drafting and review.' : 'Tighten role or context settings before relying too heavily on assisted output.'
+          }
+        ],
+        nextUpTitle: capability.canManageBusinessUnit ? 'BU attention queue' : 'Function attention queue',
+        nextUpDescription: capability.canManageBusinessUnit
+          ? 'Review the draft or result that most likely needs business-unit attention first.'
+          : 'Review the draft or result that most likely needs function-level attention first.',
+        recentTitle: capability.canManageBusinessUnit ? 'Recent BU work' : 'Recent function work',
+        recentDescription: 'Saved assessments remain available for comparison, duplication, or follow-on treatment work.',
+        contextTitle: capability.canManageBusinessUnit ? 'Business context and defaults' : 'Function context and defaults',
+        contextDescription: capability.canManageBusinessUnit
+          ? 'Keep the BU and working-function context current so teams see the right defaults and AI guidance.'
+          : 'Keep the function context current so AI assistance and saved defaults stay grounded in how the team actually works.',
+        playbookTitle: capability.canManageBusinessUnit ? 'Oversight playbook' : 'Function playbook',
+        playbookDescription: 'Open this only when you need the role-specific guidance. The main oversight lane stays intentionally focused by default.'
+      }
+    : {
+        badge: 'Personal Workspace',
+        heroCopy: 'A calm working space for moving from scenario framing to a management-ready risk view. Start with the guided path, then open detail only when you need it.',
+        roleLaneCopy,
+        quickStatus,
+        primaryActionLabel: 'Start Guided Assessment',
+        heroHint: 'Use the guided path first. Templates, imports, and sample paths are still available when you need them.',
+        overviewCards: [
+          {
+            label: 'Ready now',
+            value: openAssessmentRows.length,
+            foot: hasDraft ? 'Your live draft or priority review items are ready to open.' : 'No active draft right now. Start from the guided path when needed.'
+          },
+          {
+            label: 'Completed view',
+            value: assessments.length,
+            foot: latestAssessment ? `Latest: ${new Date(latestAssessment.completedAt || latestAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'No completed assessments yet'
+          },
+          {
+            label: 'Context signal',
+            value: contextReadinessLabel,
+            foot: contextReadinessScore >= 5 ? 'Your saved role and working context are ready to support AI-assisted drafting.' : 'Add more profile context to improve defaults and assisted output quality.'
+          }
+        ],
+        nextUpTitle: 'Next up',
+        nextUpDescription: 'Resume unfinished work or open the results that most likely need attention.',
+        recentTitle: 'Recent assessments',
+        recentDescription: 'Your latest saved analysis outputs.',
+        contextTitle: 'Your settings and saved context',
+        contextDescription: 'Reference information that shapes AI-assisted output and your default working context.',
+        playbookTitle: 'Role playbook',
+        playbookDescription: 'Open this when you want role-specific guidance. The primary workflow stays intentionally simple by default.'
+      };
   const renderDashboardEmptyState = ({ title, body, primaryId, primaryLabel, secondaryId = '', secondaryLabel = '' }) => `<div class="empty-state">
     <strong>${title}</strong>
     <div style="margin-top:8px">${body}</div>
@@ -114,19 +193,19 @@ function renderUserDashboard() {
         <section class="card card--elevated dashboard-hero">
           <div class="dashboard-hero-grid">
             <div class="dashboard-hero-main">
-              <div class="landing-badge">Personal Dashboard</div>
+              <div class="landing-badge">${roleFrontDoor.badge}</div>
               <h2 style="margin-top:var(--sp-4)">Welcome back, ${user?.displayName || 'there'}.</h2>
-              <p class="dashboard-hero-copy">A calm working space for moving from scenario framing to a management-ready risk view. Start with the guided path, then open detail only when you need it.</p>
+              <p class="dashboard-hero-copy">${roleFrontDoor.heroCopy}</p>
               <div class="dashboard-signal-strip">
                 <div class="dashboard-signal-pill">
                   <span class="dashboard-signal-pill__label">Primary lane</span>
                   <strong>${roleLaneTitle}</strong>
-                  <span>${roleLaneCopy}</span>
+                  <span>${roleFrontDoor.roleLaneCopy}</span>
                 </div>
                 <div class="dashboard-signal-pill">
                   <span class="dashboard-signal-pill__label">Workspace status</span>
                   <strong>${hasDraft ? 'Draft in progress' : assessmentsNeedingReview.length ? 'Review queue active' : 'Clear to start'}</strong>
-                  <span>${quickStatus}</span>
+                  <span>${roleFrontDoor.quickStatus}</span>
                 </div>
                 <div class="dashboard-signal-pill">
                   <span class="dashboard-signal-pill__label">Context readiness</span>
@@ -135,11 +214,11 @@ function renderUserDashboard() {
                 </div>
               </div>
               <div class="dashboard-hero-actions flex items-center gap-3 mt-6" style="flex-wrap:wrap">
-                <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="Start a New Risk Assessment">Start Guided Assessment</button>
-                <button class="btn btn--secondary" id="btn-dashboard-continue-draft" ${hasDraft ? '' : 'disabled'}>${hasDraft ? 'Resume Draft' : 'No Draft Yet'}</button>
+                <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="${roleFrontDoor.primaryActionLabel}">${roleFrontDoor.primaryActionLabel}</button>
+                <button class="btn btn--secondary" id="btn-dashboard-continue-draft" ${hasDraft ? '' : 'disabled'}>${hasDraft ? 'Resume Draft' : isOversightUser ? 'No Draft In Flight' : 'No Draft Yet'}</button>
                 <button class="btn btn--secondary" id="btn-dashboard-open-settings">${primarySettingsLabel}</button>
                 <details class="results-actions-disclosure dashboard-hero-overflow">
-                  <summary class="btn btn--ghost">More workspace tools</summary>
+                  <summary class="btn btn--ghost">${isOversightUser ? 'More oversight tools' : 'More workspace tools'}</summary>
                   <div class="results-actions-disclosure-menu">
                     <button class="btn btn--secondary btn--sm" id="btn-dashboard-start-template">Start from Template</button>
                     <button class="btn btn--secondary btn--sm" id="btn-dashboard-start-sample">Try Sample Assessment</button>
@@ -148,18 +227,18 @@ function renderUserDashboard() {
                   </div>
                 </details>
               </div>
-              <div class="form-help" style="margin-top:12px;color:rgba(255,255,255,.65)">${roleHeroHint}</div>
+              <div class="form-help" style="margin-top:12px;color:rgba(255,255,255,.65)">${roleFrontDoor.heroHint}</div>
             </div>
             <div class="card dashboard-hero-side">
-              <div class="context-panel-title">Today&apos;s operating picture</div>
+              <div class="context-panel-title">${isOversightUser ? 'Oversight picture' : 'Today&apos;s operating picture'}</div>
               <div class="dashboard-focus-stack">
                 <div class="dashboard-focus-card">
                   <span class="dashboard-focus-card__label">Recommended next move</span>
                   <strong>${roleLaneTitle}</strong>
-                  <div class="context-panel-copy">${quickStatus}</div>
+                  <div class="context-panel-copy">${roleFrontDoor.quickStatus}</div>
                 </div>
                 <div class="dashboard-focus-card">
-                  <span class="dashboard-focus-card__label">Role lens</span>
+                  <span class="dashboard-focus-card__label">${isOversightUser ? 'Managed scope' : 'Role lens'}</span>
                   <strong>${capability.roleSummary}</strong>
                   <div class="context-panel-copy">${capability.experience.dashboardLead}</div>
                 </div>
@@ -174,28 +253,14 @@ function renderUserDashboard() {
         </section>
 
         <section class="admin-overview-grid dashboard-at-a-glance" style="margin-top:var(--sp-8)">
-          ${UI.dashboardOverviewCard({
-            label: 'Ready now',
-            value: openAssessmentRows.length,
-            foot: hasDraft ? 'Your live draft or priority review items are ready to open.' : 'No active draft right now. Start from the guided path when needed.'
-          })}
-          ${UI.dashboardOverviewCard({
-            label: 'Completed view',
-            value: assessments.length,
-            foot: latestAssessment ? `Latest: ${new Date(latestAssessment.completedAt || latestAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'No completed assessments yet'
-          })}
-          ${UI.dashboardOverviewCard({
-            label: 'Context signal',
-            value: contextReadinessLabel,
-            foot: contextReadinessScore >= 5 ? 'Your saved role and working context are ready to support AI-assisted drafting.' : 'Add more profile context to improve defaults and assisted output quality.'
-          })}
+          ${roleFrontDoor.overviewCards.map(card => UI.dashboardOverviewCard(card)).join('')}
         </section>
 
         <section class="grid-2 dashboard-main-grid">
           <div class="dashboard-column">
             ${UI.dashboardSectionCard({
-              title: 'Next up',
-              description: 'Resume unfinished work or open the results that most likely need attention.',
+              title: roleFrontDoor.nextUpTitle,
+              description: roleFrontDoor.nextUpDescription,
               badge: openAssessmentRows.length,
               body: openAssessmentRows.length ? openAssessmentRows.map(item => UI.dashboardAssessmentRow({
                 assessmentId: item.action,
@@ -225,8 +290,8 @@ function renderUserDashboard() {
             })}
 
             ${UI.dashboardSectionCard({
-              title: 'Recent assessments',
-              description: 'Your latest saved analysis outputs.',
+              title: roleFrontDoor.recentTitle,
+              description: roleFrontDoor.recentDescription,
               badge: recentAssessments.length,
               body: recentAssessments.length ? recentAssessments.map(assessment => {
                 const lifecycle = getAssessmentLifecyclePresentation(assessment);
@@ -259,8 +324,8 @@ function renderUserDashboard() {
             })}
 
             <details class="dashboard-disclosure card card--elevated dashboard-section-card">
-              <summary>Your settings and saved context <span class="badge badge--neutral">${focusAreas.length ? 'Ready' : 'Needs setup'}</span></summary>
-              <div class="dashboard-disclosure-copy">Reference information that shapes AI-assisted output and your default working context.</div>
+              <summary>${roleFrontDoor.contextTitle} <span class="badge badge--neutral">${focusAreas.length ? 'Ready' : 'Needs setup'}</span></summary>
+              <div class="dashboard-disclosure-copy">${roleFrontDoor.contextDescription}</div>
               <div class="dashboard-disclosure-body">
                 <div class="card card--elevated dashboard-context-card dashboard-context-card--nested">
                   <div class="results-section-heading">Current profile</div>
@@ -277,8 +342,8 @@ function renderUserDashboard() {
 
           <div class="dashboard-column">
             <details class="dashboard-disclosure card card--elevated dashboard-section-card">
-              <summary>Role playbook <span class="badge badge--neutral">${capability.roleSummary}</span></summary>
-              <div class="dashboard-disclosure-copy">Open this when you want role-specific guidance. The primary workflow stays intentionally simple by default.</div>
+              <summary>${roleFrontDoor.playbookTitle} <span class="badge badge--neutral">${capability.roleSummary}</span></summary>
+              <div class="dashboard-disclosure-copy">${roleFrontDoor.playbookDescription}</div>
               <div class="dashboard-disclosure-body">
                 ${renderNonAdminHowToGuide(capability)}
               </div>
@@ -314,6 +379,18 @@ function renderUserDashboard() {
       </div>
     </main>`);
   document.getElementById('btn-dashboard-new-assessment')?.addEventListener('click', () => {
+    if (isOversightUser && hasDraft) {
+      openDraftWorkspaceRoute();
+      return;
+    }
+    if (isOversightUser && !hasDraft && assessmentsNeedingReview.length) {
+      Router.navigate(`/results/${assessmentsNeedingReview[0].id}`);
+      return;
+    }
+    if (isOversightUser && !hasDraft && !assessmentsNeedingReview.length) {
+      Router.navigate('/settings');
+      return;
+    }
     resetDraft();
     openDraftWorkspaceRoute();
   });

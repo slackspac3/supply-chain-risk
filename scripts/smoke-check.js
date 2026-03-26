@@ -136,7 +136,8 @@ expect(appJs.includes('item.sourceTypeLabel'), 'input provenance UI is missing s
 expect(auditLogSectionJs.includes('<th>Route</th>'), 'audit log runtime health table is missing route column');
 expect(e2eSmokeSpecJs.includes('Unexpected page errors on'), 'Playwright smoke suite is not checking for client-side crashes');
 expect(e2eSmokeSpecJs.includes('/#/results/example-assessment'), 'Playwright smoke suite is missing results-route coverage');
-expect(e2eSmokeSpecJs.includes('pressing Enter signs in and opens the personal dashboard'), 'Playwright smoke suite is missing Enter-to-login coverage');
+expect(e2eSmokeSpecJs.includes('pressing Enter signs in and opens the personal workspace'), 'Playwright smoke suite is missing Enter-to-login coverage');
+expect(e2eSmokeSpecJs.includes('business-unit oversight dashboard prioritises review and context actions'), 'Playwright smoke suite is missing BU oversight dashboard coverage');
 expect(e2eSmokeSpecJs.includes('authenticated admin shell renders without crashing'), 'Playwright smoke suite is missing authenticated admin coverage');
 expect(e2eSmokeSpecJs.includes('authenticated admin document library renders without crashing'), 'Playwright smoke suite is missing admin document-library coverage');
 expect(e2eSmokeSpecJs.includes('dashboard archive helpers move the assessment into archived items after the confirm modal opens'), 'Playwright smoke suite is missing dashboard archive state coverage');
