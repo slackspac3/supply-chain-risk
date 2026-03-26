@@ -788,6 +788,32 @@ input[type="range"]::-webkit-slider-thumb {
   animation: shimmer 1.8s infinite;
   border-radius: var(--radius-md);
 }
+.ui-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(211,223,235,0.62);
+}
+.ui-eyebrow-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(214,225,238,0.1);
+  color: var(--color-accent-300);
+  font-size: 0.72rem;
+  line-height: 1;
+}
+.wizard-assist-skeleton {
+  padding: var(--sp-5);
+  background: linear-gradient(180deg, rgba(17, 27, 40, 0.88), rgba(12, 20, 31, 0.82));
+}
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }

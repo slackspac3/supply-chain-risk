@@ -3,6 +3,20 @@
  */
 
 const UI = (() => {
+  function iconTokenForLabel(label = '') {
+    const text = String(label || '').toLowerCase();
+    if (/position|status|posture|tolerance/.test(text)) return '◌';
+    if (/action|next|priority|decision/.test(text)) return '→';
+    if (/confidence|evidence|trust/.test(text)) return '◇';
+    if (/role|focus|scope|context/.test(text)) return '·';
+    if (/ready|open|completed|view/.test(text)) return '○';
+    return '·';
+  }
+
+  function sectionEyebrow(label = '', toneClass = '') {
+    return `<span class="ui-eyebrow ${toneClass}"><span class="ui-eyebrow-mark" aria-hidden="true">${iconTokenForLabel(label)}</span><span>${label}</span></span>`;
+  }
+
   // ─── Toast ────────────────────────────────────────────────
   function toast(message, type = 'success', duration = 3500) {
     const container = document.getElementById('toast-container');
@@ -103,6 +117,15 @@ const UI = (() => {
       <div style="margin-top:8px; width:60%">${skeletonBlock(14, 4)}</div>
     </div>`;
   }
+  function wizardAssistSkeleton() {
+    return `<div class="card wizard-assist-skeleton">
+      <div class="ui-eyebrow"><span class="ui-eyebrow-mark" aria-hidden="true">◇</span><span>Preparing suggested draft</span></div>
+      <div style="margin-top:14px">${skeletonBlock(18, 6)}</div>
+      <div style="margin-top:12px">${skeletonBlock(14, 4)}</div>
+      <div style="margin-top:8px">${skeletonBlock(14, 4)}</div>
+      <div style="margin-top:18px">${skeletonBlock(78, 12)}</div>
+    </div>`;
+  }
 
 
   function adminSectionHeader({ title, description = '', actions = '' }) {
@@ -126,7 +149,7 @@ const UI = (() => {
 
   function dashboardOverviewCard({ label, value, foot }) {
     return `<div class="admin-overview-card dashboard-overview-card--premium">
-      <div class="admin-overview-label">${label}</div>
+      ${sectionEyebrow(label)}
       <div class="admin-overview-value dashboard-overview-value--premium" style="font-size:1.2rem">${value}</div>
       <div class="admin-overview-foot">${foot}</div>
     </div>`;
@@ -169,7 +192,7 @@ const UI = (() => {
 
   function resultsBriefCard({ label, value, copy }) {
     return `<div class="results-brief-card">
-      <div class="results-brief-label">${label}</div>
+      ${sectionEyebrow(label)}
       <div class="results-brief-value">${value}</div>
       <div class="results-brief-copy">${copy}</div>
     </div>`;
@@ -535,5 +558,5 @@ const UI = (() => {
     return `${_getCurrencyPrefix(currency)}${displayValue.toLocaleString(currency === 'AED' ? 'en-AE' : 'en-US')}`;
   }
 
-  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, wizardInputSection, sectionStatusBadge, disclosureSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC };
+  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, wizardAssistSkeleton, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, wizardInputSection, sectionStatusBadge, disclosureSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC };
 })();

@@ -358,7 +358,7 @@ async function runLLMAssist() {
   btn.disabled = true; btn.classList.add('loading');
   btnText.textContent = '⏳ Retrieving docs and generating inputs…';
   if (status) status.textContent = 'AI assist is building a suggested draft and loading starting values for the next step.';
-  output.innerHTML = `<div class="card mt-4">${UI.skeletonBlock(20)}<div style="margin-top:12px">${UI.skeletonBlock(14,4)}</div><div style="margin-top:8px">${UI.skeletonBlock(14,4)}</div></div>`;
+  output.innerHTML = `<div class="mt-4">${UI.wizardAssistSkeleton()}</div>`;
   try {
     const bu = getBUList().find(b => b.id === AppState.draft.buId);
     const aiContext = buildCurrentAIAssistContext({ buId: AppState.draft.buId });

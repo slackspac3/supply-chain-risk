@@ -947,7 +947,7 @@ async function runIntakeAssist() {
     UI.toast('Add a risk statement or upload a risk register first.', 'warning');
     return;
   }
-  output.innerHTML = `<div class="card">${UI.skeletonBlock(18)}<div class="mt-3">${UI.skeletonBlock(14, 4)}</div><div class="mt-3">${UI.skeletonBlock(90, 10)}</div></div>`;
+  output.innerHTML = UI.wizardAssistSkeleton();
   try {
     const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
     const citations = await RAGService.retrieveRelevantDocs(bu?.id, assistSeed || AppState.draft.registerFindings, 5);
@@ -1001,7 +1001,7 @@ async function enhanceNarrativeWithAI() {
   }
   const button = document.getElementById('btn-enhance-risk-statement');
   const resetButton = _setStep1ButtonBusy(button, 'Enhancing…');
-  output.innerHTML = `<div class="card">${UI.skeletonBlock(18)}<div class="mt-3">${UI.skeletonBlock(14, 4)}</div><div class="mt-3">${UI.skeletonBlock(90, 10)}</div></div>`;
+  output.innerHTML = UI.wizardAssistSkeleton();
   try {
     const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
     const citations = await RAGService.retrieveRelevantDocs(bu?.id, assistSeed || narrative, 5);
