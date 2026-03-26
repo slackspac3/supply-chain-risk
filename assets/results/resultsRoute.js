@@ -175,6 +175,7 @@ function renderResultsComparisonHighlight(comparison) {
       : 'Decision delta is limited';
   return `<section class="results-section-stack">
     <div class="results-section-heading">Treatment comparison</div>
+    <div class="results-comparison-foot">Use this to see whether the proposed change materially improves the current position and why.</div>
     <div class="results-comparison-card results-comparison-card--spotlight">
       <div class="results-comparison-spotlight">
         <div>
@@ -286,6 +287,7 @@ function renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence,
 function renderExecutiveInsightCluster({ scenarioNarrative, executiveDecision, executiveAnnualView, analystSummary, comparisonHighlight, recommendationCards }) {
   return `<section class="results-section-stack">
     <div class="results-section-heading">Executive meaning</div>
+    <div class="results-comparison-foot">Start here for business meaning, treatment impact, and the immediate decision.</div>
     <div class="results-summary-grid results-summary-grid--primary">
       <div class="results-summary-card results-summary-card--wide">
         <div class="results-driver-label">What this means in plain language</div>
@@ -310,6 +312,7 @@ function renderExecutiveInsightCluster({ scenarioNarrative, executiveDecision, e
 function renderTrustExplanationLayer({ confidenceNeedsBlock, explanationPanel, impactMix, thresholdModel, results, assessmentIntelligence, assessment, citations, primaryGrounding, supportingReferences, missingInformation }) {
   return `<section class="results-section-stack">
     <div class="results-section-heading">Trust and explanation</div>
+    <div class="results-comparison-foot">Use this layer to understand what is driving the result, how much confidence to place in it, and what still needs evidence.</div>
     ${confidenceNeedsBlock}
     ${explanationPanel}
     ${renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence, citations, primaryGrounding, supportingReferences, missingInformation })}
@@ -675,7 +678,8 @@ function buildResultTrustBasis(assessment, runMetadata) {
 function renderModelBasisPanel(assessment, runMetadata, confidenceFrame, thresholdModel) {
   const basis = buildResultTrustBasis(assessment, runMetadata);
   return `<section class="results-section-stack">
-    <div class="results-section-heading">Model basis and input sources</div>
+    <div class="results-section-heading">Technical appendix</div>
+    <div class="results-comparison-foot">Open this layer when you want the model basis, input sources, and reproducibility detail behind the headline result.</div>
     <div class="results-model-basis">
       <div class="results-model-basis__intro">
         <div class="results-driver-label">Plain-language model summary</div>

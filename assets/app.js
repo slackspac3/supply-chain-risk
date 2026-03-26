@@ -4665,7 +4665,9 @@ function renderAdminSettings(activeSection = 'org') {
           </div>
           <div class="admin-shell-note">Keep the main operating action simple: assess likely downstream impact, then save only when the end-user effect is clear.</div>
         </div>
-        <div class="admin-frontdoor-nav">
+        <div class="results-section-heading" style="margin-top:var(--sp-6)">Core admin tasks</div>
+        <div class="form-help" style="margin-top:8px">Start with structure, access, or defaults. Open deeper platform tools only when you need them.</div>
+        <div class="admin-frontdoor-nav" style="margin-top:var(--sp-5)">
           <a href="#/admin/settings/org" class="admin-frontdoor-link ${currentSettingsSection === 'org' ? 'active' : ''}">
             <span class="admin-frontdoor-link__label">Primary lane</span>
             <strong>Organisation Setup</strong>
@@ -4682,7 +4684,7 @@ function renderAdminSettings(activeSection = 'org') {
             <span>Adjust thresholds and guidance only when the downstream user effect is understood.</span>
           </a>
           <details class="results-actions-disclosure admin-frontdoor-overflow">
-            <summary class="btn btn--ghost btn--sm">Advanced admin areas</summary>
+            <summary class="btn btn--ghost btn--sm">Platform tools</summary>
             <div class="results-actions-disclosure-menu">
               <a href="#/admin/settings/company" class="btn btn--secondary btn--sm">AI Company Builder</a>
               <a href="#/admin/settings/access" class="btn btn--secondary btn--sm">System Access</a>
@@ -4704,7 +4706,9 @@ function renderAdminSettings(activeSection = 'org') {
             <span>${currentSettingsSection === 'org' ? 'A clear ownership tree makes downstream context and user setup much calmer.' : currentSettingsSection === 'users' ? 'Account changes are higher-risk when role and BU context are not aligned.' : currentSettingsSection === 'defaults' ? 'Thresholds and AI defaults shape many downstream user decisions.' : 'This section contains stronger platform controls, so make one intentional change at a time.'}</span>
           </div>
         </div>
-        <div class="admin-overview-grid">
+        <div class="results-section-heading" style="margin-top:var(--sp-6)">Platform snapshot</div>
+        <div class="form-help" style="margin-top:8px">A compact view of structure, context coverage, and where platform administration is concentrated.</div>
+        <div class="admin-overview-grid" style="margin-top:var(--sp-5)">
           <div class="admin-overview-card">
             <div class="admin-overview-label">Businesses</div>
             <div class="admin-overview-value">${companyEntities.length}</div>

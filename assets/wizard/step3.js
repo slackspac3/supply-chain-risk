@@ -582,6 +582,10 @@ function renderWizard3() {
           </div>
         </div>
         <div class="wizard-body">
+          <section class="wizard-ia-section anim-fade-in">
+            <div class="results-section-heading">Sanity-check the starting point</div>
+            <div class="form-help" style="margin-top:8px">Check readiness and source quality first. Then work through the core estimate from frequency to impact.</div>
+          </section>
           ${renderEstimateFocusStrip(draft, isAdv, validation, baselineAssessment)}
           ${draft.learningNote ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Template learning</div><p class="context-panel-copy">${draft.learningNote}</p></div>` : ''}
           ${renderEstimateHandoffCard(draft)}
@@ -590,6 +594,11 @@ function renderWizard3() {
           ${renderEstimateQuickStartBlock(draft, recommendedPresetKey)}
           ${renderEstimateSourceAtGlance(draft)}
           ${renderEstimateModeNote(isAdv)}
+
+          <section class="wizard-ia-section anim-fade-in">
+            <div class="results-section-heading">Enter the core estimate</div>
+            <div class="form-help" style="margin-top:8px">Work through frequency, exposure, and cost in that order. Open advanced sections only when they materially improve the model.</div>
+          </section>
 
           ${UI.wizardInputSection({
             title: 'How often could this happen? <span data-tooltip="How many times per year this type of event could realistically occur." style="cursor:help;color:var(--color-accent-300);font-size:.8rem">ⓘ</span>',
@@ -657,6 +666,11 @@ function renderWizard3() {
               })}
             </div>`
           })}
+
+          <section class="wizard-ia-section anim-fade-in">
+            <div class="results-section-heading">Open advanced detail only if needed</div>
+            <div class="form-help" style="margin-top:8px">These sections support challenge, calibration, and tuning. Most users can finish the estimate without opening all of them.</div>
+          </section>
 
           ${renderEstimateBackgroundDetails(draft, bu, isAdv, cur, sym)}
           ${renderEstimateOptionalHelpDetails(draft, sym)}

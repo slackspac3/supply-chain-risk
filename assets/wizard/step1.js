@@ -525,6 +525,10 @@ function renderWizard1() {
           </div>
         </div>
         <div class="wizard-body">
+          <section class="wizard-ia-section anim-fade-in">
+            <div class="results-section-heading">Set the frame</div>
+            <div class="form-help" style="margin-top:8px">Confirm the context first, then choose the simplest way to create a useful starting draft.</div>
+          </section>
           <div class="wizard-focus-strip wizard-focus-strip--compact anim-fade-in">
             <div class="wizard-focus-card wizard-focus-card--wide">
               <span class="wizard-focus-card__label">Step goal</span>
@@ -582,12 +586,21 @@ function renderWizard1() {
           `
           })}
 
+          <section class="wizard-ia-section anim-fade-in">
+            <div class="results-section-heading">Build the scenario</div>
+            <div class="form-help" style="margin-top:8px">Use the guided path by default. Open the alternate paths only if you already have source material.</div>
+          </section>
           ${renderStep1GuidedBuilderCard(draft)}
           ${renderStep1OtherWaysToStart(draft, hasScenarioDraft, hasImportedSource)}
 
           <div id="intake-output">
             ${draft.intakeSummary ? `<div class="card card--glow anim-fade-in"><div class="context-panel-title">AI Intake Summary</div><p class="context-panel-copy">${draft.intakeSummary}</p>${draft.linkAnalysis ? `<div class="context-panel-foot">${draft.linkAnalysis}</div>` : ''}</div>` : ''}
           </div>
+
+          <section class="wizard-ia-section anim-fade-in">
+            <div class="results-section-heading">Choose what stays in scope</div>
+            <div class="form-help" style="margin-top:8px">Carry forward only the risks that belong in the same scenario and management discussion.</div>
+          </section>
 
           <div class="card anim-fade-in anim-delay-2">
             <div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:var(--sp-3)">

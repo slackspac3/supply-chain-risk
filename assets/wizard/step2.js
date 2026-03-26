@@ -17,6 +17,10 @@ function renderWizard2() {
           </div>
         </div>
         <div class="wizard-body">
+          <section class="wizard-ia-section anim-fade-in">
+            <div class="results-section-heading">Clarify the scenario</div>
+            <div class="form-help" style="margin-top:8px">Tighten the wording first, then open AI structure or optional fields only if they improve the estimate.</div>
+          </section>
           ${renderStep2FocusStrip(draft, selectedRisks, scenarioGeographies)}
           ${renderStep2QuantBridge(draft, selectedRisks, scenarioGeographies)}
           ${renderStep2WhyItMattersCard(draft, selectedRisks, scenarioGeographies)}
@@ -44,6 +48,10 @@ function renderWizard2() {
             headerExtras: UI.sectionStatusBadge('Required', 'gold'),
             body: `<div class="form-group"><textarea class="form-textarea" id="narrative" rows="5" placeholder="Describe the risk: What could happen? Who might cause it? What assets are at risk? What are the potential impacts?" style="min-height:160px">${draft.enhancedNarrative || draft.narrative || ''}</textarea></div>`
           })}
+          <section class="wizard-ia-section anim-fade-in">
+            <div class="results-section-heading">Open more structure only if needed</div>
+            <div class="form-help" style="margin-top:8px">Use structured fields and AI structure support when they make the scenario cleaner or more challengeable.</div>
+          </section>
           ${UI.disclosureSection({
             title: 'Optional structured fields',
             badgeLabel: 'Optional',

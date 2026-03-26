@@ -302,7 +302,7 @@ function renderUserDashboard() {
               <div class="form-help" style="margin-top:12px;color:rgba(255,255,255,.65)">${roleFrontDoor.heroHint}</div>
             </div>
             <div class="card dashboard-hero-side">
-              <div class="context-panel-title">${isOversightUser ? 'Oversight picture' : 'Today&apos;s operating picture'}</div>
+              <div class="context-panel-title">${isOversightUser ? 'Oversight summary' : 'Today&apos;s summary'}</div>
               <div class="dashboard-focus-stack">
                 <div class="dashboard-focus-card">
                   <span class="dashboard-focus-card__label">Recommended next move</span>
@@ -339,12 +339,19 @@ function renderUserDashboard() {
           `).join('')}
         </section>
 
-        <section class="admin-overview-grid dashboard-at-a-glance" style="margin-top:var(--sp-8)">
+        <section style="margin-top:var(--sp-8)">
+          <div class="results-section-heading">At a glance</div>
+          <div class="form-help" style="margin-top:8px">A compact view of current attention, completed work, and context quality.</div>
+        </section>
+
+        <section class="admin-overview-grid dashboard-at-a-glance" style="margin-top:var(--sp-5)">
           ${roleFrontDoor.overviewCards.map(card => UI.dashboardOverviewCard(card)).join('')}
         </section>
 
         <section class="grid-2 dashboard-main-grid">
           <div class="dashboard-column">
+            <div class="results-section-heading">Do the work</div>
+            <div class="form-help" style="margin-top:8px;margin-bottom:var(--sp-4)">Start here for the next item to assess, review, or resume.</div>
             ${UI.dashboardSectionCard({
               title: roleFrontDoor.nextUpTitle,
               description: roleFrontDoor.nextUpDescription,
@@ -415,6 +422,8 @@ function renderUserDashboard() {
           </div>
 
           <div class="dashboard-column">
+            <div class="results-section-heading">Reference and history</div>
+            <div class="form-help" style="margin-top:8px;margin-bottom:var(--sp-4)">Open archived items and supporting context only when you need them.</div>
             <details class="dashboard-disclosure card card--elevated dashboard-section-card" ${archivedAssessments.length ? '' : ''}>
               <summary>Archived items <span class="badge badge--neutral">${archivedAssessments.length}</span></summary>
               <div class="dashboard-disclosure-copy">Stored out of the way, but still available if you need them again.</div>
