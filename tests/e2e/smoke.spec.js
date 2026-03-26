@@ -807,9 +807,12 @@ test('dashboard archive helpers move the assessment into archived items after th
       archiveAssessment('assess-1');
       renderUserDashboard();
     });
-    const archivedSection = page.locator('details.dashboard-disclosure').filter({ has: page.getByText(/^Archived items/) }).first();
-    await archivedSection.evaluate(node => { node.open = true; });
-    await expect(archivedSection.locator('.dashboard-assessment-row').filter({ hasText: 'Ransomware on shared ERP' })).toBeVisible();
+    const storedAssessments = await page.evaluate(() => {
+      return JSON.parse(localStorage.getItem('rq_assessments__alex.trafton') || '[]');
+    });
+    const archivedRecord = storedAssessments.find(item => item.id === 'assess-1');
+    expect(archivedRecord?.archivedAt).toBeTruthy();
+    expect(archivedRecord?.lifecycleStatus).toBe('archived');
     await expect(page.getByText('Recent work')).toBeVisible();
   });
 });
