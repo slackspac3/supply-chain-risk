@@ -14,12 +14,31 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
   let currentStep = Math.max(0, Math.min(4, Number(startStep) || 0));
   let onboardingAiSourceText = '';
   let onboardingAiSourceName = '';
+  let inlineValidationMessage = '';
 
   function saveProgress(markComplete = false) {
     saveUserSettings({
       ...draftSettings,
       onboardedAt: markComplete ? (draftSettings.onboardedAt || new Date().toISOString()) : draftSettings.onboardedAt || ''
     });
+  }
+
+  function getCurrentStepValidationMessage() {
+    if (currentStep === 0) {
+      if (!String(document.getElementById('onboard-name')?.value || '').trim()) return 'Add your name so the dashboard and saved outputs can address you clearly.';
+      if (!String(document.getElementById('onboard-title')?.value || '').trim()) return 'Add your role so the platform can frame outputs around the work you do.';
+    }
+    if (currentStep === 2 && !(document.getElementById('onboard-geo-primary')?.value || '').trim()) {
+      return 'Choose a primary geography so default context and regulations start in the right place.';
+    }
+    if (currentStep === 3) {
+      const preferredOutputs = String(document.getElementById('onboard-preferred-outputs')?.value || '').trim();
+      const workingContext = String(document.getElementById('onboard-working-context')?.value || '').trim();
+      if (!preferredOutputs && !workingContext) {
+        return 'Add at least one note about your output style or working context so the pilot can give you more useful starting drafts.';
+      }
+    }
+    return '';
   }
 
   function renderStep() {
@@ -141,21 +160,29 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
               </div>
             </div>
 
+            ${currentStep === 3 ? renderPilotWarningBanner('ai', { compact: true }) : ''}
+            ${currentStep === 4 ? renderPilotWarningBanner('poc', { compact: true, text: 'Keep these defaults lightweight for the pilot. You can refine them later without blocking your first assessment.' }) : ''}
+
             <div class="card mt-6" style="padding:var(--sp-6);background:var(--bg-canvas)">
               ${step.body}
             </div>
 
+            ${inlineValidationMessage ? `<div class="banner banner--warning mt-4"><span class="banner-icon">△</span><span class="banner-text">${escapeHtml(inlineValidationMessage)}</span></div>` : ''}
+
             <div class="flex items-center justify-between mt-6" style="gap:var(--sp-4);flex-wrap:wrap">
               <button class="btn btn--ghost" id="btn-onboard-back" ${currentStep === 0 ? 'disabled' : ''}>Back</button>
               <div class="flex items-center gap-3" style="flex-wrap:wrap">
+                ${currentStep >= 3 ? '<button class="btn btn--ghost" id="btn-onboard-sample-path" type="button">Try Sample Assessment</button>' : ''}
                 ${currentStep === stepMeta.length - 1
                   ? `<button class="btn btn--primary" id="btn-onboard-finish">Finish Setup</button>`
                   : `<button class="btn btn--primary" id="btn-onboard-next">Continue</button>`}
               </div>
             </div>
+            <div class="form-help" data-workspace-sync-state data-scope="settings" style="margin-top:var(--sp-4)">Changes save automatically</div>
           </div>
         </div>
       </main>`);
+    updateWorkspaceSyncState('settings');
 
     let focusInput = null;
     if (currentStep === 2) {
@@ -289,8 +316,14 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
 
     document.getElementById('btn-onboard-next')?.addEventListener('click', () => {
       captureStepValues();
+      inlineValidationMessage = getCurrentStepValidationMessage();
+      if (inlineValidationMessage) {
+        renderStep();
+        return;
+      }
       saveProgress(false);
       currentStep += 1;
+      inlineValidationMessage = '';
       renderStep();
     });
 
@@ -303,6 +336,11 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
       }
       try {
         captureStepValues();
+        inlineValidationMessage = getCurrentStepValidationMessage();
+        if (inlineValidationMessage) {
+          renderStep();
+          return;
+        }
         saveUserSettings({
           ...draftSettings,
           onboardedAt: new Date().toISOString(),
@@ -318,6 +356,12 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
           btn.textContent = originalText;
         }
       }
+    });
+
+    document.getElementById('btn-onboard-sample-path')?.addEventListener('click', async () => {
+      captureStepValues();
+      saveProgress(false);
+      launchPilotSampleAssessment();
     });
   }
 

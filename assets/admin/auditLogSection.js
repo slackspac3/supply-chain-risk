@@ -33,7 +33,7 @@ const AdminAuditLogSection = (() => {
         description: 'Use this view to confirm sign-ins, user changes, and shared-setting updates.',
         table: `<table class="data-table">
           <thead><tr><th>Time</th><th>User</th><th>Role</th><th>Activity</th><th>Target</th><th>Outcome</th><th>Details</th></tr></thead>
-          <tbody>${auditEntries.length ? auditEntries.map(entry => `<tr><td>${new Date(entry.ts).toLocaleString()}</td><td>${entry.actorUsername || 'system'}</td><td>${entry.actorRole || 'system'}</td><td>${entry.eventType || 'event'}</td><td>${entry.target || '—'}</td><td>${entry.status || 'success'}</td><td>${formatAuditDetails(entry.details) || '—'}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty-state">No activity has been loaded yet.</div></td></tr>'}</tbody>
+          <tbody>${auditEntries.length ? auditEntries.map(entry => `<tr><td>${new Date(entry.ts).toLocaleString()}</td><td>${entry.actorUsername || 'system'}</td><td>${entry.actorRole || 'system'}</td><td>${entry.eventType || 'event'}</td><td>${entry.target || '—'}</td><td>${entry.status || 'success'}</td><td>${formatAuditDetails(entry.details) || '—'}</td></tr>`).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>No recent activity loaded yet.</strong><div style="margin-top:8px">Use Refresh Activity after the next sign-in, password reset, account change, or settings update to confirm the audit trail is moving.</div></div></td></tr>'}</tbody>
         </table>`
       })}`
     });

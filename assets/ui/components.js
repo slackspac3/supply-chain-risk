@@ -303,8 +303,17 @@ const UI = (() => {
   }
 
   // ─── Confirm Dialog ───────────────────────────────────────
-  function confirm(message) {
+  function confirm(input) {
     return new Promise(resolve => {
+      const options = typeof input === 'string'
+        ? { title: 'Confirm', body: `<p>${input}</p>`, confirmLabel: 'Confirm', cancelLabel: 'Cancel', tone: 'danger' }
+        : {
+            title: input?.title || 'Confirm',
+            body: input?.body ? `<div>${input.body}</div>` : `<p>${input?.message || 'Please confirm this action.'}</p>`,
+            confirmLabel: input?.confirmLabel || 'Confirm',
+            cancelLabel: input?.cancelLabel || 'Cancel',
+            tone: input?.tone || 'danger'
+          };
       let settled = false;
       const finish = value => {
         if (settled) return;
@@ -312,10 +321,10 @@ const UI = (() => {
         resolve(value);
       };
       const m = modal({
-        title: 'Confirm',
-        body: `<p>${message}</p>`,
-        footer: `<button class="btn btn--ghost" id="confirm-cancel">Cancel</button>
-                 <button class="btn btn--danger" id="confirm-ok">Confirm</button>`,
+        title: options.title,
+        body: options.body,
+        footer: `<button class="btn btn--ghost" id="confirm-cancel">${options.cancelLabel}</button>
+                 <button class="btn btn--${options.tone}" id="confirm-ok">${options.confirmLabel}</button>`,
         onClose: () => finish(false)
       });
       document.getElementById('confirm-ok').addEventListener('click', () => { finish(true); m.close(); });

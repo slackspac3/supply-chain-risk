@@ -2323,6 +2323,29 @@ canvas { display: block; width: 100%; }
   border-color: rgba(16, 185, 129, 0.28);
 }
 
+[data-workspace-sync-state] {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,0.04);
+}
+
+[data-workspace-sync-state][data-state="syncing"] {
+  border-color: rgba(96, 165, 250, 0.32);
+}
+
+[data-workspace-sync-state][data-state="warning"] {
+  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--text-primary);
+}
+
+[data-workspace-sync-state][data-state="saved"] {
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
 .results-actions-disclosure {
   position: relative;
 }

@@ -78,6 +78,54 @@ function getReleaseLabel() {
   return `Version ${release.version} · ${String(release.channel || 'pilot').toUpperCase()} · Build ${release.build}`;
 }
 
+function formatRelativePilotTime(timestamp, fallback = 'just now') {
+  const safeTimestamp = Number(timestamp || 0);
+  if (!safeTimestamp) return fallback;
+  const elapsedMs = Math.max(0, Date.now() - safeTimestamp);
+  if (elapsedMs < 15000) return 'just now';
+  const seconds = Math.round(elapsedMs / 1000);
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'} ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function renderPilotWarningBanner(kind = 'poc', {
+  text = '',
+  title = '',
+  compact = false
+} = {}) {
+  const resolved = {
+    poc: {
+      tone: 'poc',
+      icon: '⚠',
+      title: title || 'PoC limitation',
+      text: text || 'This pilot supports structured discussion and testing. Validate important conclusions with expert review before using them in formal decisions.'
+    },
+    ai: {
+      tone: 'info',
+      icon: '✦',
+      title: title || 'AI-generated suggestions',
+      text: text || 'Treat AI content as a suggested draft. Keep what helps, edit what does not, and confirm the assumptions before you rely on it.'
+    },
+    lowConfidence: {
+      tone: 'warning',
+      icon: '△',
+      title: title || 'Low-confidence inputs',
+      text: text || 'Some inputs still rely on weak evidence or broad assumptions. Tighten the ranges or gather better source material before you escalate this result.'
+    }
+  }[kind] || {
+    tone: 'info',
+    icon: 'ℹ',
+    title: title || 'Working note',
+    text
+  };
+  return `<div class="banner banner--${resolved.tone}${compact ? '' : ' mt-4'}"><span class="banner-icon">${resolved.icon}</span><span class="banner-text"><strong>${escapeHtml(resolved.title)}:</strong> ${escapeHtml(resolved.text)}</span></div>`;
+}
+
 function normaliseAdminSettings(settings = {}) {
   const mergedRegulations = Array.from(new Set([
     ...DEFAULT_ADMIN_SETTINGS.applicableRegulations,
@@ -128,6 +176,7 @@ const AppState = {
   userStateSyncPending: null,
   userStateSyncInFlight: false,
   userStateLastConflict: null,
+  userSettingsSavedAt: 0,
   auditLogCache: { loaded: false, loading: false, entries: [], summary: null, error: '' },
   clientRuntimeErrors: [],
   draftLastSavedAt: 0,
@@ -196,6 +245,7 @@ function applyUserStateSnapshotLocally(username, state = {}) {
     _meta: buildExpectedMeta(state._meta)
   };
   updateUserStateCache(nextCache);
+  AppState.userSettingsSavedAt = Number(nextCache._meta?.updatedAt || AppState.userSettingsSavedAt || 0);
   if (nextCache.userSettings) {
     localStorage.setItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.userSettings));
   } else {
@@ -445,12 +495,31 @@ function formatDraftSaveState() {
   if (AppState.draftSaveTimer) return 'Saving draft soon…';
   if (AppState.draftDirty) return 'Changes not saved yet';
   if (!AppState.draftLastSavedAt) return 'Draft will save automatically';
-  const elapsedMs = Math.max(0, Date.now() - AppState.draftLastSavedAt);
-  if (elapsedMs < 15000) return 'Saved just now';
-  const seconds = Math.round(elapsedMs / 1000);
-  if (seconds < 60) return `Saved ${seconds} seconds ago`;
-  const minutes = Math.round(seconds / 60);
-  return `Saved ${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  return `Saved ${formatRelativePilotTime(AppState.draftLastSavedAt)}`;
+}
+
+function formatWorkspaceSyncState(scope = 'settings') {
+  if (AppState.userStateLastConflict?.code === 'WRITE_CONFLICT') return 'Latest saved version available';
+  if (AppState.userStateSyncInFlight) return scope === 'wizard' ? 'Saving draft…' : 'Saving your changes…';
+  if (AppState.userStateSyncPending || AppState.userStateSyncTimer) return scope === 'wizard' ? 'Saving draft soon…' : 'Changes queued to sync';
+  if (scope === 'wizard') return formatDraftSaveState();
+  const lastSavedAt = Number(AppState.userSettingsSavedAt || AppState.userStateCache?._meta?.updatedAt || 0);
+  if (!lastSavedAt) return 'Changes save automatically';
+  return `Last synced ${formatRelativePilotTime(lastSavedAt)}`;
+}
+
+function updateWorkspaceSyncState(scope = null) {
+  const selector = scope ? `[data-workspace-sync-state][data-scope="${scope}"]` : '[data-workspace-sync-state]';
+  document.querySelectorAll(selector).forEach(node => {
+    const nodeScope = node.dataset.scope || scope || 'settings';
+    const text = formatWorkspaceSyncState(nodeScope);
+    node.textContent = text;
+    node.dataset.state = /latest saved version available/i.test(text)
+      ? 'warning'
+      : (AppState.userStateSyncInFlight || AppState.userStateSyncPending || AppState.userStateSyncTimer)
+        ? 'syncing'
+        : 'saved';
+  });
 }
 
 function updateWizardSaveState() {
@@ -459,6 +528,7 @@ function updateWizardSaveState() {
     node.textContent = text;
     node.dataset.state = AppState.draftDirty ? 'dirty' : 'saved';
   });
+  updateWorkspaceSyncState('wizard');
 }
 
 function markDraftDirty() {
@@ -947,6 +1017,7 @@ function queueSharedUserStateSync(patch = {}, username = AuthService.getCurrentU
     ...(AppState.userStateSyncPending || {}),
     ...safePatch
   };
+  updateWorkspaceSyncState();
   if (AppState.userStateSyncTimer) clearTimeout(AppState.userStateSyncTimer);
   AppState.userStateSyncTimer = setTimeout(() => {
     AppState.userStateSyncTimer = null;
@@ -959,6 +1030,7 @@ function queueSharedUserStateSync(patch = {}, username = AuthService.getCurrentU
     if (!pendingPatch || !Object.keys(pendingPatch).length) return;
     AppState.userStateSyncInFlight = true;
     updateWizardSaveState();
+    updateWorkspaceSyncState();
     requestUserState(
       'PATCH',
       safeUsername,
@@ -972,10 +1044,12 @@ function queueSharedUserStateSync(patch = {}, username = AuthService.getCurrentU
         applyUserStateSnapshotLocally(safeUsername, data?.state || {});
         AppState.userStateSyncInFlight = false;
         updateWizardSaveState();
+        updateWorkspaceSyncState();
       })
       .catch(async error => {
         AppState.userStateSyncInFlight = false;
         updateWizardSaveState();
+        updateWorkspaceSyncState();
         if (error?.code === 'WRITE_CONFLICT') {
           await handleUserStateConflict(error, () => queueSharedUserStateSync(pendingPatch, safeUsername, options));
           return;
@@ -1640,8 +1714,47 @@ function saveUserSettings(settings) {
   const stored = buildStoredUserSettings(settings, getUserSettingsDefaults(inheritedDefaults), getAdminSettings());
   const cache = ensureUserStateCache();
   cache.userSettings = stored;
+  AppState.userSettingsSavedAt = Date.now();
   localStorage.setItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX), JSON.stringify(stored));
   queueSharedUserStateSync({ userSettings: stored });
+  updateWorkspaceSyncState('settings');
+}
+
+function confirmDestructiveAction(options = {}) {
+  return UI.confirm({
+    title: options.title || 'Confirm action',
+    body: options.body || options.message || 'Please confirm this action.',
+    confirmLabel: options.confirmLabel || 'Confirm',
+    cancelLabel: options.cancelLabel || 'Cancel',
+    tone: options.tone || 'danger'
+  });
+}
+
+function loadScenarioTemplateById(templateId) {
+  const template = Array.isArray(ScenarioTemplates)
+    ? ScenarioTemplates.find(item => item.id === templateId)
+    : null;
+  if (!template) return false;
+  loadTemplate(template);
+  return true;
+}
+
+function launchPilotSampleAssessment() {
+  resetDraft();
+  Router.navigate('/wizard/1');
+  window.setTimeout(() => {
+    const sampleScenario = Array.isArray(STEP1_DRY_RUN_SCENARIOS) ? STEP1_DRY_RUN_SCENARIOS[0] : null;
+    if (sampleScenario && typeof applyDryRunScenario === 'function') {
+      applyDryRunScenario(sampleScenario);
+      UI.toast('Sample assessment path loaded. Review the scenario and continue when ready.', 'info', 5000);
+      return;
+    }
+    const fallbackTemplate = Array.isArray(ScenarioTemplates) ? ScenarioTemplates[0] : null;
+    if (fallbackTemplate) {
+      loadTemplate(fallbackTemplate);
+      UI.toast('A sample assessment was loaded from the recommended template path.', 'info', 5000);
+    }
+  }, 0);
 }
 
 function getEffectiveSettings() {

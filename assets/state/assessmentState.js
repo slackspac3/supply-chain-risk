@@ -90,6 +90,23 @@ function getAssessmentById(id) {
   return getAssessments().find(a => a.id === id) || null;
 }
 
+function duplicateAssessmentToDraft(id) {
+  const source = getAssessmentById(id);
+  if (!source) return null;
+  const duplicate = JSON.parse(JSON.stringify(source));
+  delete duplicate.results;
+  delete duplicate.completedAt;
+  delete duplicate.archivedAt;
+  delete duplicate.assessmentIntelligence;
+  delete duplicate._shared;
+  duplicate.id = 'a_' + Date.now();
+  duplicate.scenarioTitle = `${duplicate.scenarioTitle || 'Untitled assessment'} copy`;
+  duplicate.treatmentImprovementRequest = '';
+  AppState.draft = { ...ensureDraftShape(), ...duplicate };
+  saveDraft();
+  return AppState.draft;
+}
+
 function getLearningStore() {
   const cache = ensureUserStateCache();
   if (cache.learningStore && typeof cache.learningStore === 'object') return cache.learningStore;
@@ -279,6 +296,7 @@ Object.assign(window, {
   deleteCurrentDraft,
   restoreArchivedDraftToWorkspace,
   getAssessmentById,
+  duplicateAssessmentToDraft,
   getLearningStore,
   saveLearningStore,
   getTemplateLearningProfile,

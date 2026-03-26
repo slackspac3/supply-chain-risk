@@ -42,6 +42,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     companySummary: settings.adminContextSummary || '',
     businessProfile: settings.companyContextProfile || ''
   });
+  let inlineValidationMessage = AppState.settingsValidationMessage || '';
   const userContextSection = renderSettingsSection({
     title: 'Profile And Role Context',
     description: capability.experience.settingsLead,
@@ -99,6 +100,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     meta: 'Shared source',
     open: true,
     body: `
+      ${renderPilotWarningBanner('ai', { compact: true, text: 'AI assist drafts personal defaults from your notes and uploaded material. Review the wording before you save it as part of your profile.' })}
       <div class="form-group">
         <label class="form-label" for="user-ai-source-notes">Notes for AI assist</label>
         <textarea class="form-textarea" id="user-ai-source-notes" rows="4" placeholder="Paste role notes, remit details, team responsibilities, reporting expectations, or any other useful context."></textarea>
@@ -315,6 +317,8 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
               <button class="btn btn--ghost" id="btn-import-user-settings">Import JSON</button>
               <span class="form-help">These values will be used as your personal defaults in future assessments.</span>
             </div>
+            ${inlineValidationMessage ? `<div class="banner banner--warning mt-4"><span class="banner-icon">△</span><span class="banner-text">${escapeHtml(inlineValidationMessage)}</span></div>` : ''}
+            <div class="form-help" data-workspace-sync-state data-scope="settings" style="margin-top:var(--sp-4)">Changes save automatically</div>
             <div class="form-help" style="margin-top:var(--sp-4)">Pilot release: ${escapeHtml(getReleaseLabel())}</div>
             <div class="banner banner--poc mt-6">
               <span class="banner-icon">ℹ</span>
@@ -348,6 +352,14 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       obligations: document.getElementById('user-company-section-obligations')?.value.trim() || '',
       sources: document.getElementById('user-company-section-sources')?.value.trim() || ''
     };
+  }
+
+  function getUserSettingsValidationMessage() {
+    const fullName = String(document.getElementById('user-full-name')?.value || '').trim();
+    const role = String(document.getElementById('user-job-title')?.value || '').trim();
+    if (!fullName) return 'Add your name so saved settings and generated drafts stay clearly attributable.';
+    if (!role) return 'Add your role so the pilot can frame outputs around the work you do.';
+    return '';
   }
 
   function applyUserCompanyContextResult(result) {
@@ -521,6 +533,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
 
   const userSettingsRoot = document.querySelector('.settings-shell');
   bindAutosave(userSettingsRoot, () => persistUserSettings(false));
+  updateWorkspaceSyncState('settings');
 
   document.getElementById('btn-save-user-settings').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-user-settings');
@@ -530,6 +543,13 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       btn.textContent = 'Saving…';
     }
     try {
+      inlineValidationMessage = getUserSettingsValidationMessage();
+      if (inlineValidationMessage) {
+        AppState.settingsValidationMessage = inlineValidationMessage;
+        renderUserPreferences(getUserSettings());
+        return;
+      }
+      AppState.settingsValidationMessage = '';
       await persistUserSettings(true);
       await logAuditEvent({ category: 'profile', eventType: 'personal_settings_saved', target: AuthService.getCurrentUser()?.username || '', status: 'success', source: 'client' });
     } finally {

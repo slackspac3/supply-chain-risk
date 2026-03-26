@@ -259,6 +259,7 @@ function renderWizard1() {
           <p class="form-help" style="margin-top:8px">Describe the scenario, let AI help only where useful, then carry forward only the risks that belong in this assessment.</p>
           <p class="wizard-step-desc">Use the guided path first if you want the easiest route. Use the text or upload paths only when you already have source material.</p>
           <div class="form-help" data-draft-save-state style="margin-top:10px">Draft will save automatically</div>
+          ${renderPilotWarningBanner('ai', { compact: true })}
         </div>
         <div class="wizard-body">
           ${renderStep1StartCard(recommendation)}

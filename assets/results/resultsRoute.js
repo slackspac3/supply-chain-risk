@@ -250,7 +250,16 @@ function createTreatmentDraftFromAssessment(assessment) {
 }
 
 function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, comparison) {
-  if (!comparisonOptions?.length) return '';
+  if (!comparisonOptions?.length) {
+    return `<section class="results-section-stack">
+      <div class="results-section-heading">Compare against another assessment</div>
+      <div class="results-comparison-card">
+        <div class="results-comparison-empty">
+          No other saved assessments are available to compare yet. Duplicate this assessment or run a template-based case to create a clear baseline-versus-treatment story.
+        </div>
+      </div>
+    </section>`;
+  }
   return `<section class="results-section-stack">
     <div class="results-section-heading">Compare against another assessment</div>
     <div class="results-comparison-card">
@@ -704,7 +713,21 @@ function renderResults(id, isShared) {
   }
   const assessment = getAssessmentById(id);
   if (!assessment || !assessment.results) {
-    setPage(`<div class="container" style="padding:var(--sp-12)"><h2>Assessment not found</h2><p style="margin-top:var(--sp-4);color:var(--text-muted)">ID "${id}" not found in local storage.</p><a href="#/dashboard" class="btn btn--primary" style="margin-top:var(--sp-6)">← Dashboard</a></div>`);
+    setPage(`<main class="page"><div class="container container--narrow" style="padding:var(--sp-12) var(--sp-6)">
+      <div class="card card--elevated" style="padding:var(--sp-8)">
+        <div class="landing-badge">Results</div>
+        <h2 style="margin-top:var(--sp-4)">This result is not available in this workspace</h2>
+        <p style="margin-top:var(--sp-4);color:var(--text-muted)">The saved assessment with ID "${escapeHtml(String(id))}" could not be found here. It may have been deleted, archived in another browser, or not imported into this pilot workspace yet.</p>
+        ${renderPilotWarningBanner('poc', { compact: true, text: 'Pilot results are stored per user workspace unless they were explicitly exported, shared, or imported.' })}
+        <div class="flex items-center gap-3" style="margin-top:var(--sp-6);flex-wrap:wrap">
+          <a href="#/dashboard" class="btn btn--primary">← Dashboard</a>
+          <button class="btn btn--secondary" id="btn-results-missing-template" type="button">Start from Template</button>
+          <button class="btn btn--ghost" id="btn-results-missing-sample" type="button">Try Sample Assessment</button>
+        </div>
+      </div>
+    </div></main>`);
+    document.getElementById('btn-results-missing-template')?.addEventListener('click', () => loadScenarioTemplateById(ScenarioTemplates?.[0]?.id));
+    document.getElementById('btn-results-missing-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
     return;
   }
 
@@ -1128,6 +1151,7 @@ function renderResults(id, isShared) {
           </div>
           <div class="flex items-center gap-3" style="flex-wrap:wrap">
             <button class="btn btn--secondary btn--sm" id="btn-create-treatment-case">Compare a Better Outcome</button>
+            <button class="btn btn--secondary btn--sm" id="btn-duplicate-assessment">Duplicate Assessment</button>
             <button class="btn btn--primary btn--sm" id="btn-export-pdf">↓ PDF Report</button>
             <details class="results-actions-disclosure">
               <summary class="btn btn--ghost btn--sm">More actions</summary>
@@ -1279,6 +1303,15 @@ function renderResults(id, isShared) {
       button.textContent = original;
       Router.navigate('/wizard/3');
     }, 200);
+  });
+  document.getElementById('btn-duplicate-assessment')?.addEventListener('click', () => {
+    const duplicated = duplicateAssessmentToDraft(assessment.id);
+    if (!duplicated) {
+      UI.toast('That assessment could not be duplicated right now.', 'warning');
+      return;
+    }
+    UI.toast('Assessment duplicated into a new draft.', 'success');
+    Router.navigate('/wizard/1');
   });
   document.getElementById('btn-new-assess').addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
   } catch (error) {

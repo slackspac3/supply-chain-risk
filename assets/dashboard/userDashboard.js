@@ -64,6 +64,15 @@ function renderUserDashboard() {
   const guidanceSummary = focusAreas.length
     ? `Focus areas: ${focusAreas.slice(0, 3).join(', ')}${focusAreas.length > 3 ? ', and more.' : '.'}`
     : 'No focus areas saved yet.';
+  const recommendedTemplate = Array.isArray(ScenarioTemplates) ? ScenarioTemplates[0] : null;
+  const renderDashboardEmptyState = ({ title, body, primaryId, primaryLabel, secondaryId = '', secondaryLabel = '' }) => `<div class="empty-state">
+    <strong>${title}</strong>
+    <div style="margin-top:8px">${body}</div>
+    <div class="flex items-center gap-3" style="margin-top:14px;flex-wrap:wrap">
+      <button type="button" class="btn btn--secondary btn--sm" id="${primaryId}">${primaryLabel}</button>
+      ${secondaryId ? `<button type="button" class="btn btn--ghost btn--sm" id="${secondaryId}">${secondaryLabel}</button>` : ''}
+    </div>
+  </div>`;
 
   setPage(`
     <main class="page">
@@ -76,6 +85,8 @@ function renderUserDashboard() {
               <p style="margin-top:10px;color:rgba(255,255,255,.74);max-width:680px">This is your main working space. Start a new assessment, resume unfinished work, or review completed results from here.</p>
               <div class="dashboard-hero-actions flex items-center gap-3 mt-6" style="flex-wrap:wrap">
                 <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="Start a New Risk Assessment">Start Guided Assessment</button>
+                <button class="btn btn--secondary" id="btn-dashboard-start-template">Start from Template</button>
+                <button class="btn btn--ghost" id="btn-dashboard-start-sample">Try Sample Assessment</button>
                 <button class="btn btn--secondary" id="btn-dashboard-continue-draft" ${hasDraft ? '' : 'disabled'}>Resume Draft</button>
                 <button class="btn btn--ghost" id="btn-dashboard-open-settings">${capability.experience.primaryActionLabel}</button>
                 <button class="btn btn--ghost" id="btn-dashboard-export-assessments">Export Assessments</button>
@@ -125,9 +136,16 @@ function renderUserDashboard() {
                   <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.action}">${item.actionLabel}</button>
                   ${item.action === 'draft'
                     ? '<button type="button" class="btn btn--ghost btn--sm dashboard-archive-draft">Archive</button><button type="button" class="btn btn--ghost btn--sm dashboard-delete-draft">Delete</button>'
-                    : `<button type="button" class="btn btn--ghost btn--sm dashboard-archive-assessment" data-assessment-id="${item.action}">Archive</button><button type="button" class="btn btn--ghost btn--sm dashboard-delete-assessment" data-assessment-id="${item.action}">Delete</button>`}
+                    : `<button type="button" class="btn btn--ghost btn--sm dashboard-duplicate-assessment" data-assessment-id="${item.action}">Duplicate</button><button type="button" class="btn btn--ghost btn--sm dashboard-archive-assessment" data-assessment-id="${item.action}">Archive</button><button type="button" class="btn btn--ghost btn--sm dashboard-delete-assessment" data-assessment-id="${item.action}">Delete</button>`}
                 `
-              })).join('') : `<div class="empty-state">You have nothing waiting for review right now. Start a new assessment when you are ready.</div>`
+              })).join('') : renderDashboardEmptyState({
+                title: 'Nothing needs attention right now.',
+                body: 'Start a guided assessment, load the sample path, or use a template when you want a faster first pass.',
+                primaryId: 'btn-empty-next-new',
+                primaryLabel: 'Start Guided Assessment',
+                secondaryId: 'btn-empty-next-sample',
+                secondaryLabel: 'Try Sample Assessment'
+              })
             })}
 
             ${UI.dashboardSectionCard({
@@ -142,10 +160,18 @@ function renderUserDashboard() {
                 badgeLabel: assessment.results?.toleranceBreached ? 'Above tolerance' : assessment.results?.nearTolerance ? 'Close to tolerance' : 'Open result',
                 actions: `
                   <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${assessment.id}">Open Result</button>
+                  <button type="button" class="btn btn--ghost btn--sm dashboard-duplicate-assessment" data-assessment-id="${assessment.id}">Duplicate</button>
                   <button type="button" class="btn btn--ghost btn--sm dashboard-archive-assessment" data-assessment-id="${assessment.id}">Archive</button>
                   <button type="button" class="btn btn--ghost btn--sm dashboard-delete-assessment" data-assessment-id="${assessment.id}">Delete</button>
                 `
-              })).join('') : `<div class="empty-state">No completed assessments yet. Finished assessments will appear here with quick access to results and follow-up actions.</div>`
+              })).join('') : renderDashboardEmptyState({
+                title: 'No completed assessments yet.',
+                body: 'Use a template if you want a structured starting point, or run the sample path once to see the full pilot workflow.',
+                primaryId: 'btn-empty-recent-template',
+                primaryLabel: 'Start from Template',
+                secondaryId: 'btn-empty-recent-sample',
+                secondaryLabel: 'Try Sample Assessment'
+              })
             })}
 
             <details class="dashboard-disclosure card card--elevated dashboard-section-card">
@@ -187,7 +213,12 @@ function renderUserDashboard() {
                   ${assessment.results ? `<button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${assessment.id}">Open Result</button>` : ''}
                   <button type="button" class="btn btn--ghost btn--sm dashboard-delete-assessment" data-assessment-id="${assessment.id}">Delete</button>
                 `
-              })).join('') : `<div class="empty-state">Nothing is archived right now. Items you archive will stay available here for restore or deletion.</div>`}</div>
+              })).join('') : renderDashboardEmptyState({
+                title: 'Nothing is archived right now.',
+                body: 'Archived drafts and results stay here so you can restore them later without cluttering the active dashboard.',
+                primaryId: 'btn-empty-archived-template',
+                primaryLabel: 'Start from Template'
+              })}</div>
             </details>
           </div>
         </section>
@@ -196,6 +227,22 @@ function renderUserDashboard() {
   document.getElementById('btn-dashboard-new-assessment')?.addEventListener('click', () => {
     resetDraft();
     Router.navigate('/wizard/1');
+  });
+  document.getElementById('btn-dashboard-start-template')?.addEventListener('click', () => {
+    if (recommendedTemplate) loadTemplate(recommendedTemplate);
+  });
+  document.getElementById('btn-dashboard-start-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
+  document.getElementById('btn-empty-next-new')?.addEventListener('click', () => {
+    resetDraft();
+    Router.navigate('/wizard/1');
+  });
+  document.getElementById('btn-empty-next-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
+  document.getElementById('btn-empty-recent-template')?.addEventListener('click', () => {
+    if (recommendedTemplate) loadTemplate(recommendedTemplate);
+  });
+  document.getElementById('btn-empty-recent-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
+  document.getElementById('btn-empty-archived-template')?.addEventListener('click', () => {
+    if (recommendedTemplate) loadTemplate(recommendedTemplate);
   });
   document.getElementById('btn-dashboard-open-settings')?.addEventListener('click', () => Router.navigate('/settings'));
   document.getElementById('btn-dashboard-settings-secondary')?.addEventListener('click', () => Router.navigate('/settings'));
@@ -247,16 +294,36 @@ function renderUserDashboard() {
 
       if (target.classList.contains('dashboard-archive-assessment')) {
         if (!id) return;
-        if (!await UI.confirm('Archive this assessment? It will be removed from your main dashboard.')) return;
+        if (!await confirmDestructiveAction({
+          title: 'Archive assessment',
+          body: 'Move this assessment out of the main dashboard. You can still restore it later from Archived items.',
+          confirmLabel: 'Archive'
+        })) return;
         if (!archiveAssessment(id)) { UI.toast('Could not find that assessment to archive.', 'warning'); return; }
         renderUserDashboard();
         UI.toast('Assessment archived.', 'success');
         return;
       }
 
+      if (target.classList.contains('dashboard-duplicate-assessment')) {
+        if (!id) return;
+        const duplicated = duplicateAssessmentToDraft(id);
+        if (!duplicated) {
+          UI.toast('That assessment could not be duplicated right now.', 'warning');
+          return;
+        }
+        UI.toast('Assessment duplicated into a new draft.', 'success');
+        Router.navigate('/wizard/1');
+        return;
+      }
+
       if (target.classList.contains('dashboard-delete-assessment')) {
         if (!id) return;
-        if (!await UI.confirm('Delete this assessment permanently from your workspace?')) return;
+        if (!await confirmDestructiveAction({
+          title: 'Delete assessment',
+          body: 'Delete this saved assessment from your workspace. This cannot be undone from the dashboard.',
+          confirmLabel: 'Delete'
+        })) return;
         if (!deleteAssessment(id)) { UI.toast('Could not find that assessment to delete.', 'warning'); return; }
         renderUserDashboard();
         UI.toast('Assessment deleted.', 'success');
@@ -264,7 +331,11 @@ function renderUserDashboard() {
       }
 
       if (target.classList.contains('dashboard-archive-draft')) {
-        if (!await UI.confirm('Archive the current draft and remove it from your active dashboard?')) return;
+        if (!await confirmDestructiveAction({
+          title: 'Archive current draft',
+          body: 'Move the current draft out of the active dashboard while keeping it available in Archived items.',
+          confirmLabel: 'Archive'
+        })) return;
         const archived = archiveCurrentDraft();
         if (!archived) {
           UI.toast('There is no draft to archive yet.', 'warning');
@@ -276,7 +347,11 @@ function renderUserDashboard() {
       }
 
       if (target.classList.contains('dashboard-delete-draft')) {
-        if (!await UI.confirm('Delete the current draft from your workspace?')) return;
+        if (!await confirmDestructiveAction({
+          title: 'Delete current draft',
+          body: 'Delete the current in-progress draft from this workspace. Use archive instead if you may want it later.',
+          confirmLabel: 'Delete'
+        })) return;
         deleteCurrentDraft();
         renderUserDashboard();
         UI.toast('Draft deleted.', 'success');

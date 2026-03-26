@@ -34,7 +34,7 @@ const AdminUserAccountsSection = (() => {
             </tr>
           </thead>
           <tbody>
-            ${managedAccounts.map(account => {
+            ${managedAccounts.length ? managedAccounts.map(account => {
               const departmentsForAccount = getDepartmentEntities(companyStructure, account.businessUnitEntityId || '');
               return `
               <tr class="managed-account-row" data-username="${account.username}">
@@ -67,7 +67,7 @@ const AdminUserAccountsSection = (() => {
                   <button class="btn btn--ghost btn--sm btn-delete-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Delete User</button>
                 </td>
               </tr>`;
-            }).join('')}
+            }).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>No managed users yet.</strong><div style="margin-top:8px">Create the first pilot user below, then return here to assign their role, business-unit scope, and function ownership.</div></div></td></tr>'}
           </tbody>
         </table>`
       })}

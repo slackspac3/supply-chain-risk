@@ -431,7 +431,53 @@ test('authenticated user dashboard renders without crashing', async ({ page }) =
   await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
     await expect(page).toHaveURL(/#\/dashboard$/);
     await expect(page.getByRole('button', { name: /start a new risk assessment/i })).toBeVisible();
+    await expect(page.locator('#btn-dashboard-start-template')).toBeVisible();
+    await expect(page.locator('#btn-dashboard-start-sample')).toBeVisible();
     await expect(page.getByRole('button', { name: /open personal settings/i })).toBeVisible();
+  });
+});
+
+test('first-run onboarding can launch the sample assessment path', async ({ page }) => {
+  const seededUserSettings = {
+    userProfile: {
+      fullName: 'Alex Trafton',
+      jobTitle: '',
+      businessUnit: 'G42',
+      department: 'Security',
+      focusAreas: ['Resilience'],
+      preferredOutputs: '',
+      workingContext: ''
+    },
+    _overrideKeys: []
+  };
+  await seedAuthenticatedUser(page, { userSettings: seededUserSettings });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
+    await page.locator('#onboard-title').fill('Risk Manager');
+    await page.getByRole('button', { name: /^Continue$/ }).click();
+    await page.getByRole('button', { name: /^Continue$/ }).click();
+    await page.getByRole('button', { name: /^Continue$/ }).click();
+    await page.getByRole('button', { name: /try sample assessment/i }).click();
+    await expect(page).toHaveURL(/#\/wizard\/1$/);
+    await expect(page.locator('#btn-clear-dry-run')).toBeVisible();
   });
 });
 
@@ -608,7 +654,7 @@ test('dashboard archive helpers preserve state after the confirm modal opens', a
     const activeRow = page.locator('.dashboard-assessment-row[data-assessment-id="assess-1"]').first();
     await expect(activeRow).toBeVisible();
     await activeRow.getByRole('button', { name: /^Archive$/ }).click();
-    const confirmButton = page.getByRole('button', { name: /^Confirm$/ }).last();
+    const confirmButton = page.getByRole('button', { name: /^Archive$/ }).last();
     await expect(confirmButton).toBeVisible();
     await page.evaluate(() => {
       archiveAssessment('assess-1');
@@ -628,6 +674,54 @@ test('dashboard archive helpers preserve state after the confirm modal opens', a
     const restoredRow = page.locator('.dashboard-assessment-row[data-assessment-id="assess-1"]').filter({ has: page.locator('.dashboard-archive-assessment[data-assessment-id="assess-1"]') }).first();
     await expect(restoredRow).toBeVisible();
     await expect(restoredRow).toContainText(/open result|close to tolerance|above tolerance/i);
+  });
+});
+
+test('dashboard duplicate assessment creates a new editable draft', async ({ page }) => {
+  const seededUserSettings = {
+    userProfile: {
+      fullName: 'Alex Trafton',
+      jobTitle: 'Risk Manager',
+      businessUnit: 'G42',
+      department: 'Security',
+      focusAreas: ['Resilience'],
+      preferredOutputs: 'Executive summaries',
+      workingContext: 'Support regulated services.'
+    },
+    onboardedAt: '2026-03-17T00:00:00.000Z',
+    _overrideKeys: []
+  };
+  const activeAssessment = {
+    id: 'assess-2',
+    scenarioTitle: 'Cloud exposure in shared platform',
+    narrative: 'A cloud storage configuration error exposes sensitive data.',
+    buName: 'G42',
+    createdAt: '2026-03-15T00:00:00.000Z',
+    completedAt: '2026-03-16T00:00:00.000Z',
+    results: { toleranceBreached: false, nearTolerance: false, annualReviewTriggered: false }
+  };
+  await seedAuthenticatedUser(page, { userSettings: seededUserSettings });
+  await page.addInitScript(({ activeAssessment }) => {
+    localStorage.setItem('rq_assessments__alex.trafton', JSON.stringify([activeAssessment]));
+  }, { activeAssessment });
+  await mockSharedApis(page, {
+    settings: {},
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [activeAssessment],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
+    await page.locator('.dashboard-assessment-row[data-assessment-id="assess-2"]').getByRole('button', { name: /^Duplicate$/ }).click();
+    await expect(page).toHaveURL(/#\/wizard\/1$/);
+    await expect.poll(async () => page.evaluate(() => {
+      const draft = JSON.parse(sessionStorage.getItem('rq_draft__alex.trafton') || 'null');
+      return draft?.scenarioTitle || '';
+    })).toMatch(/copy/i);
   });
 });
 

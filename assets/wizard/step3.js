@@ -342,6 +342,13 @@ function renderWizard3() {
               <p class="form-help" style="margin-top:8px">Review the starting numbers, sense-check them against what you know, and adjust only the values you want to challenge.</p>
               <p class="wizard-step-desc">Start in Basic mode for the normal estimation path. Switch to Advanced only if you need direct exposure, follow-on loss, or simulation tuning. ${draft.llmAssisted?'<span style="color:var(--color-success-400)">✓ Pre-loaded from AI assist</span>':''}</p>
               <div class="form-help" data-draft-save-state style="margin-top:10px">Draft will save automatically</div>
+              ${draft.llmAssisted ? renderPilotWarningBanner('ai', { compact: true }) : ''}
+              ${/low/i.test(String(draft.confidenceLabel || '')) || (Array.isArray(draft.missingInformation) && draft.missingInformation.length) ? renderPilotWarningBanner('lowConfidence', {
+                compact: true,
+                text: Array.isArray(draft.missingInformation) && draft.missingInformation.length
+                  ? `This estimate still depends on incomplete evidence. Best next gap to close: ${draft.missingInformation[0]}`
+                  : undefined
+              }) : ''}
             </div>
             <div class="mode-toggle">
               <button class="${!isAdv?'active':''}" id="mode-basic">Basic</button>
