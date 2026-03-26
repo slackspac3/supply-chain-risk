@@ -810,7 +810,7 @@ test('dashboard archive helpers move the assessment into archived items after th
     const archivedSection = page.locator('details.dashboard-disclosure').filter({ has: page.getByText(/^Archived items/) }).first();
     await archivedSection.locator('> summary').click();
     await expect(archivedSection.locator('.dashboard-assessment-row').filter({ hasText: 'Ransomware on shared ERP' })).toBeVisible();
-    await expect(page.getByText('Recent assessments')).toBeVisible();
+    await expect(page.getByText('Recent work')).toBeVisible();
   });
 });
 

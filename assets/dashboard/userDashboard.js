@@ -27,11 +27,25 @@ function renderUserDashboard() {
     .slice(0, 6);
   const recentAssessments = assessments.slice(0, 4);
   const latestAssessment = recentAssessments[0] || null;
+  const compactRecentAssessments = assessments.slice(0, 3);
   const draftTitle = String(AppState.draft?.scenarioTitle || AppState.draft?.narrative || '').trim();
   const hasDraft = Boolean(draftTitle);
   const draftLifecycle = getAssessmentLifecyclePresentation(AppState.draft || {});
   const focusAreas = Array.isArray(profile.focusAreas) ? profile.focusAreas.filter(Boolean) : [];
   const assessmentsNeedingReview = assessments.filter(a => a?.results && (a.results.toleranceBreached || a.results.nearTolerance || a.results.annualReviewTriggered)).slice(0, 3);
+  const lifecycleCounts = assessments.reduce((acc, assessment) => {
+    const status = deriveAssessmentLifecycleStatus(assessment);
+    if (status === ASSESSMENT_LIFECYCLE_STATUS.READY_FOR_REVIEW) acc.readyForReview += 1;
+    else if (status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT) acc.treatmentCandidates += 1;
+    else if (status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED) acc.baselines += 1;
+    else if (status === ASSESSMENT_LIFECYCLE_STATUS.SIMULATED) acc.simulated += 1;
+    return acc;
+  }, {
+    readyForReview: 0,
+    simulated: 0,
+    treatmentCandidates: 0,
+    baselines: 0
+  });
   const openAssessmentRows = [
     ...(hasDraft ? [{
       id: 'draft',
@@ -115,6 +129,8 @@ function renderUserDashboard() {
             : 'No urgent review item is currently competing for attention.',
         primaryActionLabel: assessmentsNeedingReview.length ? 'Review Priority Item' : hasDraft ? 'Resume Draft' : primarySettingsLabel,
         heroHint: 'Keep the front door focused on attention, context, and oversight. Templates, imports, and other utilities stay available only when you need them.',
+        secondaryActionLabel: primarySettingsLabel,
+        secondaryActionId: 'settings',
         overviewCards: [
           {
             label: 'Needs attention',
@@ -137,13 +153,17 @@ function renderUserDashboard() {
           ? 'Review the draft or result that most likely needs business-unit attention first.'
           : 'Review the draft or result that most likely needs function-level attention first.',
         recentTitle: capability.canManageBusinessUnit ? 'Recent BU work' : 'Recent function work',
-        recentDescription: 'Saved assessments remain available for comparison, duplication, or follow-on treatment work.',
+        recentDescription: 'Recent in-scope work stays compact here so you can reopen or compare without sifting through the whole workspace.',
         contextTitle: capability.canManageBusinessUnit ? 'Business context and defaults' : 'Function context and defaults',
         contextDescription: capability.canManageBusinessUnit
           ? 'Keep the BU and working-function context current so teams see the right defaults and AI guidance.'
           : 'Keep the function context current so AI assistance and saved defaults stay grounded in how the team actually works.',
         playbookTitle: capability.canManageBusinessUnit ? 'Oversight playbook' : 'Function playbook',
-        playbookDescription: 'Open this only when you need the role-specific guidance. The main oversight lane stays intentionally focused by default.'
+        playbookDescription: 'Open this only when you need the role-specific guidance. The main oversight lane stays intentionally focused by default.',
+        spotlightTitle: capability.canManageBusinessUnit ? 'BU defaults and context health' : 'Function defaults and context health',
+        spotlightCopy: capability.canManageBusinessUnit
+          ? 'Use this lane to keep business-unit defaults and working context clean before more assessments are started.'
+          : 'Use this lane to keep function context and default guidance clean before more assessments are started.'
       }
     : {
         badge: 'Personal Workspace',
@@ -152,6 +172,8 @@ function renderUserDashboard() {
         quickStatus,
         primaryActionLabel: 'Start Guided Assessment',
         heroHint: 'Use the guided path first. Templates, imports, and sample paths are still available when you need them.',
+        secondaryActionLabel: recommendedTemplate ? 'View Worked Example' : 'Start from Template',
+        secondaryActionId: recommendedTemplate ? 'sample' : 'template',
         overviewCards: [
           {
             label: 'Ready now',
@@ -171,13 +193,62 @@ function renderUserDashboard() {
         ],
         nextUpTitle: 'Next up',
         nextUpDescription: 'Resume unfinished work or open the results that most likely need attention.',
-        recentTitle: 'Recent assessments',
-        recentDescription: 'Your latest saved analysis outputs.',
+        recentTitle: 'Recent work',
+        recentDescription: 'Your latest saved assessments, kept compact so it is easy to reopen or compare them.',
         contextTitle: 'Your settings and saved context',
         contextDescription: 'Reference information that shapes AI-assisted output and your default working context.',
         playbookTitle: 'Role playbook',
-        playbookDescription: 'Open this when you want role-specific guidance. The primary workflow stays intentionally simple by default.'
+        playbookDescription: 'Open this when you want role-specific guidance. The primary workflow stays intentionally simple by default.',
+        spotlightTitle: 'Worked example and templates',
+        spotlightCopy: 'Use the worked example when you want a fast demo path. Open templates when you want structure without starting from a blank assessment.'
       };
+  const compactRecentRows = compactRecentAssessments.map(assessment => {
+    const lifecycle = getAssessmentLifecyclePresentation(assessment);
+    return UI.dashboardAssessmentRow({
+      assessmentId: assessment.id,
+      title: assessment.scenarioTitle || 'Untitled assessment',
+      detail: `${assessment.buName || profile.businessUnit || user?.businessUnit || 'Business unit not set'} · ${new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}`,
+      badgeClass: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED ? 'badge--gold' : assessment.results?.toleranceBreached ? 'badge--danger' : assessment.results?.nearTolerance ? 'badge--warning' : lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? 'badge--gold' : 'badge--success',
+      badgeLabel: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED || lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? lifecycle.label : assessment.results?.toleranceBreached ? 'Above tolerance' : assessment.results?.nearTolerance ? 'Close to tolerance' : lifecycle.label,
+      actions: `
+        <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${assessment.id}">Open</button>
+        <details class="results-actions-disclosure dashboard-row-overflow">
+          <summary class="btn btn--ghost btn--sm">More</summary>
+          <div class="results-actions-disclosure-menu">
+            <button type="button" class="btn btn--secondary btn--sm dashboard-duplicate-assessment" data-assessment-id="${assessment.id}">Duplicate</button>
+            <button type="button" class="btn btn--secondary btn--sm dashboard-archive-assessment" data-assessment-id="${assessment.id}">Archive</button>
+            <button type="button" class="btn btn--secondary btn--sm dashboard-delete-assessment" data-assessment-id="${assessment.id}">Delete</button>
+          </div>
+        </details>
+      `
+    });
+  }).join('');
+  const attentionCards = [
+    {
+      label: isOversightUser ? 'Needs attention' : 'Ready for review',
+      value: lifecycleCounts.readyForReview + (hasDraft && isOversightUser ? 1 : 0),
+      note: isOversightUser ? 'Flagged draft or result' : 'Completed items needing review',
+      tone: lifecycleCounts.readyForReview ? 'warning' : 'neutral'
+    },
+    {
+      label: 'Simulated',
+      value: lifecycleCounts.simulated,
+      note: 'Saved analysis outputs',
+      tone: lifecycleCounts.simulated ? 'success' : 'neutral'
+    },
+    {
+      label: 'Treatment candidates',
+      value: lifecycleCounts.treatmentCandidates,
+      note: 'Future-state comparisons',
+      tone: lifecycleCounts.treatmentCandidates ? 'gold' : 'neutral'
+    },
+    {
+      label: isOversightUser ? 'Locked baselines' : 'Baselines',
+      value: lifecycleCounts.baselines,
+      note: 'Protected comparison anchors',
+      tone: lifecycleCounts.baselines ? 'gold' : 'neutral'
+    }
+  ];
   const renderDashboardEmptyState = ({ title, body, primaryId, primaryLabel, secondaryId = '', secondaryLabel = '' }) => `<div class="empty-state">
     <strong>${title}</strong>
     <div style="margin-top:8px">${body}</div>
@@ -215,15 +286,16 @@ function renderUserDashboard() {
               </div>
               <div class="dashboard-hero-actions flex items-center gap-3 mt-6" style="flex-wrap:wrap">
                 <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="${roleFrontDoor.primaryActionLabel}">${roleFrontDoor.primaryActionLabel}</button>
-                <button class="btn btn--secondary" id="btn-dashboard-continue-draft" ${hasDraft ? '' : 'disabled'}>${hasDraft ? 'Resume Draft' : isOversightUser ? 'No Draft In Flight' : 'No Draft Yet'}</button>
-                <button class="btn btn--secondary" id="btn-dashboard-open-settings">${primarySettingsLabel}</button>
+                <button class="btn btn--secondary" id="btn-dashboard-hero-secondary">${roleFrontDoor.secondaryActionLabel}</button>
                 <details class="results-actions-disclosure dashboard-hero-overflow">
                   <summary class="btn btn--ghost">${isOversightUser ? 'More oversight tools' : 'More workspace tools'}</summary>
                   <div class="results-actions-disclosure-menu">
+                    ${hasDraft ? `<button class="btn btn--secondary btn--sm" id="btn-dashboard-continue-draft">Resume Draft</button>` : ''}
                     <button class="btn btn--secondary btn--sm" id="btn-dashboard-start-template">Start from Template</button>
-                    <button class="btn btn--secondary btn--sm" id="btn-dashboard-start-sample">Try Sample Assessment</button>
+                    <button class="btn btn--secondary btn--sm" id="btn-dashboard-start-sample">${isOversightUser ? 'View Worked Example' : 'Try Sample Assessment'}</button>
                     <button class="btn btn--secondary btn--sm" id="btn-dashboard-export-assessments">Export Assessments</button>
                     <button class="btn btn--secondary btn--sm" id="btn-dashboard-import-assessments">Import Assessments</button>
+                    <button class="btn btn--secondary btn--sm" id="btn-dashboard-open-settings">${primarySettingsLabel}</button>
                   </div>
                 </details>
               </div>
@@ -247,9 +319,24 @@ function renderUserDashboard() {
                   <strong>${settings.geographyPrimary || settings.geography || globalSettings.geography}</strong>
                   <div class="context-panel-copy">This geography and your saved profile shape default wording, guidance, and AI-assisted suggestions.</div>
                 </div>
+                <div class="dashboard-focus-card dashboard-focus-card--spotlight">
+                  <span class="dashboard-focus-card__label">${roleFrontDoor.spotlightTitle}</span>
+                  <strong>${isOversightUser ? primarySettingsLabel : (recommendedTemplate ? 'Worked example ready' : 'Template-ready workspace')}</strong>
+                  <div class="context-panel-copy">${roleFrontDoor.spotlightCopy}</div>
+                </div>
               </div>
             </div>
           </div>
+        </section>
+
+        <section class="dashboard-status-band" aria-label="Status overview">
+          ${attentionCards.map(card => `
+            <div class="dashboard-status-chip dashboard-status-chip--${card.tone}">
+              <span class="dashboard-status-chip__label">${card.label}</span>
+              <strong>${card.value}</strong>
+              <span>${card.note}</span>
+            </div>
+          `).join('')}
         </section>
 
         <section class="admin-overview-grid dashboard-at-a-glance" style="margin-top:var(--sp-8)">
@@ -292,28 +379,8 @@ function renderUserDashboard() {
             ${UI.dashboardSectionCard({
               title: roleFrontDoor.recentTitle,
               description: roleFrontDoor.recentDescription,
-              badge: recentAssessments.length,
-              body: recentAssessments.length ? recentAssessments.map(assessment => {
-                const lifecycle = getAssessmentLifecyclePresentation(assessment);
-                return UI.dashboardAssessmentRow({
-                assessmentId: assessment.id,
-                title: assessment.scenarioTitle || 'Untitled assessment',
-                detail: `${assessment.buName || profile.businessUnit || user?.businessUnit || 'Business unit not set'} · ${new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}`,
-                badgeClass: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED ? 'badge--gold' : assessment.results?.toleranceBreached ? 'badge--danger' : assessment.results?.nearTolerance ? 'badge--warning' : lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? 'badge--gold' : 'badge--success',
-                badgeLabel: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED || lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? lifecycle.label : assessment.results?.toleranceBreached ? 'Above tolerance' : assessment.results?.nearTolerance ? 'Close to tolerance' : lifecycle.label,
-                actions: `
-                  <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${assessment.id}">Open Result</button>
-                  <details class="results-actions-disclosure dashboard-row-overflow">
-                    <summary class="btn btn--ghost btn--sm">More</summary>
-                    <div class="results-actions-disclosure-menu">
-                      <button type="button" class="btn btn--secondary btn--sm dashboard-duplicate-assessment" data-assessment-id="${assessment.id}">Duplicate</button>
-                      <button type="button" class="btn btn--secondary btn--sm dashboard-archive-assessment" data-assessment-id="${assessment.id}">Archive</button>
-                      <button type="button" class="btn btn--secondary btn--sm dashboard-delete-assessment" data-assessment-id="${assessment.id}">Delete</button>
-                    </div>
-                  </details>
-                `
-                });
-              }).join('') : renderDashboardEmptyState({
+              badge: compactRecentAssessments.length,
+              body: compactRecentRows || renderDashboardEmptyState({
                 title: 'No completed assessments yet.',
                 body: 'Use a template if you want a structured starting point, or run the sample path once to see the full pilot workflow.',
                 primaryId: 'btn-empty-recent-template',
@@ -393,6 +460,17 @@ function renderUserDashboard() {
     }
     resetDraft();
     openDraftWorkspaceRoute();
+  });
+  document.getElementById('btn-dashboard-hero-secondary')?.addEventListener('click', () => {
+    if (roleFrontDoor.secondaryActionId === 'settings') {
+      Router.navigate('/settings');
+      return;
+    }
+    if (roleFrontDoor.secondaryActionId === 'template') {
+      if (recommendedTemplate) loadTemplate(recommendedTemplate);
+      return;
+    }
+    launchPilotSampleAssessment();
   });
   document.getElementById('btn-dashboard-start-template')?.addEventListener('click', () => {
     if (recommendedTemplate) loadTemplate(recommendedTemplate);
