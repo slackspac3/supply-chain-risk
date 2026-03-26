@@ -2420,6 +2420,8 @@ canvas { display: block; width: 100%; }
 .dashboard-context-card--nested { padding: var(--sp-5); background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015)); }
 .dashboard-disclosure[open] > summary { margin-bottom: var(--sp-3); }
 .dashboard-assessment-row {
+  position: relative;
+  overflow: visible;
   padding: var(--sp-5);
   background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
   text-align: left;
@@ -2878,6 +2880,12 @@ canvas { display: block; width: 100%; }
 
 .results-actions-disclosure {
   position: relative;
+  z-index: 1;
+  overflow: visible;
+}
+
+.results-actions-disclosure[open] {
+  z-index: var(--z-dropdown);
 }
 
 .results-actions-disclosure summary {
@@ -2900,7 +2908,14 @@ canvas { display: block; width: 100%; }
   border: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-lg);
-  z-index: 10;
+  z-index: var(--z-dropdown);
+}
+
+.dashboard-assessment-row:has(.results-actions-disclosure[open]),
+.card:has(.results-actions-disclosure[open]),
+.results-executive-view:has(.results-actions-disclosure[open]),
+.results-technical-view:has(.results-actions-disclosure[open]) {
+  z-index: var(--z-dropdown);
 }
 
 
