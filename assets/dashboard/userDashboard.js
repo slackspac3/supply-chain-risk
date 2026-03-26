@@ -269,7 +269,7 @@ function renderUserDashboard() {
       tone: contextReadinessScore >= 5 ? 'success' : contextReadinessScore >= 3 ? 'neutral' : 'warning'
     }
   ];
-  const renderDashboardEmptyState = ({ title, body, primaryId, primaryLabel, secondaryId = '', secondaryLabel = '' }) => `<div class="empty-state">
+  const renderDashboardEmptyState = ({ title, body, primaryId, primaryLabel, secondaryId = '', secondaryLabel = '' }) => `<div class="empty-state dashboard-empty-state">
     <strong>${title}</strong>
     <div style="margin-top:8px">${body}</div>
     <div class="flex items-center gap-3" style="margin-top:14px;flex-wrap:wrap">
@@ -285,12 +285,16 @@ function renderUserDashboard() {
       </div>
       <div class="dashboard-start-stack">
         <div class="dashboard-start-primary">
-          <div>
-            <div class="dashboard-start-kicker">Recommended</div>
+          <div class="dashboard-start-primary__content">
+            <div class="dashboard-start-kicker">Recommended path</div>
             <h3>Guided assessment</h3>
             <p>Build a risk scenario step by step with AI-assisted guidance, then refine only where needed.</p>
+            <div class="dashboard-start-primary__foot">Best for new scenarios, structured walkthroughs, and decision-ready outputs.</div>
           </div>
-          <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="Start Guided Assessment">Start Guided Assessment</button>
+          <div class="dashboard-start-primary__actions">
+            <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="Start Guided Assessment">Start Guided Assessment</button>
+            <span class="dashboard-start-inline-note">AI-assisted wizard</span>
+          </div>
         </div>
         <div class="dashboard-start-secondary-grid">
           <div class="dashboard-start-secondary">
@@ -321,6 +325,7 @@ function renderUserDashboard() {
             </div>
           </div>
         </div>
+        <div class="dashboard-start-quiet-note">Use the guided path for most new work. Open the register or preloaded scenario paths only when they match how you are starting.</div>
       </div>
     </div>` : '';
 
@@ -375,9 +380,8 @@ function renderUserDashboard() {
                 <span>${isOversightUser ? capability.experience.dashboardLead : 'Saved context shapes default wording, guidance, and assisted suggestions.'}</span>
               </div>
               <div class="form-help dashboard-hero-side-foot">${roleFrontDoor.spotlightTitle}: ${roleFrontDoor.spotlightCopy}</div>
-            </div>` : `<aside class="card dashboard-hero-side dashboard-hero-side--support dashboard-hero-side--standard">
+            </div>` : `<aside class="dashboard-hero-side dashboard-hero-side--support dashboard-hero-side--standard">
               <div class="context-panel-title">Workspace summary</div>
-              <div class="dashboard-hero-side-copy">Use the guided path for most new work. Open the register or preloaded scenario paths only when they match how you are starting.</div>
               <div class="dashboard-side-summary-list">
                 ${orientationCards.map(card => `<div class="dashboard-side-summary-item dashboard-side-summary-item--${card.tone}">
                   <span class="dashboard-side-summary-item__label">${card.label}</span>
@@ -385,17 +389,19 @@ function renderUserDashboard() {
                   <span>${card.note}</span>
                 </div>`).join('')}
               </div>
+              <div class="dashboard-hero-side-foot">Saved workspace context shapes wording, guidance, and assisted suggestions across the wizard.</div>
             </aside>`}
           </div>
         </section>
 
-        <section class="dashboard-primary-band">
+        <section class="dashboard-primary-band dashboard-primary-band--work">
           <div class="results-section-heading">Do the work</div>
           <div class="form-help" style="margin-top:8px;margin-bottom:var(--sp-4)">Start here for the next item to assess, review, or resume.</div>
           ${UI.dashboardSectionCard({
             title: roleFrontDoor.nextUpTitle,
             description: roleFrontDoor.nextUpDescription,
             badge: openAssessmentRows.length,
+            className: 'dashboard-section-card--spotlight',
             body: openAssessmentRows.length ? openAssessmentRows.map(item => UI.dashboardAssessmentRow({
               assessmentId: item.action,
               title: item.title,
@@ -434,11 +440,12 @@ function renderUserDashboard() {
           `).join('')}
         </section>` : ''}
 
-        <section class="dashboard-primary-band">
+        <section class="dashboard-primary-band dashboard-primary-band--recent">
           ${UI.dashboardSectionCard({
             title: roleFrontDoor.recentTitle,
             description: roleFrontDoor.recentDescription,
             badge: compactRecentAssessments.length,
+            className: 'dashboard-section-card--recent',
             body: compactRecentRows || renderDashboardEmptyState({
               title: 'No completed assessments yet.',
               body: 'Use a template if you want a structured starting point, or run the sample path once to see the full pilot workflow.',
@@ -450,7 +457,7 @@ function renderUserDashboard() {
           })}
         </section>
 
-        <section style="margin-top:var(--sp-12)">
+        <section class="dashboard-open-band" style="margin-top:var(--sp-12)">
           <div class="results-section-heading">At a glance</div>
           <div class="form-help" style="margin-top:8px">A compact view of current attention, completed work, and context quality.</div>
         </section>
@@ -461,7 +468,7 @@ function renderUserDashboard() {
 
         <section class="grid-2 dashboard-secondary-grid">
           <div class="dashboard-column">
-            <details class="dashboard-disclosure card card--elevated dashboard-section-card">
+            <details class="dashboard-disclosure card card--elevated dashboard-section-card dashboard-section-card--secondary">
               <summary>${roleFrontDoor.contextTitle} <span class="badge badge--neutral">${focusAreas.length ? 'Ready' : 'Needs setup'}</span></summary>
               <div class="dashboard-disclosure-copy">${roleFrontDoor.contextDescription}</div>
               <div class="dashboard-disclosure-body">
@@ -488,7 +495,7 @@ function renderUserDashboard() {
           <div class="dashboard-column">
             <div class="results-section-heading">Reference and history</div>
             <div class="form-help" style="margin-top:8px;margin-bottom:var(--sp-4)">Open archived items and supporting context only when you need them.</div>
-            <details class="dashboard-disclosure card card--elevated dashboard-section-card" ${archivedAssessments.length ? '' : ''}>
+            <details class="dashboard-disclosure card card--elevated dashboard-section-card dashboard-section-card--secondary" ${archivedAssessments.length ? '' : ''}>
               <summary>Archived items <span class="badge badge--neutral">${archivedAssessments.length}</span></summary>
               <div class="dashboard-disclosure-copy">Stored out of the way, but still available if you need them again.</div>
               <div class="dashboard-disclosure-body">${archivedAssessments.length ? archivedAssessments.map(assessment => UI.dashboardAssessmentRow({

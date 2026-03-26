@@ -155,8 +155,10 @@ const UI = (() => {
     </div>`;
   }
 
-  function dashboardSectionCard({ title, description = '', badge = '', body }) {
-    return `<div class="card card--elevated dashboard-section-card">
+  function dashboardSectionCard({ title, description = '', badge = '', body, className = '', bodyClass = '' }) {
+    const sectionClasses = ['card', 'card--elevated', 'dashboard-section-card', className].filter(Boolean).join(' ');
+    const bodyClasses = bodyClass || '';
+    return `<div class="${sectionClasses}">
       <div class="flex items-center justify-between" style="gap:var(--sp-3);flex-wrap:wrap">
         <div>
           <div class="context-panel-title">${title}</div>
@@ -164,7 +166,7 @@ const UI = (() => {
         </div>
         ${badge ? `<span class="badge badge--neutral">${badge}</span>` : ''}
       </div>
-      <div style="display:flex;flex-direction:column;gap:12px;margin-top:var(--sp-5)">${body}</div>
+      <div class="${bodyClasses}" style="display:flex;flex-direction:column;gap:12px;margin-top:var(--sp-5)">${body}</div>
     </div>`;
   }
 
