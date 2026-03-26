@@ -8,7 +8,13 @@
 const TOLERANCE_THRESHOLD = 5_000_000;
 const DEFAULT_FX_RATE = 3.6725;
 const DEFAULT_COMPASS_PROXY_URL = resolveCompassProxyUrl();
-const APP_ASSET_VERSION = '20260312ch';
+const APP_ASSET_VERSION = '20260326pilot1';
+const APP_RELEASE = Object.freeze((typeof window !== 'undefined' && window.__RISK_CALCULATOR_RELEASE__) || {
+  version: '0.10.0-pilot.1',
+  channel: 'pilot',
+  build: '2026-03-26-pilot1',
+  assetVersion: APP_ASSET_VERSION
+});
 const GLOBAL_ADMIN_STORAGE_KEY = 'rq_admin_settings';
 const USER_SETTINGS_STORAGE_PREFIX = 'rq_user_settings';
 const ASSESSMENTS_STORAGE_PREFIX = 'rq_assessments';
@@ -61,6 +67,15 @@ function escapeHtml(value = '') {
     .replace(/>/g, '&gt;')
     .replace(/\"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function getReleaseInfo() {
+  return APP_RELEASE;
+}
+
+function getReleaseLabel() {
+  const release = getReleaseInfo();
+  return `Version ${release.version} · ${String(release.channel || 'pilot').toUpperCase()} · Build ${release.build}`;
 }
 
 function normaliseAdminSettings(settings = {}) {

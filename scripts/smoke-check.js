@@ -5,6 +5,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const failures = [];
 const notes = [];
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), 'utf8');
@@ -28,15 +29,27 @@ const benchmarkData = read('data/benchmarks.json');
 const settingsApi = read('api/settings.js');
 const usersApi = read('api/users.js');
 const authServiceJs = read('assets/services/authService.js');
+const systemAccessSectionJs = read('assets/admin/systemAccessSection.js');
 const resultsRouteJs = read('assets/results/resultsRoute.js');
 const userPreferencesJs = read('assets/settings/userPreferences.js');
 const userOnboardingJs = read('assets/settings/userOnboarding.js');
 const assessmentStateJs = read('assets/state/assessmentState.js');
 const auditLogSectionJs = read('assets/admin/auditLogSection.js');
 const e2eSmokeSpecJs = read('tests/e2e/smoke.spec.js');
+const pagesWorkflow = read('.github/workflows/pages.yml');
+const ciWorkflow = read('.github/workflows/ci.yml');
+const releaseChecklist = read('RELEASE_CHECKLIST.md');
+const rollbackPlaybook = read('ROLLBACK_PLAYBOOK.md');
+const seededUsers = read('data/pilot-seed/bootstrap-accounts.sample.json');
+const seededAssessments = read('data/pilot-seed/demo-assessments.sample.json');
 
 const versions = extractAssetVersions(indexHtml);
 expect(versions.length === 1, `Expected one frontend asset version, found: ${versions.join(', ') || 'none'}`);
+expect(indexHtml.includes('window.__RISK_CALCULATOR_RELEASE__'), 'index.html is missing the release metadata bootstrap');
+expect(appJs.includes('function getReleaseInfo()'), 'app.js is missing getReleaseInfo helper');
+expect(appJs.includes('function getReleaseLabel()'), 'app.js is missing getReleaseLabel helper');
+expect(String(packageJson.version || '').trim().length > 0, 'package.json must include an application version');
+expect(appJs.includes(`const APP_ASSET_VERSION = '${versions[0] || ''}'`), 'app.js asset version does not match index.html asset version');
 expect(indexHtml.includes('assets/services/reportPresentation.js'), 'index.html is missing reportPresentation.js');
 expect(indexHtml.includes('assets/services/benchmarkService.js'), 'index.html is missing benchmarkService.js');
 expect(indexHtml.indexOf('assets/services/reportPresentation.js') < indexHtml.indexOf('assets/services/exportService.js'), 'reportPresentation.js must load before exportService.js');
@@ -79,9 +92,11 @@ expect(!authServiceJs.includes('departmentEntityId: payload.departmentEntityId')
 
 expect(resultsRouteJs.includes('Confirm your organisation context'), 'results route is missing the updated organisation-context copy');
 expect(resultsRouteJs.includes('const canChooseDepartment = capability.canManageBusinessUnit && !capability.canManageDepartment;'), 'results route is missing the aligned BU-admin-only department chooser guard');
+expect(systemAccessSectionJs.includes('Pilot release diagnostics'), 'admin system access section is missing pilot release diagnostics');
 
 expect(userPreferencesJs.includes('Your business-unit and function assignment is controlled by your current role.'), 'user preferences role guidance is missing');
 expect(userOnboardingJs.includes('Your organisation assignment is set by your current admin-managed role.'), 'user onboarding role guidance is missing');
+expect(userPreferencesJs.includes('Pilot release:'), 'user preferences footer is missing the pilot release display');
 
 expect(exportJs.includes('ReportPresentation.buildExecutiveScenarioSummary'), 'exportService is not using shared ReportPresentation summary helper');
 expect(exportJs.includes('ReportPresentation.buildExecutiveThresholdModel'), 'exportService is not using shared ReportPresentation threshold helper');
@@ -102,10 +117,21 @@ expect(e2eSmokeSpecJs.includes('authenticated admin shell renders without crashi
 expect(e2eSmokeSpecJs.includes('dashboard archive and restore flow works through the real confirm modal'), 'Playwright smoke suite is missing dashboard archive/restore coverage');
 expect(e2eSmokeSpecJs.includes('wizard step 1 clear all keeps manually added risks unselected after rerender'), 'Playwright smoke suite is missing wizard clear-all coverage');
 expect(e2eSmokeSpecJs.includes('admin can update user access and the request carries the expected role assignment'), 'Playwright smoke suite is missing admin role update coverage');
+expect(ciWorkflow.includes('npm run check:syntax'), 'Pilot CI workflow is missing syntax checks');
+expect(ciWorkflow.includes('npm run check:smoke'), 'Pilot CI workflow is missing smoke-check.js');
+expect(ciWorkflow.includes('npm run test:e2e:smoke'), 'Pilot CI workflow is missing Playwright smoke coverage');
+expect(pagesWorkflow.includes('needs: validate'), 'Pages deployment is not blocked on validation');
+expect(releaseChecklist.includes('Confirm GitHub Actions `Pilot CI` is green'), 'Release checklist is missing CI confirmation');
+expect(rollbackPlaybook.includes('Frontend Rollback: GitHub Pages'), 'Rollback playbook is missing frontend rollback guidance');
+expect(rollbackPlaybook.includes('Backend Rollback: Vercel API'), 'Rollback playbook is missing backend rollback guidance');
+expect(seededUsers.includes('"role": "admin"'), 'Bootstrap seed users file is missing the admin sample account');
+expect(seededUsers.includes('"role": "user"'), 'Bootstrap seed users file is missing the standard-user sample account');
+expect(seededAssessments.includes('"runMetadata"'), 'Sample assessments file is missing persisted run metadata');
 
 if (!failures.length) {
   notes.push('Smoke check passed.');
   if (versions[0]) notes.push(`Asset version: ${versions[0]}`);
+  notes.push(`Release version: ${packageJson.version}`);
   console.log(notes.join('\n'));
   process.exit(0);
 }

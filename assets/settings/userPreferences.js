@@ -315,6 +315,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
               <button class="btn btn--ghost" id="btn-import-user-settings">Import JSON</button>
               <span class="form-help">These values will be used as your personal defaults in future assessments.</span>
             </div>
+            <div class="form-help" style="margin-top:var(--sp-4)">Pilot release: ${escapeHtml(getReleaseLabel())}</div>
             <div class="banner banner--poc mt-6">
               <span class="banner-icon">ℹ</span>
               <span class="banner-text">Global admin context still applies underneath your personal overrides for organisation structure, BU definitions, document library, thresholds, and escalation logic.</span>

@@ -143,18 +143,34 @@ That file contains placeholder values only and shows the expected configuration 
 ### Frontend
 - hosted on GitHub Pages
 - workflow: [.github/workflows/pages.yml](./.github/workflows/pages.yml)
+- release is blocked on syntax, smoke-check, and Playwright smoke validation
 
 ### Backend
 - deploy the `api/` routes to Vercel
 - configure environment variables and shared storage there
+- use the rollback steps in [ROLLBACK_PLAYBOOK.md](./ROLLBACK_PLAYBOOK.md) if a pilot deploy regresses
+
+## Pilot Seed Data
+
+Sample pilot/demo data is checked in for repeatable setup:
+
+- bootstrap accounts: [data/pilot-seed/bootstrap-accounts.sample.json](./data/pilot-seed/bootstrap-accounts.sample.json)
+- importable assessments: [data/pilot-seed/demo-assessments.sample.json](./data/pilot-seed/demo-assessments.sample.json)
+- sample user-state shape: [data/pilot-seed/demo-user-state.sample.json](./data/pilot-seed/demo-user-state.sample.json)
+
+Suggested usage:
+
+- copy the bootstrap accounts JSON into `BOOTSTRAP_ACCOUNTS_JSON` for non-production pilot seeding
+- import the sample assessments from the dashboard `Import Assessments` action
+- use the sample user-state file only as a reference shape for backend seeding, not as a production migration artifact
 
 ## QA
 
 Core checks:
 
 ```bash
-node scripts/smoke-check.js
-node --check assets/app.js
+npm run check:syntax
+npm run check:smoke
 ```
 
 Browser smoke suite:
@@ -174,7 +190,10 @@ Current browser smoke coverage includes:
 - admin user-access update flow
 
 Release checklist:
-- [docs/release-checklist.md](./docs/release-checklist.md)
+- [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)
+
+Rollback playbook:
+- [ROLLBACK_PLAYBOOK.md](./ROLLBACK_PLAYBOOK.md)
 
 ## Security Notes
 

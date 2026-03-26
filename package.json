@@ -1,10 +1,14 @@
 {
   "name": "risk-calculator",
+  "version": "0.10.0-pilot.1",
   "private": true,
   "scripts": {
+    "check:syntax": "node scripts/syntax-check.js",
+    "check:smoke": "node scripts/smoke-check.js",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.js",
-    "test:unit": "node --test tests/unit/**/*.test.js"
+    "test:unit": "node --test tests/unit/**/*.test.js",
+    "release:pilot": "npm run check:syntax && npm run check:smoke && npm run test:e2e:smoke"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2"

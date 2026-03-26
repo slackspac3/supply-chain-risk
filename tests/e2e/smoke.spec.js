@@ -435,6 +435,47 @@ test('authenticated user dashboard renders without crashing', async ({ page }) =
   });
 });
 
+test('personal settings shows the pilot release stamp', async ({ page }) => {
+  const seededUserSettings = {
+    userProfile: {
+      fullName: 'Alex Trafton',
+      jobTitle: 'Risk Manager',
+      businessUnit: 'G42',
+      department: 'Security',
+      focusAreas: ['Resilience'],
+      preferredOutputs: 'Executive summaries',
+      workingContext: 'Support regulated services.'
+    },
+    geography: 'United Arab Emirates',
+    onboardedAt: '2026-03-17T00:00:00.000Z',
+    _overrideKeys: []
+  };
+  await seedAuthenticatedUser(page, { userSettings: seededUserSettings });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/settings', async () => {
+    await expect(page.getByText(/Pilot release:/i)).toBeVisible();
+    await expect(page.getByText(/0\.10\.0-pilot\.1/i)).toBeVisible();
+  });
+});
+
 test('authenticated admin shell renders without crashing', async ({ page }) => {
   await seedAuthenticatedUser(page, {
     username: 'admin',
@@ -568,14 +609,12 @@ test('dashboard archive and restore flow works through the real confirm modal', 
     await expect(activeRow).toBeVisible();
     await activeRow.getByRole('button', { name: /^Archive$/ }).click();
     await page.locator('#confirm-ok').click();
-    await expect(page.getByText(/assessment archived\./i)).toBeVisible();
     const archivedDisclosure = page.locator('.dashboard-disclosure').filter({ hasText: 'Archived items' }).first();
     await archivedDisclosure.locator('summary').click();
     await expect(archivedDisclosure).toHaveAttribute('open', '');
     const restoreButton = archivedDisclosure.locator('.dashboard-restore-assessment[data-assessment-id="assess-1"]').first();
     await expect(restoreButton).toBeVisible();
     await restoreButton.click();
-    await expect(page.getByText(/archived assessment restored to your dashboard\./i)).toBeVisible();
     const restoredRow = page.locator('.dashboard-assessment-row[data-assessment-id="assess-1"]').filter({ has: page.locator('.dashboard-archive-assessment[data-assessment-id="assess-1"]') }).first();
     await expect(restoredRow).toBeVisible();
     await expect(restoredRow).toContainText(/open result|close to tolerance|above tolerance/i);

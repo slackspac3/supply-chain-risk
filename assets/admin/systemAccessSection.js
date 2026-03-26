@@ -1,5 +1,6 @@
 const AdminSystemAccessSection = (() => {
   function renderSection({ directCompass, sessionLLM }) {
+    const release = getReleaseInfo();
     return renderSettingsSection({
       title: 'System Access',
       scope: 'admin-settings',
@@ -26,6 +27,16 @@ const AdminSystemAccessSection = (() => {
         <button class="btn btn--secondary" id="btn-test-session-llm">Test Connection</button>
         <button class="btn btn--ghost" id="btn-clear-session-llm">Clear Session Key</button>
         <span class="form-help">Stored in this admin browser for the PoC until you clear it.</span>
+      </div>
+      <div class="card card--elevated mt-6">
+        <div class="context-panel-title">Pilot release diagnostics</div>
+        <div class="context-panel-copy" style="margin-top:var(--sp-2)">Use this stamp to confirm which pilot build is live before sign-off, smoke checks, or rollback.</div>
+        <div class="grid-3" style="margin-top:var(--sp-4)">
+          <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div class="form-help">Version</div><div style="font-weight:700;color:var(--text-primary);margin-top:4px">${escapeHtml(String(release.version || '0.0.0'))}</div></div>
+          <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div class="form-help">Channel</div><div style="font-weight:700;color:var(--text-primary);margin-top:4px">${escapeHtml(String(release.channel || 'pilot'))}</div></div>
+          <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div class="form-help">Build</div><div style="font-weight:700;color:var(--text-primary);margin-top:4px">${escapeHtml(String(release.build || 'unknown'))}</div></div>
+        </div>
+        <div class="form-help" style="margin-top:var(--sp-4)">Asset version ${escapeHtml(String(release.assetVersion || APP_ASSET_VERSION))} · See <code>RELEASE_CHECKLIST.md</code> and <code>ROLLBACK_PLAYBOOK.md</code> before pilot release changes.</div>
       </div>`
     });
   }
