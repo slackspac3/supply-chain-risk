@@ -401,6 +401,8 @@ test('wizard handoff guidance carries the scenario cleanly into steps 2 and 3', 
   });
 
   await expectNoClientCrashOnRoute(page, '/#/wizard/1', async () => {
+    const framingDisclosure = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /assessment framing and defaults/i }) }).first();
+    await framingDisclosure.evaluate(node => { node.open = true; });
     await page.locator('#wizard-bu').selectOption({ index: 1 });
     await expect(page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /worked example/i }) }).first()).toBeVisible();
     await page.evaluate(() => {
@@ -766,7 +768,9 @@ test('wizard step 1 clear all keeps manually added risks unselected after rerend
 
     await expect(page.getByRole('button', { name: /^Clear All$/ })).toBeVisible();
     await expect(page.locator('.risk-select-checkbox:checked')).toHaveCount(2);
-    await page.getByRole('button', { name: /^Clear All$/ }).click();
+    const clearAllButton = page.locator('#btn-clear-all-risks');
+    await clearAllButton.scrollIntoViewIfNeeded();
+    await clearAllButton.click({ force: true });
     await expect(page.locator('.risk-select-checkbox:checked')).toHaveCount(0);
   });
 });

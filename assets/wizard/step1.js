@@ -148,7 +148,7 @@ function renderStep1SupportBand({ draft, hasScenarioDraft, hasImportedSource, fe
         title: 'Assessment framing and defaults',
         badgeLabel: 'Adjust only if needed',
         badgeTone: 'neutral',
-        open: !draft.buId || !scenarioGeographies.length,
+        open: false,
         className: 'wizard-disclosure wizard-disclosure--support',
         body: `
         <div class="grid-2">
@@ -194,12 +194,24 @@ function renderStep1SupportBand({ draft, hasScenarioDraft, hasImportedSource, fe
 
 function renderStep1ScopeBand({ draft, selectedRisks, riskCandidates, regs }) {
   const hasCandidates = riskCandidates.length > 0;
+  const chosenRisks = (riskCandidates || []).filter(risk => selectedRisks.includes(risk.id)).slice(0, 3);
   return `<section class="wizard-scope-band anim-fade-in">
     <div class="wizard-ia-section">
       <div class="results-section-heading">Choose what stays in scope</div>
       <div class="form-help" style="margin-top:8px">Carry forward only the risks that belong in the same scenario and management discussion.</div>
     </div>
     ${hasCandidates ? `
+      ${selectedRisks.length ? `<section class="wizard-summary-band wizard-summary-band--quiet">
+        <div>
+          <div class="wizard-summary-band__label">Selected for this assessment</div>
+          <strong>${selectedRisks.length} risk${selectedRisks.length === 1 ? '' : 's'} currently in scope</strong>
+          <div class="wizard-summary-band__copy">Keep only risks that belong in the same scenario and management discussion before you continue.</div>
+        </div>
+        <div class="wizard-summary-band__meta">
+          ${chosenRisks.map(risk => `<span class="badge badge--neutral">${escapeHtml(String(risk.title || risk.name || 'Risk'))}</span>`).join('')}
+          ${selectedRisks.length > chosenRisks.length ? `<span class="badge badge--neutral">+${selectedRisks.length - chosenRisks.length} more</span>` : ''}
+        </div>
+      </section>` : ''}
       <div class="card anim-fade-in anim-delay-2">
         <div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:var(--sp-3)">
           <div>
@@ -599,7 +611,7 @@ function renderWizard1() {
   const featuredDryRun = STEP1_DRY_RUN_SCENARIOS[0] || null;
   const hasScenarioDraft = !!String(draft.narrative || draft.sourceNarrative || '').trim();
   const hasImportedSource = !!String(draft.uploadedRegisterName || '').trim() || (riskCandidates || []).some(risk => risk.source === 'register' || risk.source === 'ai+register');
-  const stepReady = !!(draft.buId && (hasScenarioDraft || selectedRisks.length));
+  const stepReady = !!(hasScenarioDraft || selectedRisks.length);
 
   setPage(`
     <main class="page">
@@ -616,7 +628,6 @@ function renderWizard1() {
         </div>
         <div class="wizard-body">
           ${renderStep1GuidedBuilderCard(draft, recommendation)}
-          ${renderStep1SelectedRisksSummary(selectedRisks, riskCandidates)}
           ${renderStep1SupportBand({ draft, hasScenarioDraft, hasImportedSource, featuredDryRun, activeDryRun, buList, scenarioGeographies, regs, settings })}
           ${renderStep1ScopeBand({ draft, selectedRisks, riskCandidates, regs })}
         </div>
@@ -751,7 +762,14 @@ function renderWizard1() {
     const buId = document.getElementById('wizard-bu').value;
     let narrative = document.getElementById('intake-risk-statement').value.trim();
     let selected = getSelectedRisks();
-    if (!buId) { UI.toast('Please select a business unit.', 'warning'); return; }
+    if (!buId) {
+      const framingDisclosure = Array.from(document.querySelectorAll('.wizard-support-band details'))
+        .find(node => /assessment framing and defaults/i.test(node.querySelector('summary')?.textContent || ''));
+      if (framingDisclosure) framingDisclosure.open = true;
+      document.getElementById('wizard-bu')?.focus();
+      UI.toast('Select the business unit in the support section before continuing.', 'warning');
+      return;
+    }
     if (!narrative) {
       const composed = composeGuidedNarrative(AppState.draft.guidedInput);
       if (composed) {
