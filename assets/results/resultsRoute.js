@@ -1361,10 +1361,8 @@ function renderResults(id, isShared) {
           <div class="results-hero-tags">
             <span class="badge ${r.toleranceBreached ? 'badge--danger' : r.nearTolerance ? 'badge--warning' : 'badge--success'}">${statusTitle}</span>
             <span class="badge badge--${lifecycle.tone}">${lifecycle.label}</span>
-            <span class="badge badge--neutral">${assessment.buName || 'No business unit'}</span>
-            <span class="badge badge--neutral">${assessment.geography || 'No geography'}</span>
-            <span class="badge badge--neutral">${completedLabel}</span>
           </div>
+          <div class="results-hero-meta">${escapeHtml(String(assessment.buName || 'No business unit'))} · ${escapeHtml(String(assessment.geography || 'No geography'))} · ${escapeHtml(String(completedLabel))}</div>
         </div>
         <div class="results-hero-side">
           <div class="results-signal-ring ${statusClass}">

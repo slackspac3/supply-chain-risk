@@ -1701,6 +1701,12 @@ canvas { display: block; width: 100%; }
 .results-brief-label {
   color: rgba(211,223,235,0.62);
 }
+.results-hero-meta {
+  margin-top: var(--sp-3);
+  color: rgba(211,223,235,0.62);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
 @media (max-width: 1100px) {
   .results-executive-brief, .results-exec-metrics, .results-visual-grid, .results-decision-grid, .results-summary-grid, .results-analyst-summary__grid, .results-traceability-grid, .results-model-basis__grid, .quant-readiness-grid {
     grid-template-columns: 1fr;
