@@ -235,7 +235,7 @@ function renderUserDashboard() {
     </main>`);
   document.getElementById('btn-dashboard-new-assessment')?.addEventListener('click', () => {
     resetDraft();
-    Router.navigate('/wizard/1');
+    openDraftWorkspaceRoute();
   });
   document.getElementById('btn-dashboard-start-template')?.addEventListener('click', () => {
     if (recommendedTemplate) loadTemplate(recommendedTemplate);
@@ -243,7 +243,7 @@ function renderUserDashboard() {
   document.getElementById('btn-dashboard-start-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
   document.getElementById('btn-empty-next-new')?.addEventListener('click', () => {
     resetDraft();
-    Router.navigate('/wizard/1');
+    openDraftWorkspaceRoute();
   });
   document.getElementById('btn-empty-next-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
   document.getElementById('btn-empty-recent-template')?.addEventListener('click', () => {
@@ -255,7 +255,7 @@ function renderUserDashboard() {
   });
   document.getElementById('btn-dashboard-open-settings')?.addEventListener('click', () => Router.navigate('/settings'));
   document.getElementById('btn-dashboard-settings-secondary')?.addEventListener('click', () => Router.navigate('/settings'));
-  document.getElementById('btn-dashboard-continue-draft')?.addEventListener('click', () => Router.navigate('/wizard/1'));
+  document.getElementById('btn-dashboard-continue-draft')?.addEventListener('click', () => openDraftWorkspaceRoute());
   document.getElementById('btn-dashboard-export-assessments')?.addEventListener('click', () => {
     ExportService.exportDataAsJson(getAssessments(), `risk-calculator-assessments-${user?.username || 'user'}.json`);
   });
@@ -291,7 +291,7 @@ function renderUserDashboard() {
     try {
       if (target.classList.contains('dashboard-open-action')) {
         if (id === 'draft') {
-          Router.navigate('/wizard/1');
+          openDraftWorkspaceRoute();
           return;
         }
         if (id) Router.navigate(`/results/${id}`);
@@ -319,7 +319,7 @@ function renderUserDashboard() {
           return;
         }
         UI.toast('Assessment duplicated into a new draft.', 'success');
-        Router.navigate('/wizard/1');
+        openDraftWorkspaceRoute();
         return;
       }
 
@@ -376,10 +376,18 @@ function renderUserDashboard() {
         }
         restoreArchivedDraftToWorkspace(id);
         UI.toast('Archived draft restored to your active workspace.', 'success');
-        Router.navigate('/wizard/1');
+        openDraftWorkspaceRoute();
       }
     } catch (error) {
       UI.toast('That action could not be completed. Try again in a moment.', 'danger');
     }
   });
+}
+
+function openDraftWorkspaceRoute() {
+  Router.navigate('/wizard/1');
+  if (typeof window !== 'undefined' && window.location.hash !== '#/wizard/1') {
+    window.location.hash = '/wizard/1';
+  }
+  Router.resolve?.();
 }
