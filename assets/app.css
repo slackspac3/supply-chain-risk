@@ -90,13 +90,29 @@ code { font-family: var(--font-mono); font-size: 0.875em; background: var(--bg-e
   padding: 0 var(--sp-6);
 }
 .bar-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
   font-family: var(--font-display);
   font-size: 1.25rem;
   font-weight: var(--font-bold);
   color: var(--text-primary);
   letter-spacing: -0.05em;
 }
-.bar-logo span { color: var(--color-primary-500); }
+.bar-logo-text span { color: var(--color-primary-500); }
+.bar-logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 40px;
+  flex-shrink: 0;
+}
+.bar-logo-mark img {
+  display: block;
+  width: 18px;
+  height: auto;
+}
 .bar-spacer { flex: 1; }
 .bar-poc-tag {
   font-size: 0.8125rem;

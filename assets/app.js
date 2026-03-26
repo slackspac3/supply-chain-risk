@@ -3741,7 +3741,12 @@ function renderAppBar() {
   const bar = document.getElementById('app-bar');
   bar.innerHTML = `
     <div class="bar-inner">
-      <a href="${homeHref}" class="bar-logo">Risk <span>Intelligence</span> Platform</a>
+      <a href="${homeHref}" class="bar-logo">
+        <span class="bar-logo-mark" aria-hidden="true">
+          <img src="assets/brand/g42-catalyst-symbol-logo-inverted-rgb.svg" alt="">
+        </span>
+        <span class="bar-logo-text">Risk <span>Intelligence</span> Platform</span>
+      </a>
       <nav class="flex items-center gap-3">
         ${navLinks.map(link => `<a href="${link.href}" class="bar-nav-link${link.active ? ' active' : ''}">${link.label}</a>`).join('')}
       </nav>
