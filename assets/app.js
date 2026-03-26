@@ -4645,7 +4645,19 @@ function renderAdminSettings(activeSection = 'org') {
             <h2>${settingsSectionMeta[currentSettingsSection].title}</h2>
             <p style="margin-top:6px">${settingsSectionMeta[currentSettingsSection].description}</p>
           </div>
-          <button class="btn btn--secondary" id="btn-reset-settings">Reset Defaults</button>
+          <div class="admin-shell-note">Keep the main operating action simple: assess likely downstream impact, then save only when the end-user effect is clear.</div>
+        </div>
+        <div class="admin-focus-strip">
+          <div class="admin-focus-pill">
+            <span class="admin-focus-pill__label">Current section</span>
+            <strong>${settingsSectionMeta[currentSettingsSection].title}</strong>
+            <span>${settingsSectionMeta[currentSettingsSection].description}</span>
+          </div>
+          <div class="admin-focus-pill">
+            <span class="admin-focus-pill__label">Recommended next move</span>
+            <strong>${currentSettingsSection === 'org' ? 'Tune structure before thresholds' : currentSettingsSection === 'users' ? 'Review access before issuing changes' : currentSettingsSection === 'defaults' ? 'Assess end-user impact before save' : 'Keep advanced controls deliberate'}</strong>
+            <span>${currentSettingsSection === 'org' ? 'A clear ownership tree makes downstream context and user setup much calmer.' : currentSettingsSection === 'users' ? 'Account changes are higher-risk when role and BU context are not aligned.' : currentSettingsSection === 'defaults' ? 'Thresholds and AI defaults shape many downstream user decisions.' : 'This section contains stronger platform controls, so make one intentional change at a time.'}</span>
+          </div>
         </div>
         <div class="admin-overview-grid">
           <div class="admin-overview-card">

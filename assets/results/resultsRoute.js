@@ -80,7 +80,7 @@ function renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, e
 function renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, confidence, rolePresentation) {
   const confidenceValue = confidence?.label || 'Moderate confidence';
   const confidenceCopy = confidence?.summary || 'Use this result as a management starting point, then challenge the biggest assumptions.';
-  return `<div class="results-executive-brief">
+  return `<div class="results-executive-brief results-executive-brief--premium">
     ${UI.resultsBriefCard({ label: 'Current position', value: statusTitle, copy: statusDetail })}
     ${UI.resultsBriefCard({ label: 'Management action', value: executiveDecision?.decision || 'Review', copy: executiveAction || executiveDecision?.priority || '' })}
     ${UI.resultsBriefCard({ label: 'Confidence', value: confidenceValue, copy: confidenceCopy })}
@@ -135,15 +135,34 @@ function renderResultsConfidenceNeedsBlock(confidenceFrame, evidenceQuality, mis
 function renderResultsComparisonHighlight(comparison) {
   if (!comparison) return '';
   return `<section class="results-section-stack">
-    <div class="results-section-heading">Decision view versus the baseline</div>
-    <div class="results-comparison-card">
-      <div class="results-comparison-banner"><strong>Baseline:</strong> ${comparison.baselineTitle} · ${comparison.baselineDate}</div>
-      <p class="results-summary-copy" style="margin-top:var(--sp-3)">${comparison.summary}</p>
-      <div class="results-comparison-banner" style="margin-top:var(--sp-3)">${comparison.treatmentNarrative || comparison.keyDriver}</div>
+    <div class="results-section-heading">Treatment comparison</div>
+    <div class="results-comparison-card results-comparison-card--spotlight">
+      <div class="results-comparison-spotlight">
+        <div>
+          <div class="results-driver-label">Decision signal versus the baseline</div>
+          <h3 class="results-comparison-spotlight__title">${comparison.directionTitle}</h3>
+          <p class="results-summary-copy" style="margin-top:var(--sp-3)">${comparison.summary}</p>
+        </div>
+        <div class="results-comparison-spotlight__rail">
+          <div class="results-comparison-banner"><strong>Baseline:</strong> ${comparison.baselineTitle} · ${comparison.baselineDate}</div>
+          <div class="results-comparison-banner">${comparison.statusShift}</div>
+        </div>
+      </div>
+      <div class="results-comparison-banner" style="margin-top:var(--sp-4)">${comparison.treatmentNarrative || comparison.keyDriver}</div>
       <div class="results-comparison-grid">
         <div class="results-comparison-metric ${comparison.severeEvent.direction}"><div class="results-impact-label">Severe single event</div><div class="results-comparison-value">${comparison.severeEvent.formatted}</div><div class="results-comparison-foot">${comparison.statusShift}</div></div>
         <div class="results-comparison-metric ${comparison.annualExposure.direction}"><div class="results-impact-label">Expected annual exposure</div><div class="results-comparison-value">${comparison.annualExposure.formatted}</div><div class="results-comparison-foot">Average-year delta</div></div>
         <div class="results-comparison-metric ${comparison.severeAnnual.direction}"><div class="results-impact-label">Severe annual exposure</div><div class="results-comparison-value">${comparison.severeAnnual.formatted}</div><div class="results-comparison-foot">${comparison.keyDriver}</div></div>
+      </div>
+      <div class="results-comparison-levers">
+        <div class="results-comparison-lever">
+          <span class="results-driver-label">Primary change</span>
+          <strong>${comparison.keyDriver}</strong>
+        </div>
+        <div class="results-comparison-lever">
+          <span class="results-driver-label">Secondary change</span>
+          <strong>${comparison.secondaryDriver}</strong>
+        </div>
       </div>
     </div>
   </section>`;
@@ -214,6 +233,11 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
     keyDriver: levers[0]?.magnitude > 0 ? levers[0].message : 'The two cases are directionally similar, so no single input change stands out as the dominant driver.',
     secondaryDriver,
     treatmentNarrative,
+    directionTitle: severeEvent.direction === 'down'
+      ? 'The treatment path is reducing the decision burden.'
+      : severeEvent.direction === 'up'
+        ? 'The current case is still heavier than the baseline.'
+        : 'The treatment path is not yet materially changing the position.',
     summary: severeEvent.direction === 'up'
       ? 'This scenario is currently running hotter than the selected baseline on the severe single-event view, so the current assumptions are not yet delivering a better management outcome.'
       : severeEvent.direction === 'down'
@@ -310,8 +334,8 @@ function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, 
     <div class="results-comparison-card">
       <div class="results-comparison-head">
         <div>
-          <div class="results-driver-label">Current baseline</div>
-          <div class="results-comparison-sub">Choose another saved assessment to understand what changed and how this scenario compares.</div>
+          <div class="results-driver-label">Comparison source</div>
+          <div class="results-comparison-sub">Choose another saved assessment to show the management delta, the changed assumptions, and whether the treatment is really improving the position.</div>
         </div>
         <select class="form-select results-comparison-select" id="results-compare-select">
           <option value="">No comparison selected</option>
@@ -319,6 +343,7 @@ function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, 
         </select>
       </div>
       ${comparison ? `
+        <div class="results-comparison-banner" style="margin-top:var(--sp-3)"><strong>Decision read:</strong> ${comparison.directionTitle}</div>
         <div class="results-comparison-banner">
           <strong>Comparing against:</strong> ${comparison.baselineTitle} · ${comparison.baselineDate}
         </div>

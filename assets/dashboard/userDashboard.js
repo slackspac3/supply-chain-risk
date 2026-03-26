@@ -70,6 +70,28 @@ function renderUserDashboard() {
   const guidanceSummary = focusAreas.length
     ? `Focus areas: ${focusAreas.slice(0, 3).join(', ')}${focusAreas.length > 3 ? ', and more.' : '.'}`
     : 'No focus areas saved yet.';
+  const contextReadinessScore = [
+    profile.jobTitle,
+    profile.businessUnit || user?.businessUnit,
+    profile.department || user?.department,
+    focusAreas.length ? 'focus-areas' : '',
+    profile.workingContext
+  ].filter(Boolean).length;
+  const contextReadinessLabel = contextReadinessScore >= 5
+    ? 'Ready'
+    : contextReadinessScore >= 3
+      ? 'Partially set'
+      : 'Needs setup';
+  const roleLaneTitle = hasDraft
+    ? 'Resume the live draft'
+    : assessmentsNeedingReview.length
+      ? 'Review the latest result'
+      : 'Start a guided assessment';
+  const roleLaneCopy = hasDraft
+    ? 'Continue the active assessment and move it toward a management-ready result.'
+    : assessmentsNeedingReview.length
+      ? 'Open the highest-priority completed scenario and confirm the next management action.'
+      : 'Use the guided path to get to a first useful result quickly, then refine only if needed.';
   const recommendedTemplate = Array.isArray(ScenarioTemplates) ? ScenarioTemplates[0] : null;
   const primarySettingsLabel = capability.canManageBusinessUnit || capability.canManageDepartment
     ? capability.experience.primaryActionLabel
@@ -94,7 +116,24 @@ function renderUserDashboard() {
             <div class="dashboard-hero-main">
               <div class="landing-badge">Personal Dashboard</div>
               <h2 style="margin-top:var(--sp-4)">Welcome back, ${user?.displayName || 'there'}.</h2>
-              <p style="margin-top:10px;color:rgba(255,255,255,.74);max-width:680px">This is your main working space. Start a new assessment, resume unfinished work, or review completed results from here.</p>
+              <p class="dashboard-hero-copy">A calm working space for moving from scenario framing to a management-ready risk view. Start with the guided path, then open detail only when you need it.</p>
+              <div class="dashboard-signal-strip">
+                <div class="dashboard-signal-pill">
+                  <span class="dashboard-signal-pill__label">Primary lane</span>
+                  <strong>${roleLaneTitle}</strong>
+                  <span>${roleLaneCopy}</span>
+                </div>
+                <div class="dashboard-signal-pill">
+                  <span class="dashboard-signal-pill__label">Workspace status</span>
+                  <strong>${hasDraft ? 'Draft in progress' : assessmentsNeedingReview.length ? 'Review queue active' : 'Clear to start'}</strong>
+                  <span>${quickStatus}</span>
+                </div>
+                <div class="dashboard-signal-pill">
+                  <span class="dashboard-signal-pill__label">Context readiness</span>
+                  <strong>${contextReadinessLabel}</strong>
+                  <span>${guidanceSummary}</span>
+                </div>
+              </div>
               <div class="dashboard-hero-actions flex items-center gap-3 mt-6" style="flex-wrap:wrap">
                 <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="Start a New Risk Assessment">Start Guided Assessment</button>
                 <button class="btn btn--secondary" id="btn-dashboard-continue-draft" ${hasDraft ? '' : 'disabled'}>${hasDraft ? 'Resume Draft' : 'No Draft Yet'}</button>
@@ -112,29 +151,43 @@ function renderUserDashboard() {
               <div class="form-help" style="margin-top:12px;color:rgba(255,255,255,.65)">${roleHeroHint}</div>
             </div>
             <div class="card dashboard-hero-side">
-              <div class="context-panel-title">What to do next</div>
-              <div class="context-panel-copy" style="margin-top:8px">${quickStatus}</div>
-              <div class="form-help" style="margin-top:10px;color:rgba(255,255,255,.65)">${capability.experience.dashboardLead}</div>
-              <div class="form-help" style="margin-top:10px;color:rgba(255,255,255,.65)">Current access: ${capability.roleSummary} · Default geography: ${settings.geographyPrimary || settings.geography || globalSettings.geography}</div>
+              <div class="context-panel-title">Today&apos;s operating picture</div>
+              <div class="dashboard-focus-stack">
+                <div class="dashboard-focus-card">
+                  <span class="dashboard-focus-card__label">Recommended next move</span>
+                  <strong>${roleLaneTitle}</strong>
+                  <div class="context-panel-copy">${quickStatus}</div>
+                </div>
+                <div class="dashboard-focus-card">
+                  <span class="dashboard-focus-card__label">Role lens</span>
+                  <strong>${capability.roleSummary}</strong>
+                  <div class="context-panel-copy">${capability.experience.dashboardLead}</div>
+                </div>
+                <div class="dashboard-focus-card">
+                  <span class="dashboard-focus-card__label">Default context in use</span>
+                  <strong>${settings.geographyPrimary || settings.geography || globalSettings.geography}</strong>
+                  <div class="context-panel-copy">This geography and your saved profile shape default wording, guidance, and AI-assisted suggestions.</div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
         <section class="admin-overview-grid dashboard-at-a-glance" style="margin-top:var(--sp-8)">
           ${UI.dashboardOverviewCard({
-            label: 'Open work',
+            label: 'Ready now',
             value: openAssessmentRows.length,
-            foot: 'Drafts and results that are most likely to need attention now.'
+            foot: hasDraft ? 'Your live draft or priority review items are ready to open.' : 'No active draft right now. Start from the guided path when needed.'
           })}
           ${UI.dashboardOverviewCard({
-            label: 'Completed assessments',
+            label: 'Completed view',
             value: assessments.length,
             foot: latestAssessment ? `Latest: ${new Date(latestAssessment.completedAt || latestAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'No completed assessments yet'
           })}
           ${UI.dashboardOverviewCard({
-            label: 'Needs review',
-            value: assessmentsNeedingReview.length,
-            foot: assessmentsNeedingReview.length ? 'Scenarios near or above tolerance are ready for review.' : 'Nothing currently stands out for urgent review.'
+            label: 'Context signal',
+            value: contextReadinessLabel,
+            foot: contextReadinessScore >= 5 ? 'Your saved role and working context are ready to support AI-assisted drafting.' : 'Add more profile context to improve defaults and assisted output quality.'
           })}
         </section>
 
@@ -223,9 +276,9 @@ function renderUserDashboard() {
           </div>
 
           <div class="dashboard-column">
-            <details class="dashboard-disclosure card card--elevated dashboard-section-card" open>
-              <summary>How to use this platform <span class="badge badge--neutral">${capability.roleSummary}</span></summary>
-              <div class="dashboard-disclosure-copy">Guidance matched to the access and responsibilities you currently have.</div>
+            <details class="dashboard-disclosure card card--elevated dashboard-section-card">
+              <summary>Role playbook <span class="badge badge--neutral">${capability.roleSummary}</span></summary>
+              <div class="dashboard-disclosure-copy">Open this when you want role-specific guidance. The primary workflow stays intentionally simple by default.</div>
               <div class="dashboard-disclosure-body">
                 ${renderNonAdminHowToGuide(capability)}
               </div>
