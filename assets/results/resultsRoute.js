@@ -192,24 +192,59 @@ function renderResultsComparisonHighlight(comparison) {
           <div class="results-comparison-banner">${comparison.statusShift}</div>
         </div>
       </div>
+      <div class="results-treatment-before-after">
+        <div class="results-treatment-posture-card">
+          <div class="results-driver-label">Baseline posture</div>
+          <strong>${comparison.baselineStatus}</strong>
+          <div class="results-treatment-posture-grid">
+            <div><span>Severe event</span><strong>${comparison.baselineMetrics.severeEvent}</strong></div>
+            <div><span>Expected annual</span><strong>${comparison.baselineMetrics.annualExposure}</strong></div>
+            <div><span>Severe annual</span><strong>${comparison.baselineMetrics.severeAnnual}</strong></div>
+          </div>
+        </div>
+        <div class="results-treatment-posture-card results-treatment-posture-card--current">
+          <div class="results-driver-label">Treatment posture</div>
+          <strong>${comparison.currentStatus}</strong>
+          <div class="results-treatment-posture-grid">
+            <div><span>Severe event</span><strong>${comparison.currentMetrics.severeEvent}</strong></div>
+            <div><span>Expected annual</span><strong>${comparison.currentMetrics.annualExposure}</strong></div>
+            <div><span>Severe annual</span><strong>${comparison.currentMetrics.severeAnnual}</strong></div>
+          </div>
+        </div>
+      </div>
+      <div class="results-comparison-grid results-comparison-grid--delta">
+        <div class="results-comparison-metric ${comparison.severeEvent.direction}"><div class="results-impact-label">Reduction in severe-event exposure</div><div class="results-comparison-value">${comparison.severeEvent.formatted}</div><div class="results-comparison-foot">${comparison.severeEvent.direction === 'down' ? 'Treatment reduces the severe case.' : comparison.severeEvent.direction === 'up' ? 'Treatment currently worsens the severe case.' : 'No material severe-event shift yet.'}</div></div>
+        <div class="results-comparison-metric ${comparison.annualExposure.direction}"><div class="results-impact-label">Reduction in expected annual loss</div><div class="results-comparison-value">${comparison.annualExposure.formatted}</div><div class="results-comparison-foot">${comparison.annualExposure.direction === 'down' ? 'Average-year burden is falling.' : comparison.annualExposure.direction === 'up' ? 'Average-year burden is rising.' : 'Average-year burden is broadly unchanged.'}</div></div>
+        <div class="results-comparison-metric ${comparison.severeAnnual.direction}"><div class="results-impact-label">Change in threshold posture</div><div class="results-comparison-value">${comparison.currentStatus}</div><div class="results-comparison-foot">${comparison.statusShift}</div></div>
+      </div>
       <div class="results-comparison-banner results-comparison-banner--premium" style="margin-top:var(--sp-4)">
         <strong>Recommended treatment read:</strong> ${treatmentDecision.action}
       </div>
-      <div class="results-comparison-grid">
-        <div class="results-comparison-metric ${comparison.severeEvent.direction}"><div class="results-impact-label">Severe single event</div><div class="results-comparison-value">${comparison.severeEvent.formatted}</div><div class="results-comparison-foot">${comparison.statusShift}</div></div>
-        <div class="results-comparison-metric ${comparison.annualExposure.direction}"><div class="results-impact-label">Expected annual exposure</div><div class="results-comparison-value">${comparison.annualExposure.formatted}</div><div class="results-comparison-foot">Average-year delta</div></div>
-        <div class="results-comparison-metric ${comparison.severeAnnual.direction}"><div class="results-impact-label">Severe annual exposure</div><div class="results-comparison-value">${comparison.severeAnnual.formatted}</div><div class="results-comparison-foot">${comparison.keyDriver}</div></div>
-      </div>
       <div class="results-comparison-levers">
         <div class="results-comparison-lever">
-          <span class="results-driver-label">Primary change</span>
+          <span class="results-driver-label">Driver shift</span>
           <strong>${comparison.keyDriver}</strong>
         </div>
         <div class="results-comparison-lever">
-          <span class="results-driver-label">Secondary change</span>
-          <strong>${comparison.secondaryDriver}</strong>
+          <span class="results-driver-label">Confidence caveat</span>
+          <strong>${comparison.caveat}</strong>
+        </div>
+        <div class="results-comparison-lever">
+          <span class="results-driver-label">Recommendation summary</span>
+          <strong>${treatmentDecision.title}</strong>
         </div>
       </div>
+      <details class="results-detail-disclosure" style="margin-top:var(--sp-5);margin-bottom:0">
+        <summary>Show technical comparison detail</summary>
+        <div class="results-detail-disclosure-copy">Open this when you want the exact baseline-versus-treatment movement for each saved metric.</div>
+        <div class="results-disclosure-stack">
+          <div class="results-comparison-grid">
+            <div class="results-comparison-metric ${comparison.severeEvent.direction}"><div class="results-impact-label">Severe single event delta</div><div class="results-comparison-value">${comparison.severeEvent.formatted}</div><div class="results-comparison-foot">Baseline ${comparison.baselineMetrics.severeEvent} → Treatment ${comparison.currentMetrics.severeEvent}</div></div>
+            <div class="results-comparison-metric ${comparison.annualExposure.direction}"><div class="results-impact-label">Expected annual exposure delta</div><div class="results-comparison-value">${comparison.annualExposure.formatted}</div><div class="results-comparison-foot">Baseline ${comparison.baselineMetrics.annualExposure} → Treatment ${comparison.currentMetrics.annualExposure}</div></div>
+            <div class="results-comparison-metric ${comparison.severeAnnual.direction}"><div class="results-impact-label">Severe annual exposure delta</div><div class="results-comparison-value">${comparison.severeAnnual.formatted}</div><div class="results-comparison-foot">Baseline ${comparison.baselineMetrics.severeAnnual} → Treatment ${comparison.currentMetrics.severeAnnual}</div></div>
+          </div>
+        </div>
+      </details>
     </div>
   </section>`;
 }
@@ -357,6 +392,7 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
     statusShift,
     keyDriver: levers[0]?.magnitude > 0 ? levers[0].message : 'The two cases are directionally similar, so no single input change stands out as the dominant driver.',
     secondaryDriver,
+    caveat: currentAssessment.missingInformation?.[0] || baselineAssessment.missingInformation?.[0] || 'Validate the treatment assumptions before relying on this delta for investment or prioritisation.',
     treatmentNarrative,
     directionTitle: severeEvent.direction === 'down'
       ? 'The treatment path is reducing the decision burden.'
@@ -367,7 +403,17 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
       ? 'This scenario is currently running hotter than the selected baseline on the severe single-event view, so the current assumptions are not yet delivering a better management outcome.'
       : severeEvent.direction === 'down'
         ? 'This scenario is currently less severe than the selected baseline on the severe single-event view, which suggests the treatment assumptions are improving the management posture.'
-        : 'This scenario is broadly aligned with the selected baseline on the severe single-event view, so the proposed change is not yet materially shifting the management position.'
+        : 'This scenario is broadly aligned with the selected baseline on the severe single-event view, so the proposed change is not yet materially shifting the management position.',
+    baselineMetrics: {
+      severeEvent: fmtCurrency(baseline.lm?.p90 || 0),
+      annualExposure: fmtCurrency(baseline.ale?.mean || 0),
+      severeAnnual: fmtCurrency(baseline.ale?.p90 || 0)
+    },
+    currentMetrics: {
+      severeEvent: fmtCurrency(current.lm?.p90 || 0),
+      annualExposure: fmtCurrency(current.ale?.mean || 0),
+      severeAnnual: fmtCurrency(current.ale?.p90 || 0)
+    }
   };
 }
 
@@ -474,23 +520,43 @@ function renderAssessmentComparisonBlock(comparisonOptions, activeComparisonId, 
           <strong>Comparing against:</strong> ${comparison.baselineTitle} · ${comparison.baselineDate}
         </div>
         <p class="results-summary-copy" style="margin-top:var(--sp-3)">${treatmentDecision.summary}</p>
+        <div class="results-treatment-before-after" style="margin-top:var(--sp-4)">
+          <div class="results-treatment-posture-card">
+            <div class="results-driver-label">Baseline</div>
+            <strong>${comparison.baselineStatus}</strong>
+            <div class="results-treatment-posture-grid">
+              <div><span>Severe event</span><strong>${comparison.baselineMetrics.severeEvent}</strong></div>
+              <div><span>Expected annual</span><strong>${comparison.baselineMetrics.annualExposure}</strong></div>
+              <div><span>Severe annual</span><strong>${comparison.baselineMetrics.severeAnnual}</strong></div>
+            </div>
+          </div>
+          <div class="results-treatment-posture-card results-treatment-posture-card--current">
+            <div class="results-driver-label">Treatment</div>
+            <strong>${comparison.currentStatus}</strong>
+            <div class="results-treatment-posture-grid">
+              <div><span>Severe event</span><strong>${comparison.currentMetrics.severeEvent}</strong></div>
+              <div><span>Expected annual</span><strong>${comparison.currentMetrics.annualExposure}</strong></div>
+              <div><span>Severe annual</span><strong>${comparison.currentMetrics.severeAnnual}</strong></div>
+            </div>
+          </div>
+        </div>
         <div class="results-comparison-banner" style="margin-top:var(--sp-3)">${comparison.statusShift}</div>
         <div class="results-comparison-banner" style="margin-top:var(--sp-3)">${treatmentDecision.action}</div>
         <div class="results-comparison-grid">
           <div class="results-comparison-metric ${comparison.severeEvent.direction}">
-            <div class="results-impact-label">Severe single event</div>
+            <div class="results-impact-label">Severe single event delta</div>
             <div class="results-comparison-value">${comparison.severeEvent.formatted}</div>
-            <div class="results-comparison-foot">Current: ${comparison.currentStatus} · Baseline: ${comparison.baselineStatus}</div>
+            <div class="results-comparison-foot">Baseline ${comparison.baselineMetrics.severeEvent} → Treatment ${comparison.currentMetrics.severeEvent}</div>
           </div>
           <div class="results-comparison-metric ${comparison.annualExposure.direction}">
-            <div class="results-impact-label">Expected annual exposure</div>
+            <div class="results-impact-label">Expected annual exposure delta</div>
             <div class="results-comparison-value">${comparison.annualExposure.formatted}</div>
-            <div class="results-comparison-foot">Average-year comparison</div>
+            <div class="results-comparison-foot">Baseline ${comparison.baselineMetrics.annualExposure} → Treatment ${comparison.currentMetrics.annualExposure}</div>
           </div>
           <div class="results-comparison-metric ${comparison.severeAnnual.direction}">
-            <div class="results-impact-label">High-end annual exposure</div>
+            <div class="results-impact-label">High-end annual exposure delta</div>
             <div class="results-comparison-value">${comparison.severeAnnual.formatted}</div>
-            <div class="results-comparison-foot">Severe-year comparison</div>
+            <div class="results-comparison-foot">Baseline ${comparison.baselineMetrics.severeAnnual} → Treatment ${comparison.currentMetrics.severeAnnual}</div>
           </div>
         </div>` : `
         <div class="results-comparison-empty">Choose a baseline assessment to compare event size, yearly exposure, and tolerance position.</div>`}
