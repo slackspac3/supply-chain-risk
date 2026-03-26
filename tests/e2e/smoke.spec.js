@@ -557,6 +557,41 @@ test('authenticated admin shell renders without crashing', async ({ page }) => {
   });
 });
 
+test('authenticated admin document library renders without crashing', async ({ page }) => {
+  await seedAuthenticatedUser(page, {
+    username: 'admin',
+    displayName: 'Global Admin',
+    role: 'admin',
+    adminSettings: {
+      geography: 'United Arab Emirates',
+      companyStructure: [],
+      entityContextLayers: [],
+      applicableRegulations: ['UAE PDPL'],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    preferredAdminSection: 'org'
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      companyStructure: [],
+      entityContextLayers: [],
+      applicableRegulations: ['UAE PDPL'],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/admin/docs', async () => {
+    await expect(page.getByRole('heading', { name: /document library/i })).toBeVisible();
+    await expect(page.locator('#btn-add-doc')).toBeVisible();
+    await expect(page.locator('#btn-reindex')).toBeVisible();
+  });
+});
+
 
 
 test('wizard step 1 clear all keeps manually added risks unselected after rerender', async ({ page }) => {

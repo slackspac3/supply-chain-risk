@@ -58,6 +58,7 @@ expect(String(packageJson.engines?.node || '').trim() === '>=24 <25', 'package.j
 expect(appJs.includes(`const APP_ASSET_VERSION = '${versions[0] || ''}'`), 'app.js asset version does not match index.html asset version');
 expect(indexHtml.includes('assets/services/reportPresentation.js'), 'index.html is missing reportPresentation.js');
 expect(indexHtml.includes('assets/services/benchmarkService.js'), 'index.html is missing benchmarkService.js');
+expect(indexHtml.includes('assets/admin/documentLibrarySection.js'), 'index.html is missing documentLibrarySection.js');
 expect(indexHtml.indexOf('assets/services/reportPresentation.js') < indexHtml.indexOf('assets/services/exportService.js'), 'reportPresentation.js must load before exportService.js');
 expect(indexHtml.indexOf('assets/services/reportPresentation.js') < indexHtml.indexOf('assets/app.js'), 'reportPresentation.js must load before app.js');
 expect(indexHtml.includes('assets/state/workspaceStateModel.js'), 'index.html is missing workspaceStateModel.js');
@@ -123,6 +124,7 @@ expect(e2eSmokeSpecJs.includes('Unexpected page errors on'), 'Playwright smoke s
 expect(e2eSmokeSpecJs.includes('/#/results/example-assessment'), 'Playwright smoke suite is missing results-route coverage');
 expect(e2eSmokeSpecJs.includes('pressing Enter signs in and opens the personal dashboard'), 'Playwright smoke suite is missing Enter-to-login coverage');
 expect(e2eSmokeSpecJs.includes('authenticated admin shell renders without crashing'), 'Playwright smoke suite is missing authenticated admin coverage');
+expect(e2eSmokeSpecJs.includes('authenticated admin document library renders without crashing'), 'Playwright smoke suite is missing admin document-library coverage');
 expect(e2eSmokeSpecJs.includes('dashboard archive helpers preserve state after the confirm modal opens'), 'Playwright smoke suite is missing dashboard archive state coverage');
 expect(e2eSmokeSpecJs.includes('first-run onboarding can launch the sample assessment path'), 'Playwright smoke suite is missing first-run onboarding sample-path coverage');
 expect(e2eSmokeSpecJs.includes('dashboard duplicate assessment creates a new editable draft'), 'Playwright smoke suite is missing dashboard duplicate-assessment coverage');
