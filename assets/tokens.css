@@ -1,80 +1,83 @@
 /* ============================================================
    G42 RISK QUANTIFIER — DESIGN TOKENS
-   Replace these with official G42 brand tokens when available.
+   Operationalized from the G42 Brand Alignment Brief for LLMs.
    ============================================================ */
 
 :root {
   /* ── Brand Palette ─────────────────────────────────────── */
-  --color-primary-900:   #08111d;
-  --color-primary-800:   #0f1b2c;
-  --color-primary-700:   #17304a;
-  --color-primary-600:   #1f4666;
-  --color-primary-500:   #2d638d;
-  --color-primary-400:   #4d82ab;
-  --color-primary-300:   #9dbed6;
-  --color-primary-200:   #cfe0eb;
-  --color-primary-100:   #e8f0f5;
+  --color-primary-900:   #061410;
+  --color-primary-800:   #0d231c;
+  --color-primary-700:   #12352c;
+  --color-primary-600:   #0f8e74;
+  --color-primary-500:   #03D1A8;
+  --color-primary-400:   #45dfbc;
+  --color-primary-300:   #87e9d2;
+  --color-primary-200:   #c1f5e8;
+  --color-primary-100:   #ebfff8;
 
-  --color-accent-500:    #7a6330;
-  --color-accent-400:    #a48345;
-  --color-accent-300:    #d6bb76;
+  --color-accent-500:    #c8d63c;
+  --color-accent-400:    #dce94c;
+  --color-accent-300:    #F2FB5A;
 
-  --color-gold-500:      #8f6b2f;
-  --color-gold-400:      #b48a46;
-  --color-gold-300:      #dfc78b;
-  --accent-gold:         #b48a46;
+  --color-gold-500:      #9baa2b;
+  --color-gold-400:      #cad93b;
+  --color-gold-300:      #F2FB5A;
+  --accent-gold:         #F2FB5A;
 
   /* ── Semantic / Status ──────────────────────────────────── */
-  --color-success-600:   #0b8b63;
-  --color-success-500:   #17b07e;
-  --color-success-100:   rgba(23,176,126,0.12);
-  --color-warning-600:   #b87518;
-  --color-warning-500:   #dd9736;
-  --color-warning-100:   rgba(221,151,54,0.12);
-  --color-danger-700:    #b73232;
-  --color-danger-600:    #d14a4a;
-  --color-danger-500:    #ec6969;
-  --color-danger-100:    rgba(209,74,74,0.12);
-  --color-info-500:      #5d89b5;
-  --color-info-100:      rgba(93,137,181,0.14);
+  --color-success-600:   #238d68;
+  --color-success-500:   #5ACA91;
+  --color-success-400:   #8be0b5;
+  --color-success-100:   rgba(90,202,145,0.14);
+  --color-warning-600:   #cad93b;
+  --color-warning-500:   #F2FB5A;
+  --color-warning-400:   #f5fb90;
+  --color-warning-100:   rgba(242,251,90,0.14);
+  --color-danger-700:    #d93a4e;
+  --color-danger-600:    #FE4A5E;
+  --color-danger-500:    #ff7383;
+  --color-danger-400:    #ff9cab;
+  --color-danger-100:    rgba(254,74,94,0.14);
+  --color-info-500:      #4D5C9C;
+  --color-info-100:      rgba(77,92,156,0.14);
 
   /* ── Neutrals ───────────────────────────────────────────── */
-  --color-neutral-950:   #05070b;
-  --color-neutral-900:   #0b1017;
-  --color-neutral-800:   #121922;
-  --color-neutral-700:   #1b2531;
-  --color-neutral-600:   #314050;
-  --color-neutral-500:   #596474;
-  --color-neutral-400:   #97a3b4;
-  --color-neutral-300:   #cfd7e2;
-  --color-neutral-200:   #e2e8ef;
-  --color-neutral-100:   #f1f4f8;
-  --color-neutral-50:    #fafbfd;
+  --color-neutral-950:   #101410;
+  --color-neutral-900:   #171d18;
+  --color-neutral-800:   #1d241f;
+  --color-neutral-700:   #212822;
+  --color-neutral-600:   #384038;
+  --color-neutral-500:   #647065;
+  --color-neutral-400:   #99a39a;
+  --color-neutral-300:   #c8cec8;
+  --color-neutral-200:   #e0ddd9;
+  --color-neutral-100:   #F6F3F2;
+  --color-neutral-50:    #fcf9f8;
   --color-white:         #ffffff;
 
   /* ── Surface / Background ───────────────────────────────── */
-  --bg-base:             #07101a;
-  --bg-surface:          rgba(13, 22, 33, 0.74);
-  --bg-elevated:         rgba(18, 29, 42, 0.88);
-  --bg-canvas:           #0a1320;
-  --bg-overlay:          rgba(255,255,255,0.06);
-  --bg-overlay-hover:    rgba(255,255,255,0.1);
-  --bg-glass:            rgba(255,255,255,0.055);
-  --bg-glass-strong:     rgba(255,255,255,0.085);
+  --bg-base:             #101410;
+  --bg-surface:          rgba(27, 34, 29, 0.74);
+  --bg-elevated:         rgba(33, 40, 34, 0.9);
+  --bg-canvas:           #161c18;
+  --bg-overlay:          rgba(246,243,242,0.06);
+  --bg-overlay-hover:    rgba(246,243,242,0.1);
+  --bg-glass:            rgba(246,243,242,0.05);
+  --bg-glass-strong:     rgba(246,243,242,0.08);
 
   /* ── Text ───────────────────────────────────────────────── */
-  --text-primary:        #f5f7f8;
-  --text-secondary:      #b0bac6;
-  --text-muted:          #7b8797;
-  --text-inverted:       #0d141d;
-  --text-link:           #c5d8e8;
-  --text-link-hover:     #f0d9a0;
+  --text-primary:        #F6F3F2;
+  --text-secondary:      #d6d2ce;
+  --text-muted:          #95a095;
+  --text-inverted:       #212822;
+  --text-link:           #87e9d2;
+  --text-link-hover:     #F2FB5A;
 
   /* ── Border ─────────────────────────────────────────────── */
-  --border-subtle:       rgba(214,225,238,0.1);
-  --border-default:      rgba(214,225,238,0.18);
-  --border-strong:       rgba(214,225,238,0.32);
-  --border-focus:        var(--color-gold-400);
+  --border-subtle:       rgba(246,243,242,0.08);
+  --border-default:      rgba(246,243,242,0.14);
+  --border-strong:       rgba(246,243,242,0.24);
+  --border-focus:        var(--color-primary-500);
 
   /* ── Typography ─────────────────────────────────────────── */
   --font-display:        'Syne', 'Georgia', serif;
@@ -120,11 +123,11 @@
   --radius-full: 9999px;
 
   /* ── Shadows ────────────────────────────────────────────── */
-  --shadow-sm:  0 12px 24px rgba(1,6,15,0.16);
-  --shadow-md:  0 22px 50px rgba(1,8,18,0.22);
-  --shadow-lg:  0 30px 76px rgba(1,8,18,0.3);
-  --shadow-xl:  0 42px 100px rgba(1,8,18,0.34);
-  --shadow-glow:0 16px 44px rgba(180,138,70,0.16);
+  --shadow-sm:  0 12px 24px rgba(4,8,5,0.16);
+  --shadow-md:  0 22px 50px rgba(4,8,5,0.22);
+  --shadow-lg:  0 30px 76px rgba(4,8,5,0.28);
+  --shadow-xl:  0 42px 100px rgba(4,8,5,0.34);
+  --shadow-glow:0 18px 44px rgba(3,209,168,0.16);
 
   /* ── Transitions ────────────────────────────────────────── */
   --transition-fast:   150ms ease;
@@ -139,10 +142,10 @@
   --z-tooltip: 400;
 
   /* ── Chart Colors ───────────────────────────────────────── */
-  --chart-primary:  #4d82ab;
-  --chart-accent:   #b48a46;
-  --chart-danger:   #ef4444;
-  --chart-warning:  #f59e0b;
-  --chart-success:  #10b981;
-  --chart-grid:     rgba(255,255,255,0.06);
+  --chart-primary:  #03D1A8;
+  --chart-accent:   #F2FB5A;
+  --chart-danger:   #FE4A5E;
+  --chart-warning:  #F2FB5A;
+  --chart-success:  #5ACA91;
+  --chart-grid:     rgba(246,243,242,0.08);
 }

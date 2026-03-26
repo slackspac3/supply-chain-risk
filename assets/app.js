@@ -8,11 +8,11 @@
 const TOLERANCE_THRESHOLD = 5_000_000;
 const DEFAULT_FX_RATE = 3.6725;
 const DEFAULT_COMPASS_PROXY_URL = resolveCompassProxyUrl();
-const APP_ASSET_VERSION = '20260326pilot1';
+const APP_ASSET_VERSION = '20260327g42a';
 const APP_RELEASE = Object.freeze((typeof window !== 'undefined' && window.__RISK_CALCULATOR_RELEASE__) || {
   version: '0.10.0-pilot.1',
   channel: 'pilot',
-  build: '2026-03-26-pilot1',
+  build: '2026-03-27-g42a',
   assetVersion: APP_ASSET_VERSION
 });
 const GLOBAL_ADMIN_STORAGE_KEY = 'rq_admin_settings';

@@ -5,12 +5,12 @@
 const UI = (() => {
   function iconTokenForLabel(label = '') {
     const text = String(label || '').toLowerCase();
+    if (/action|next|priority|decision/.test(text)) return '▸';
+    if (/confidence|evidence|trust/.test(text)) return '●';
     if (/position|status|posture|tolerance/.test(text)) return '◌';
-    if (/action|next|priority|decision/.test(text)) return '→';
-    if (/confidence|evidence|trust/.test(text)) return '◇';
-    if (/role|focus|scope|context/.test(text)) return '·';
+    if (/role|focus|scope|context/.test(text)) return '◦';
     if (/ready|open|completed|view/.test(text)) return '○';
-    return '·';
+    return '▸';
   }
 
   function sectionEyebrow(label = '', toneClass = '') {
