@@ -277,17 +277,61 @@ function renderUserDashboard() {
       ${secondaryId ? `<button type="button" class="btn btn--ghost btn--sm" id="${secondaryId}">${secondaryLabel}</button>` : ''}
     </div>
   </div>`;
+  const standardStartModule = !isOversightUser ? `
+    <div class="dashboard-start-module">
+      <div class="dashboard-start-head">
+        <div class="context-panel-title">Start a risk scenario</div>
+        <p class="dashboard-start-copy">Guided assessment is recommended for most users. Use register upload when you already have source material, or start from a preloaded scenario when you want a faster first pass.</p>
+      </div>
+      <div class="dashboard-start-stack">
+        <div class="dashboard-start-primary">
+          <div>
+            <div class="dashboard-start-kicker">Recommended</div>
+            <h3>Guided assessment</h3>
+            <p>Build a risk scenario step by step with AI-assisted guidance, then refine only where needed.</p>
+          </div>
+          <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="Start Guided Assessment">Start Guided Assessment</button>
+        </div>
+        <div class="dashboard-start-secondary">
+          <div>
+            <div class="dashboard-start-kicker">Bring your own source material</div>
+            <strong>Upload a risk register</strong>
+            <p>Bring in existing risks and turn them into candidate scenarios for assessment.</p>
+          </div>
+          <button class="btn btn--secondary" id="btn-dashboard-upload-register">Upload risk register</button>
+        </div>
+        <div class="dashboard-start-tertiary">
+          <div>
+            <div class="dashboard-start-kicker">Faster starting point</div>
+            <strong>Preloaded risk scenarios</strong>
+            <p>Start from realistic example scenarios when you want a faster first pass.</p>
+          </div>
+          <div class="dashboard-start-tertiary__actions">
+            <button class="btn btn--ghost" id="btn-dashboard-start-sample">Use preloaded scenario</button>
+            <details class="results-actions-disclosure dashboard-hero-overflow">
+              <summary class="btn btn--ghost">More actions</summary>
+              <div class="results-actions-disclosure-menu">
+                <button class="btn btn--secondary btn--sm" id="btn-dashboard-start-template">Start from Template</button>
+                <button class="btn btn--secondary btn--sm" id="btn-dashboard-export-assessments">Export Assessments</button>
+                <button class="btn btn--secondary btn--sm" id="btn-dashboard-import-assessments">Import Assessments</button>
+                <button class="btn btn--secondary btn--sm" id="btn-dashboard-open-settings">${primarySettingsLabel}</button>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>` : '';
 
   setPage(`
     <main class="page">
       <div class="container container--wide dashboard-shell">
-        <section class="card card--elevated dashboard-hero">
-          <div class="dashboard-hero-grid">
+        <section class="card card--elevated dashboard-hero ${isOversightUser ? '' : 'dashboard-hero--start'}">
+          <div class="dashboard-hero-grid ${isOversightUser ? '' : 'dashboard-hero-grid--single'}">
             <div class="dashboard-hero-main">
               <div class="landing-badge">${roleFrontDoor.badge}</div>
               <h2 style="margin-top:var(--sp-4)">Welcome back, ${user?.displayName || 'there'}.</h2>
               <p class="dashboard-hero-copy">${roleFrontDoor.heroCopy}</p>
-              <div class="dashboard-signal-strip">
+              ${isOversightUser ? `<div class="dashboard-signal-strip">
                 <div class="dashboard-signal-pill">
                   <span class="dashboard-signal-pill__label">Primary lane</span>
                   <strong>${roleLaneTitle}</strong>
@@ -319,9 +363,9 @@ function renderUserDashboard() {
                   </div>
                 </details>
               </div>
-              <div class="form-help" style="margin-top:12px;color:rgba(255,255,255,.65)">${roleFrontDoor.heroHint}</div>
+              <div class="form-help" style="margin-top:12px;color:rgba(255,255,255,.65)">${roleFrontDoor.heroHint}</div>` : standardStartModule}
             </div>
-            <div class="dashboard-hero-side dashboard-hero-side--support">
+            ${isOversightUser ? `<div class="dashboard-hero-side dashboard-hero-side--support">
               <div class="context-panel-title">${isOversightUser ? 'Oversight summary' : 'Today&apos;s summary'}</div>
               <div class="dashboard-hero-side-copy">${roleFrontDoor.quickStatus}</div>
               <div class="dashboard-hero-side-meta">
@@ -329,7 +373,7 @@ function renderUserDashboard() {
                 <span>${isOversightUser ? capability.experience.dashboardLead : 'Saved context shapes default wording, guidance, and assisted suggestions.'}</span>
               </div>
               <div class="form-help dashboard-hero-side-foot">${roleFrontDoor.spotlightTitle}: ${roleFrontDoor.spotlightCopy}</div>
-            </div>
+            </div>` : ''}
           </div>
         </section>
 
@@ -487,6 +531,11 @@ function renderUserDashboard() {
       return;
     }
     launchPilotSampleAssessment();
+  });
+  document.getElementById('btn-dashboard-upload-register')?.addEventListener('click', () => {
+    resetDraft();
+    AppState.dashboardStartIntent = 'register';
+    openDraftWorkspaceRoute();
   });
   document.getElementById('btn-dashboard-start-template')?.addEventListener('click', () => {
     if (recommendedTemplate) loadTemplate(recommendedTemplate);

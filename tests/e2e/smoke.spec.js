@@ -482,9 +482,10 @@ test('authenticated user dashboard renders without crashing', async ({ page }) =
     await expect(page).toHaveURL(/#\/dashboard$/);
     await expect(page.getByText(/personal workspace/i)).toBeVisible();
     await expect(page.locator('#btn-dashboard-new-assessment')).toBeVisible();
-    await page.getByText(/more workspace tools/i).click();
-    await expect(page.locator('#btn-dashboard-start-template')).toBeVisible();
+    await expect(page.locator('#btn-dashboard-upload-register')).toBeVisible();
     await expect(page.locator('#btn-dashboard-start-sample')).toBeVisible();
+    await page.getByText(/more actions/i).click();
+    await expect(page.locator('#btn-dashboard-start-template')).toBeVisible();
     await expect(page.locator('#btn-dashboard-open-settings')).toBeVisible();
   });
 });

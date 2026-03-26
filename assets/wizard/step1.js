@@ -147,7 +147,7 @@ function renderStep1GuidedBuilderCard(draft) {
 }
 
 function renderStep1OtherWaysToStart(draft, hasScenarioDraft, hasImportedSource) {
-  return `<details class="wizard-disclosure anim-fade-in anim-delay-1" ${(hasScenarioDraft || hasImportedSource) ? 'open' : ''}>
+  return `<details class="wizard-disclosure anim-fade-in anim-delay-1" ${(AppState.dashboardStartIntent === 'register' || hasScenarioDraft || hasImportedSource) ? 'open' : ''}>
     <summary>Other ways to start <span class="badge badge--neutral">Optional</span></summary>
     <div class="wizard-disclosure-body">
       <div class="form-help">Open this only if you already have a scenario draft, a register, or a known list of risks. The guided builder remains the easiest path for most users.</div>
@@ -613,6 +613,13 @@ function renderWizard1() {
         </div>
       </div>
     </main>`);
+
+  if (AppState.dashboardStartIntent === 'register') {
+    AppState.dashboardStartIntent = '';
+    window.setTimeout(() => {
+      document.getElementById('risk-register-file')?.focus();
+    }, 0);
+  }
 
   document.getElementById('wizard-bu').addEventListener('change', function() {
     const bu = buList.find(b => b.id === this.value) || null;
