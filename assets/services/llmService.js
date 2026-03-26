@@ -602,46 +602,57 @@ ${businessUnit.selectedDepartmentContext}` : ''
   function _classifyAiFallbackReason(error = null) {
     const message = String(error?.message || error || '').trim();
     const safeMessage = _sanitizeAiText(message, { maxChars: 220 });
+    const withDetail = (base, detail) => ({
+      ...base,
+      detail: String(detail || '').trim()
+    });
     if (!safeMessage) {
-      return {
+      return withDetail({
         code: 'no_ai_response',
         title: 'AI analysis unavailable',
         message: 'The AI register-analysis service did not return a usable response, so the platform used local extraction instead.'
-      };
+      }, 'No response content was returned.');
     }
     if (/Missing COMPASS_API_KEY secret/i.test(safeMessage)) {
-      return {
+      return withDetail({
         code: 'proxy_missing_secret',
         title: 'AI analysis unavailable',
         message: 'The hosted AI proxy is missing its server-side key, so the platform used local extraction instead.'
-      };
+      }, 'The proxy is missing its Compass key.');
     }
     if (/Vercel proxy could not reach Compass|Compass preflight\/CORS blocked|Failed to fetch|NetworkError/i.test(safeMessage)) {
-      return {
+      return withDetail({
         code: 'proxy_unreachable',
         title: 'AI analysis unavailable',
         message: 'The hosted AI service could not be reached, so the platform used local extraction instead.'
-      };
+      }, safeMessage);
     }
     if (/Compass rejected the request|401|403/i.test(safeMessage)) {
-      return {
+      return withDetail({
         code: 'ai_access_rejected',
         title: 'AI analysis unavailable',
         message: 'The AI service rejected the request, so the platform used local extraction instead.'
-      };
+      }, safeMessage);
     }
     if (/Unexpected token|JSON|schema|parse/i.test(safeMessage)) {
-      return {
+      return withDetail({
         code: 'invalid_ai_output',
         title: 'AI analysis incomplete',
         message: 'The AI service returned an unusable structured response, so the platform used local extraction instead.'
-      };
+      }, safeMessage);
     }
-    return {
+    if (/response shape was not usable/i.test(safeMessage)) {
+      return withDetail({
+        code: 'unexpected_response_shape',
+        title: 'AI analysis incomplete',
+        message: 'The AI service returned an unexpected response shape, so the platform used local extraction instead.'
+      }, safeMessage);
+    }
+    return withDetail({
       code: 'ai_runtime_error',
       title: 'AI analysis unavailable',
       message: 'The AI register-analysis step failed at runtime, so the platform used local extraction instead.'
-    };
+    }, safeMessage);
   }
 
   function _classifyScenario(narrative = '') {
@@ -1426,7 +1437,8 @@ ${evidenceMeta.promptBlock}`;
       ...stub,
       fallbackReasonCode: fallbackReason?.code || 'local_register_fallback',
       fallbackReasonTitle: fallbackReason?.title || 'Fallback register analysis loaded',
-      fallbackReasonMessage: fallbackReason?.message || 'The platform used local extraction instead of live AI analysis for this upload.'
+      fallbackReasonMessage: fallbackReason?.message || 'The platform used local extraction instead of live AI analysis for this upload.',
+      fallbackReasonDetail: fallbackReason?.detail || ''
     }, evidenceMeta), evidenceMeta, {
       contentFields: ['summary', 'linkAnalysis', 'benchmarkBasis'],
       fallbackUsed: true

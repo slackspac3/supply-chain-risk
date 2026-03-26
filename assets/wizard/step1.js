@@ -272,7 +272,9 @@ function renderStep1ContextCard(settings, draft, scenarioGeographies, regs, buLi
 function getRegisterFallbackToastCopy(result = {}) {
   const title = String(result.fallbackReasonTitle || 'Fallback register analysis loaded').trim();
   const detail = String(result.fallbackReasonMessage || '').trim();
-  return detail ? `${title}. ${detail} Review the suggested risks before continuing.` : `${title}. Review the suggested risks before continuing.`;
+  const diagnostic = String(result.fallbackReasonDetail || '').trim();
+  const shortDiagnostic = diagnostic ? ` Diagnostic: ${diagnostic}` : '';
+  return detail ? `${title}. ${detail}${shortDiagnostic} Review the suggested risks before continuing.` : `${title}.${shortDiagnostic} Review the suggested risks before continuing.`;
 }
 
 function renderStep1ReadinessBanner(draft, selectedRisks) {
