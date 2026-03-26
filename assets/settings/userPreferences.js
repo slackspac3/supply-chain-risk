@@ -81,11 +81,11 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       </div>
       <div class="form-group mt-4">
         <label class="form-label" for="user-working-context">Working context</label>
-        <textarea class="form-textarea" id="user-working-context" rows="4">${profile.workingContext || ''}</textarea>
+        <textarea class="form-textarea" id="user-working-context" rows="4" placeholder="e.g. I support technology and cyber risk decisions across shared platforms, work closely with control owners, and often need outputs that balance resilience, compliance, and executive reporting.">${profile.workingContext || ''}</textarea>
       </div>
       <div class="form-group mt-4">
         <label class="form-label" for="user-preferred-outputs">Preferred output style</label>
-        <textarea class="form-textarea" id="user-preferred-outputs" rows="4">${profile.preferredOutputs || ''}</textarea>
+        <textarea class="form-textarea" id="user-preferred-outputs" rows="4" placeholder="e.g. Keep answers concise, highlight key risk drivers, call out business impact and dependencies, and end with practical actions I can take with stakeholders.">${profile.preferredOutputs || ''}</textarea>
       </div>
       <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
         <button class="btn btn--secondary" id="btn-user-role-ai">AI Assist Role Context</button>

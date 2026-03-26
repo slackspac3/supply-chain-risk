@@ -86,11 +86,11 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
         body: `
           <div class="form-group">
             <label class="form-label" for="onboard-preferred-outputs">Preferred output style</label>
-            <textarea class="form-textarea" id="onboard-preferred-outputs" rows="4" placeholder="e.g. Give me crisp executive summaries, clear risk drivers, and actions I can take with my team.">${draftSettings.userProfile.preferredOutputs || ''}</textarea>
+            <textarea class="form-textarea" id="onboard-preferred-outputs" rows="4" placeholder="e.g. Keep answers concise, highlight key risk drivers, call out business impact and dependencies, and end with practical actions I can take with stakeholders.">${draftSettings.userProfile.preferredOutputs || ''}</textarea>
           </div>
           <div class="form-group mt-4">
             <label class="form-label" for="onboard-working-context">Anything important about your working context?</label>
-            <textarea class="form-textarea" id="onboard-working-context" rows="4" placeholder="e.g. I mostly support regulated services and need outputs that balance resilience, compliance, and board reporting.">${draftSettings.userProfile.workingContext || ''}</textarea>
+            <textarea class="form-textarea" id="onboard-working-context" rows="4" placeholder="e.g. I support technology and cyber risk decisions across shared platforms, work closely with control owners, and often need outputs that balance resilience, compliance, and executive reporting.">${draftSettings.userProfile.workingContext || ''}</textarea>
           </div>
           ${UI.aiAssistCard({
             notesId: 'onboard-answer-notes',
