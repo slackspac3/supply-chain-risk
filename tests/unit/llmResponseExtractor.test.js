@@ -54,3 +54,18 @@ test('describeLlmResponse includes inner choice diagnostics when content is empt
   assert.match(response.diagnostic, /finish_reason: stop/i);
   assert.match(response.diagnostic, /message keys: role, content, refusal/i);
 });
+
+test('extractLlmTextResponse reads nested text.value blocks', () => {
+  const text = extractLlmTextResponse({
+    choices: [
+      {
+        message: {
+          content: [
+            { type: 'output_text', text: { value: '{"summary":"ok"}' } }
+          ]
+        }
+      }
+    ]
+  });
+  assert.equal(text, '{"summary":"ok"}');
+});

@@ -1347,7 +1347,7 @@ ${evidenceMeta.promptBlock}`;
       organisationContext: input.adminSettings?.companyStructureContext,
       adminSettings: input.adminSettings
     });
-    const compactRegisterText = _truncateText(input.registerText || '', 9000);
+    const compactRegisterText = _truncateText(input.registerText || '', 5000);
     const compactContextSummary = _truncateText(input.businessUnit?.contextSummary || input.businessUnit?.notes || '(none)', 320);
     const compactAdminSummary = _truncateText(input.adminSettings?.adminContextSummary || '', 220);
     const compactUserProfile = _truncateText(input.adminSettings?.userProfileSummary || '(none)', 220);
@@ -1369,9 +1369,14 @@ ${evidenceMeta.promptBlock}`;
 Geography: ${input.geography || 'Unknown'}
 BU context summary: ${compactContextSummary}
 BU-specific AI guidance: ${input.businessUnit?.aiGuidance || '(none)'}
-Applicable regulations: ${(input.applicableRegulations || []).join(', ')}
-Register metadata: ${input.registerMeta ? JSON.stringify(input.registerMeta) : '(none)'}
-Benchmark strategy: ${input.adminSettings?.benchmarkStrategy || 'Prefer GCC and UAE references where possible, then use best global data with clear explanation.'}
+Applicable regulations: ${(input.applicableRegulations || []).slice(0, 8).join(', ')}
+Register metadata: ${input.registerMeta ? JSON.stringify({
+  type: input.registerMeta.type,
+  extension: input.registerMeta.extension,
+  sheetSelectionMode: input.registerMeta.sheetSelectionMode,
+  sheets: input.registerMeta.sheets
+}) : '(none)'}
+Benchmark strategy: ${_truncateText(input.adminSettings?.benchmarkStrategy || 'Prefer GCC and UAE references where possible, then use best global data with clear explanation.', 180)}
 Admin context summary: ${compactAdminSummary || '(none)'}
 User profile context:
 ${compactUserProfile}
@@ -1388,15 +1393,15 @@ Instructions:
 - deduplicate overlapping risks
 - produce concise risk titles suitable for selection cards
 - preserve important contextual detail in the descriptions
-- extract up to 12 material risks if the register supports them
+- extract up to 8 material risks if the register supports them
 - include workflow guidance that tells a non-risk practitioner what to do after extraction
 
 Evidence quality context:
-${evidenceMeta.promptBlock}`;
+${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
         const raw = await _callLLM(systemPrompt, userPrompt, {
           taskName: 'analyseRiskRegister',
-          maxCompletionTokens: 2200,
-          maxPromptChars: 12000,
+          maxCompletionTokens: 2800,
+          maxPromptChars: 9000,
           timeoutMs: 45000
         });
         if (raw) {

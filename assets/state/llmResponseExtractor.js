@@ -8,7 +8,11 @@
         .map((item) => {
           if (typeof item === 'string') return item;
           if (item && typeof item.text === 'string') return item.text;
+          if (item && item.text && typeof item.text.value === 'string') return item.text.value;
+          if (item && item.text && typeof item.text.content === 'string') return item.text.content;
+          if (item && item.type === 'output_text' && typeof item.value === 'string') return item.value;
           if (item && typeof item.content === 'string') return item.content;
+          if (item && Array.isArray(item.content)) return coerceTextContent(item.content);
           return '';
         })
         .filter(Boolean)
@@ -17,7 +21,10 @@
       return joined || null;
     }
     if (value && typeof value.text === 'string') return value.text;
+    if (value && value.text && typeof value.text.value === 'string') return value.text.value;
     if (value && typeof value.content === 'string') return value.content;
+    if (value && Array.isArray(value.content)) return coerceTextContent(value.content);
+    if (value && typeof value.value === 'string') return value.value;
     return null;
   }
 
