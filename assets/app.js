@@ -107,7 +107,8 @@ const AppState = {
   clientRuntimeErrors: [],
   draftLastSavedAt: 0,
   draftDirty: false,
-  draftSaveTimer: null
+  draftSaveTimer: null,
+  simulation: createSimulationState()
 };
 
 
@@ -167,7 +168,7 @@ async function loadSharedAdminSettings() {
         companyContextSections: sharedSettings.companyContextSections || localSaved?.companyContextSections || null
       };
       const normalisedMerged = normaliseAdminSettings(merged);
-      AppState.adminSettingsCache = normalisedMerged;
+      updateAdminSettingsState(normalisedMerged);
       localStorage.setItem(GLOBAL_ADMIN_STORAGE_KEY, JSON.stringify(normalisedMerged));
       if ((!sharedHasStructure && localHasStructure) || (!sharedHasLayers && localHasLayers)) {
         syncSharedAdminSettings(normalisedMerged, { category: 'settings', eventType: 'shared_settings_rehydrated', target: 'global_settings', details: { reason: 'local_backup_richer_than_shared' } }).catch(error => console.warn('shared settings rehydrate failed:', error.message));
@@ -313,16 +314,71 @@ function updateWizardSaveState() {
 }
 
 function markDraftDirty() {
-  AppState.draftDirty = true;
+  updateDraftAssessmentState({ draftDirty: true });
   updateWizardSaveState();
 }
 
 function scheduleDraftAutosave(delay = 700) {
   if (AppState.draftSaveTimer) window.clearTimeout(AppState.draftSaveTimer);
-  AppState.draftSaveTimer = window.setTimeout(() => {
-    AppState.draftSaveTimer = null;
-    saveDraft();
-  }, delay);
+  updateDraftAssessmentState({
+    draftSaveTimer: window.setTimeout(() => {
+      updateDraftAssessmentState({ draftSaveTimer: null });
+      saveDraft();
+    }, delay)
+  });
+}
+
+function clearDraftAutosaveTimer() {
+  if (AppState.draftSaveTimer) window.clearTimeout(AppState.draftSaveTimer);
+  updateDraftAssessmentState({ draftSaveTimer: null });
+}
+
+function getCurrentSimulationState() {
+  return createSimulationState(AppState.simulation || {});
+}
+
+function resetSimulationState() {
+  resetSimulationLifecycleState();
+}
+
+function startSimulationState(total = 0) {
+  updateSimulationLifecycleState({
+    status: 'running',
+    lastRunAt: Date.now(),
+    lastError: '',
+    progress: {
+      completed: 0,
+      total: Number(total || 0),
+      ratio: 0,
+      message: ''
+    }
+  });
+}
+
+function updateSimulationProgressState({ completed = 0, total = 0, ratio = 0, message = '' } = {}) {
+  updateSimulationLifecycleState({
+    status: 'running',
+    progress: {
+      completed: Number(completed || 0),
+      total: Number(total || 0),
+      ratio: Number(ratio || 0),
+      message: String(message || '').trim()
+    }
+  });
+}
+
+function completeSimulationState() {
+  updateSimulationLifecycleState({
+    status: 'completed',
+    lastError: ''
+  });
+}
+
+function failSimulationState(error) {
+  updateSimulationLifecycleState({
+    status: 'failed',
+    lastError: String(error?.message || error || '').trim()
+  });
 }
 
 function openShortcutHelpModal() {
@@ -623,7 +679,8 @@ async function performLogout({ renderLoginScreen = false } = {}) {
     await logAuditEvent({ category: 'auth', eventType: 'logout', target: currentUser.username, status: 'success', source: 'client' });
   }
   AuthService.logout();
-  AppState.adminVisiblePasswords = {};
+  resetAuthSessionState();
+  resetSimulationState();
   activateAuthenticatedState();
   if (renderLoginScreen) renderLogin();
   else Router.navigate('/login');
@@ -664,7 +721,7 @@ async function loadSharedUserState(username = AuthService.getCurrentUser()?.user
   try {
     const data = await requestUserState('GET', safeUsername);
     const state = data?.state || {};
-    AppState.userStateCache = {
+    updateUserStateCache({
       username: safeUsername,
       userSettings: state.userSettings || null,
       assessments: Array.isArray(state.assessments) ? state.assessments : [],
@@ -674,7 +731,7 @@ async function loadSharedUserState(username = AuthService.getCurrentUser()?.user
         revision: Number(state._meta?.revision || 0),
         updatedAt: Number(state._meta?.updatedAt || 0)
       }
-    };
+    });
     if (state.userSettings) {
       localStorage.setItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername), JSON.stringify(state.userSettings));
     }
@@ -694,7 +751,10 @@ function queueSharedUserStateSync(username = AuthService.getCurrentUser()?.usern
   if (AppState.userStateSyncTimer) clearTimeout(AppState.userStateSyncTimer);
   const revision = ++AppState.userStateSyncRevision;
   const updatedAt = Date.now();
-  AppState.userStateCache._meta = { revision, updatedAt };
+  updateUserStateCache({
+    ...AppState.userStateCache,
+    _meta: { revision, updatedAt }
+  });
   AppState.userStateSyncTimer = setTimeout(() => {
     const payload = {
       userSettings: AppState.userStateCache.userSettings,
@@ -710,17 +770,17 @@ function queueSharedUserStateSync(username = AuthService.getCurrentUser()?.usern
 function ensureUserStateCache(username = AuthService.getCurrentUser()?.username || '') {
   const safeUsername = String(username || '').trim().toLowerCase();
   if (!safeUsername) {
-    return { username: '', userSettings: null, assessments: [], learningStore: { templates: {} }, draft: null, _meta: { revision: 0, updatedAt: 0 } };
+    return createEmptyUserStateCache('');
   }
   if (AppState.userStateCache.username !== safeUsername) {
-    AppState.userStateCache = {
+    updateUserStateCache({
       username: safeUsername,
       userSettings: null,
       assessments: null,
       learningStore: null,
       draft: null,
       _meta: { revision: 0, updatedAt: 0 }
-    };
+    });
   }
   return AppState.userStateCache;
 }
@@ -860,7 +920,7 @@ function clearUserPersistentState(username) {
   sessionStorage.removeItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername));
   sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX, safeUsername));
   if (AppState.userStateCache.username === safeUsername) {
-    AppState.userStateCache = { username: safeUsername, userSettings: null, assessments: [], learningStore: { templates: {} }, draft: null, _meta: { revision: 0, updatedAt: 0 } };
+    resetUserStateCache(safeUsername);
   }
   requestUserState('PUT', safeUsername, { userSettings: null, assessments: [], learningStore: { templates: {} }, draft: null }, { category: 'user_admin', eventType: 'user_state_reset', target: safeUsername }).catch(error => console.warn('clearUserPersistentState sync failed:', error.message));
 }
@@ -1027,16 +1087,18 @@ function applyBUOverrideToSettings(baseSettings, buOverride = null) {
 }
 
 function activateAuthenticatedState() {
-  AppState.currentUser = AuthService.getCurrentUser();
+  updateAuthSessionState({ currentUser: AuthService.getCurrentUser() });
   if (!AppState.currentUser) {
-    AppState.userStateCache = { username: '', userSettings: null, assessments: [], learningStore: { templates: {} }, draft: null, _meta: { revision: 0, updatedAt: 0 } };
-    AppState.draft = {};
+    resetUserStateCache('');
+    updateDraftAssessmentState({ draft: {}, draftDirty: false, draftLastSavedAt: 0 });
+    resetSimulationState();
     LLMService.clearCompassConfig();
     renderAppBar();
     return;
   }
 
-  AppState.draft = {};
+  updateDraftAssessmentState({ draft: {}, draftDirty: false, draftLastSavedAt: 0 });
+  resetSimulationState();
   loadDraft();
   if (!AppState.draft.id) resetDraft();
   ensureDraftShape();
@@ -1174,7 +1236,7 @@ function getAdminSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(GLOBAL_ADMIN_STORAGE_KEY) || 'null') || {};
     const merged = normaliseAdminSettings(saved);
-    AppState.adminSettingsCache = merged;
+    updateAdminSettingsState(merged);
     return merged;
   } catch {
     return normaliseAdminSettings();
@@ -1206,7 +1268,7 @@ function applyManagedAccountAssignmentToSettings(account, updates = {}, baseSett
 
 function saveAdminSettings(settings, options = {}) {
   const merged = normaliseAdminSettings(settings);
-  AppState.adminSettingsCache = merged;
+  updateAdminSettingsState(merged);
   localStorage.setItem(GLOBAL_ADMIN_STORAGE_KEY, JSON.stringify(merged));
   if (AuthService.getAdminApiSecret() || AuthService.getApiSessionToken()) {
     syncSharedAdminSettings(merged, options.audit || null).catch(error => console.warn('syncSharedAdminSettings failed:', error.message));

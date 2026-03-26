@@ -458,6 +458,7 @@ async function runSimulation() {
     const p = AppState.draft.fairParams;
     const progressText = document.querySelector('#sim-progress .card div:last-child');
     p.iterations = Math.min(100000, Math.max(1000, Number.parseInt(p.iterations, 10) || 10000));
+    startSimulationState(p.iterations);
     const scenario = getScenarioMultipliers();
     const toleranceThreshold = getToleranceThreshold();
     const warningThreshold = getWarningThreshold();
@@ -488,12 +489,20 @@ async function runSimulation() {
       RiskEngine.runAsync(ep, {
         yieldEvery: 500,
         onProgress: (ratio, completed, total) => {
-          if (progressText) progressText.textContent = `Computing ${completed.toLocaleString()} of ${total.toLocaleString()} Monte Carlo iterations…`;
+          const message = `Computing ${completed.toLocaleString()} of ${total.toLocaleString()} Monte Carlo iterations…`;
+          updateSimulationProgressState({ ratio, completed, total, message });
+          if (progressText) progressText.textContent = message;
         }
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Simulation timed out during computation.')), 20000))
     ]);
     if (progressText) progressText.textContent = 'Finalising the simulation results…';
+    updateSimulationProgressState({
+      completed: p.iterations,
+      total: p.iterations,
+      ratio: 1,
+      message: 'Finalising the simulation results…'
+    });
     await yieldToUI();
     await new Promise(requestAnimationFrame);
     results.inputs = { ...ep };
@@ -514,10 +523,12 @@ async function runSimulation() {
     saveAssessment(assessment);
     recordLearningFromAssessment(assessment);
     saveDraft();
+    completeSimulationState();
     Router.navigate('/results/' + AppState.draft.id);
   } catch(e) {
     document.getElementById('sim-progress').classList.add('hidden');
     document.getElementById('run-area').classList.remove('hidden');
+    failSimulationState(e);
     UI.toast(e?.message === 'Simulation timed out during computation.' ? 'The simulation took too long and was stopped. Reduce the iteration count and try again.' : 'The simulation could not be completed right now. Try again in a moment.', 'danger');
     console.error(e);
   }

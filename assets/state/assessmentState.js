@@ -164,8 +164,10 @@ function saveDraft() {
   try { sessionStorage.setItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX), JSON.stringify(AppState.draft)); } catch {}
   const cache = ensureUserStateCache();
   cache.draft = { ...AppState.draft };
-  AppState.draftLastSavedAt = Date.now();
-  AppState.draftDirty = false;
+  updateDraftAssessmentState({
+    draftLastSavedAt: Date.now(),
+    draftDirty: false
+  });
   if (typeof updateWizardSaveState === 'function') updateWizardSaveState();
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     window.dispatchEvent(new CustomEvent('rq:draft-saved', { detail: { at: AppState.draftLastSavedAt } }));
@@ -175,16 +177,29 @@ function saveDraft() {
 function loadDraft() {
   const cache = ensureUserStateCache();
   if (cache.draft && typeof cache.draft === 'object') {
-    Object.assign(AppState.draft, cache.draft);
+    updateDraftAssessmentState({
+      draft: {
+        ...(AppState.draft || {}),
+        ...cache.draft
+      }
+    });
     return;
   }
   try {
     const d = JSON.parse(sessionStorage.getItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX)) || 'null');
-    if (d) Object.assign(AppState.draft, d);
+    if (d) {
+      updateDraftAssessmentState({
+        draft: {
+          ...(AppState.draft || {}),
+          ...d
+        }
+      });
+    }
   } catch {}
 }
 function resetDraft() {
-  AppState.draft = {
+  updateDraftAssessmentState({
+    draft: {
     id: 'a_' + Date.now(),
     templateId: null,
     buId: null, buName: null, contextNotes: '',
@@ -227,7 +242,8 @@ function resetDraft() {
       impact: '',
       urgency: 'medium'
     }
-  };
+    }
+  });
   saveDraft();
 }
 
