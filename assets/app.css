@@ -3267,7 +3267,7 @@ canvas { display: block; width: 100%; }
   flex-wrap: wrap;
   gap: var(--sp-3);
   min-height: 36px;
-  padding-right: 24px;
+  padding-right: 40px;
   color: var(--text-primary);
   font-weight: var(--font-semibold);
   line-height: 1.4;
@@ -3309,4 +3309,5 @@ canvas { display: block; width: 100%; }
 .wizard-disclosure .badge,
 .results-actions-disclosure .badge {
   max-width: 100%;
+  margin-right: var(--sp-2);
 }
