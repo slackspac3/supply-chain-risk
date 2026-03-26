@@ -208,7 +208,7 @@ function renderEstimateModeNote(isAdv) {
 
 function renderEstimateQuickStartBlock(draft, recommendedPresetKey) {
   const nextAction = renderEstimateActionCard(draft, recommendedPresetKey);
-  const directStart = `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Start here</div><p class="context-panel-copy" style="margin-top:var(--sp-2)">Go straight to the three sections below: frequency, exposure, and cost. If the AI values look broadly right, change only the numbers you want to challenge.</p><div class="context-panel-foot" style="margin-top:12px">Good enough to continue: you can explain the expected case in plain English, and your low and severe cases are wider on purpose.</div></div>`;
+  const directStart = `<div class="card card--elevated anim-fade-in"><div class="wizard-premium-head"><div><div class="context-panel-title">Basic estimation path</div><p class="context-panel-copy" style="margin-top:var(--sp-2)">Most users only need the three sections below: frequency, exposure, and cost.</p></div><span class="badge badge--gold">Default path</span></div><div class="context-panel-foot" style="margin-top:12px">If the AI values look broadly right, change only the numbers you want to challenge. Good enough to continue means you can explain the expected case in plain English.</div></div>`;
   return `${nextAction}${directStart}`;
 }
 
@@ -268,6 +268,36 @@ function renderEstimateReadinessCard(draft, validation) {
       </div>
     </div>
     ${(errors.length || warnings.length || missingInfo.length) ? `<div class="context-panel-foot" style="margin-top:var(--sp-4)">${escapeHtml([...items.slice(0, 2), ...missingInfo.slice(0, 1)].join(' '))}</div>` : '' }
+  </div>`;
+}
+
+function renderEstimateSourceAtGlance(draft) {
+  const sources = Array.isArray(draft.inputAssignments) ? draft.inputAssignments.filter(Boolean) : [];
+  const citations = Array.isArray(draft.citations) ? draft.citations.filter(Boolean) : [];
+  const missing = Array.isArray(draft.missingInformation) ? draft.missingInformation.filter(Boolean) : [];
+  if (!sources.length && !citations.length && !missing.length && !draft.confidenceLabel) return '';
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="wizard-premium-head">
+      <div>
+        <div class="context-panel-title">What is informing the model</div>
+        <p class="context-panel-copy" style="margin-top:var(--sp-2)">This estimate stays transparent: you can see whether it is mainly AI-seeded, benchmark-guided, or supported by documents and scenario evidence.</p>
+      </div>
+      <span class="badge badge--neutral">${escapeHtml(String(draft.confidenceLabel || 'Working estimate'))}</span>
+    </div>
+    <div class="context-grid" style="margin-top:var(--sp-4)">
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Seeded inputs</div>
+        <p class="context-panel-copy">${sources.length ? `${sources.length} tracked input source${sources.length === 1 ? '' : 's'} are attached to this estimate.` : 'No tracked source summary is attached yet.'}</p>
+      </div>
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Source material</div>
+        <p class="context-panel-copy">${citations.length ? `${citations.length} supporting citation${citations.length === 1 ? '' : 's'} are linked to the scenario context.` : 'No named supporting source is attached yet.'}</p>
+      </div>
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Best next challenge</div>
+        <p class="context-panel-copy">${escapeHtml(missing[0] || 'Challenge the expected case first, then widen the low and severe cases deliberately.')}</p>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -446,6 +476,7 @@ function renderWizard3() {
           ${renderEstimateReadinessCard(draft, validation)}
           ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="wizard-premium-head"><div><div class="context-panel-title">Current assessment baseline</div><p class="context-panel-copy">You are working from <strong>${baselineAssessment.scenarioTitle || 'the original assessment'}</strong>. Adjust the assumptions below to reflect stronger prevention, faster response, or lower disruption impact, then rerun to compare the new result against the current baseline.</p></div><span class="badge badge--gold">Treatment lane</span></div><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Try stronger controls</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="detection-response">Try faster detection</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="resilience">Try lower disruption impact</button></div><div class="form-group" style="margin-top:16px"><label class="form-label" for="treatment-improvement-request">Describe the better outcome you want to test</label><textarea class="form-textarea" id="treatment-improvement-request" rows="3" placeholder="e.g. stronger privileged-access controls, faster containment, better resilience, lower business disruption">${draft.treatmentImprovementRequest || ''}</textarea><span class="form-help">Describe the improvement in plain language and let AI adjust the copied baseline values before you simulate the new case.</span></div><div class="flex items-center gap-3" style="margin-top:12px;flex-wrap:wrap"><button class="btn btn--secondary" id="btn-treatment-ai-assist" type="button">AI Assist This Better Outcome</button><span class="form-help" id="treatment-improvement-status">These are quick starting points. You can still adjust every number manually before rerunning the analysis.</span></div></div>` : ''}
           ${renderEstimateQuickStartBlock(draft, recommendedPresetKey)}
+          ${renderEstimateSourceAtGlance(draft)}
           ${renderEstimateModeNote(isAdv)}
 
           ${UI.wizardInputSection({
@@ -515,9 +546,8 @@ function renderWizard3() {
             </div>`
           })}
 
-          ${!isAdv ? `${renderEstimateBackgroundDetails(draft, bu, isAdv, cur, sym)}${renderEstimateOptionalHelpDetails(draft, sym)}` : ''}
-
-          ${isAdv ? `${renderEstimateBackgroundDetails(draft, bu, isAdv, cur, sym)}${renderEstimateOptionalHelpDetails(draft, sym)}` : ''}
+          ${renderEstimateBackgroundDetails(draft, bu, isAdv, cur, sym)}
+          ${renderEstimateOptionalHelpDetails(draft, sym)}
 
           ${isAdv ? `
             ${UI.disclosureSection({

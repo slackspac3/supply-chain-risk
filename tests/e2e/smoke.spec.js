@@ -740,7 +740,7 @@ test('wizard step 1 clear all keeps manually added risks unselected after rerend
   });
 
   await expectNoClientCrashOnRoute(page, '/#/wizard/1', async () => {
-    const advancedSummary = page.getByText('Import from a risk register or add risks manually');
+    const advancedSummary = page.getByText('Other ways to start');
     const manualInput = page.locator('#manual-risk-add');
     const addManualRisk = page.locator('#btn-add-manual-risk');
 

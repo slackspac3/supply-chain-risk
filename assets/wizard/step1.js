@@ -62,6 +62,156 @@ function renderStep1StartCard(recommendation) {
   </div>`;
 }
 
+function renderStep1FeaturedExampleCard(example) {
+  if (!example) return '';
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="wizard-premium-head">
+      <div>
+        <div class="context-panel-title">Need a worked example first?</div>
+        <p class="context-panel-copy" style="margin-top:var(--sp-2)">Load one polished example to see what a good first draft and shortlist look like before you enter your own case.</p>
+      </div>
+      <span class="badge badge--neutral">Fast demo path</span>
+    </div>
+    <div class="wizard-focus-card wizard-focus-card--wide" style="margin-top:var(--sp-4)">
+      <span class="wizard-focus-card__label">Featured example</span>
+      <strong>${escapeHtml(example.title)}</strong>
+      <span>${escapeHtml(example.summary)} Best for: ${escapeHtml(example.bestFor)}.</span>
+    </div>
+    <div class="admin-inline-actions" style="margin-top:var(--sp-4)">
+      <button class="btn btn--secondary btn-load-dry-run" data-dry-run-id="${escapeHtml(example.id)}" type="button">Load Example</button>
+      <span class="form-help">${escapeHtml(example.nextStep)}</span>
+    </div>
+  </div>`;
+}
+
+function renderStep1GuidedBuilderCard(draft) {
+  return `<div class="card anim-fade-in anim-delay-1">
+    <div class="wizard-premium-head" style="margin-bottom:var(--sp-5)">
+      <div>
+        <h3>Guided scenario builder</h3>
+        <p>Answer a few plain-language prompts. The platform will turn them into a structured starting point you can edit before continuing.</p>
+      </div>
+      <span class="badge badge--gold">Recommended</span>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label" for="guided-event">What happened or what could happen?</label>
+        <textarea class="form-textarea" id="guided-event" rows="3" placeholder="Example: a supplier with privileged access is compromised and disrupts a regulated customer platform">${draft.guidedInput?.event || ''}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="guided-impact">What is the main impact you care about?</label>
+        <input class="form-input" id="guided-impact" type="text" placeholder="Example: service outage, regulatory breach, customer harm, financial exposure, recovery strain" value="${draft.guidedInput?.impact || ''}">
+      </div>
+    </div>
+    <details class="wizard-disclosure wizard-disclosure--compact" style="margin-top:var(--sp-4)">
+      <summary>Add more context only if you need it <span class="badge badge--neutral">Optional</span></summary>
+      <div class="wizard-disclosure-body">
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label" for="guided-asset">What is affected?</label>
+            <input class="form-input" id="guided-asset" type="text" placeholder="Example: payment platform, shared identity service, cloud data store" value="${draft.guidedInput?.asset || ''}">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="guided-cause">What is the likely cause or trigger?</label>
+            <input class="form-input" id="guided-cause" type="text" placeholder="Example: supplier breach, phishing-led compromise, weak recovery process, control gap" value="${draft.guidedInput?.cause || ''}">
+          </div>
+        </div>
+        <div class="grid-2 mt-4">
+          <div class="form-group">
+            <label class="form-label" for="guided-urgency">How urgent does it feel?</label>
+            <select class="form-select" id="guided-urgency">
+              <option value="low" ${draft.guidedInput?.urgency === 'low' ? 'selected' : ''}>Low</option>
+              <option value="medium" ${!draft.guidedInput?.urgency || draft.guidedInput?.urgency === 'medium' ? 'selected' : ''}>Medium</option>
+              <option value="high" ${draft.guidedInput?.urgency === 'high' ? 'selected' : ''}>High</option>
+              <option value="critical" ${draft.guidedInput?.urgency === 'critical' ? 'selected' : ''}>Critical</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Prompt ideas</label>
+            <div class="citation-chips">
+              <button class="citation-chip guided-prompt-chip" data-prompt="Supplier compromise affecting a regulated platform">Supplier compromise</button>
+              <button class="citation-chip guided-prompt-chip" data-prompt="Cloud misconfiguration exposing sensitive data">Cloud exposure</button>
+              <button class="citation-chip guided-prompt-chip" data-prompt="Ransomware disrupting critical business services">Ransomware outage</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+    <div class="admin-inline-actions mt-4">
+      <button class="btn btn--primary" id="btn-build-guided-narrative" type="button">Build scenario draft</button>
+      <span class="form-help">Good enough is enough here. You can still tighten the wording and shortlist on the next screens.</span>
+    </div>
+    <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-elevated)">
+      <div class="context-panel-title">Draft preview</div>
+      <p class="context-panel-copy" id="guided-preview">${composeGuidedNarrative(draft.guidedInput) || 'Answer the prompts and build the draft. The platform will create a clean starting statement for you.'}</p>
+    </div>
+  </div>`;
+}
+
+function renderStep1OtherWaysToStart(draft, hasScenarioDraft, hasImportedSource) {
+  return `<details class="wizard-disclosure anim-fade-in anim-delay-1" ${(hasScenarioDraft || hasImportedSource) ? 'open' : ''}>
+    <summary>Other ways to start <span class="badge badge--neutral">Optional</span></summary>
+    <div class="wizard-disclosure-body">
+      <div class="form-help">Open this only if you already have a scenario draft, a register, or a known list of risks. The guided builder remains the easiest path for most users.</div>
+      <div class="card" style="padding:var(--sp-5);background:var(--bg-elevated)">
+        <div class="context-panel-title">Bring your own scenario wording</div>
+        <div class="form-help" style="margin-top:6px">Use AI only if you want help sharpening the draft or extracting the shortlist.</div>
+        <div class="form-group" style="margin-top:var(--sp-4)">
+          <label class="form-label" for="intake-risk-statement">Scenario draft</label>
+          <textarea class="form-textarea" id="intake-risk-statement" rows="6" placeholder="If you already know the scenario, describe it here in plain English. Include what could happen, what is affected, likely triggers, and the business or regulatory impact.">${draft.narrative || ''}</textarea>
+        </div>
+        <div class="flex items-center gap-3" style="flex-wrap:wrap">
+          <button class="btn btn--secondary" id="btn-enhance-risk-statement" type="button">Use AI to refine this draft</button>
+          <button class="btn btn--ghost" id="btn-generate-risks-from-draft" type="button">Generate shortlist from this draft</button>
+        </div>
+      </div>
+      <div class="card" style="padding:var(--sp-5);background:var(--bg-elevated)">
+        <div class="context-panel-title">Import or add risks directly</div>
+        <div class="form-help" style="margin-top:6px">Use this only when your source material already exists in a register, spreadsheet, or known risk list.</div>
+        <div class="grid-2" style="margin-top:var(--sp-4)">
+          <div class="form-group">
+            <label class="form-label" for="risk-register-file">Risk register upload</label>
+            <input class="form-input" id="risk-register-file" type="file" accept=".txt,.csv,.json,.md,.tsv,.xlsx,.xls">
+            <div class="form-help">${draft.uploadedRegisterName ? `Current file: ${draft.uploadedRegisterName}${draft.registerMeta?.sheetCount ? ` · ${draft.registerMeta.sheetCount} sheet(s)` : ''}` : 'Upload TXT, CSV, TSV, JSON, Markdown, or Excel. Word and PDF still need conversion before upload.'}</div>
+            <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
+              <button class="btn btn--secondary" id="btn-register-analyse">Upload, extract, analyse and enhance risks</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="manual-risk-add">Add risk manually</label>
+            <div class="inline-action-row">
+              <input class="form-input" id="manual-risk-add" type="text" placeholder="e.g. Export control screening failure">
+              <button class="btn btn--secondary" id="btn-add-manual-risk" type="button">Add</button>
+            </div>
+            <div class="form-help" style="margin-top:10px">Manual risks are added to the same candidate list and selected by default.</div>
+          </div>
+        </div>
+        <p class="form-help" style="margin-top:var(--sp-4)">Uses runtime AI if a key has been set with <code>LLMService.setOpenAIKey(...)</code>. Otherwise the local extraction stub is used.</p>
+      </div>
+      <div class="card" style="padding:var(--sp-5);background:var(--bg-elevated)">
+        <div class="context-panel-title">More worked examples</div>
+        <p class="context-panel-copy" style="margin-top:6px">Use these when you want a fast, high-quality starting point for a common cyber or resilience case.</p>
+        <div class="risk-selection-grid" style="margin-top:var(--sp-4)">
+          ${STEP1_DRY_RUN_SCENARIOS.map(example => `<div class="risk-pick-card">
+            <div class="risk-pick-head" style="align-items:flex-start">
+              <div style="flex:1">
+                <div class="risk-pick-title">${example.title}</div>
+                <div class="form-help" style="margin-top:6px">${example.summary}</div>
+                <div class="form-help" style="margin-top:6px"><strong>Best for:</strong> ${example.bestFor}</div>
+              </div>
+              <button class="btn btn--ghost btn--sm btn-load-dry-run" data-dry-run-id="${example.id}" type="button">Load Example</button>
+            </div>
+            <div class="citation-chips" style="margin-top:var(--sp-3)">
+              ${(example.geographies || []).map(geo => `<span class="badge badge--neutral">${geo}</span>`).join('')}
+              <span class="badge badge--neutral">${example.risks.length} starter risks</span>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </details>`;
+}
+
 function ensureStep1ContextPrefills(draft, settings, buList) {
   let changed = false;
   const preferredBusinessUnitId = settings.userProfile?.businessUnitEntityId || AppState.currentUser?.businessUnitEntityId || '';
@@ -355,6 +505,7 @@ function renderWizard1() {
   const regs = deriveApplicableRegulations(buList.find(b => b.id === draft.buId), selectedRisks, scenarioGeographies);
   const recommendation = getStep1RecommendedAction(draft, selectedRisks);
   const activeDryRun = getLoadedDryRunScenario(draft);
+  const featuredDryRun = STEP1_DRY_RUN_SCENARIOS[0] || null;
   const hasScenarioDraft = !!String(draft.narrative || draft.sourceNarrative || '').trim();
   const hasImportedSource = !!String(draft.uploadedRegisterName || '').trim() || (riskCandidates || []).some(risk => risk.source === 'register' || risk.source === 'ai+register');
 
@@ -385,6 +536,7 @@ function renderWizard1() {
           </div>
           ${renderStep1ContextCard(settings, draft, scenarioGeographies, regs, buList)}
           ${renderStep1StartCard(recommendation)}
+          ${renderStep1FeaturedExampleCard(featuredDryRun)}
           ${renderLoadedDryRunBanner(activeDryRun)}
           ${draft.learningNote ? `<div class="card card--elevated anim-fade-in"><div class="context-panel-title">Learnt from prior use</div><p class="context-panel-copy">${draft.learningNote}</p></div>` : ''}
           ${UI.disclosureSection({
@@ -427,123 +579,8 @@ function renderWizard1() {
           `
           })}
 
-          <div class="card anim-fade-in anim-delay-1">
-            <div class="wizard-premium-head" style="margin-bottom:var(--sp-5)">
-              <div>
-                <h3>Start Here: Guided Scenario Builder</h3>
-                <p>Use this if you do not already have a finished risk statement. The platform will turn your answers into a structured starting point.</p>
-              </div>
-              <span class="badge badge--gold">Default path</span>
-            </div>
-            <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-elevated)">
-              <div class="context-panel-title">Try a dry-run example</div>
-              <p class="context-panel-copy">Use one of these examples to prefill the scenario and shortlist so new users can see how the full assessment flow works.</p>
-              <div class="risk-selection-grid" style="margin-top:var(--sp-4)">
-                ${STEP1_DRY_RUN_SCENARIOS.map(example => `<div class="risk-pick-card">
-                  <div class="risk-pick-head" style="align-items:flex-start">
-                    <div style="flex:1">
-                      <div class="risk-pick-title">${example.title}</div>
-                      <div class="form-help" style="margin-top:6px">${example.summary}</div>
-                      <div class="form-help" style="margin-top:6px"><strong>Best for:</strong> ${example.bestFor}</div>
-                    </div>
-                    <button class="btn btn--ghost btn--sm btn-load-dry-run" data-dry-run-id="${example.id}" type="button">Load Example</button>
-                  </div>
-                  <div class="citation-chips" style="margin-top:var(--sp-3)">
-                    ${(example.geographies || []).map(geo => `<span class="badge badge--neutral">${geo}</span>`).join('')}
-                    <span class="badge badge--neutral">${example.risks.length} starter risks</span>
-                  </div>
-                </div>`).join('')}
-              </div>
-            </div>
-            <div class="grid-2">
-              <div class="form-group">
-                <label class="form-label" for="guided-event">What happened or what could happen?</label>
-                <textarea class="form-textarea" id="guided-event" rows="3" placeholder="Example: a supplier with privileged access is compromised and disrupts a regulated customer platform">${draft.guidedInput?.event || ''}</textarea>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="guided-asset">What is affected?</label>
-                <input class="form-input" id="guided-asset" type="text" placeholder="Example: payment platform, shared identity service, cloud data store" value="${draft.guidedInput?.asset || ''}">
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="guided-cause">What is the likely cause or trigger?</label>
-                <input class="form-input" id="guided-cause" type="text" placeholder="Example: supplier breach, phishing-led compromise, weak recovery process, control gap" value="${draft.guidedInput?.cause || ''}">
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="guided-impact">What is the main impact you care about?</label>
-                <input class="form-input" id="guided-impact" type="text" placeholder="Example: service outage, regulatory breach, customer harm, financial exposure, recovery strain" value="${draft.guidedInput?.impact || ''}">
-              </div>
-            </div>
-            <div class="grid-2 mt-4">
-              <div class="form-group">
-                <label class="form-label" for="guided-urgency">How urgent does it feel?</label>
-                <select class="form-select" id="guided-urgency">
-                  <option value="low" ${draft.guidedInput?.urgency === 'low' ? 'selected' : ''}>Low</option>
-                  <option value="medium" ${!draft.guidedInput?.urgency || draft.guidedInput?.urgency === 'medium' ? 'selected' : ''}>Medium</option>
-                  <option value="high" ${draft.guidedInput?.urgency === 'high' ? 'selected' : ''}>High</option>
-                  <option value="critical" ${draft.guidedInput?.urgency === 'critical' ? 'selected' : ''}>Critical</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Quick Start Prompts</label>
-                <div class="citation-chips">
-                  <button class="citation-chip guided-prompt-chip" data-prompt="Supplier compromise affecting a regulated platform">Supplier compromise</button>
-                  <button class="citation-chip guided-prompt-chip" data-prompt="Cloud misconfiguration exposing sensitive data">Cloud exposure</button>
-                  <button class="citation-chip guided-prompt-chip" data-prompt="Ransomware disrupting critical business services">Ransomware outage</button>
-                </div>
-              </div>
-            </div>
-            <div class="admin-inline-actions mt-4">
-              <button class="btn btn--primary" id="btn-build-guided-narrative" type="button">Build Scenario Draft</button>
-              <span class="form-help">This creates a plain-English draft below. Good enough is fine here. You can still edit it manually afterwards.</span>
-            </div>
-            <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-elevated)">
-              <div class="context-panel-title">Generated Statement Preview</div>
-              <p class="context-panel-copy" id="guided-preview">${composeGuidedNarrative(draft.guidedInput) || 'Complete the guided questions and click “Build Scenario Draft”.'}</p>
-            </div>
-          </div>
-
-          <details class="wizard-disclosure anim-fade-in anim-delay-1" ${hasScenarioDraft ? 'open' : ''}>
-            <summary>Use your own scenario draft instead <span class="badge badge--neutral">Optional</span></summary>
-            <div class="wizard-disclosure-body">
-              <div class="form-help">Open this only if you already know the scenario and want to write or paste it yourself instead of relying on the guided builder.</div>
-              <div class="form-group">
-                <label class="form-label" for="intake-risk-statement">Scenario Draft</label>
-                <textarea class="form-textarea" id="intake-risk-statement" rows="6" placeholder="If you already know the scenario, describe it here in plain English. Include what could happen, what is affected, likely triggers, and the business or regulatory impact.">${draft.narrative || ''}</textarea>
-              </div>
-              <div class="flex items-center gap-3" style="flex-wrap:wrap">
-                <button class="btn btn--secondary" id="btn-enhance-risk-statement" type="button">Use AI to Refine This Draft</button>
-                <button class="btn btn--ghost" id="btn-generate-risks-from-draft" type="button">Generate Risks From This Draft</button>
-                <span class="form-help">Use AI when you want drafting help. Use the generate button when you just want a shortlist to carry into the next step.</span>
-              </div>
-            </div>
-          </details>
-
-          <details class="wizard-disclosure anim-fade-in anim-delay-1" ${hasImportedSource ? 'open' : ''}>
-            <summary>Import from a risk register or add risks manually <span class="badge badge--neutral">Advanced</span></summary>
-            <div class="wizard-disclosure-body">
-              <div class="form-help">Use this only when your source material already exists in a register, spreadsheet, or known risk list.</div>
-              <div class="grid-2">
-                <div class="form-group">
-                  <label class="form-label" for="risk-register-file">Risk Register Upload</label>
-                  <input class="form-input" id="risk-register-file" type="file" accept=".txt,.csv,.json,.md,.tsv,.xlsx,.xls">
-                  <div class="form-help">${draft.uploadedRegisterName ? `Current file: ${draft.uploadedRegisterName}${draft.registerMeta?.sheetCount ? ` · ${draft.registerMeta.sheetCount} sheet(s)` : ''}` : 'Upload TXT, CSV, TSV, JSON, Markdown, or Excel. Word and PDF still need conversion before upload.'}</div>
-                  <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
-                    <button class="btn btn--secondary" id="btn-register-analyse">Upload, Extract, Analyse &amp; Enhance Risks</button>
-                    <span class="form-help">AI will turn the uploaded material into candidate risks you can review and trim down.</span>
-                  </div>
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="manual-risk-add">Add Risk Manually</label>
-                  <div class="inline-action-row">
-                    <input class="form-input" id="manual-risk-add" type="text" placeholder="e.g. Export control screening failure">
-                    <button class="btn btn--secondary" id="btn-add-manual-risk" type="button">Add</button>
-                  </div>
-                  <div class="form-help" style="margin-top:10px">Manual risks are added to the same candidate list and selected by default.</div>
-                </div>
-              </div>
-              <p class="form-help">Uses runtime AI if a key has been set with <code>LLMService.setOpenAIKey(...)</code>. Otherwise the local extraction stub is used.</p>
-            </div>
-          </details>
+          ${renderStep1GuidedBuilderCard(draft)}
+          ${renderStep1OtherWaysToStart(draft, hasScenarioDraft, hasImportedSource)}
 
           <div id="intake-output">
             ${draft.intakeSummary ? `<div class="card card--glow anim-fade-in"><div class="context-panel-title">AI Intake Summary</div><p class="context-panel-copy">${draft.intakeSummary}</p>${draft.linkAnalysis ? `<div class="context-panel-foot">${draft.linkAnalysis}</div>` : ''}</div>` : ''}

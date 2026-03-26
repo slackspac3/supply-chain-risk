@@ -17,29 +17,13 @@ function renderWizard2() {
         <div class="wizard-body">
           ${renderStep2FocusStrip(draft, selectedRisks, scenarioGeographies)}
           ${renderStep2QuantBridge(draft, selectedRisks, scenarioGeographies)}
+          ${renderStep2WhyItMattersCard(draft, selectedRisks, scenarioGeographies)}
+          ${renderStep2StructuredSummary(draft, selectedRisks, scenarioGeographies)}
           ${UI.disclosureSection({
-            title: 'What to do on this step',
-            badgeLabel: 'Optional guide',
+            title: 'AI structure and evidence summary',
+            badgeLabel: 'Optional detail',
             badgeTone: 'neutral',
-            body: UI.contextInfoGrid({
-              panels: [
-                UI.contextInfoPanel({
-                  title: '1. Read the draft',
-                  copy: 'Check that the scenario describes the event, the affected asset, the likely cause, and the impact you care about.'
-                }),
-                UI.contextInfoPanel({
-                  title: '2. Improve if needed',
-                  copy: 'Edit the wording in plain English. You do not need formal risk language.'
-                }),
-                UI.contextInfoPanel({
-                  title: '3. Use AI assist if useful',
-                  copy: 'AI assist will structure the scenario and prepare FAIR inputs for the next step.'
-                })
-              ]
-            }),
-            open: false
-          })}
-          ${renderScenarioAssistSummaryBlock({
+            body: `${renderScenarioAssistSummaryBlock({
             workflowGuidance: draft.workflowGuidance,
             confidenceLabel: draft.confidenceLabel,
             evidenceQuality: draft.evidenceQuality,
@@ -48,24 +32,12 @@ function renderWizard2() {
             benchmarkBasis: draft.benchmarkBasis,
             inputProvenance: draft.inputProvenance,
             citations: draft.citations
-          })}
-          ${selectedRisks.length ? UI.disclosureSection({
-            title: 'Selected risks in scope',
-            badgeLabel: 'Required',
-            badgeTone: 'gold',
-            open: true,
-            body: `<div class="citation-chips">${selectedRisks.map(r => `<span class="badge badge--neutral">${r.title}</span>`).join('')}</div><div class="context-panel-foot">${draft.linkedRisks && selectedRisks.length > 1 ? 'Linked scenario uplift will be applied in the simulation.' : 'Risks will be assessed as a combined scenario without linked uplift.'}</div>`
-          }) : ''}
-          ${draft.benchmarkBasis ? UI.disclosureSection({
-            title: 'Benchmark approach',
-            badgeLabel: 'Optional context',
-            badgeTone: 'neutral',
-            body: `<p class="context-panel-copy">${draft.benchmarkBasis}</p>`,
+          })}`,
             open: false
-          }) : ''}
+          })}
           ${UI.wizardInputSection({
             title: 'Risk scenario narrative <span class="required">*</span>',
-            description: 'This is the main required input on this step. Keep the wording to one coherent assessment scope before you continue.',
+            description: 'This is the one required task on this step. Keep the wording to one coherent assessment scope so the estimate stays credible.',
             className: 'card anim-fade-in',
             headerExtras: UI.sectionStatusBadge('Required', 'gold'),
             body: `<div class="form-group"><textarea class="form-textarea" id="narrative" rows="5" placeholder="Describe the risk: What could happen? Who might cause it? What assets are at risk? What are the potential impacts?" style="min-height:160px">${draft.enhancedNarrative || draft.narrative || ''}</textarea></div>`
@@ -91,22 +63,22 @@ function renderWizard2() {
             </div>`
           })}
           ${UI.disclosureSection({
-            title: 'AI assist',
+            title: 'Use AI to structure the scenario',
             badgeLabel: 'Optional',
             badgeTone: 'neutral',
             open: false,
             className: 'wizard-disclosure card anim-fade-in anim-delay-2',
             body: `<div class="wizard-section-head">
               <div class="wizard-section-copy">
-                <h3 class="wizard-section-title">Use AI only if you want a stronger starting point</h3>
-                <p class="wizard-section-description">This keeps the workflow transparent: your narrative stays editable, and the next-step FAIR inputs remain challengeable.</p>
+                <h3 class="wizard-section-title">Use AI only if you want better structure, not more fluff</h3>
+                <p class="wizard-section-description">AI should help tighten scope, surface assumptions, and prepare challengeable FAIR inputs for the next step. Your narrative stays editable.</p>
               </div>
               ${UI.sectionStatusBadge('Assistive only', 'neutral')}
             </div>
             <button class="btn btn--primary" id="btn-llm-assist" style="width:100%;justify-content:center;padding:14px;margin-top:var(--sp-4)">
-              <span id="llm-btn-text">🤖 LLM Assist — Draft Scenario &amp; Suggest FAIR Inputs</span>
+              <span id="llm-btn-text">🤖 Structure scenario and suggest FAIR inputs</span>
             </button>
-            <p style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:8px">Retrieves relevant internal docs and uses AI to suggest FAIR inputs with citations.</p>
+            <p style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:8px">Retrieves relevant internal docs and uses AI to suggest structured narrative improvements and FAIR inputs with citations.</p>
             <div class="form-help" id="wizard2-ai-status" style="text-align:center;margin-top:8px">Use AI assist only if you want a structured starting point. You can continue manually at any time.</div>`
           })}
           <div id="llm-output-area"></div>
@@ -235,6 +207,73 @@ function renderStep2QuantBridge(draft, selectedRisks, scenarioGeographies) {
     </div>
     ${scopeChips.length ? `<div class="citation-chips" style="margin-top:var(--sp-4)">${scopeChips.map(item => `<span class="badge badge--neutral">${escapeHtml(item)}</span>`).join('')}</div>` : ''}
     <div class="context-panel-foot" style="margin-top:var(--sp-4)">${warnings.length ? `Tighten this before continuing: ${escapeHtml(warnings[0])}` : 'If the wording is broadly right, continue. You can still challenge the AI numbers and edit the scenario later.'}</div>
+  </div>`;
+}
+
+function renderStep2WhyItMattersCard(draft, selectedRisks, scenarioGeographies) {
+  const warnings = getStep2NarrativeReadiness(draft, selectedRisks, scenarioGeographies);
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="wizard-premium-head">
+      <div>
+        <div class="context-panel-title">Why this step improves the estimate</div>
+        <p class="context-panel-copy" style="margin-top:var(--sp-2)">A cleaner scenario produces better starting assumptions. This step is where you remove ambiguity before the model turns the narrative into ranges.</p>
+      </div>
+      <span class="badge badge--neutral">Quality gate</span>
+    </div>
+    <div class="wizard-focus-strip wizard-focus-strip--compact" style="margin-top:var(--sp-4)">
+      <div class="wizard-focus-card">
+        <span class="wizard-focus-card__label">Clarify the event</span>
+        <strong>One scenario, not a bundle of issues</strong>
+        <span>Keep one coherent event path so the next-step numbers mean something.</span>
+      </div>
+      <div class="wizard-focus-card">
+        <span class="wizard-focus-card__label">Expose weak spots</span>
+        <strong>Assumptions become visible</strong>
+        <span>Missing information and evidence gaps are easier to challenge before you estimate.</span>
+      </div>
+      <div class="wizard-focus-card">
+        <span class="wizard-focus-card__label">Set up the quant step</span>
+        <strong>Better defaults, less rework</strong>
+        <span>${escapeHtml(warnings[0] || 'If the scenario wording is coherent, the estimate step becomes faster and more defensible.')}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderStep2StructuredSummary(draft, selectedRisks, scenarioGeographies) {
+  const structured = draft.structuredScenario || {};
+  const assumptions = Array.isArray(draft.inferredAssumptions) ? draft.inferredAssumptions.filter(Boolean).slice(0, 2) : [];
+  const missing = Array.isArray(draft.missingInformation) ? draft.missingInformation.filter(Boolean).slice(0, 2) : [];
+  const sourceBasis = normaliseCitations(draft.citations || []).slice(0, 2);
+  const chips = [
+    structured.assetService ? `Asset / service: ${structured.assetService}` : '',
+    structured.attackType ? `Threat type: ${structured.attackType}` : '',
+    selectedRisks.length ? `In scope: ${selectedRisks.length} risk${selectedRisks.length === 1 ? '' : 's'}` : '',
+    scenarioGeographies.length ? `Geography: ${scenarioGeographies.join(', ')}` : ''
+  ].filter(Boolean);
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="wizard-premium-head">
+      <div>
+        <div class="context-panel-title">Scenario structure at a glance</div>
+        <p class="context-panel-copy" style="margin-top:var(--sp-2)">Use this summary to check whether the scenario is grounded, what still looks assumed, and what evidence would improve the estimate.</p>
+      </div>
+      <span class="badge badge--gold">Review before quant</span>
+    </div>
+    ${chips.length ? `<div class="citation-chips" style="margin-top:var(--sp-4)">${chips.map(item => `<span class="badge badge--neutral">${escapeHtml(item)}</span>`).join('')}</div>` : ''}
+    <div class="context-grid" style="margin-top:var(--sp-4)">
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Main assumptions</div>
+        <p class="context-panel-copy">${escapeHtml(assumptions[0] || 'No major assumptions have been captured yet. If something feels implied but not stated, add it now.')}</p>
+      </div>
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Best evidence gap</div>
+        <p class="context-panel-copy">${escapeHtml(missing[0] || 'No obvious evidence gap is blocking the estimate yet.')}</p>
+      </div>
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Source basis</div>
+        <p class="context-panel-copy">${escapeHtml(sourceBasis[0]?.title || 'No named source is attached yet. AI can still help, but a stronger source basis improves confidence.')}</p>
+      </div>
+    </div>
   </div>`;
 }
 

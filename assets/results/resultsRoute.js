@@ -573,6 +573,64 @@ function renderRunGuardrailSummary(validation) {
   return `<div class="banner banner--warning anim-fade-in anim-delay-2" style="margin-top:var(--sp-4)"><span class="banner-icon">⏱</span><span class="banner-text">${escapeHtml(warnings[0])}${warnings[1] ? ` ${escapeHtml(warnings[1])}` : ''}</span></div>`;
 }
 
+function renderPreRunReviewRail(draft, validation, selectedRisks, safeIterations) {
+  const warnings = Array.isArray(validation?.warnings) ? validation.warnings.filter(Boolean) : [];
+  const errors = Array.isArray(validation?.errors) ? validation.errors.filter(Boolean) : [];
+  const readiness = errors.length
+    ? 'Needs changes before run'
+    : warnings.length
+      ? 'Ready, but challenge the flagged assumptions'
+      : 'Ready to run';
+  const confidence = String(draft.confidenceLabel || '').trim() || 'Working estimate';
+  return `<div class="wizard-focus-strip anim-fade-in">
+    <div class="wizard-focus-card wizard-focus-card--wide">
+      <span class="wizard-focus-card__label">Review gate</span>
+      <strong>${escapeHtml(readiness)}</strong>
+      <span>${escapeHtml(errors[0] || warnings[0] || 'The scenario, assumptions, and model settings are coherent enough for a pilot run. Use the checks below to decide whether to run now or tighten one input first.')}</span>
+    </div>
+    <div class="wizard-focus-card">
+      <span class="wizard-focus-card__label">Scope</span>
+      <strong>${selectedRisks.length ? `${selectedRisks.length} risk${selectedRisks.length === 1 ? '' : 's'} in scope` : 'Scenario scope only'}</strong>
+      <span>${draft.geography || 'No geography stated'} · ${safeIterations.toLocaleString('en-US')} iterations</span>
+    </div>
+    <div class="wizard-focus-card">
+      <span class="wizard-focus-card__label">Trust signal</span>
+      <strong>${escapeHtml(confidence)}</strong>
+      <span>${Array.isArray(draft.missingInformation) && draft.missingInformation.length ? escapeHtml(draft.missingInformation[0]) : 'Input provenance and saved run metadata will stay visible after the simulation.'}</span>
+    </div>
+  </div>`;
+}
+
+function renderPreRunTrustSummary(draft, safeIterations) {
+  const provenanceCount = Array.isArray(draft.inputProvenance) ? draft.inputProvenance.filter(Boolean).length : 0;
+  const evidenceCount = Array.isArray(draft.citations) ? draft.citations.filter(Boolean).length : 0;
+  const assumptions = Array.isArray(draft.inferredAssumptions) ? draft.inferredAssumptions.filter(Boolean).slice(0, 2) : [];
+  return `<div class="card card--elevated anim-fade-in">
+    <div class="wizard-premium-head">
+      <div>
+        <div class="context-panel-title">Run trust summary</div>
+        <p class="context-panel-copy" style="margin-top:var(--sp-2)">This is the last review point before the simulation. The run stays reproducible, and the assumptions remain challengeable after save.</p>
+      </div>
+      <span class="badge badge--gold">Premium review gate</span>
+    </div>
+    <div class="context-grid" style="margin-top:var(--sp-4)">
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Input provenance</div>
+        <p class="context-panel-copy">${provenanceCount ? `${provenanceCount} tracked input source${provenanceCount === 1 ? '' : 's'} are attached to this run.` : 'No tracked input provenance is attached yet.'}</p>
+      </div>
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Evidence posture</div>
+        <p class="context-panel-copy">${evidenceCount ? `${evidenceCount} supporting citation${evidenceCount === 1 ? '' : 's'} are linked to the scenario.` : 'No named supporting citation is attached yet.'}</p>
+      </div>
+      <div class="context-chip-panel">
+        <div class="context-panel-title">Model summary</div>
+        <p class="context-panel-copy">${safeIterations.toLocaleString('en-US')} Monte Carlo iterations with ${escapeHtml(String(draft.fairParams?.distType || 'triangular'))} distributions and saved run metadata.</p>
+      </div>
+    </div>
+    ${assumptions.length ? `<div class="context-panel-foot" style="margin-top:var(--sp-4)">Main assumption to challenge: ${escapeHtml(assumptions[0])}</div>` : ''}
+  </div>`;
+}
+
 function validateFairParams(runPayload = buildSimulationRunPayload(), { toast = true } = {}) {
   const validation = RiskEngine.validateRunParams(runPayload.ep);
   if (toast && !validation.valid) {
@@ -597,9 +655,11 @@ function renderWizard4() {
         <div class="wizard-header">
           ${UI.renderStepper(4)}
           <h2 class="wizard-step-title">Review &amp; Run Simulation</h2>
-          <p class="wizard-step-desc">Review your inputs, then run the Monte Carlo simulation.</p>
+          <p class="wizard-step-desc">Review what matters, confirm the model looks credible, then run the simulation with confidence.</p>
         </div>
         <div class="wizard-body">
+          ${renderPreRunReviewRail(draft, validation, selectedRisks, safeIterations)}
+          ${renderPreRunTrustSummary(draft, safeIterations)}
           ${UI.disclosureSection({
             title: 'Scenario summary for this run',
             badgeLabel: 'Required',
@@ -639,10 +699,11 @@ function renderWizard4() {
             <div class="mt-4" style="font-size:.78rem;color:var(--text-muted)">Iterations: <strong>${p.iterations||10000}</strong> · Distribution: <strong>${p.distType||'triangular'}</strong> · Threshold: <strong>${fmtCurrency(getToleranceThreshold())}</strong> · Geography: <strong>${draft.geography || '—'}</strong></div>
             ${draft.applicableRegulations?.length ? `<div class="citation-chips mt-3">${draft.applicableRegulations.map(tag => `<span class="badge badge--gold">${tag}</span>`).join('')}</div>` : ''}`
           })}
-          <div class="banner banner--poc anim-fade-in anim-delay-2"><span class="banner-icon">⚠</span><span class="banner-text">PoC tool. FAIR input ranges should be validated through expert elicitation for production risk decisions.</span></div>
+          <div class="banner banner--poc anim-fade-in anim-delay-2"><span class="banner-icon">⚠</span><span class="banner-text">Pilot decision-support tool. FAIR input ranges should still be challenged through expert judgement before higher-stakes production decisions.</span></div>
           ${renderRunGuardrailSummary(validation)}
           <div id="run-area">
-            <button class="btn btn--primary btn--lg" id="btn-run-sim" style="width:100%;justify-content:center">🚀 Run Monte Carlo Simulation (${safeIterations} iterations)</button>
+            <button class="btn btn--primary btn--lg" id="btn-run-sim" style="width:100%;justify-content:center">Run Monte Carlo simulation (${safeIterations} iterations)</button>
+            <div class="form-help" style="text-align:center;margin-top:10px">This saves the full run metadata, including seed, distributions, threshold configuration, and assumptions used for the result.</div>
           </div>
           <div id="sim-progress" class="hidden">
             <div class="card sim-progress-card">
