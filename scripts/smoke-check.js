@@ -126,8 +126,12 @@ expect(ciWorkflow.includes('npm run check:syntax'), 'Pilot CI workflow is missin
 expect(ciWorkflow.includes('npm run check:smoke'), 'Pilot CI workflow is missing smoke-check.js');
 expect(ciWorkflow.includes('npm run test:e2e:smoke'), 'Pilot CI workflow is missing Playwright smoke coverage');
 expect(ciWorkflow.includes('node-version-file: .nvmrc'), 'Pilot CI workflow must use the repo Node pin.');
+expect(ciWorkflow.includes('actions/checkout@v6'), 'Pilot CI workflow must use actions/checkout@v6.');
+expect(ciWorkflow.includes('actions/setup-node@v6'), 'Pilot CI workflow must use actions/setup-node@v6.');
 expect(pagesWorkflow.includes('needs: validate'), 'Pages deployment is not blocked on validation');
 expect(pagesWorkflow.includes('node-version-file: .nvmrc'), 'Pages workflow must use the repo Node pin.');
+expect(pagesWorkflow.includes('actions/checkout@v6'), 'Pages workflow must use actions/checkout@v6.');
+expect(pagesWorkflow.includes('actions/setup-node@v6'), 'Pages workflow must use actions/setup-node@v6.');
 expect(releaseChecklist.includes('Confirm GitHub Actions `Pilot CI` is green'), 'Release checklist is missing CI confirmation');
 expect(rollbackPlaybook.includes('Frontend Rollback: GitHub Pages'), 'Rollback playbook is missing frontend rollback guidance');
 expect(rollbackPlaybook.includes('Backend Rollback: Vercel API'), 'Rollback playbook is missing backend rollback guidance');
