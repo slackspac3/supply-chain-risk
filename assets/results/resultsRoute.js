@@ -156,24 +156,37 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
       key: 'control',
       magnitude: Math.abs(Number(currentInputs.controlStrLikely || 0) - Number(baselineInputs.controlStrLikely || 0)),
       message: Number(currentInputs.controlStrLikely || 0) > Number(baselineInputs.controlStrLikely || 0)
-        ? 'Stronger controls appear to be one of the main reasons the treated case improved.'
-        : 'Weaker control strength appears to be one of the main reasons this case worsened.'
+        ? 'Stronger controls are one of the clearest reasons the treatment case improved.'
+        : 'Weaker control strength is one of the clearest reasons this case worsened.'
     },
     {
-      key: 'frequency',
+      key: 'detection-response',
       magnitude: Math.abs(Number(currentInputs.tefLikely || 0) - Number(baselineInputs.tefLikely || 0)),
       message: Number(currentInputs.tefLikely || 0) < Number(baselineInputs.tefLikely || 0)
-        ? 'A lower event frequency assumption is materially helping the treated case.'
-        : 'A higher event frequency assumption is materially pushing this case upward.'
+        ? 'Faster detection or fewer credible opportunities are materially reducing the annual exposure in the treatment case.'
+        : 'A higher frequency assumption is materially pushing this case upward.'
     },
     {
-      key: 'business-interruption',
+      key: 'resilience',
       magnitude: Math.abs(Number(currentInputs.biLikely || 0) - Number(baselineInputs.biLikely || 0)),
       message: Number(currentInputs.biLikely || 0) < Number(baselineInputs.biLikely || 0)
         ? 'Lower business interruption cost is one of the clearest improvements in the treated case.'
         : 'Higher business interruption cost is one of the clearest reasons this case is worse.'
+    },
+    {
+      key: 'secondary-loss',
+      magnitude: Math.abs(Number(currentInputs.secProbLikely || 0) - Number(baselineInputs.secProbLikely || 0)),
+      message: Number(currentInputs.secProbLikely || 0) < Number(baselineInputs.secProbLikely || 0)
+        ? 'Reduced secondary-loss exposure is helping keep the treatment case tail lower.'
+        : 'Higher secondary-loss exposure is keeping the downside tail heavier than the baseline.'
     }
   ].sort((a, b) => b.magnitude - a.magnitude);
+  const secondaryDriver = levers[1]?.message || 'No second dominant change stands out beyond the primary lever.';
+  const treatmentNarrative = severeEvent.direction === 'down'
+    ? `The treatment case is improving the outcome mainly through ${String(levers[0]?.message || 'a better control and loss posture').replace(/\.$/, '').toLowerCase()}. ${secondaryDriver}`
+    : severeEvent.direction === 'up'
+      ? `The current case is worse than the selected baseline mainly because ${String(levers[0]?.message || 'the main assumptions are still heavier than the baseline').replace(/\.$/, '').toLowerCase()}. ${secondaryDriver}`
+      : 'The current case and baseline are directionally similar, so the outcome is not being moved by one dominant lever.';
 
   return {
     baselineTitle: baselineAssessment.scenarioTitle || 'Selected baseline',
@@ -185,6 +198,8 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
     baselineStatus,
     statusShift,
     keyDriver: levers[0]?.magnitude > 0 ? levers[0].message : 'The two cases are directionally similar, so no single input change stands out as the dominant driver.',
+    secondaryDriver,
+    treatmentNarrative,
     summary: severeEvent.direction === 'up'
       ? 'This scenario is currently running hotter than the selected baseline on the severe single-event view.'
       : severeEvent.direction === 'down'
@@ -210,17 +225,26 @@ function applyTreatmentPrompt(promptId) {
     multiply('vulnMin', 0.9, 0.01, 1);
     multiply('vulnLikely', 0.85, 0.01, 1);
     multiply('vulnMax', 0.8, 0.01, 1);
-  } else if (promptId === 'frequency') {
-    multiply('tefMin', 0.8, 0.1, null);
-    multiply('tefLikely', 0.75, 0.1, null);
-    multiply('tefMax', 0.7, 0.1, null);
-  } else if (promptId === 'business-interruption') {
-    multiply('biMin', 0.7, 0, null);
-    multiply('biLikely', 0.65, 0, null);
+  } else if (promptId === 'detection-response') {
+    multiply('tefMin', 0.85, 0.1, null);
+    multiply('tefLikely', 0.78, 0.1, null);
+    multiply('tefMax', 0.72, 0.1, null);
+    multiply('irMin', 0.82, 0, null);
+    multiply('irLikely', 0.78, 0, null);
+    multiply('irMax', 0.75, 0, null);
+    multiply('secProbMin', 0.9, 0, 1);
+    multiply('secProbLikely', 0.82, 0, 1);
+    multiply('secProbMax', 0.8, 0, 1);
+  } else if (promptId === 'resilience') {
+    multiply('biMin', 0.72, 0, null);
+    multiply('biLikely', 0.66, 0, null);
     multiply('biMax', 0.6, 0, null);
-    multiply('irMin', 0.9, 0, null);
-    multiply('irLikely', 0.9, 0, null);
-    multiply('irMax', 0.9, 0, null);
+    multiply('rcMin', 0.88, 0, null);
+    multiply('rcLikely', 0.8, 0, null);
+    multiply('rcMax', 0.76, 0, null);
+    multiply('secMagMin', 0.9, 0, null);
+    multiply('secMagLikely', 0.82, 0, null);
+    multiply('secMagMax', 0.78, 0, null);
   }
   saveDraft();
 }
@@ -376,19 +400,21 @@ function renderSensitivitySummary(drivers) {
 function renderResultsExplanationPanel(assessmentIntelligence, comparison, runMetadata) {
   const topDrivers = Array.isArray(assessmentIntelligence?.drivers?.sensitivity) ? assessmentIntelligence.drivers.sensitivity.slice(0, 3) : [];
   const assumptions = Array.isArray(assessmentIntelligence?.assumptions) ? assessmentIntelligence.assumptions.slice(0, 3) : [];
+  const uncertainty = Array.isArray(assessmentIntelligence?.drivers?.uncertainty) ? assessmentIntelligence.drivers.uncertainty.slice(0, 3) : [];
   const caveats = [
     ...(Array.isArray(assessmentIntelligence?.confidence?.reasons) ? assessmentIntelligence.confidence.reasons.slice(0, 2) : []),
     ...(Array.isArray(assessmentIntelligence?.confidence?.improvements) ? assessmentIntelligence.confidence.improvements.slice(0, 2) : [])
   ].slice(0, 3);
-  const treatmentDelta = comparison?.keyDriver || 'No treatment comparison is currently selected, so this view is explaining the current case only.';
+  const treatmentDelta = comparison?.treatmentNarrative || comparison?.keyDriver || 'No treatment comparison is currently selected, so this view is explaining the current case only.';
   const runtimeNote = runMetadata?.runtimeGuardrails?.[0] || `The saved run used seed ${runMetadata?.seed ?? '—'} and ${Number(runMetadata?.iterations || 0).toLocaleString()} iterations for reproducibility.`;
   return `<section class="results-section-stack">
     <div class="results-section-heading">Why this result looks the way it does</div>
     <div class="results-summary-grid results-summary-grid--primary">
       <div class="results-summary-card"><div class="results-driver-label">Top drivers</div><div class="results-summary-copy">${topDrivers.length ? topDrivers.map(item => `• ${escapeHtml(String(item.label || 'Driver'))}: ${escapeHtml(String(item.why || ''))}`).join('<br>') : '• No dominant drivers were captured for this run.'}</div></div>
       <div class="results-summary-card"><div class="results-driver-label">Biggest assumptions</div><div class="results-summary-copy">${assumptions.length ? assumptions.map(item => `• ${escapeHtml(String(item.text || ''))}`).join('<br>') : '• No assumptions were saved with this run.'}</div></div>
+      <div class="results-summary-card"><div class="results-driver-label">Where uncertainty matters most</div><div class="results-summary-copy">${uncertainty.length ? uncertainty.map(item => `• ${escapeHtml(String(item.label || 'Uncertainty'))}: ${escapeHtml(String(item.why || ''))}`).join('<br>') : '• No dominant uncertainty sources were captured for this run.'}</div></div>
       <div class="results-summary-card"><div class="results-driver-label">Confidence caveats</div><div class="results-summary-copy">${caveats.length ? caveats.map(item => `• ${escapeHtml(String(item || ''))}`).join('<br>') : '• Confidence caveats were not recorded for this run.'}</div></div>
-      <div class="results-summary-card results-summary-card--wide"><div class="results-driver-label">Treatment delta explanation</div><div class="results-summary-copy">${escapeHtml(String(treatmentDelta))}</div><div class="results-comparison-foot" style="margin-top:var(--sp-3)">${escapeHtml(String(runtimeNote))}</div></div>
+      <div class="results-summary-card results-summary-card--wide"><div class="results-driver-label">Treatment delta explanation</div><div class="results-summary-copy">${escapeHtml(String(treatmentDelta))}</div>${comparison?.secondaryDriver ? `<div class="results-comparison-foot" style="margin-top:var(--sp-3)">${escapeHtml(String(comparison.secondaryDriver))}</div>` : ''}<div class="results-comparison-foot" style="margin-top:var(--sp-3)">${escapeHtml(String(runtimeNote))}</div></div>
     </div>
   </section>`;
 }

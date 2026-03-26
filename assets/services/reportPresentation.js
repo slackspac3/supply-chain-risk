@@ -27,7 +27,7 @@ const ReportPresentation = (() => {
 
     const openingParts = [];
     if (entity) openingParts.push(entity);
-    openingParts.push('is assessing an identity and access scenario');
+    openingParts.push('is assessing a material risk scenario');
     if (asset) openingParts.push(`centred on ${asset}`);
     let opening = openingParts.join(' ');
     if (!opening.endsWith('.')) opening += '.';
@@ -56,7 +56,7 @@ const ReportPresentation = (() => {
       if (deduped.length >= 3) break;
     }
 
-    const geographySentence = geographies ? `This assessment is being considered across ${geographies}.` : '';
+    const geographySentence = geographies ? `This view should be read in the context of ${geographies}.` : '';
     return [opening, ...deduped, geographySentence]
       .filter(Boolean)
       .join(' ')
@@ -70,32 +70,33 @@ const ReportPresentation = (() => {
     const drivers = intelligence?.drivers || { upward: [], stabilisers: [] };
     const strongestUpward = drivers.upward?.[0] || '';
     const strongestStabiliser = drivers.stabilisers?.[0] || '';
+    const keyUncertainty = drivers.uncertainty?.[0]?.label || '';
 
     if (results.toleranceBreached) {
       return {
         decision: 'Escalate and reduce now',
-        rationale: 'The scenario is already above tolerance on a severe single-event basis, so leadership should treat it as an active risk reduction decision rather than a monitoring case.',
+        rationale: 'The severe-case loss is already above tolerance, so this should be handled as an active management decision with named actions, owners, and timing rather than passive monitoring.',
         priority: strongestUpward || 'The severe-event loss estimate is above tolerance and needs direct treatment focus.',
         managementFocus: strongestStabiliser
-          ? `Preserve the controls that are currently helping, but focus immediate action on the main upward driver. ${strongestStabiliser}`
+          ? `Preserve the control or resilience measures that are already helping, but direct the next action at the main upward driver. ${strongestStabiliser}`
           : 'Focus the next management discussion on the biggest upward driver and the fastest credible reduction lever.'
       };
     }
     if (results.nearTolerance || results.annualReviewTriggered) {
       return {
         decision: 'Actively reduce and review',
-        rationale: 'The scenario is not yet above tolerance, but it is close enough to justify named actions, management review, and a clear reduction plan before exposure worsens.',
-        priority: strongestUpward || 'The current estimate is being pushed up by one or two material assumptions that should be challenged and improved.',
+        rationale: 'The scenario is not yet above tolerance, but it is close enough to justify named actions, management review, and a reduction plan before the position worsens.',
+        priority: strongestUpward || 'One or two material assumptions are still keeping the current estimate elevated and should be challenged first.',
         managementFocus: confidence?.label === 'Low confidence'
-          ? 'Reduce the exposure, but also improve the evidence behind the estimate before relying on it for long-term decisions.'
-          : (strongestStabiliser || 'Use the current control position as the baseline and test which action would move the result down fastest.')
+          ? `Reduce the exposure, but improve the evidence behind ${keyUncertainty || 'the broadest assumption'} before relying on this for longer-term decisions.`
+          : (strongestStabiliser || 'Use the current position as the baseline and test which action would move the result down fastest.')
       };
     }
     return {
       decision: 'Monitor and improve selectively',
-      rationale: 'The scenario is currently within tolerance, so the priority is to preserve the stabilisers, watch for change, and improve the most material weak point before it becomes urgent.',
+      rationale: 'The scenario is currently within tolerance, so the priority is to preserve what is working, watch for change, and improve the most material weak point before it becomes urgent.',
       priority: strongestUpward || 'Use this as a monitored scenario and challenge the assumptions that could move it upward fastest.',
-      managementFocus: strongestStabiliser || 'Keep the strongest current control in place and refresh the assessment if the threat picture, geography, or business dependence changes.'
+      managementFocus: strongestStabiliser || `Keep the strongest current control in place and refresh the assessment if ${keyUncertainty || 'the main assumptions'} changes materially.`
     };
   }
 
@@ -153,7 +154,7 @@ const ReportPresentation = (() => {
     }));
   }
 
-  return {
+  const exported = {
     clampNumber,
     cleanExecutiveNarrativeText,
     buildExecutiveScenarioSummary,
@@ -161,4 +162,8 @@ const ReportPresentation = (() => {
     buildExecutiveThresholdModel,
     buildExecutiveImpactMix
   };
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = exported;
+  }
+  return exported;
 })();

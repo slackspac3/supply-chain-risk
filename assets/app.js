@@ -1718,7 +1718,7 @@ function launchPilotSampleAssessment() {
     const sampleScenario = Array.isArray(STEP1_DRY_RUN_SCENARIOS) ? STEP1_DRY_RUN_SCENARIOS[0] : null;
     if (sampleScenario && typeof applyDryRunScenario === 'function') {
       applyDryRunScenario(sampleScenario);
-      UI.toast('Sample assessment path loaded. Review the scenario and continue when ready.', 'info', 5000);
+      UI.toast('Sample assessment path loaded. It includes linked third-party, resilience, and regulatory angles so you can see a fuller pilot workflow quickly.', 'info', 5500);
       return;
     }
     const fallbackTemplate = Array.isArray(ScenarioTemplates) ? ScenarioTemplates[0] : null;
@@ -4163,6 +4163,7 @@ function buildAssessmentDrivers(draft, results, modelInputs) {
   const upward = [];
   const stabilisers = [];
   const sensitivity = [];
+  const uncertainty = [];
   const lossDrivers = [
     ['Business interruption', averageRange(modelInputs.biMin, modelInputs.biLikely, modelInputs.biMax)],
     ['Response and recovery', averageRange(modelInputs.irMin, modelInputs.irLikely, modelInputs.irMax)],
@@ -4189,10 +4190,39 @@ function buildAssessmentDrivers(draft, results, modelInputs) {
   if (lossDrivers[0]?.[1] > 0) sensitivity.push({ label: lossDrivers[0][0], why: `${lossDrivers[0][0]} is one of the largest per-event cost components in the current estimate.` });
   if (lossDrivers[1]?.[1] > 0) sensitivity.push({ label: lossDrivers[1][0], why: `${lossDrivers[1][0]} is also materially influencing the event-loss range.` });
 
+  const rangeSpread = (minValue, maxValue) => Math.max(0, Number(maxValue || 0) - Number(minValue || 0));
+  const uncertaintyCandidates = [
+    {
+      label: 'Event frequency range',
+      spread: rangeSpread(modelInputs.tefMin, modelInputs.tefMax),
+      why: `The event-frequency range spans from ${modelInputs.tefMin ?? '—'} to ${modelInputs.tefMax ?? '—'} events per year, so annual exposure can still move materially.`
+    },
+    {
+      label: 'Control effectiveness range',
+      spread: rangeSpread(modelInputs.controlStrMin, modelInputs.controlStrMax),
+      why: `The control-strength range spans from ${modelInputs.controlStrMin ?? '—'} to ${modelInputs.controlStrMax ?? '—'}, so event success still depends heavily on judgement rather than hard evidence.`
+    },
+    {
+      label: 'Business interruption range',
+      spread: rangeSpread(modelInputs.biMin, modelInputs.biMax),
+      why: `Business interruption ranges from ${fmtCurrency(modelInputs.biMin || 0)} to ${fmtCurrency(modelInputs.biMax || 0)}, making service-restoration assumptions one of the biggest uncertainty levers.`
+    },
+    {
+      label: 'Reputation and contract range',
+      spread: rangeSpread(modelInputs.rcMin, modelInputs.rcMax),
+      why: `Reputation and contract costs range from ${fmtCurrency(modelInputs.rcMin || 0)} to ${fmtCurrency(modelInputs.rcMax || 0)}, so downstream commercial impact is still broad.`
+    }
+  ]
+    .filter(item => item.spread > 0)
+    .sort((a, b) => b.spread - a.spread)
+    .slice(0, 3);
+  uncertainty.push(...uncertaintyCandidates);
+
   return {
     upward: upward.slice(0, 4),
     stabilisers: stabilisers.slice(0, 3),
-    sensitivity: sensitivity.slice(0, 3)
+    sensitivity: sensitivity.slice(0, 3),
+    uncertainty
   };
 }
 

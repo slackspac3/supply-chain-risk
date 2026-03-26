@@ -60,16 +60,17 @@ const STEP1_DRY_RUN_SCENARIOS = [
     title: 'Supplier outage on a regulated platform',
     summary: 'Good first example for third-party and resilience risk.',
     bestFor: 'Third-party, resilience, and escalation walkthroughs',
-    nextStep: 'Review the two starter risks, then continue to see how the platform refines and estimates a linked supplier scenario.',
-    event: 'A critical supplier with privileged access is compromised and disrupts a regulated digital platform.',
-    asset: 'Customer-facing regulated platform and supporting supplier connection',
-    cause: 'Supplier compromise leading to operational disruption and delayed response',
-    impact: 'Service outage, customer disruption, and regulatory scrutiny',
+    nextStep: 'Review the starter risks, then continue to see how the platform turns a supplier resilience issue into linked loss and management actions.',
+    event: 'A critical supplier with privileged access is compromised and disrupts a regulated digital platform during a peak operating period.',
+    asset: 'Customer-facing regulated platform, supplier integration layer, and dependent support workflows',
+    cause: 'Supplier compromise leading to service disruption, delayed response, and uncertain recovery sequencing',
+    impact: 'Service outage, customer disruption, manual-workaround strain, and regulatory scrutiny',
     urgency: 'high',
     geographies: ['United Arab Emirates'],
     risks: [
       { title: 'Third-party service disruption', category: 'Third-party', source: 'dry-run', description: 'Supplier dependency leads to a material service outage.' },
-      { title: 'Regulatory reporting delay', category: 'Compliance', source: 'dry-run', description: 'Incident handling delays increase regulatory exposure.' }
+      { title: 'Regulatory reporting delay', category: 'Compliance', source: 'dry-run', description: 'Incident handling delays increase regulatory exposure.' },
+      { title: 'Manual recovery backlog', category: 'Resilience', source: 'dry-run', description: 'Fallback operations create sustained pressure on service teams and restoration priorities.' }
     ]
   },
   {
@@ -77,16 +78,17 @@ const STEP1_DRY_RUN_SCENARIOS = [
     title: 'Cloud misconfiguration exposing sensitive data',
     summary: 'Useful for privacy, security, and legal-impact walkthroughs.',
     bestFor: 'Privacy, legal, and notification-impact walkthroughs',
-    nextStep: 'Use this to see how data exposure turns into regulatory and loss-estimation inputs in the next steps.',
-    event: 'A cloud storage configuration error exposes sensitive data to unauthorised parties.',
-    asset: 'Cloud data store containing customer and operational records',
-    cause: 'Misconfiguration and weak change control',
-    impact: 'Data exposure, legal obligations, and customer trust impact',
+    nextStep: 'Use this to see how a common cloud-control failure turns into regulatory, customer, and response-cost estimates in the next steps.',
+    event: 'A cloud storage configuration error exposes sensitive data to unauthorised parties after a routine deployment change.',
+    asset: 'Cloud data store containing customer, employee, and operational records',
+    cause: 'Misconfiguration, weak change control, and delayed exposure detection',
+    impact: 'Data exposure, legal obligations, customer notification, and trust impact',
     urgency: 'high',
     geographies: ['United Arab Emirates', 'European Union'],
     risks: [
       { title: 'Sensitive data exposure', category: 'Privacy', source: 'dry-run', description: 'Sensitive records become accessible outside intended controls.' },
-      { title: 'Regulatory notification breach', category: 'Compliance', source: 'dry-run', description: 'Notification and remediation obligations increase quickly.' }
+      { title: 'Regulatory notification breach', category: 'Compliance', source: 'dry-run', description: 'Notification and remediation obligations increase quickly.' },
+      { title: 'Customer trust erosion', category: 'Commercial', source: 'dry-run', description: 'Customer and partner confidence is strained once the exposure becomes public.' }
     ]
   },
   {
@@ -94,16 +96,53 @@ const STEP1_DRY_RUN_SCENARIOS = [
     title: 'Ransomware disrupting core business services',
     summary: 'Helpful for business interruption and recovery modelling.',
     bestFor: 'Outage, recovery, and business interruption walkthroughs',
-    nextStep: 'Continue after loading to see how the platform frames recovery cost and service-impact assumptions.',
-    event: 'A ransomware event disrupts core business services and slows operational recovery.',
-    asset: 'Core business systems, shared files, and service operations',
-    cause: 'Phishing-led compromise and weak endpoint containment',
-    impact: 'Business interruption, recovery cost, and customer service degradation',
+    nextStep: 'Continue after loading to see how the platform frames recovery cost, service dependency, and management action in a severe outage case.',
+    event: 'A ransomware event disrupts core business services and slows operational recovery across shared support teams.',
+    asset: 'Core business systems, shared files, service operations, and customer-support workflows',
+    cause: 'Phishing-led compromise, privilege escalation, and weak endpoint containment',
+    impact: 'Business interruption, recovery cost, customer-service degradation, and executive escalation',
     urgency: 'critical',
     geographies: ['United Arab Emirates'],
     risks: [
       { title: 'Critical service outage', category: 'Resilience', source: 'dry-run', description: 'Essential services are unavailable during containment and recovery.' },
-      { title: 'Recovery cost escalation', category: 'Financial', source: 'dry-run', description: 'Recovery, response, and overtime costs rise quickly.' }
+      { title: 'Recovery cost escalation', category: 'Financial', source: 'dry-run', description: 'Recovery, response, and overtime costs rise quickly.' },
+      { title: 'Customer backlog growth', category: 'Commercial', source: 'dry-run', description: 'Service backlog and missed commitments build while systems remain constrained.' }
+    ]
+  },
+  {
+    id: 'identity-admin-takeover',
+    title: 'Privileged identity takeover affecting shared platforms',
+    summary: 'Helpful for identity, fraud, and rapid containment walkthroughs.',
+    bestFor: 'Identity, access, fraud, and executive-visibility walkthroughs',
+    nextStep: 'Use this to see how one privileged identity event can become both a security and business-continuity problem.',
+    event: 'A privileged identity is compromised and used to access shared cloud and productivity platforms.',
+    asset: 'Privileged identity tier, shared collaboration services, and cloud administration consoles',
+    cause: 'Credential theft, session hijack, and weak privileged-access recovery processes',
+    impact: 'Administrative misuse, fraud potential, service disruption, and urgent containment activity',
+    urgency: 'critical',
+    geographies: ['United Arab Emirates'],
+    risks: [
+      { title: 'Privileged account misuse', category: 'Identity', source: 'dry-run', description: 'Administrative access is used to change controls or access sensitive systems.' },
+      { title: 'Fraud or payment manipulation', category: 'Financial', source: 'dry-run', description: 'Mailbox or workflow access creates financial manipulation risk.' },
+      { title: 'Containment-driven disruption', category: 'Resilience', source: 'dry-run', description: 'Emergency containment actions disrupt shared business services.' }
+    ]
+  },
+  {
+    id: 'dc-recovery-failure',
+    title: 'Data centre recovery shortfall during a critical outage',
+    summary: 'Useful for resilience, continuity, and executive recovery planning walkthroughs.',
+    bestFor: 'Resilience, continuity, and treatment-planning walkthroughs',
+    nextStep: 'Load this when you want a resilience-heavy case that tests recovery capability more than a pure cyber intrusion.',
+    event: 'A critical hosting location suffers a prolonged outage and recovery does not meet the expected service timeline.',
+    asset: 'Primary hosting environment, recovery runbooks, and customer-facing digital services',
+    cause: 'Facility or infrastructure failure combined with weak recovery preparedness',
+    impact: 'Extended outage, backlog growth, contract pressure, and management scrutiny',
+    urgency: 'critical',
+    geographies: ['United Arab Emirates', 'Saudi Arabia'],
+    risks: [
+      { title: 'Recovery capability shortfall', category: 'Resilience', source: 'dry-run', description: 'Recovery dependencies are slower or weaker than assumed.' },
+      { title: 'Contractual service breach', category: 'Commercial', source: 'dry-run', description: 'Customer commitments are missed during a prolonged outage.' },
+      { title: 'Executive escalation pressure', category: 'Governance', source: 'dry-run', description: 'Leadership needs to decide on interim service, communication, and investment actions.' }
     ]
   }
 ];

@@ -794,24 +794,24 @@ ${businessUnit.selectedDepartmentContext}` : ''
       ];
     } else if (classification.key === 'cloud') {
       recommendations = [
-        { title: 'Cloud Security Posture Management (CSPM)', why: 'Misconfigurations remain a leading driver of cloud exposure events.', impact: 'Reduces misconfiguration dwell time from weeks to hours.' },
-        { title: 'Infrastructure as Code Security Scanning', why: 'Pre-deployment controls prevent repeat configuration drift.', impact: 'Prevents a large share of common cloud misconfigurations.' },
-        { title: 'Privileged Access Management for Cloud Consoles', why: 'Over-permissive console access is a catastrophic single point of failure.', impact: 'Limits blast radius of compromised cloud credentials.' },
-        { title: 'Real-Time Alerting on Public Exposure', why: 'Publicly exposed services are often discovered and abused quickly.', impact: 'Reduces exploitation windows materially.' }
+        { title: 'Cloud Security Posture Management (CSPM)', why: 'Misconfigurations remain a leading driver of cloud exposure events.', impact: 'Reduces misconfiguration dwell time from weeks to hours and gives management a clearer control baseline.' },
+        { title: 'Infrastructure as Code Security Scanning', why: 'Pre-deployment controls prevent repeat configuration drift.', impact: 'Prevents a large share of common cloud misconfigurations before they affect production services.' },
+        { title: 'Privileged Access Management for Cloud Consoles', why: 'Over-permissive console access is a catastrophic single point of failure.', impact: 'Limits blast radius of compromised cloud credentials and narrows the likely breach scope.' },
+        { title: 'Real-Time Alerting on Public Exposure', why: 'Publicly exposed services are often discovered and abused quickly.', impact: 'Reduces exploitation windows materially and shortens the period of unmanaged exposure.' }
       ];
     } else if (classification.key === 'phishing') {
       recommendations = [
-        { title: 'Phishing-Resistant MFA', why: 'Phishing and session hijack campaigns increasingly bypass weak MFA patterns.', impact: 'Near-elimination of credential takeover from basic phishing paths.' },
-        { title: 'Advanced Email Security Controls', why: 'Reducing malicious messages reaching users remains one of the strongest volume controls.', impact: 'Substantially lowers phishing exposure at inbox level.' },
-        { title: 'BEC Payment Verification Controls', why: 'Out-of-band verification and approval hardening reduce direct fraud loss.', impact: 'Eliminates the main financial loss path in many BEC cases.' },
-        { title: 'Security Awareness and Simulation Programme', why: 'Human detection remains an important last line of defence.', impact: 'Reduces click-through and improves early reporting.' }
+        { title: 'Phishing-Resistant MFA', why: 'Phishing and session hijack campaigns increasingly bypass weak MFA patterns.', impact: 'Near-elimination of credential takeover from basic phishing paths and a clearer reduction in identity-driven fraud exposure.' },
+        { title: 'Advanced Email Security Controls', why: 'Reducing malicious messages reaching users remains one of the strongest volume controls.', impact: 'Substantially lowers phishing exposure at inbox level before more expensive response work starts.' },
+        { title: 'BEC Payment Verification Controls', why: 'Out-of-band verification and approval hardening reduce direct fraud loss.', impact: 'Cuts the main financial-loss path in many BEC cases and improves executive confidence in payment governance.' },
+        { title: 'Security Awareness and Simulation Programme', why: 'Human detection remains an important last line of defence.', impact: 'Reduces click-through, improves early reporting, and supports better measurement of people risk over time.' }
       ];
     } else {
       recommendations = [
-        { title: 'Risk-Based Vulnerability Management', why: 'Exploitability-led prioritisation reduces the most likely technical entry paths.', impact: 'Addresses a major driver of severe incidents.' },
-        { title: 'Zero Trust Architecture', why: 'Reducing implicit trust limits lateral movement and blast radius.', impact: 'Can materially reduce breach scope and recovery effort.' },
-        { title: 'Third-Party Security Assessment Programme', why: 'Supplier and dependency risks often amplify core scenarios.', impact: 'Improves identification of inherited exposure.' },
-        { title: 'Security Operations Maturity', why: 'Faster detection and response remains one of the strongest levers on loss magnitude.', impact: 'Reduces dwell time and downstream business loss.' }
+        { title: 'Risk-Based Vulnerability Management', why: 'Exploitability-led prioritisation reduces the most likely technical entry paths.', impact: 'Addresses a major driver of severe incidents and gives teams a more defensible remediation focus.' },
+        { title: 'Zero Trust Architecture', why: 'Reducing implicit trust limits lateral movement and blast radius.', impact: 'Can materially reduce breach scope, service disruption, and recovery effort.' },
+        { title: 'Third-Party Security Assessment Programme', why: 'Supplier and dependency risks often amplify core scenarios.', impact: 'Improves identification of inherited exposure and helps separate internal versus external treatment choices.' },
+        { title: 'Security Operations Maturity', why: 'Faster detection and response remains one of the strongest levers on loss magnitude.', impact: 'Reduces dwell time, downstream business loss, and uncertainty around incident progression.' }
       ];
     }
 

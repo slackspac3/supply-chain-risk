@@ -9,7 +9,7 @@ const ScenarioTemplates = [
     id: 'ransomware-ops',
     label: 'Ransomware — Operational Systems',
     icon: 'RW',
-    description: 'Ransomware deployment via phishing or exposed RDP, targeting operational or production systems. Double-extortion model (encrypt + exfiltrate).',
+    description: 'Ransomware against operational or production systems with outage, extortion, and executive recovery pressure. Useful when business interruption matters more than pure data loss.',
     tags: ['Ransomware', 'High Impact', 'Common'],
     suggestedBUTypes: ['bu-fintech', 'bu-health', 'bu-iot', 'bu-enterprise-it'],
     draft: {
@@ -44,7 +44,7 @@ const ScenarioTemplates = [
     id: 'bec-financial',
     label: 'Business Email Compromise (BEC)',
     icon: 'BEC',
-    description: 'CEO/CFO impersonation or email account takeover leading to fraudulent wire transfer authorisation. Among the highest-frequency financial threats in the GCC.',
+    description: 'Executive impersonation or mailbox takeover leading to fraudulent payment approval, supplier fraud, or urgent finance disruption.',
     tags: ['BEC', 'Financial Loss', 'High Frequency'],
     suggestedBUTypes: ['bu-enterprise-it', 'bu-fintech'],
     draft: {
@@ -79,7 +79,7 @@ const ScenarioTemplates = [
     id: 'supply-chain-compromise',
     label: 'Supply Chain / Third-Party Compromise',
     icon: '3P',
-    description: 'A trusted vendor or software supplier is compromised, providing attackers with a trusted pathway into the organisation. SolarWinds and MOVEit-style attack patterns.',
+    description: 'A trusted vendor, software supplier, or MSP is compromised, creating an inherited pathway into critical services. Strong choice for resilience and concentration-risk discussions.',
     tags: ['Supply Chain', 'Third Party', 'Stealthy'],
     suggestedBUTypes: ['bu-cloud', 'bu-enterprise-it', 'bu-cyber'],
     draft: {
@@ -114,7 +114,7 @@ const ScenarioTemplates = [
     id: 'cloud-misconfiguration',
     label: 'Cloud Misconfiguration / Data Exposure',
     icon: 'CLD',
-    description: 'Misconfigured cloud storage, API, or access controls expose sensitive data publicly or to unauthorised parties. High frequency; often detected externally.',
+    description: 'Misconfigured cloud storage, API, or access controls expose sensitive data or critical services. Useful for privacy, legal, and customer-trust scenarios.',
     tags: ['Cloud', 'Data Exposure', 'High Frequency'],
     suggestedBUTypes: ['bu-cloud', 'bu-ai', 'bu-enterprise-it'],
     draft: {
@@ -147,7 +147,7 @@ const ScenarioTemplates = [
     id: 'insider-data-theft',
     label: 'Insider Threat — Data Theft',
     icon: 'INS',
-    description: 'A current or departing employee, contractor, or privileged user deliberately exfiltrates sensitive data. Often detected late; impact includes IP loss and regulatory consequences.',
+    description: 'A current or departing employee, contractor, or privileged user deliberately exfiltrates sensitive data or IP. Useful for human-risk and offboarding-control cases.',
     tags: ['Insider', 'Data Theft', 'Hard to Detect'],
     suggestedBUTypes: ['bu-ai', 'bu-cyber', 'bu-health', 'bu-fintech'],
     draft: {
@@ -175,6 +175,76 @@ const ScenarioTemplates = [
         secProbMin: 0.15, secProbLikely: 0.35, secProbMax: 0.65,
         secMagMin: 200000, secMagLikely: 1000000, secMagMax: 5000000,
         corrBiIr: 0.25, corrRlRc: 0.55
+      }
+    }
+  },
+  {
+    id: 'identity-shared-services',
+    label: 'Privileged Identity Takeover',
+    icon: 'IAM',
+    description: 'A privileged identity is compromised and used across shared platforms, creating security, fraud, and service-disruption consequences. Strong for identity and executive-action discussions.',
+    tags: ['Identity', 'Privileged Access', 'Cross-Platform'],
+    suggestedBUTypes: ['bu-enterprise-it', 'bu-cloud', 'bu-cyber'],
+    draft: {
+      scenarioTitle: 'Privileged Identity Takeover Across Shared Platforms',
+      narrative: 'A privileged administrator account is compromised through phishing-resistant MFA bypass, token theft, or a poorly governed support path. The attacker uses that identity to access shared cloud consoles, productivity tooling, and administrative workflows. Containment requires emergency account lockdown, forced session reset, and urgent review of high-privilege changes. The direct security impact is serious, but the wider business issue is that multiple shared services may be disrupted while the identity tier is stabilised.',
+      structuredScenario: {
+        assetService: 'Privileged identity tier, shared cloud administration, and business-critical collaboration services',
+        threatCommunity: 'Identity-focused criminal actors or sophisticated adversaries targeting privileged access',
+        attackType: 'Credential theft or token abuse → privileged access misuse → emergency containment across shared platforms',
+        effect: 'Administrative misuse, urgent containment, service disruption, and possible fraud or data access'
+      },
+      fairParams: {
+        distType: 'triangular',
+        iterations: 10000,
+        tefMin: 0.6, tefLikely: 2.2, tefMax: 8,
+        threatCapMin: 0.52, threatCapLikely: 0.70, threatCapMax: 0.88,
+        controlStrMin: 0.42, controlStrLikely: 0.58, controlStrMax: 0.78,
+        irMin: 90000, irLikely: 260000, irMax: 900000,
+        biMin: 80000, biLikely: 350000, biMax: 1800000,
+        dbMin: 20000, dbLikely: 140000, dbMax: 900000,
+        rlMin: 20000, rlLikely: 120000, rlMax: 850000,
+        tpMin: 0, tpLikely: 60000, tpMax: 400000,
+        rcMin: 50000, rcLikely: 220000, rcMax: 1500000,
+        secondaryEnabled: true,
+        secProbMin: 0.10, secProbLikely: 0.25, secProbMax: 0.45,
+        secMagMin: 50000, secMagLikely: 240000, secMagMax: 1200000,
+        corrBiIr: 0.30, corrRlRc: 0.35
+      }
+    }
+  },
+  {
+    id: 'service-recovery-shortfall',
+    label: 'Critical Service Recovery Shortfall',
+    icon: 'RES',
+    description: 'A major outage exposes weak recovery readiness, forcing prolonged service disruption and management action. Strong for resilience and continuity treatment planning.',
+    tags: ['Resilience', 'Continuity', 'Recovery'],
+    suggestedBUTypes: ['bu-cloud', 'bu-enterprise-it', 'bu-health', 'bu-fintech'],
+    draft: {
+      scenarioTitle: 'Critical Service Recovery Shortfall During Major Outage',
+      narrative: 'A major technology outage affects a critical customer-facing service, but recovery takes materially longer than the organisation planned for because dependencies, failover steps, and recovery decision rights are not as mature as assumed. The technical trigger could be cyber, infrastructure, or supplier related; the main risk being assessed is the resilience shortfall itself. Customer commitments are missed, backlogs build, and leadership must decide how to trade recovery speed, cost, and interim service levels.',
+      structuredScenario: {
+        assetService: 'Critical digital service, recovery runbooks, and supporting infrastructure dependencies',
+        threatCommunity: 'Any severe disruption source that forces a real recovery event',
+        attackType: 'Material outage → weak recovery execution → extended disruption and backlog growth',
+        effect: 'Extended service outage, customer impact, contract pressure, and executive escalation'
+      },
+      fairParams: {
+        distType: 'triangular',
+        iterations: 10000,
+        tefMin: 0.4, tefLikely: 1.4, tefMax: 4.5,
+        threatCapMin: 0.35, threatCapLikely: 0.50, threatCapMax: 0.72,
+        controlStrMin: 0.38, controlStrLikely: 0.54, controlStrMax: 0.74,
+        irMin: 70000, irLikely: 240000, irMax: 900000,
+        biMin: 250000, biLikely: 1100000, biMax: 5500000,
+        dbMin: 0, dbLikely: 30000, dbMax: 200000,
+        rlMin: 20000, rlLikely: 120000, rlMax: 900000,
+        tpMin: 50000, tpLikely: 250000, tpMax: 1500000,
+        rcMin: 100000, rcLikely: 500000, rcMax: 2800000,
+        secondaryEnabled: true,
+        secProbMin: 0.10, secProbLikely: 0.22, secProbMax: 0.40,
+        secMagMin: 120000, secMagLikely: 600000, secMagMax: 3000000,
+        corrBiIr: 0.42, corrRlRc: 0.26
       }
     }
   }

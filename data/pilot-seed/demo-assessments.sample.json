@@ -307,6 +307,45 @@
         }
       }
     },
+    "assessmentIntelligence": {
+      "confidence": {
+        "score": 74,
+        "label": "Moderate confidence",
+        "summary": "This treatment case is useful for decision discussion because the improvement levers are explicit, but the recovery and interruption assumptions still need validation before committing investment.",
+        "reasons": [
+          "The treatment case keeps the same baseline scenario, making the comparison easier to explain.",
+          "The improved control and resilience assumptions are directionally consistent with the stated treatment plan."
+        ],
+        "improvements": [
+          "Validate the expected recovery-time improvement with operations and infrastructure owners.",
+          "Confirm whether the stronger privileged-access controls are funded and realistically achievable in the target period."
+        ]
+      },
+      "drivers": {
+        "upward": [
+          "Business interruption still remains the largest single cost driver, even after the treatment changes.",
+          "Annual exposure still depends on how quickly the service can be restored under pressure."
+        ],
+        "stabilisers": [
+          "Stronger control strength materially reduces the chance of successful ransomware progression.",
+          "Lower secondary-loss assumptions help keep the severe tail lower than the baseline."
+        ],
+        "sensitivity": [
+          { "label": "Business interruption", "why": "Service restoration assumptions still have the biggest effect on the severe-event result." },
+          { "label": "Control effectiveness", "why": "The improved control posture is one of the main reasons the treatment case drops below the warning trigger." },
+          { "label": "Event frequency", "why": "The treated case also benefits from fewer credible opportunities for a successful event to escalate." }
+        ],
+        "uncertainty": [
+          { "label": "Business interruption range", "why": "The treatment case still depends heavily on how much downtime can realistically be removed." },
+          { "label": "Recovery execution", "why": "The result assumes restore and containment are materially faster than in the baseline." }
+        ]
+      },
+      "assumptions": [
+        { "category": "Treatment", "text": "Assumes stronger privileged-access controls are implemented and operated consistently." },
+        { "category": "Recovery", "text": "Assumes tested restore paths materially reduce service interruption and recovery effort." },
+        { "category": "Resilience", "text": "Assumes segmentation and recovery planning reduce the spread and duration of the outage." }
+      ]
+    },
     "completedAt": 1774515600000
   }
 ]
