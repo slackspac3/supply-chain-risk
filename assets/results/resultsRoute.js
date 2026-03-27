@@ -1469,6 +1469,7 @@ function renderResults(id, isShared) {
   const supportingReferences = Array.isArray(assessment.supportingReferences) ? assessment.supportingReferences : [];
   const inferredAssumptions = Array.isArray(assessment.inferredAssumptions) ? assessment.inferredAssumptions : [];
   const missingInformation = Array.isArray(assessment.missingInformation) ? assessment.missingInformation : [];
+  const assessmentIntelligence = assessment.assessmentIntelligence || buildAssessmentIntelligence(assessment, r, technicalInputs, r.portfolioMeta || {});
   const evidenceGapPlan = buildEvidenceGapActionPlan({
     confidenceLabel: assessment.confidenceLabel,
     evidenceQuality: assessment.evidenceQuality,
@@ -1480,7 +1481,6 @@ function renderResults(id, isShared) {
     citations,
     assumptions: Array.isArray(assessmentIntelligence?.assumptions) ? assessmentIntelligence.assumptions : []
   });
-  const assessmentIntelligence = assessment.assessmentIntelligence || buildAssessmentIntelligence(assessment, r, technicalInputs, r.portfolioMeta || {});
   const assessmentChallenge = assessment.assessmentChallenge || null;
   const executiveDecision = ReportPresentation.buildExecutiveDecisionSupport(assessment, r, assessmentIntelligence);
   const confidenceFrame = ReportPresentation.buildExecutiveConfidenceFrame(assessmentIntelligence.confidence, assessment.evidenceQuality, missingInformation, citations);
