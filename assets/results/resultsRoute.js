@@ -318,7 +318,7 @@ function renderExecutiveInsightCluster({ scenarioNarrative, executiveDecision, e
 }
 
 function renderTrustExplanationLayer({ confidenceNeedsBlock, explanationPanel, impactMix, thresholdModel, results, assessmentIntelligence, assessment, citations, primaryGrounding, supportingReferences, missingInformation }) {
-  return `<section class="results-section-stack">
+  return `<section class="results-section-stack results-layer-band results-layer-band--editorial">
     <div class="results-section-heading">Trust and explanation</div>
     <div class="results-comparison-foot">Use this layer to understand what is driving the result, how much confidence to place in it, and what still needs evidence.</div>
     ${confidenceNeedsBlock}
@@ -1561,7 +1561,7 @@ function renderResults(id, isShared) {
       ${renderTechnicalReviewSurface(r, assessmentIntelligence, confidenceFrame, assessment, thresholdModel)}
       ${renderTechnicalStoryBand(r, assessmentIntelligence, confidenceFrame, thresholdModel, assessment)}
 
-      <section class="results-section-stack">
+      <section class="results-section-stack results-layer-band results-layer-band--editorial">
         <div class="results-section-heading">Review-ready metrics and sensitivities</div>
         <div class="results-detail-disclosure-copy">Start here when you want to challenge the size of the result, the dominant sensitivities, and whether the ranges are credible enough for management use.</div>
         <div class="results-disclosure-stack">
@@ -1583,7 +1583,7 @@ function renderResults(id, isShared) {
         </div>
       </section>
 
-      <section class="results-section-stack">
+      <section class="results-section-stack results-layer-band">
         <div class="results-section-heading">Assumptions, evidence, and input origins</div>
         <div class="results-detail-disclosure-copy">Use this layer to review what the result depends on, how grounded the evidence is, and where the main inputs came from.</div>
         <div class="results-disclosure-stack">

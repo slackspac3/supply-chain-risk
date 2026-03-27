@@ -610,42 +610,56 @@ function renderAdvancedTuningWorkspace(p, sym) {
         className: 'wizard-disclosure wizard-disclosure--nested',
         body: `
           <div class="wizard-advanced-grid">
-            <div class="wizard-advanced-card">
-              <div class="wizard-advanced-card__label">Distribution and iterations</div>
-              <div class="wizard-advanced-card__copy">Use the default settings unless you need heavier-tail modelling or a higher-confidence committee rerun.</div>
-              <div class="grid-2" style="margin-top:var(--sp-4)">
-                <div class="form-group">
-                  <label class="form-label">Distribution Type <span data-tooltip="Triangular: intuitive. Lognormal: heavier right tail (better for cyber)." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
-                  <select class="form-select" id="adv-dist">
-                    <option value="triangular" ${(p.distType||'triangular')==='triangular'?'selected':''}>Triangular</option>
-                    <option value="lognormal" ${p.distType==='lognormal'?'selected':''}>Lognormal</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Iterations</label>
-                  <input class="form-input" id="adv-iter" type="number" min="1000" max="100000" step="1000" value="${p.iterations||10000}">
-                </div>
-              </div>
-            </div>
-            <div class="wizard-advanced-card">
-              <div class="wizard-advanced-card__label">Reproducibility and relationships</div>
-              <div class="wizard-advanced-card__copy">Save a seed only when you need repeatability. Change correlations only if you can justify the relationship between the cost components.</div>
-              <div class="grid-2" style="margin-top:var(--sp-4)">
-                <div class="form-group">
-                  <label class="form-label">Random Seed <span class="text-muted text-xs">(reproducibility)</span></label>
-                  <input class="form-input" id="adv-seed" type="number" placeholder="Leave empty for random" value="${p.seed||''}">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Correlations <span data-tooltip="BI-IR: Business Interruption & IR correlation. RL-RC: Regulatory & Reputation." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
-                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
-                    <label style="font-size:.72rem;color:var(--text-muted)">BI↔IR</label>
-                    <input class="form-input" id="corr-bi-ir" type="number" min="-1" max="1" step="0.05" value="${p.corrBiIr||0.3}" style="width:72px">
-                    <label style="font-size:.72rem;color:var(--text-muted)">Reg↔Rep</label>
-                    <input class="form-input" id="corr-rl-rc" type="number" min="-1" max="1" step="0.05" value="${p.corrRlRc||0.2}" style="width:72px">
+            ${UI.disclosureSection({
+              title: 'Distribution and iterations',
+              badgeLabel: 'Core tuning',
+              badgeTone: 'neutral',
+              open: false,
+              className: 'wizard-disclosure wizard-disclosure--nested',
+              body: `<div class="wizard-advanced-card">
+                <div class="wizard-advanced-card__label">Committee-grade rerun settings</div>
+                <div class="wizard-advanced-card__copy">Use the default settings unless you need heavier-tail modelling or a higher-confidence rerun for committee review.</div>
+                <div class="grid-2" style="margin-top:var(--sp-4)">
+                  <div class="form-group">
+                    <label class="form-label">Distribution Type <span data-tooltip="Triangular: intuitive. Lognormal: heavier right tail (better for cyber)." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
+                    <select class="form-select" id="adv-dist">
+                      <option value="triangular" ${(p.distType||'triangular')==='triangular'?'selected':''}>Triangular</option>
+                      <option value="lognormal" ${p.distType==='lognormal'?'selected':''}>Lognormal</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Iterations</label>
+                    <input class="form-input" id="adv-iter" type="number" min="1000" max="100000" step="1000" value="${p.iterations||10000}">
                   </div>
                 </div>
-              </div>
-            </div>
+              </div>`
+            })}
+            ${UI.disclosureSection({
+              title: 'Reproducibility and relationships',
+              badgeLabel: 'Only if justified',
+              badgeTone: 'neutral',
+              open: false,
+              className: 'wizard-disclosure wizard-disclosure--nested',
+              body: `<div class="wizard-advanced-card">
+                <div class="wizard-advanced-card__label">Repeatability and correlations</div>
+                <div class="wizard-advanced-card__copy">Save a seed only when you need repeatability. Change correlations only if you can justify the relationship between the cost components.</div>
+                <div class="grid-2" style="margin-top:var(--sp-4)">
+                  <div class="form-group">
+                    <label class="form-label">Random Seed <span class="text-muted text-xs">(reproducibility)</span></label>
+                    <input class="form-input" id="adv-seed" type="number" placeholder="Leave empty for random" value="${p.seed||''}">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Correlations <span data-tooltip="BI-IR: Business Interruption & IR correlation. RL-RC: Regulatory & Reputation." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+                      <label style="font-size:.72rem;color:var(--text-muted)">BI↔IR</label>
+                      <input class="form-input" id="corr-bi-ir" type="number" min="-1" max="1" step="0.05" value="${p.corrBiIr||0.3}" style="width:72px">
+                      <label style="font-size:.72rem;color:var(--text-muted)">Reg↔Rep</label>
+                      <input class="form-input" id="corr-rl-rc" type="number" min="-1" max="1" step="0.05" value="${p.corrRlRc||0.2}" style="width:72px">
+                    </div>
+                  </div>
+                </div>
+              </div>`
+            })}
           </div>
         `
       })}

@@ -42,16 +42,18 @@ const AdminDocumentLibrarySection = (() => {
             <thead><tr><th>Document</th><th>Tags</th><th>Updated</th><th>Actions</th></tr></thead>
             <tbody>${docList.map(doc => `<tr class="admin-doc-row" data-search="${escapeHtml([doc.title, doc.id, ...(doc.tags || [])].join(' ').toLowerCase())}" data-tags="${escapeHtml((doc.tags || []).join('|').toLowerCase())}">
               <td><div class="table-primary-cell"><strong style="color:var(--text-primary);font-size:.875rem">${doc.title}</strong><span>${doc.id}</span></div></td>
-              <td>${(doc.tags || []).slice(0, 2).map(t => `<span class="badge badge--primary" style="font-size:.6rem;margin:2px">${t}</span>`).join('')}${(doc.tags || []).length > 2 ? `<span class="table-more-pill">+${(doc.tags || []).length - 2} more</span>` : ''}</td>
+              <td><div class="table-tag-stack">${(doc.tags || []).slice(0, 2).map(t => `<span class="badge badge--primary" style="font-size:.6rem">${t}</span>`).join('')}${(doc.tags || []).length > 2 ? `<span class="table-more-pill">+${(doc.tags || []).length - 2} more</span>` : ''}</div></td>
               <td style="font-size:.8rem;white-space:nowrap">${doc.lastUpdated || '—'}</td>
               <td class="table-actions-cell">
-                <button class="btn btn--ghost btn--sm" data-id="${doc.id}" id="edit-doc-${doc.id}">Edit</button>
-                <details class="results-actions-disclosure dashboard-row-overflow" style="display:inline-flex;margin-left:8px">
-                  <summary class="btn btn--ghost btn--sm">More</summary>
-                  <div class="results-actions-disclosure-menu">
-                    <button class="btn btn--secondary btn--sm" data-id="${doc.id}" id="del-doc-${doc.id}">Delete</button>
-                  </div>
-                </details>
+                <div class="table-actions-row">
+                  <button class="btn btn--ghost btn--sm" data-id="${doc.id}" id="edit-doc-${doc.id}">Edit</button>
+                  <details class="results-actions-disclosure dashboard-row-overflow" style="display:inline-flex">
+                    <summary class="btn btn--ghost btn--sm">More</summary>
+                    <div class="results-actions-disclosure-menu">
+                      <button class="btn btn--secondary btn--sm" data-id="${doc.id}" id="del-doc-${doc.id}">Delete</button>
+                    </div>
+                  </details>
+                </div>
               </td>
             </tr>`).join('')}</tbody>
           </table>`
