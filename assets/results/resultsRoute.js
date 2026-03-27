@@ -946,6 +946,35 @@ function renderPreRunTrustSummary(draft, safeIterations) {
   </div>`;
 }
 
+function renderPreRunActionSpotlight(validation, safeIterations, distType) {
+  const warnings = Array.isArray(validation?.warnings) ? validation.warnings.filter(Boolean) : [];
+  const errors = Array.isArray(validation?.errors) ? validation.errors.filter(Boolean) : [];
+  const readinessLabel = errors.length
+    ? 'Complete the flagged inputs before you run'
+    : warnings.length
+      ? 'Run now, but challenge the flagged assumptions'
+      : 'Run now with the current assumptions';
+  const supportCopy = errors.length
+    ? errors[0]
+    : warnings[0] || 'The run will save the current thresholds, distributions, and traced assumptions behind the result.';
+  const toneClass = errors.length ? 'wizard-run-band--blocked' : warnings.length ? 'wizard-run-band--caution' : '';
+  return `<section class="wizard-run-band ${toneClass} anim-fade-in">
+    <div class="wizard-run-band__summary">
+      <div class="wizard-summary-band__label">Run decision</div>
+      <strong>${escapeHtml(readinessLabel)}</strong>
+      <p class="wizard-summary-band__copy">${escapeHtml(supportCopy)}</p>
+      <div class="wizard-summary-band__meta">
+        <span class="badge badge--neutral">${safeIterations.toLocaleString('en-US')} iterations</span>
+        <span class="badge badge--neutral">${escapeHtml(String(distType || 'triangular'))} model</span>
+      </div>
+    </div>
+    <div id="run-area" class="wizard-run-band__actions">
+      <button class="btn btn--primary btn--lg" id="btn-run-sim" style="width:100%;justify-content:center">Run Monte Carlo simulation (${safeIterations} iterations)</button>
+      <div class="form-help wizard-run-band__footnote">The result stays reproducible and reviewable after save.</div>
+    </div>
+  </section>`;
+}
+
 function validateFairParams(runPayload = buildSimulationRunPayload(), { toast = true } = {}) {
   const validation = RiskEngine.validateRunParams(runPayload.ep);
   if (toast && !validation.valid) {
@@ -970,15 +999,29 @@ function renderWizard4() {
         <div class="wizard-header">
           ${UI.renderStepper(4)}
           <h2 class="wizard-step-title">Review &amp; Run Simulation</h2>
-          <p class="wizard-step-desc">Review what matters, confirm the model looks credible, then run the simulation with confidence.</p>
+          <p class="wizard-step-desc">Check the summary, confirm the main assumptions look credible, then run the simulation with confidence. Open deeper detail only if something needs challenge before the run.</p>
         </div>
         <div class="wizard-body">
           ${renderPreRunReviewRail(draft, validation, selectedRisks, safeIterations)}
           ${renderPreRunTrustSummary(draft, safeIterations)}
+          ${renderPreRunActionSpotlight(validation, safeIterations, p.distType)}
+          ${renderRunGuardrailSummary(validation)}
+          <div id="sim-progress" class="hidden">
+            <div class="card sim-progress-card">
+              <div class="sim-progress-mark" aria-hidden="true">◌</div>
+              <div class="sim-progress-title">Running simulation</div>
+              <div id="sim-progress-text" class="sim-progress-copy">Computing ${safeIterations} Monte Carlo iterations…</div>
+              <div class="sim-progress-track">
+                <div id="sim-progress-bar" class="sim-progress-fill"></div>
+              </div>
+              <div id="sim-progress-meta" class="sim-progress-meta">Yielding frequently so the page stays responsive.</div>
+              <button class="btn btn--ghost btn--sm" id="btn-cancel-sim" style="margin-top:var(--sp-5)">Cancel Run</button>
+            </div>
+          </div>
           ${UI.disclosureSection({
             title: 'Scenario summary for this run',
-            badgeLabel: 'Required',
-            badgeTone: 'gold',
+            badgeLabel: 'Open for review',
+            badgeTone: 'neutral',
             open: true,
             className: 'wizard-disclosure card card--elevated anim-fade-in',
             body: `<div style="display:flex;align-items:center;gap:var(--sp-4);margin-bottom:var(--sp-5)">
@@ -995,13 +1038,13 @@ function renderWizard4() {
             ${selectedRisks.length ? `<div class="mt-4"><div class="context-panel-title">Scenario Scope</div><div class="citation-chips">${selectedRisks.map(r => `<span class="badge badge--neutral">${r.title}</span>`).join('')}</div><div class="context-panel-foot">${multipliers.linked ? `${selectedRisks.length} linked risks selected. Uplift is being applied to event frequency and loss components.` : `${selectedRisks.length} risks selected. Combined scenario, no linked uplift.`}</div></div>` : ''}`
           })}
           ${UI.disclosureSection({ title: 'How the result is built', badgeLabel: 'Optional guide', badgeTone: 'neutral', open: false, className: 'wizard-disclosure card anim-fade-in', body: renderSimulationEquationFlow() })}
-          ${UI.disclosureSection({ title: 'Challenge these 3 assumptions first', badgeLabel: 'Recommended', badgeTone: 'warning', open: true, className: 'wizard-disclosure card anim-fade-in', body: renderPreRunChallengeBlock(draft) })}
+          ${UI.disclosureSection({ title: 'Challenge these 3 assumptions first', badgeLabel: 'Recommended', badgeTone: 'warning', open: false, className: 'wizard-disclosure card anim-fade-in', body: renderPreRunChallengeBlock(draft) })}
           ${UI.disclosureSection({ title: 'Current source of each key input', badgeLabel: 'Optional detail', badgeTone: 'neutral', open: false, className: 'wizard-disclosure card anim-fade-in', body: renderInputSourceAuditBlock(liveInputAssignments) })}
           ${UI.disclosureSection({
             title: 'Key parameters before you run',
-            badgeLabel: 'Required',
-            badgeTone: 'gold',
-            open: true,
+            badgeLabel: 'Open for review',
+            badgeTone: 'neutral',
+            open: false,
             className: 'wizard-disclosure card anim-fade-in anim-delay-1',
             body: `<div class="grid-3">
               <div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.7rem;text-transform:uppercase;color:var(--text-muted)">Event frequency</div><div style="font-size:.9rem;font-weight:600;margin-top:4px">${p.tefMin}–${p.tefLikely}–${p.tefMax}</div><div style="font-size:.7rem;color:var(--text-muted)">events/year</div></div>
@@ -1015,23 +1058,6 @@ function renderWizard4() {
             ${draft.applicableRegulations?.length ? `<div class="citation-chips mt-3">${draft.applicableRegulations.map(tag => `<span class="badge badge--gold">${tag}</span>`).join('')}</div>` : ''}`
           })}
           <div class="banner banner--poc anim-fade-in anim-delay-2"><span class="banner-icon">⚠</span><span class="banner-text">Pilot decision-support tool. FAIR input ranges should still be challenged through expert judgement before higher-stakes production decisions.</span></div>
-          ${renderRunGuardrailSummary(validation)}
-          <div id="run-area">
-            <button class="btn btn--primary btn--lg" id="btn-run-sim" style="width:100%;justify-content:center">Run Monte Carlo simulation (${safeIterations} iterations)</button>
-            <div class="form-help" style="text-align:center;margin-top:10px">This saves the full run metadata, including seed, distributions, threshold configuration, and assumptions used for the result.</div>
-          </div>
-          <div id="sim-progress" class="hidden">
-            <div class="card sim-progress-card">
-              <div class="sim-progress-mark" aria-hidden="true">◌</div>
-              <div class="sim-progress-title">Running simulation</div>
-              <div id="sim-progress-text" class="sim-progress-copy">Computing ${safeIterations} Monte Carlo iterations…</div>
-              <div class="sim-progress-track">
-                <div id="sim-progress-bar" class="sim-progress-fill"></div>
-              </div>
-              <div id="sim-progress-meta" class="sim-progress-meta">Yielding frequently so the page stays responsive.</div>
-              <button class="btn btn--ghost btn--sm" id="btn-cancel-sim" style="margin-top:var(--sp-5)">Cancel Run</button>
-            </div>
-          </div>
         </div>
         <div class="wizard-footer">
           <button class="btn btn--ghost" id="btn-back-4">← Back</button>
