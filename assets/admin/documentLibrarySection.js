@@ -38,13 +38,13 @@ const AdminDocumentLibrarySection = (() => {
               ${availableTags.map(tag => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('')}
             </select>
           </div>
-          <table class="data-table">
+          <table class="data-table data-table--workbench">
             <thead><tr><th>Document</th><th>Tags</th><th>Updated</th><th>Actions</th></tr></thead>
             <tbody>${docList.map(doc => `<tr class="admin-doc-row" data-search="${escapeHtml([doc.title, doc.id, ...(doc.tags || [])].join(' ').toLowerCase())}" data-tags="${escapeHtml((doc.tags || []).join('|').toLowerCase())}">
-              <td><strong style="color:var(--text-primary);font-size:.875rem">${doc.title}</strong><br><span style="font-size:.68rem;color:var(--text-muted)">${doc.id}</span></td>
-              <td>${(doc.tags || []).slice(0, 3).map(t => `<span class="badge badge--primary" style="font-size:.6rem;margin:2px">${t}</span>`).join('')}</td>
+              <td><div class="table-primary-cell"><strong style="color:var(--text-primary);font-size:.875rem">${doc.title}</strong><span>${doc.id}</span></div></td>
+              <td>${(doc.tags || []).slice(0, 2).map(t => `<span class="badge badge--primary" style="font-size:.6rem;margin:2px">${t}</span>`).join('')}${(doc.tags || []).length > 2 ? `<span class="table-more-pill">+${(doc.tags || []).length - 2} more</span>` : ''}</td>
               <td style="font-size:.8rem;white-space:nowrap">${doc.lastUpdated || '—'}</td>
-              <td>
+              <td class="table-actions-cell">
                 <button class="btn btn--ghost btn--sm" data-id="${doc.id}" id="edit-doc-${doc.id}">Edit</button>
                 <details class="results-actions-disclosure dashboard-row-overflow" style="display:inline-flex;margin-left:8px">
                   <summary class="btn btn--ghost btn--sm">More</summary>

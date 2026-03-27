@@ -508,20 +508,26 @@ function renderUserDashboard() {
           </div>
         </section>
 
-        <section class="dashboard-open-band" style="margin-top:var(--sp-12)">
+        <section class="dashboard-open-band dashboard-open-band--compact" style="margin-top:var(--sp-12)">
           <div class="results-section-heading">At a glance</div>
           <div class="form-help" style="margin-top:8px">A compact view of current attention, completed work, and context quality.</div>
         </section>
 
-        <section class="admin-overview-grid dashboard-at-a-glance" style="margin-top:var(--sp-5)">
-          ${roleFrontDoor.overviewCards.map(card => UI.dashboardOverviewCard(card)).join('')}
+        <section class="dashboard-glance-strip" style="margin-top:var(--sp-4)">
+          ${roleFrontDoor.overviewCards.map(card => `
+            <div class="dashboard-glance-stat">
+              <span class="dashboard-glance-stat__label">${card.label}</span>
+              <strong>${card.value}</strong>
+              <span>${card.foot}</span>
+            </div>
+          `).join('')}
         </section>
 
         <section class="grid-2 dashboard-secondary-grid dashboard-secondary-grid--history">
           <div class="dashboard-column">
             <div class="results-section-heading">Reference and history</div>
             <div class="form-help" style="margin-top:8px;margin-bottom:var(--sp-4)">Open archived items and supporting context only when you need them.</div>
-            <details class="dashboard-disclosure card card--elevated dashboard-section-card dashboard-section-card--secondary" ${archivedAssessments.length ? '' : ''}>
+            <details class="dashboard-disclosure dashboard-history-panel" ${archivedAssessments.length ? '' : ''}>
               <summary>Archived items <span class="badge badge--neutral">${archivedAssessments.length}</span></summary>
               <div class="dashboard-disclosure-copy">Stored out of the way, but still available if you need them again.</div>
               <div class="dashboard-disclosure-body">${archivedAssessments.length ? archivedAssessments.map(assessment => UI.dashboardAssessmentRow({

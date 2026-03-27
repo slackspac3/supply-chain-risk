@@ -563,6 +563,96 @@ function renderEstimateOptionalHelpDetails(draft, sym) {
   });
 }
 
+function renderAdvancedTuningWorkspace(p, sym) {
+  return UI.disclosureSection({
+    title: 'Advanced tuning workspace',
+    badgeLabel: 'Advanced',
+    badgeTone: 'neutral',
+    open: !!p.secondaryEnabled,
+    className: 'wizard-disclosure card card--elevated anim-fade-in',
+    body: `
+      <div class="wizard-summary-band wizard-summary-band--quiet">
+        <div>
+          <div class="wizard-summary-band__label">When to open this</div>
+          <strong>Only when the core estimate is already defensible.</strong>
+          <div class="wizard-summary-band__copy">Use this layer for follow-on impact, direct exposure, and reproducibility tuning. Most users can keep the main estimate in basic form and still reach a strong result.</div>
+        </div>
+        <div class="wizard-summary-band__meta">
+          <span class="badge badge--neutral">${p.vulnDirect ? 'Direct exposure on' : 'Derived exposure'}</span>
+          <span class="badge badge--neutral">${p.secondaryEnabled ? 'Follow-on impact enabled' : 'Follow-on impact off'}</span>
+        </div>
+      </div>
+      ${UI.disclosureSection({
+        title: 'Follow-on impact',
+        badgeLabel: 'Optional',
+        badgeTone: 'neutral',
+        open: !!p.secondaryEnabled,
+        className: 'wizard-disclosure wizard-disclosure--nested',
+        body: `
+          <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:var(--sp-4)">Use this only if the main event could trigger a second loss, such as a lawsuit, large partner claim, or wider business consequence.</p>
+          <div class="flex items-center justify-between mb-4">
+            <div class="form-help">Include a follow-on impact in the simulation</div>
+            <label class="toggle"><input type="checkbox" id="secondary-toggle" ${p.secondaryEnabled?'checked':''}><div class="toggle-track"></div></label>
+          </div>
+          <div id="secondary-inputs" ${!p.secondaryEnabled?'class="hidden"':''}>
+            <div class="grid-2">
+              <div class="wizard-subsection"><p class="wizard-subsection-copy">How likely is the follow-on impact? Use 0 to 1.</p>${tripleInput('secProb','Secondary probability', p.secProbMin ?? 0.1, p.secProbLikely ?? 0.3, p.secProbMax ?? 0.7, { minLabel: 'Low chance', likelyLabel: 'Expected chance', maxLabel: 'High chance' })}</div>
+              <div class="wizard-subsection"><p class="wizard-subsection-copy">If it happens, how large could that extra impact be in ${sym}?</p>${tripleInput('secMag','Secondary magnitude', p.secMagMin ?? 100000, p.secMagLikely ?? 500000, p.secMagMax ?? 2000000, { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'High cost', money: true, inputType: 'text' })}</div>
+            </div>
+          </div>
+        `
+      })}
+      ${UI.disclosureSection({
+        title: 'Simulation tuning',
+        badgeLabel: 'Optional',
+        badgeTone: 'neutral',
+        open: false,
+        className: 'wizard-disclosure wizard-disclosure--nested',
+        body: `
+          <div class="wizard-advanced-grid">
+            <div class="wizard-advanced-card">
+              <div class="wizard-advanced-card__label">Distribution and iterations</div>
+              <div class="wizard-advanced-card__copy">Use the default settings unless you need heavier-tail modelling or a higher-confidence committee rerun.</div>
+              <div class="grid-2" style="margin-top:var(--sp-4)">
+                <div class="form-group">
+                  <label class="form-label">Distribution Type <span data-tooltip="Triangular: intuitive. Lognormal: heavier right tail (better for cyber)." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
+                  <select class="form-select" id="adv-dist">
+                    <option value="triangular" ${(p.distType||'triangular')==='triangular'?'selected':''}>Triangular</option>
+                    <option value="lognormal" ${p.distType==='lognormal'?'selected':''}>Lognormal</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Iterations</label>
+                  <input class="form-input" id="adv-iter" type="number" min="1000" max="100000" step="1000" value="${p.iterations||10000}">
+                </div>
+              </div>
+            </div>
+            <div class="wizard-advanced-card">
+              <div class="wizard-advanced-card__label">Reproducibility and relationships</div>
+              <div class="wizard-advanced-card__copy">Save a seed only when you need repeatability. Change correlations only if you can justify the relationship between the cost components.</div>
+              <div class="grid-2" style="margin-top:var(--sp-4)">
+                <div class="form-group">
+                  <label class="form-label">Random Seed <span class="text-muted text-xs">(reproducibility)</span></label>
+                  <input class="form-input" id="adv-seed" type="number" placeholder="Leave empty for random" value="${p.seed||''}">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Correlations <span data-tooltip="BI-IR: Business Interruption & IR correlation. RL-RC: Regulatory & Reputation." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+                    <label style="font-size:.72rem;color:var(--text-muted)">BI↔IR</label>
+                    <input class="form-input" id="corr-bi-ir" type="number" min="-1" max="1" step="0.05" value="${p.corrBiIr||0.3}" style="width:72px">
+                    <label style="font-size:.72rem;color:var(--text-muted)">Reg↔Rep</label>
+                    <input class="form-input" id="corr-rl-rc" type="number" min="-1" max="1" step="0.05" value="${p.corrRlRc||0.2}" style="width:72px">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `
+      })}
+    `
+  });
+}
+
 function renderWizard3() {
   const draft = AppState.draft;
   _ensureDraftFairParamsSeeded(draft);
@@ -702,64 +792,7 @@ function renderWizard3() {
 
           ${renderEstimateBackgroundDetails(draft, bu, isAdv, cur, sym)}
 
-          ${isAdv ? `
-            ${UI.disclosureSection({
-              title: 'Follow-on impact',
-              badgeLabel: 'Advanced optional',
-              badgeTone: 'neutral',
-              open: !!p.secondaryEnabled,
-              className: 'wizard-disclosure card anim-fade-in anim-delay-3',
-              body: `
-                <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:var(--sp-4)">Use this only if the main event could trigger a second loss, such as a lawsuit, large partner claim, or wider business consequence.</p>
-                <div class="flex items-center justify-between mb-4">
-                  <div class="form-help">Include a follow-on impact in the simulation</div>
-                  <label class="toggle"><input type="checkbox" id="secondary-toggle" ${p.secondaryEnabled?'checked':''}><div class="toggle-track"></div></label>
-                </div>
-                <div id="secondary-inputs" ${!p.secondaryEnabled?'class="hidden"':''}>
-                  <div class="grid-2">
-                    <div class="wizard-subsection"><p class="wizard-subsection-copy">How likely is the follow-on impact? Use 0 to 1.</p>${tripleInput('secProb','Secondary probability', v('secProbMin',0.1), v('secProbLikely',0.3), v('secProbMax',0.7), { minLabel: 'Low chance', likelyLabel: 'Expected chance', maxLabel: 'High chance' })}</div>
-                    <div class="wizard-subsection"><p class="wizard-subsection-copy">If it happens, how large could that extra impact be in ${sym}?</p>${tripleInput('secMag','Secondary magnitude', v('secMagMin',100000), v('secMagLikely',500000), v('secMagMax',2000000), { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'High cost', money: true, inputType: 'text' })}</div>
-                  </div>
-                </div>
-              `
-            })}
-
-            ${UI.disclosureSection({
-              title: 'Simulation tuning',
-              badgeLabel: 'Advanced optional',
-              badgeTone: 'neutral',
-              open: false,
-              className: 'wizard-disclosure card anim-fade-in',
-              body: `
-                <div class="grid-2">
-                  <div class="form-group">
-                    <label class="form-label">Distribution Type <span data-tooltip="Triangular: intuitive. Lognormal: heavier right tail (better for cyber)." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
-                    <select class="form-select" id="adv-dist">
-                      <option value="triangular" ${(p.distType||'triangular')==='triangular'?'selected':''}>Triangular</option>
-                      <option value="lognormal" ${p.distType==='lognormal'?'selected':''}>Lognormal</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Iterations</label>
-                    <input class="form-input" id="adv-iter" type="number" min="1000" max="100000" step="1000" value="${p.iterations||10000}">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Random Seed <span class="text-muted text-xs">(reproducibility)</span></label>
-                    <input class="form-input" id="adv-seed" type="number" placeholder="Leave empty for random" value="${p.seed||''}">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Correlations <span data-tooltip="BI-IR: Business Interruption & IR correlation. RL-RC: Regulatory & Reputation." style="cursor:help;color:var(--color-accent-300)">ⓘ</span></label>
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
-                      <label style="font-size:.72rem;color:var(--text-muted)">BI↔IR</label>
-                      <input class="form-input" id="corr-bi-ir" type="number" min="-1" max="1" step="0.05" value="${p.corrBiIr||0.3}" style="width:72px">
-                      <label style="font-size:.72rem;color:var(--text-muted)">Reg↔Rep</label>
-                      <input class="form-input" id="corr-rl-rc" type="number" min="-1" max="1" step="0.05" value="${p.corrRlRc||0.2}" style="width:72px">
-                    </div>
-                  </div>
-                </div>
-              `
-            })}
-          ` : ''}
+          ${isAdv ? renderAdvancedTuningWorkspace(p, sym) : ''}
 
         </div>
         <div class="wizard-footer">

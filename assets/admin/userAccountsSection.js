@@ -13,15 +13,13 @@ const AdminUserAccountsSection = (() => {
         table: `<div class="admin-table-toolbar">
           <input class="form-input" id="admin-user-search" type="search" placeholder="Search name, username, role, BU, or function" style="min-width:min(320px,100%);max-width:420px">
         </div>
-        <table class="data-table data-table--dense">
+        <table class="data-table data-table--dense data-table--workbench">
           <thead>
             <tr>
               <th>User</th>
-              <th>Username</th>
-              <th>Role</th>
-              <th>Assigned BU</th>
-              <th>Assigned Function</th>
-              <th>Issued Password</th>
+              <th>Access role</th>
+              <th>Scope</th>
+              <th>Issued password</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -30,8 +28,12 @@ const AdminUserAccountsSection = (() => {
               const departmentsForAccount = getDepartmentEntities(companyStructure, account.businessUnitEntityId || '');
               return `
               <tr class="managed-account-row" data-username="${account.username}">
-                <td>${account.displayName}</td>
-                <td><code>${account.username}</code></td>
+                <td>
+                  <div class="table-primary-cell">
+                    <strong>${account.displayName}</strong>
+                    <span><code>${account.username}</code></span>
+                  </div>
+                </td>
                 <td>
                   <select class="form-select form-select--sm account-role-select" data-username="${account.username}">
                     <option value="user" ${account.role === 'user' ? 'selected' : ''}>Standard user</option>
@@ -40,19 +42,19 @@ const AdminUserAccountsSection = (() => {
                   </select>
                 </td>
                 <td>
-                  <select class="form-select form-select--sm account-bu-select" data-username="${account.username}">
-                    <option value="">Choose BU</option>
-                    ${companyEntities.map(entity => `<option value="${entity.id}" ${entity.id === (account.businessUnitEntityId || '') ? 'selected' : ''}>${entity.name}</option>`).join('')}
-                  </select>
-                </td>
-                <td>
-                  <select class="form-select form-select--sm account-department-select" data-username="${account.username}">
-                    <option value="">${account.role === 'bu_admin' ? 'Optional for BU admin' : 'Choose function'}</option>
-                    ${departmentsForAccount.map(entity => `<option value="${entity.id}" ${entity.id === (account.departmentEntityId || '') ? 'selected' : ''}>${entity.name}</option>`).join('')}
-                  </select>
+                  <div class="table-scope-stack">
+                    <select class="form-select form-select--sm account-bu-select" data-username="${account.username}">
+                      <option value="">Choose BU</option>
+                      ${companyEntities.map(entity => `<option value="${entity.id}" ${entity.id === (account.businessUnitEntityId || '') ? 'selected' : ''}>${entity.name}</option>`).join('')}
+                    </select>
+                    <select class="form-select form-select--sm account-department-select" data-username="${account.username}">
+                      <option value="">${account.role === 'bu_admin' ? 'Optional for BU admin' : 'Choose function'}</option>
+                      ${departmentsForAccount.map(entity => `<option value="${entity.id}" ${entity.id === (account.departmentEntityId || '') ? 'selected' : ''}>${entity.name}</option>`).join('')}
+                    </select>
+                  </div>
                 </td>
                 <td><code>${AppState.adminVisiblePasswords[account.username] || 'Reset to issue'}</code></td>
-                <td style="text-align:right">
+                <td class="table-actions-cell">
                   <button class="btn btn--secondary btn--sm btn-apply-user-access" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Apply Access</button>
                   <details class="results-actions-disclosure dashboard-row-overflow" style="display:inline-flex;margin-left:8px">
                     <summary class="btn btn--ghost btn--sm">More</summary>
@@ -64,7 +66,7 @@ const AdminUserAccountsSection = (() => {
                   </details>
                 </td>
               </tr>`;
-            }).join('') : '<tr><td colspan="7"><div class="empty-state"><strong>No managed users yet.</strong><div style="margin-top:8px">Create the first pilot user below, then return here to assign their role, business-unit scope, and function ownership.</div></div></td></tr>'}
+            }).join('') : '<tr><td colspan="5"><div class="empty-state"><strong>No managed users yet.</strong><div style="margin-top:8px">Create the first pilot user below, then return here to assign their role, business-unit scope, and function ownership.</div></div></td></tr>'}
           </tbody>
         </table>`
       })}

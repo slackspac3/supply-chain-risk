@@ -787,6 +787,77 @@ function renderTechnicalReviewSurface(results, assessmentIntelligence, confidenc
   </section>`;
 }
 
+function renderTechnicalStoryBand(results, assessmentIntelligence, confidenceFrame, thresholdModel, assessment) {
+  const sensitivity = Array.isArray(assessmentIntelligence?.drivers?.sensitivity) ? assessmentIntelligence.drivers.sensitivity.slice(0, 3) : [];
+  const basis = buildResultTrustBasis(assessment, results.runMetadata || null);
+  const threshold = Number(results.threshold || 0);
+  const warningThreshold = Number(results.warningThreshold || 0);
+  const severeLoss = Number(results.eventLoss?.p90 || 0);
+  const maxScale = Math.max(severeLoss, threshold, warningThreshold, 1);
+  const severePct = Math.min(100, (severeLoss / maxScale) * 100);
+  const warningPct = Math.min(100, (warningThreshold / maxScale) * 100);
+  const thresholdPct = Math.min(100, (threshold / maxScale) * 100);
+  const basisTotal = Math.max(1, basis.userEntered + basis.aiSuggested + basis.inheritedContext);
+  const basisParts = [
+    { label: 'User-entered', value: basis.userEntered, width: (basis.userEntered / basisTotal) * 100, tone: 'user' },
+    { label: 'AI-seeded', value: basis.aiSuggested, width: (basis.aiSuggested / basisTotal) * 100, tone: 'ai' },
+    { label: 'Inherited context', value: basis.inheritedContext, width: (basis.inheritedContext / basisTotal) * 100, tone: 'context' }
+  ];
+  return `<section class="results-section-stack">
+    <div class="results-section-heading">What the technical review should challenge first</div>
+    <div class="results-technical-story-grid">
+      <div class="results-tech-story-card results-tech-story-card--hero">
+        <div class="results-driver-label">Severity versus tolerance</div>
+        <strong>${fmtCurrency(severeLoss)}</strong>
+        <p>${escapeHtml(String(thresholdModel?.single?.summary || 'Compare the severe event loss against the warning and tolerance thresholds first.'))}</p>
+        <div class="results-threshold-story">
+          <div class="results-threshold-story__track">
+            <span class="results-threshold-story__marker results-threshold-story__marker--warning" style="left:${warningPct}%"></span>
+            <span class="results-threshold-story__marker results-threshold-story__marker--limit" style="left:${thresholdPct}%"></span>
+            <span class="results-threshold-story__fill" style="width:${severePct}%"></span>
+          </div>
+          <div class="results-threshold-story__labels">
+            <span>Warning ${fmtCurrency(warningThreshold)}</span>
+            <span>Tolerance ${fmtCurrency(threshold)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="results-tech-story-card">
+        <div class="results-driver-label">Confidence posture</div>
+        <strong>${escapeHtml(String(confidenceFrame?.label || 'Moderate confidence'))}</strong>
+        <p>${escapeHtml(String(confidenceFrame?.implication || 'Use the drivers and assumptions below to pressure-test whether this result is strong enough for action.'))}</p>
+        <div class="results-confidence-chip-row">
+          <span class="badge badge--neutral">${escapeHtml(String(confidenceFrame?.basis || 'Evidence and input quality'))}</span>
+        </div>
+      </div>
+      <div class="results-tech-story-card">
+        <div class="results-driver-label">Input origin mix</div>
+        <strong>${basis.userEntered + basis.aiSuggested + basis.inheritedContext} traced inputs</strong>
+        <p>Use this to see how much of the result is being carried by user judgement, AI seeding, and inherited context.</p>
+        <div class="results-origin-story">
+          ${basisParts.map(part => `<div class="results-origin-story__row">
+            <span>${part.label}</span>
+            <div class="results-origin-story__bar"><i class="results-origin-story__fill results-origin-story__fill--${part.tone}" style="width:${part.width}%"></i></div>
+            <strong>${part.value}</strong>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    ${sensitivity.length ? `<div class="results-tech-driver-story">
+      <div class="results-driver-label">Main drivers</div>
+      <div class="results-tech-driver-story__grid">
+        ${sensitivity.map((driver, index) => `<div class="results-tech-driver-story__item">
+          <span class="results-tech-driver-story__rank">0${index + 1}</span>
+          <div>
+            <strong>${escapeHtml(String(driver.label || 'Driver'))}</strong>
+            <p>${escapeHtml(String(driver.why || 'Review whether this driver is justified by evidence and current context.'))}</p>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+  </section>`;
+}
+
 function renderRunMetadataPanel(runMetadata, metricSemantics) {
   if (!runMetadata) return '';
   const thresholdConfig = runMetadata.thresholdConfigUsed || {};
@@ -1488,17 +1559,18 @@ function renderResults(id, isShared) {
     <section class="results-technical-view ${activeTab === 'technical' ? '' : 'hidden'}" id="results-tab-technical">
       ${renderTechnicalOrientationBlock(rolePresentation, runMetadata, confidenceFrame)}
       ${renderTechnicalReviewSurface(r, assessmentIntelligence, confidenceFrame, assessment, thresholdModel)}
+      ${renderTechnicalStoryBand(r, assessmentIntelligence, confidenceFrame, thresholdModel, assessment)}
 
       <section class="results-section-stack">
         <div class="results-section-heading">Review-ready metrics and sensitivities</div>
         <div class="results-detail-disclosure-copy">Start here when you want to challenge the size of the result, the dominant sensitivities, and whether the ranges are credible enough for management use.</div>
         <div class="results-disclosure-stack">
-          <div class="grid-3 mb-6 anim-fade-in">
+          <div class="grid-3 mb-6 anim-fade-in results-metric-band">
             <div class="metric-card"><div class="metric-label">Typical conditional event loss</div><div class="metric-value">${fmtCurrency(r.eventLoss.p50)}</div><div class="metric-sub">Midpoint successful-event view</div></div>
             <div class="metric-card"><div class="metric-label">Severe conditional event loss</div><div class="metric-value ${r.toleranceBreached ? 'danger' : ''}">${fmtCurrency(r.eventLoss.p90)}</div><div class="metric-sub">Used for tolerance check</div></div>
             <div class="metric-card"><div class="metric-label">Expected conditional event loss</div><div class="metric-value">${fmtCurrency(r.eventLoss.mean)}</div><div class="metric-sub">Average successful-event loss</div></div>
           </div>
-          <div class="grid-3 anim-fade-in anim-delay-1">
+          <div class="grid-3 anim-fade-in anim-delay-1 results-metric-band results-metric-band--secondary">
             <div class="metric-card"><div class="metric-label">Typical annualized loss</div><div class="metric-value">${fmtCurrency(r.annualLoss.p50)}</div><div class="metric-sub">Midpoint annual view</div></div>
             <div class="metric-card"><div class="metric-label">Severe annualized loss</div><div class="metric-value warning">${fmtCurrency(r.annualLoss.p90)}</div><div class="metric-sub">Annual severe-but-plausible view</div></div>
             <div class="metric-card"><div class="metric-label">Expected annualized loss</div><div class="metric-value">${fmtCurrency(r.annualLoss.mean)}</div><div class="metric-sub">Average annual loss</div></div>
