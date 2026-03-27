@@ -317,11 +317,17 @@ function renderExecutiveInsightCluster({ scenarioNarrative, executiveDecision, e
   </section>`;
 }
 
-function renderTrustExplanationLayer({ confidenceNeedsBlock, explanationPanel, impactMix, thresholdModel, results, assessmentIntelligence, assessment, citations, primaryGrounding, supportingReferences, missingInformation }) {
+function renderTrustExplanationLayer({ confidenceNeedsBlock, evidenceGapPlan = [], explanationPanel, impactMix, thresholdModel, results, assessmentIntelligence, assessment, citations, primaryGrounding, supportingReferences, missingInformation }) {
   return `<section class="results-section-stack results-layer-band results-layer-band--editorial">
     <div class="results-section-heading">Trust and explanation</div>
     <div class="results-comparison-foot">Use this layer to understand what is driving the result, how much confidence to place in it, and what still needs evidence.</div>
     ${confidenceNeedsBlock}
+    ${evidenceGapPlan.length ? renderEvidenceGapActionPlan(evidenceGapPlan, {
+      title: 'Best evidence to collect next',
+      subtitle: 'Use these to strengthen confidence, narrow the range, or improve the treatment decision before the next review.',
+      compact: true,
+      lowEmphasis: true
+    }) : ''}
     ${explanationPanel}
     ${renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence, citations, primaryGrounding, supportingReferences, missingInformation })}
     <details class="results-detail-disclosure">
@@ -1046,6 +1052,16 @@ function renderWizard4() {
   const selectedRisks = getSelectedRisks();
   const multipliers = getScenarioMultipliers();
   const validation = validateFairParams(buildSimulationRunPayload(), { toast: false });
+  const evidenceGapPlan = buildEvidenceGapActionPlan({
+    confidenceLabel: draft.confidenceLabel,
+    evidenceQuality: draft.evidenceQuality,
+    missingInformation: draft.missingInformation,
+    primaryGrounding: draft.primaryGrounding,
+    supportingReferences: draft.supportingReferences,
+    inputProvenance: draft.inputProvenance,
+    inferredAssumptions: draft.inferredAssumptions,
+    citations: draft.citations
+  });
   setPage(`
     <main class="page">
       <div class="wizard-layout container container--narrow">
@@ -1058,6 +1074,13 @@ function renderWizard4() {
           ${renderPreRunReviewRail(draft, validation, selectedRisks, safeIterations)}
           ${renderPreRunTrustSummary(draft, safeIterations)}
           ${renderPreRunActionSpotlight(validation, safeIterations, p.distType)}
+          ${evidenceGapPlan.length ? renderEvidenceGapActionPlan(evidenceGapPlan, {
+            title: 'Before you run, improve one of these',
+            subtitle: 'Keep this secondary to the run decision. Tighten one gap only if it would materially change confidence or the range.',
+            compact: true,
+            lowEmphasis: true,
+            className: 'anim-fade-in'
+          }) : ''}
           ${renderRunGuardrailSummary(validation)}
           <div id="sim-progress" class="hidden">
             <div class="card sim-progress-card">
@@ -1446,6 +1469,17 @@ function renderResults(id, isShared) {
   const supportingReferences = Array.isArray(assessment.supportingReferences) ? assessment.supportingReferences : [];
   const inferredAssumptions = Array.isArray(assessment.inferredAssumptions) ? assessment.inferredAssumptions : [];
   const missingInformation = Array.isArray(assessment.missingInformation) ? assessment.missingInformation : [];
+  const evidenceGapPlan = buildEvidenceGapActionPlan({
+    confidenceLabel: assessment.confidenceLabel,
+    evidenceQuality: assessment.evidenceQuality,
+    missingInformation,
+    primaryGrounding,
+    supportingReferences,
+    inputProvenance: assessment.inputProvenance,
+    inferredAssumptions,
+    citations,
+    assumptions: Array.isArray(assessmentIntelligence?.assumptions) ? assessmentIntelligence.assumptions : []
+  });
   const assessmentIntelligence = assessment.assessmentIntelligence || buildAssessmentIntelligence(assessment, r, technicalInputs, r.portfolioMeta || {});
   const assessmentChallenge = assessment.assessmentChallenge || null;
   const executiveDecision = ReportPresentation.buildExecutiveDecisionSupport(assessment, r, assessmentIntelligence);
@@ -1541,6 +1575,7 @@ function renderResults(id, isShared) {
       ${comparisonHighlight ? recommendationCards : ''}
       ${renderTrustExplanationLayer({
         confidenceNeedsBlock,
+        evidenceGapPlan,
         explanationPanel,
         impactMix,
         thresholdModel,
@@ -1587,6 +1622,12 @@ function renderResults(id, isShared) {
         <div class="results-section-heading">Assumptions, evidence, and input origins</div>
         <div class="results-detail-disclosure-copy">Use this layer to review what the result depends on, how grounded the evidence is, and where the main inputs came from.</div>
         <div class="results-disclosure-stack">
+          ${evidenceGapPlan.length ? renderEvidenceGapActionPlan(evidenceGapPlan, {
+            title: 'Challenge checklist for evidence gaps',
+            subtitle: 'Use this when you want the clearest gaps, who should close them, and which part of the estimate they affect.',
+            compact: false,
+            lowEmphasis: false
+          }) : ''}
           ${renderAssessmentAssumptionsBlock(assessmentIntelligence.assumptions)}
           ${renderEvidenceQualityBlock(assessment.confidenceLabel, assessment.evidenceQuality, assessment.evidenceSummary, missingInformation, 'Evidence posture and missing information', { primaryGrounding: primaryGrounding, supportingReferences: supportingReferences, inferredAssumptions: inferredAssumptions })}
           ${renderInputSourceAuditBlock(buildLiveInputSourceAssignments(assessment))}

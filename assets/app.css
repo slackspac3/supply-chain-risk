@@ -3698,6 +3698,76 @@ canvas { display: block; width: 100%; }
   gap: var(--sp-4);
   margin-top: var(--sp-4);
 }
+.evidence-gap-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border-radius: 24px;
+  border: 1px solid rgba(246,243,242,.08);
+  background: linear-gradient(180deg, rgba(246,243,242,.028), rgba(246,243,242,.01));
+}
+.evidence-gap-plan--quiet {
+  background: linear-gradient(180deg, rgba(246,243,242,.022), rgba(246,243,242,.008));
+  border-color: rgba(246,243,242,.07);
+}
+.evidence-gap-plan--compact {
+  padding: var(--sp-4) var(--sp-5);
+}
+.evidence-gap-plan__intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.evidence-gap-plan__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+.evidence-gap-plan__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border-radius: 18px;
+  border: 1px solid rgba(246,243,242,.07);
+  background: linear-gradient(180deg, rgba(246,243,242,.022), rgba(246,243,242,.008));
+}
+.evidence-gap-plan__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.evidence-gap-plan__title {
+  font-family: var(--font-display);
+  font-size: .96rem;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+.evidence-gap-plan__meta {
+  margin-top: 4px;
+  font-size: .72rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(246,243,242,.48);
+}
+.evidence-gap-plan__copy {
+  color: var(--text-secondary);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+.evidence-gap-plan__impact {
+  margin-top: auto;
+  font-size: .72rem;
+  color: rgba(3,209,168,.82);
+  letter-spacing: .03em;
+}
+.evidence-gap-plan__details {
+  margin-bottom: 0;
+}
 .results-tech-story-card {
   display: flex;
   flex-direction: column;
@@ -4231,6 +4301,7 @@ canvas { display: block; width: 100%; }
   }
   .dashboard-glance-strip,
   .results-technical-story-grid,
+  .evidence-gap-plan__grid,
   .results-tech-driver-story__grid,
   .wizard-advanced-grid,
   .table-scope-stack {

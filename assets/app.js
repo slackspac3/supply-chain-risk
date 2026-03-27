@@ -4140,6 +4140,185 @@ function renderEvidenceQualityBlock(confidenceLabel, evidenceQuality, evidenceSu
   </div>`;
 }
 
+function inferEvidenceGapOwner(text = '') {
+  const source = String(text || '').toLowerCase();
+  if (/(vendor|supplier|third[- ]party|partner|outsourc)/.test(source)) return 'Vendor management';
+  if (/(legal|regulat|privacy|contract|obligation|counsel|compliance)/.test(source)) return 'Legal';
+  if (/(cost|finance|revenue|budget|loss|exposure|insurance)/.test(source)) return 'Finance';
+  if (/(control|access|security|threat|attack|detect|incident|contain|vulnerab)/.test(source)) return 'Security';
+  return 'Operations';
+}
+
+function inferEvidenceGapProfile(text = '') {
+  const source = String(text || '').trim();
+  const lower = source.toLowerCase();
+  if (/(frequency|how often|event frequency|history|incident data|occurrence|recurring|volume)/.test(lower)) {
+    return {
+      area: 'Event frequency',
+      why: 'This changes how wide the annual loss range should be and whether the review trigger is truly credible.',
+      collect: 'Recent incident counts, service disruption history, near misses, or control-monitoring trend data.',
+      improves: 'Confidence and estimate bounds'
+    };
+  }
+  if (/(control|detection|response|access|contain|resilien|recovery|capability|vulnerab|attack path)/.test(lower)) {
+    return {
+      area: 'Exposure and control strength',
+      why: 'This changes how likely the event is to succeed and whether the current treatment view is realistic.',
+      collect: 'Control test results, tabletop findings, response metrics, or recovery evidence from the owning team.',
+      improves: 'Confidence and treatment decision quality'
+    };
+  }
+  if (/(cost|financial|revenue|loss|business interruption|disruption|outage|customer impact|insurance)/.test(lower)) {
+    return {
+      area: 'Loss range',
+      why: 'This changes the severe-case loss and can materially tighten the decision range.',
+      collect: 'Finance estimates, outage cost assumptions, recovery cost evidence, or prior disruption impact records.',
+      improves: 'Estimate bounds and threshold interpretation'
+    };
+  }
+  if (/(regulat|legal|privacy|compliance|contract|obligation)/.test(lower)) {
+    return {
+      area: 'Regulatory and legal impact',
+      why: 'This changes the severe-case tail and can shift how close the result sits to tolerance.',
+      collect: 'Applicable obligations, counsel input, notification requirements, or contract penalty language.',
+      improves: 'Treatment decision quality and threshold interpretation'
+    };
+  }
+  if (/(vendor|supplier|third[- ]party|partner|outsourc)/.test(lower)) {
+    return {
+      area: 'Third-party dependency',
+      why: 'This changes disruption duration, recovery confidence, and whether mitigation options are realistic.',
+      collect: 'Supplier assurance evidence, recovery commitments, SLA terms, and dependency-specific continuity detail.',
+      improves: 'Confidence and treatment decision quality'
+    };
+  }
+  return {
+    area: 'Scenario evidence base',
+    why: 'This still affects how defensible the scenario and resulting estimate are in review.',
+    collect: 'The most direct business, control, financial, or source evidence that confirms the scenario assumption.',
+    improves: 'Confidence'
+  };
+}
+
+function buildEvidenceGapActionPlan({
+  confidenceLabel = '',
+  evidenceQuality = '',
+  missingInformation = [],
+  primaryGrounding = [],
+  supportingReferences = [],
+  inputProvenance = [],
+  inferredAssumptions = [],
+  citations = [],
+  assumptions = []
+} = {}) {
+  const plan = [];
+  const seen = new Set();
+  const addItem = (title, description, overrides = {}) => {
+    const label = String(title || description || '').trim();
+    if (!label) return;
+    const dedupeKey = label.toLowerCase();
+    if (seen.has(dedupeKey)) return;
+    const profile = inferEvidenceGapProfile(description || label);
+    seen.add(dedupeKey);
+    plan.push({
+      title: label,
+      why: overrides.why || profile.why,
+      collect: overrides.collect || profile.collect,
+      owner: overrides.owner || inferEvidenceGapOwner(description || label),
+      area: overrides.area || profile.area,
+      improves: overrides.improves || profile.improves
+    });
+  };
+
+  (Array.isArray(missingInformation) ? missingInformation : [])
+    .filter(Boolean)
+    .slice(0, 4)
+    .forEach(item => addItem(item, item));
+
+  const provenanceCount = (Array.isArray(inputProvenance) ? inputProvenance : []).filter(Boolean).length;
+  const citationCount = (Array.isArray(citations) ? citations : []).filter(Boolean).length
+    + (Array.isArray(primaryGrounding) ? primaryGrounding : []).filter(Boolean).length
+    + (Array.isArray(supportingReferences) ? supportingReferences : []).filter(Boolean).length;
+  const inferred = Array.isArray(inferredAssumptions) ? inferredAssumptions.filter(Boolean) : [];
+  const tracedAssumptions = Array.isArray(assumptions) ? assumptions.filter(Boolean) : [];
+  const lowConfidence = /low/i.test(String(confidenceLabel || '')) || /thin/i.test(String(evidenceQuality || ''));
+
+  if (plan.length < 3 && inferred.length) {
+    addItem('One key assumption is still inferred', inferred[0], {
+      area: 'Assumption quality',
+      collect: 'The direct evidence, control record, or business input that turns this assumption into a defendable input.',
+      improves: 'Confidence and treatment decision quality'
+    });
+  }
+  if (plan.length < 3 && tracedAssumptions.length) {
+    const topAssumption = tracedAssumptions[0]?.text || tracedAssumptions[0];
+    addItem('The leading assumption still needs direct backing', topAssumption, {
+      area: 'Assumption traceability',
+      collect: 'Source-backed evidence that confirms or narrows the assumption before the next review.',
+      improves: 'Confidence'
+    });
+  }
+  if (plan.length < 3 && provenanceCount < 2) {
+    addItem('Key inputs have thin provenance', 'The estimate is still relying on too little traced source basis.', {
+      area: 'Input provenance',
+      collect: 'A clearer source trail for the core estimate inputs, especially frequency, exposure, and largest loss drivers.',
+      owner: 'Operations',
+      improves: 'Confidence and estimate bounds'
+    });
+  }
+  if (plan.length < 3 && (citationCount < 2 || lowConfidence)) {
+    addItem('The external and internal evidence base is still light', 'More grounded evidence would make the result easier to defend in review.', {
+      area: 'Evidence base',
+      collect: 'One or two high-quality internal or external references that directly support the current scenario path.',
+      owner: 'Operations',
+      improves: 'Confidence and threshold interpretation'
+    });
+  }
+
+  return plan.slice(0, 5);
+}
+
+function renderEvidenceGapActionPlan(plan = [], {
+  title = 'Best evidence to collect next',
+  subtitle = '',
+  compact = false,
+  lowEmphasis = false,
+  disclosureTitle = 'Show full evidence plan',
+  className = ''
+} = {}) {
+  const items = Array.isArray(plan) ? plan.filter(Boolean) : [];
+  if (!items.length) return '';
+  const visibleItems = items.slice(0, 3);
+  const hiddenItems = items.slice(3);
+  const itemMarkup = item => `<article class="evidence-gap-plan__item">
+    <div class="evidence-gap-plan__head">
+      <div>
+        <div class="evidence-gap-plan__title">${escapeHtml(String(item.title || 'Evidence gap'))}</div>
+        <div class="evidence-gap-plan__meta">${escapeHtml(String(item.area || 'Scenario evidence'))}</div>
+      </div>
+      ${item.owner ? `<span class="badge badge--neutral">${escapeHtml(String(item.owner))}</span>` : ''}
+    </div>
+    <div class="evidence-gap-plan__copy"><strong>Why it matters:</strong> ${escapeHtml(String(item.why || 'This still affects the confidence of the result.'))}</div>
+    <div class="evidence-gap-plan__copy"><strong>Collect next:</strong> ${escapeHtml(String(item.collect || 'Add the most direct evidence available for this assumption.'))}</div>
+    ${item.improves ? `<div class="evidence-gap-plan__impact">${escapeHtml(String(item.improves))}</div>` : ''}
+  </article>`;
+  return `<div class="evidence-gap-plan ${compact ? 'evidence-gap-plan--compact' : ''} ${lowEmphasis ? 'evidence-gap-plan--quiet' : ''} ${className}".trim()>
+    <div class="evidence-gap-plan__intro">
+      <div>
+        <div class="results-driver-label">${escapeHtml(String(title))}</div>
+        ${subtitle ? `<div class="results-comparison-foot">${escapeHtml(String(subtitle))}</div>` : ''}
+      </div>
+      <span class="badge badge--neutral">${visibleItems.length} priority gap${visibleItems.length === 1 ? '' : 's'}</span>
+    </div>
+    <div class="evidence-gap-plan__grid">${visibleItems.map(itemMarkup).join('')}</div>
+    ${hiddenItems.length ? `<details class="results-detail-disclosure evidence-gap-plan__details">
+      <summary>${escapeHtml(String(disclosureTitle))}</summary>
+      <div class="results-detail-disclosure-copy">Use this only when you want the longer challenge list behind the immediate evidence priorities.</div>
+      <div class="results-disclosure-stack">${hiddenItems.map(itemMarkup).join('')}</div>
+    </details>` : ''}
+  </div>`;
+}
+
 
 function renderScenarioAssistSummaryBlock({ workflowGuidance = [], confidenceLabel = '', evidenceQuality = '', evidenceSummary = '', missingInformation = [], benchmarkBasis = '', inputProvenance = [], citations = [] } = {}) {
   const guidance = Array.isArray(workflowGuidance) ? workflowGuidance.filter(Boolean).slice(0, 2) : [];

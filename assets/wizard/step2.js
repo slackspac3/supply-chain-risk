@@ -2,6 +2,16 @@ function renderWizard2() {
   const draft = AppState.draft;
   const selectedRisks = getSelectedRisks();
   const scenarioGeographies = getScenarioGeographies();
+  const evidenceGapPlan = buildEvidenceGapActionPlan({
+    confidenceLabel: draft.confidenceLabel,
+    evidenceQuality: draft.evidenceQuality,
+    missingInformation: draft.missingInformation,
+    primaryGrounding: draft.primaryGrounding,
+    supportingReferences: draft.supportingReferences,
+    inputProvenance: draft.inputProvenance,
+    inferredAssumptions: draft.inferredAssumptions,
+    citations: draft.citations
+  });
   setPage(`
     <main class="page">
       <div class="wizard-layout container container--narrow">
@@ -30,6 +40,16 @@ function renderWizard2() {
           })}
           ${renderStep2WhyItMattersCard(draft, selectedRisks, scenarioGeographies)}
           ${renderStep2StructuredSummary(draft, selectedRisks, scenarioGeographies)}
+          ${evidenceGapPlan.length ? renderEvidenceGapActionPlan(evidenceGapPlan, {
+            title: 'What would strengthen this scenario next',
+            subtitle: /low/i.test(String(draft.confidenceLabel || ''))
+              ? 'Confidence is still low, so tightening one of these gaps would help before estimation.'
+              : 'Keep this secondary. Use it only if one of these gaps would materially improve the estimate.',
+            compact: true,
+            lowEmphasis: !/low/i.test(String(draft.confidenceLabel || '')),
+            disclosureTitle: 'Show full evidence plan',
+            className: 'anim-fade-in'
+          }) : ''}
           ${renderStep2QuantBridge(draft, selectedRisks, scenarioGeographies)}
           ${UI.disclosureSection({
             title: 'AI structure and evidence summary',
