@@ -417,9 +417,18 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
           </div>
 
           <div class="settings-shell__footer settings-sticky-savebar">
+            <div class="settings-save-rail">
+              <div class="settings-save-rail__status">
+                <div class="settings-save-rail__title">Personal settings save automatically</div>
+                <div class="settings-save-rail__copy">Edit this page normally. Use Sync now only when you want to force an immediate save before leaving or sharing the screen.</div>
+                <div class="form-help settings-save-rail__sync" data-workspace-sync-state data-scope="settings">Autosave is on</div>
+              </div>
+              <div class="settings-save-rail__actions">
+                <button class="btn btn--secondary btn--sm" id="btn-save-user-settings">Sync now</button>
+                <button class="btn btn--ghost btn--sm" id="btn-rerun-onboarding">Re-run Setup</button>
+              </div>
+            </div>
             <div class="flex items-center gap-3" style="flex-wrap:wrap">
-              <button class="btn btn--primary" id="btn-save-user-settings">Save My Settings</button>
-              <button class="btn btn--ghost" id="btn-rerun-onboarding">Re-run Setup</button>
               <details class="results-actions-disclosure admin-footer-overflow">
                 <summary class="btn btn--ghost btn--sm">Advanced actions</summary>
                 <div class="results-actions-disclosure-menu">
@@ -431,7 +440,6 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
               <span class="form-help">These values shape your personal defaults and AI framing in future assessments.</span>
             </div>
             ${inlineValidationMessage ? `<div class="banner banner--warning mt-4"><span class="banner-icon">△</span><span class="banner-text">${escapeHtml(inlineValidationMessage)}</span></div>` : ''}
-            <div class="form-help" data-workspace-sync-state data-scope="settings" style="margin-top:var(--sp-4)">Changes save automatically</div>
             <div class="form-help" style="margin-top:var(--sp-4)">Pilot release: ${escapeHtml(getReleaseLabel())}</div>
           </div>
         </div>
@@ -648,7 +656,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
 
   document.getElementById('btn-save-user-settings').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-user-settings');
-    const originalText = btn?.textContent || 'Save Personal Settings';
+    const originalText = btn?.textContent || 'Sync now';
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'Saving…';
@@ -662,8 +670,9 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
         return;
       }
       AppState.settingsValidationMessage = '';
-      await persistUserSettings(true);
+      await persistUserSettings(false);
       await logAuditEvent({ category: 'profile', eventType: 'personal_settings_saved', target: AuthService.getCurrentUser()?.username || '', status: 'success', source: 'client' });
+      UI.toast('Changes synced.', 'success');
     } finally {
       if (btn) {
         btn.disabled = false;

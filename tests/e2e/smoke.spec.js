@@ -411,7 +411,9 @@ test('wizard handoff guidance carries the scenario cleanly into steps 2 and 3', 
     await page.getByRole('button', { name: /continue with 3 selected risks/i }).click();
     await expect(page).toHaveURL(/#\/wizard\/2$/);
     await expect(page.getByText(/what will carry into the estimate/i)).toBeVisible();
-    await page.getByRole('button', { name: /continue to estimation/i }).click();
+    const continueToEstimation = page.getByRole('button', { name: /continue to estimation/i });
+    await continueToEstimation.scrollIntoViewIfNeeded();
+    await continueToEstimation.click();
     await expect(page).toHaveURL(/#\/wizard\/3$/);
     await expect(page.getByText(/scenario handoff/i)).toBeVisible();
     await expect(page.getByText(/quant readiness/i)).toBeVisible();
@@ -636,6 +638,9 @@ test('personal settings shows the pilot release stamp', async ({ page }) => {
   });
 
   await expectNoClientCrashOnRoute(page, '/#/settings', async () => {
+    await expect(page.getByText(/Personal settings save automatically/i)).toBeVisible();
+    await expect(page.locator('[data-workspace-sync-state][data-scope="settings"]')).toContainText(/Autosave is on|Last synced|Saving your changes|Changes queued to sync|Sync needs attention/i);
+    await expect(page.getByRole('button', { name: /^Sync now$/ })).toBeVisible();
     await expect(page.getByText(/Pilot release:/i)).toBeVisible();
     await expect(page.getByText(/0\.10\.0-pilot\.1/i)).toBeVisible();
   });

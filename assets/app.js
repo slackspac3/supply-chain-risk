@@ -515,12 +515,12 @@ function formatDraftSaveState() {
 }
 
 function formatWorkspaceSyncState(scope = 'settings') {
-  if (AppState.userStateLastConflict?.code === 'WRITE_CONFLICT') return 'Latest saved version available';
+  if (AppState.userStateLastConflict?.code === 'WRITE_CONFLICT') return scope === 'wizard' ? 'Latest saved version available' : 'Sync needs attention';
   if (AppState.userStateSyncInFlight) return scope === 'wizard' ? 'Saving draft…' : 'Saving your changes…';
   if (AppState.userStateSyncPending || AppState.userStateSyncTimer) return scope === 'wizard' ? 'Saving draft soon…' : 'Changes queued to sync';
   if (scope === 'wizard') return formatDraftSaveState();
   const lastSavedAt = Number(AppState.userSettingsSavedAt || AppState.userStateCache?._meta?.updatedAt || 0);
-  if (!lastSavedAt) return 'Changes save automatically';
+  if (!lastSavedAt) return 'Autosave is on';
   return `Last synced ${formatRelativePilotTime(lastSavedAt)}`;
 }
 
