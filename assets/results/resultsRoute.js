@@ -1560,7 +1560,7 @@ function renderResults(id, isShared) {
   });
 
   const executiveTab = `
-    <section class="results-executive-view" id="results-tab-executive">
+    <section class="results-executive-view ${activeTab === 'executive' ? '' : 'hidden'}" id="results-tab-executive" role="tabpanel" aria-labelledby="results-tab-btn-executive" tabindex="-1" data-results-panel="executive" data-page-focus>
       <div class="results-hero ${statusClass}">
         <div class="results-hero-main">
           <div class="results-kicker">Assessment outcome</div>
@@ -1631,7 +1631,7 @@ function renderResults(id, isShared) {
     </section>`;
 
   const technicalTab = `
-    <section class="results-technical-view ${activeTab === 'technical' ? '' : 'hidden'}" id="results-tab-technical">
+    <section class="results-technical-view ${activeTab === 'technical' ? '' : 'hidden'}" id="results-tab-technical" role="tabpanel" aria-labelledby="results-tab-btn-technical" tabindex="-1" data-results-panel="technical" data-page-focus>
       ${renderTechnicalOrientationBlock(rolePresentation, runMetadata, confidenceFrame)}
       ${renderTechnicalReviewSurface(r, assessmentIntelligence, confidenceFrame, assessment, thresholdModel)}
       ${renderTechnicalStoryBand(r, assessmentIntelligence, confidenceFrame, thresholdModel, assessment)}
@@ -1677,7 +1677,7 @@ function renderResults(id, isShared) {
     </section>`;
 
   const appendixTab = `
-    <section class="results-appendix-view ${activeTab === 'appendix' ? '' : 'hidden'}" id="results-tab-appendix">
+    <section class="results-appendix-view ${activeTab === 'appendix' ? '' : 'hidden'}" id="results-tab-appendix" role="tabpanel" aria-labelledby="results-tab-btn-appendix" tabindex="-1" data-results-panel="appendix" data-page-focus>
       <section class="results-section-stack">
         <div class="results-section-heading">Appendix and evidence</div>
         <div class="results-appendix-intro">
@@ -1809,12 +1809,12 @@ function renderResults(id, isShared) {
         </div>
 
         <div class="results-tabbar mb-6" role="tablist" aria-label="Results views">
-          <button class="results-tab ${activeTab === 'executive' ? 'active' : ''}" id="results-tab-btn-executive" role="tab" aria-selected="${activeTab === 'executive' ? 'true' : 'false'}" aria-controls="results-tab-executive-wrap" tabindex="${activeTab === 'executive' ? '0' : '-1'}" data-results-tab="executive">Executive Summary</button>
+          <button class="results-tab ${activeTab === 'executive' ? 'active' : ''}" id="results-tab-btn-executive" role="tab" aria-selected="${activeTab === 'executive' ? 'true' : 'false'}" aria-controls="results-tab-executive" tabindex="${activeTab === 'executive' ? '0' : '-1'}" data-results-tab="executive">Executive Summary</button>
           <button class="results-tab ${activeTab === 'technical' ? 'active' : ''}" id="results-tab-btn-technical" role="tab" aria-selected="${activeTab === 'technical' ? 'true' : 'false'}" aria-controls="results-tab-technical" tabindex="${activeTab === 'technical' ? '0' : '-1'}" data-results-tab="technical">Technical Detail</button>
           <button class="results-tab ${activeTab === 'appendix' ? 'active' : ''}" id="results-tab-btn-appendix" role="tab" aria-selected="${activeTab === 'appendix' ? 'true' : 'false'}" aria-controls="results-tab-appendix" tabindex="${activeTab === 'appendix' ? '0' : '-1'}" data-results-tab="appendix">Appendix & Evidence</button>
         </div>
 
-        <div class="${activeTab === 'executive' ? '' : 'hidden'}" id="results-tab-executive-wrap">${executiveTab}</div>
+        <div class="${activeTab === 'executive' ? '' : 'hidden'}" id="results-tab-executive-wrap" role="presentation">${executiveTab}</div>
         ${technicalTab}
         ${appendixTab}
 
@@ -1837,11 +1837,21 @@ function renderResults(id, isShared) {
     });
   }
 
+  const activateResultsTab = (tabName, { focusTarget = 'tab' } = {}) => {
+    const nextTab = String(tabName || '').trim();
+    if (!nextTab || AppState.resultsTab === nextTab) {
+      AppState.resultsFocusTarget = focusTarget;
+      return;
+    }
+    AppState.resultsShouldScrollTop = true;
+    AppState.resultsFocusTarget = focusTarget;
+    AppState.resultsTab = nextTab;
+    renderResults(id, isShared || assessment._shared);
+  };
+
   document.querySelectorAll('[data-results-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
-      AppState.resultsShouldScrollTop = AppState.resultsTab !== btn.dataset.resultsTab;
-      AppState.resultsTab = btn.dataset.resultsTab;
-      renderResults(id, isShared || assessment._shared);
+      activateResultsTab(btn.dataset.resultsTab, { focusTarget: 'tab' });
     });
     btn.addEventListener('keydown', event => {
       const tabs = Array.from(document.querySelectorAll('[data-results-tab]'));
@@ -1852,14 +1862,43 @@ function renderResults(id, isShared) {
         const nextIndex = event.key === 'ArrowRight'
           ? (currentIndex + 1) % tabs.length
           : (currentIndex - 1 + tabs.length) % tabs.length;
-        tabs[nextIndex]?.focus();
+        const nextTab = tabs[nextIndex];
+        if (!nextTab) return;
+        activateResultsTab(nextTab.dataset.resultsTab, { focusTarget: 'tab' });
+        window.requestAnimationFrame(() => {
+          document.querySelector(`[data-results-tab="${nextTab.dataset.resultsTab}"]`)?.focus();
+        });
+      }
+      if (event.key === 'Home' || event.key === 'End') {
+        event.preventDefault();
+        const nextTab = event.key === 'Home' ? tabs[0] : tabs[tabs.length - 1];
+        if (!nextTab) return;
+        activateResultsTab(nextTab.dataset.resultsTab, { focusTarget: 'tab' });
+        window.requestAnimationFrame(() => {
+          document.querySelector(`[data-results-tab="${nextTab.dataset.resultsTab}"]`)?.focus();
+        });
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        if (AppState.resultsTab === btn.dataset.resultsTab) {
+          document.querySelector(`[data-results-panel="${btn.dataset.resultsTab}"]`)?.focus();
+          return;
+        }
+        activateResultsTab(btn.dataset.resultsTab, { focusTarget: 'panel' });
       }
     });
   });
-  if (AppState.resultsShouldScrollTop) {
+  if (AppState.resultsShouldScrollTop || AppState.resultsFocusTarget) {
+    const focusTarget = AppState.resultsFocusTarget || 'tab';
     AppState.resultsShouldScrollTop = false;
+    AppState.resultsFocusTarget = null;
     window.requestAnimationFrame(() => {
       document.querySelector('.results-tabbar')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      if (focusTarget === 'panel') {
+        document.querySelector(`[data-results-panel="${activeTab}"]`)?.focus();
+      } else {
+        document.querySelector(`[data-results-tab="${activeTab}"]`)?.focus();
+      }
     });
   }
   if (activeTab === 'appendix') drawTechnicalCharts();

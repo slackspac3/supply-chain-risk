@@ -1585,6 +1585,10 @@ canvas { display: block; width: 100%; }
   border-radius: var(--radius-full);
   scroll-margin-top: calc(var(--sp-10) + 56px);
 }
+.results-tabbar:focus-within {
+  border-color: rgba(3,209,168,0.18);
+  box-shadow: 0 0 0 1px rgba(3,209,168,0.1);
+}
 .results-tab {
   border: 0;
   background: transparent;
@@ -1605,6 +1609,10 @@ canvas { display: block; width: 100%; }
   background: rgba(3,209,168,0.12);
   color: var(--text-primary);
   box-shadow: inset 0 0 0 1px rgba(3,209,168,0.22);
+}
+[data-results-panel] {
+  scroll-margin-top: calc(var(--sp-10) + 56px);
+  outline: none;
 }
 .results-header-bar,
 .results-header-actions {

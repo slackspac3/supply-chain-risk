@@ -435,6 +435,7 @@ function focusAdminUserSearch() {
 function triggerResultsTab(tabName) {
   const button = document.querySelector(`[data-results-tab="${tabName}"]`);
   if (!button) return false;
+  AppState.resultsFocusTarget = 'tab';
   button.click();
   return true;
 }
