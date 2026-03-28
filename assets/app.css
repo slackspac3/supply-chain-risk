@@ -1948,6 +1948,30 @@ canvas { display: block; width: 100%; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--sp-4);
 }
+.results-boardroom-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+  gap: var(--sp-4);
+  align-items: start;
+  padding: var(--sp-5) var(--sp-6);
+  border-radius: 22px;
+  border: 1px solid rgba(3,209,168,.14);
+  background:
+    radial-gradient(circle at top right, rgba(3,209,168,.08), transparent 34%),
+    linear-gradient(180deg, rgba(246,243,242,0.04), rgba(246,243,242,0.016));
+}
+.results-boardroom-banner__title {
+  margin-top: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+  line-height: 1.28;
+  letter-spacing: -0.03em;
+}
+.results-boardroom-banner__meta {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.72;
+}
 .results-technical-surface {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
@@ -3835,6 +3859,12 @@ canvas { display: block; width: 100%; }
 .results-decision-card--compact { align-self: start; }
 .results-detail-disclosure-copy { margin-top: var(--sp-3); color: var(--text-muted); font-size: var(--text-sm); line-height: 1.65; }
 .results-disclosure-stack { display: flex; flex-direction: column; gap: var(--sp-5); margin-top: var(--sp-5); }
+.results-executive-view--boardroom .results-hero {
+  margin-bottom: var(--sp-7);
+}
+.results-secondary-band--boardroom {
+  gap: var(--sp-5);
+}
 .help-page {
   padding-bottom: var(--sp-16);
 }
@@ -4876,6 +4906,7 @@ canvas { display: block; width: 100%; }
     grid-template-columns: 1fr;
   }
   .dashboard-glance-strip,
+  .results-boardroom-banner,
   .results-technical-story-grid,
   .results-parameter-challenge-grid,
   .evidence-gap-plan__grid,

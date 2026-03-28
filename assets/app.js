@@ -212,6 +212,7 @@ const AppState = {
   settingsSectionState: {},
   settingsScrollState: {},
   disclosureState: {},
+  resultsBoardroomMode: false,
   adminSettingsCache: null,
   userStateCache: { username: '', userSettings: null, assessments: null, learningStore: null, draft: null, _meta: { revision: 0, updatedAt: 0 } },
   userStateSyncTimer: null,

@@ -155,6 +155,43 @@ function renderResultsActionBlock(recommendations, executiveAction, missingInfor
   </section>`;
 }
 
+function renderBoardroomModeIntro(comparison) {
+  return `<section class="results-section-stack">
+    <div class="results-boardroom-banner">
+      <div>
+        <div class="results-driver-label">Boardroom review mode</div>
+        <h3 class="results-boardroom-banner__title">This view compresses the assessment into the clearest management read, then leaves the deeper challenge layers one step lower.</h3>
+      </div>
+      <div class="results-boardroom-banner__meta">${comparison ? 'Treatment comparison is still included because it changes the management decision.' : 'Use this mode when you need a committee-ready read without the full executive support stack.'}</div>
+    </div>
+  </section>`;
+}
+
+function renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextStepPlan = [], scenarioNarrative, analystSummary }) {
+  return UI.resultsSectionBlock({
+    title: 'Boardroom readout',
+    body: `
+    <div class="results-summary-grid results-summary-grid--primary">
+      ${UI.resultsSummaryCard({
+        label: 'Decision now',
+        body: `<p class="results-summary-copy"><strong>${escapeHtml(String(executiveDecision?.priority || executiveDecision?.decision || 'Review the current management position'))}</strong></p>`,
+        foot: escapeHtml(String(executiveDecision?.rationale || analystSummary?.opening || 'Use the result to agree the next management action.'))
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Biggest caveat',
+        body: `<p class="results-summary-copy"><strong>${escapeHtml(String(confidenceFrame?.topGap || 'Validate the main evidence gap before formal commitment.'))}</strong></p>`,
+        foot: escapeHtml(String(confidenceFrame?.implication || 'Confidence posture should shape how firmly you treat this result.'))
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Next decision required',
+        wide: true,
+        body: `<p class="results-summary-copy"><strong>${escapeHtml(String(nextStepPlan[0]?.title || 'Confirm the next management step'))}</strong></p>`,
+        foot: escapeHtml(String(nextStepPlan[0]?.copy || scenarioNarrative || 'Use the saved assessment as the working decision view, then challenge the main assumptions.'))
+      })}
+    </div>`
+  });
+}
+
 function renderResultsConfidenceNeedsBlock(confidenceFrame, evidenceQuality, missingInformation = [], citations = []) {
   const topGap = confidenceFrame?.topGap || missingInformation[0] || 'No major evidence gap has been recorded yet.';
   return UI.resultsSectionBlock({
@@ -1552,6 +1589,7 @@ function renderResults(id, isShared) {
   };
   const requestedTab = String(AppState.resultsTab || 'executive');
   const activeTab = ['executive', 'technical', 'appendix'].includes(requestedTab) ? requestedTab : 'executive';
+  const boardroomMode = !!AppState.resultsBoardroomMode;
   const statusClass = r.toleranceBreached ? 'above' : r.nearTolerance ? 'warning' : 'within';
   const statusIcon = r.toleranceBreached ? '🔴' : r.nearTolerance ? '🟠' : '🟢';
   const statusTitle = r.toleranceBreached ? 'Needs leadership action' : r.nearTolerance ? 'Needs management attention' : 'Within current tolerance';
@@ -1648,75 +1686,89 @@ function renderResults(id, isShared) {
     lifecycle
   });
 
-  const executiveTab = `
-    <section class="results-executive-view ${activeTab === 'executive' ? '' : 'hidden'}" id="results-tab-executive" role="tabpanel" aria-labelledby="results-tab-btn-executive" tabindex="-1" data-results-panel="executive" data-page-focus>
-      <div class="results-hero ${statusClass}">
-        <div class="results-hero-main">
-          <div class="results-kicker">Assessment outcome</div>
-          <h2 class="results-hero-title">${executiveHeadline}</h2>
-          <p class="results-hero-copy">${statusDetail}</p>
-          <div class="results-hero-tags">
-            <span class="badge ${r.toleranceBreached ? 'badge--danger' : r.nearTolerance ? 'badge--warning' : 'badge--success'}">${statusTitle}</span>
-            <span class="badge badge--${lifecycle.tone}">${lifecycle.label}</span>
-          </div>
-          <div class="results-hero-meta">${escapeHtml(String(assessment.buName || 'No business unit'))} · ${escapeHtml(String(assessment.geography || 'No geography'))} · ${escapeHtml(String(completedLabel))}</div>
-        </div>
-        <div class="results-hero-side">
-          <div class="results-signal-ring ${statusClass}">
-            <div class="results-signal-ring-inner">${statusIcon}</div>
-          </div>
-          <div class="results-signal-label">${exceedancePct}% breach likelihood</div>
-          <div class="results-hero-action-card">
-            <span class="results-driver-label">Immediate focus</span>
-            <strong>${escapeHtml(String(executiveDecision?.decision || 'Review'))}</strong>
-            <span>${escapeHtml(String(executiveAction || executiveDecision?.priority || 'Confirm the next management step for this scenario.'))}</span>
-            <div class="results-hero-action-card__foot">${escapeHtml(String(rolePresentation.executiveNoteTitle))}: ${escapeHtml(String(rolePresentation.executiveNote))}</div>
-          </div>
-        </div>
+  const executiveHero = `<div class="results-hero ${statusClass}">
+    <div class="results-hero-main">
+      <div class="results-kicker">${boardroomMode ? 'Boardroom review' : 'Assessment outcome'}</div>
+      <h2 class="results-hero-title">${executiveHeadline}</h2>
+      <p class="results-hero-copy">${statusDetail}</p>
+      <div class="results-hero-tags">
+        <span class="badge ${r.toleranceBreached ? 'badge--danger' : r.nearTolerance ? 'badge--warning' : 'badge--success'}">${statusTitle}</span>
+        <span class="badge badge--${lifecycle.tone}">${lifecycle.label}</span>
+        ${boardroomMode ? '<span class="badge badge--neutral">Boardroom mode</span>' : ''}
       </div>
+      <div class="results-hero-meta">${escapeHtml(String(assessment.buName || 'No business unit'))} · ${escapeHtml(String(assessment.geography || 'No geography'))} · ${escapeHtml(String(completedLabel))}</div>
+    </div>
+    <div class="results-hero-side">
+      <div class="results-signal-ring ${statusClass}">
+        <div class="results-signal-ring-inner">${statusIcon}</div>
+      </div>
+      <div class="results-signal-label">${exceedancePct}% breach likelihood</div>
+      <div class="results-hero-action-card">
+        <span class="results-driver-label">Immediate focus</span>
+        <strong>${escapeHtml(String(executiveDecision?.decision || 'Review'))}</strong>
+        <span>${escapeHtml(String(executiveAction || executiveDecision?.priority || 'Confirm the next management step for this scenario.'))}</span>
+        <div class="results-hero-action-card__foot">${escapeHtml(String(rolePresentation.executiveNoteTitle))}: ${escapeHtml(String(rolePresentation.executiveNote))}</div>
+      </div>
+    </div>
+  </div>`;
 
+  const executiveMetrics = `<div class="results-exec-metrics">
+    <div class="results-impact-card results-impact-card--headline">
+      <div class="results-impact-label">Conditional loss from one successful event</div>
+      <div class="results-impact-value ${r.toleranceBreached ? 'danger' : ''}">${fmtCurrency(r.eventLoss.p90)}</div>
+      <div class="results-impact-copy">Severe single-event view</div>
+      <div class="results-impact-foot">${r.toleranceBreached ? 'Above the current event tolerance.' : r.nearTolerance ? 'Above the warning threshold, but below tolerance.' : 'Below the current warning trigger.'}</div>
+    </div>
+    <div class="results-impact-card">
+      <div class="results-impact-label">Expected annualized loss</div>
+      <div class="results-impact-value">${fmtCurrency(r.annualLoss.mean)}</div>
+      <div class="results-impact-copy">Expected annual exposure</div>
+      <div class="results-impact-foot">Use this as the average-year planning view.</div>
+    </div>
+    <div class="results-impact-card">
+      <div class="results-impact-label">High-stress annualized loss</div>
+      <div class="results-impact-value warning">${fmtCurrency(r.annualLoss.p90)}</div>
+      <div class="results-impact-copy">Severe annual planning view</div>
+      <div class="results-impact-foot">${r.annualReviewTriggered ? 'At or above the annual review trigger.' : 'Still below the annual review trigger.'}</div>
+    </div>
+  </div>`;
+
+  const executiveTab = `
+    <section class="results-executive-view ${boardroomMode ? 'results-executive-view--boardroom' : ''} ${activeTab === 'executive' ? '' : 'hidden'}" id="results-tab-executive" role="tabpanel" aria-labelledby="results-tab-btn-executive" tabindex="-1" data-results-panel="executive" data-page-focus>
+      ${executiveHero}
       <div class="results-executive-band">
+        ${boardroomMode ? renderBoardroomModeIntro(comparison) : ''}
         ${renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, assessmentIntelligence.confidence, rolePresentation)}
-      <div class="results-exec-metrics">
-        <div class="results-impact-card results-impact-card--headline">
-          <div class="results-impact-label">Conditional loss from one successful event</div>
-          <div class="results-impact-value ${r.toleranceBreached ? 'danger' : ''}">${fmtCurrency(r.eventLoss.p90)}</div>
-          <div class="results-impact-copy">Severe single-event view</div>
-          <div class="results-impact-foot">${r.toleranceBreached ? 'Above the current event tolerance.' : r.nearTolerance ? 'Above the warning threshold, but below tolerance.' : 'Below the current warning trigger.'}</div>
-        </div>
-        <div class="results-impact-card">
-          <div class="results-impact-label">Expected annualized loss</div>
-          <div class="results-impact-value">${fmtCurrency(r.annualLoss.mean)}</div>
-          <div class="results-impact-copy">Expected annual exposure</div>
-          <div class="results-impact-foot">Use this as the average-year planning view.</div>
-        </div>
-        <div class="results-impact-card">
-          <div class="results-impact-label">High-stress annualized loss</div>
-          <div class="results-impact-value warning">${fmtCurrency(r.annualLoss.p90)}</div>
-          <div class="results-impact-copy">Severe annual planning view</div>
-          <div class="results-impact-foot">${r.annualReviewTriggered ? 'At or above the annual review trigger.' : 'Still below the annual review trigger.'}</div>
-        </div>
+        ${boardroomMode ? renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView) : ''}
+        ${executiveMetrics}
       </div>
-      </div>
-      ${renderAnalystSummaryBlock(analystSummary)}
-      ${comparisonHighlight || recommendationCards}
-      <section class="results-secondary-band">
-      ${comparisonHighlight ? recommendationCards : ''}
-      ${renderTrustExplanationLayer({
-        confidenceNeedsBlock,
-        evidenceGapPlan,
-        explanationPanel,
-        impactMix,
-        thresholdModel,
-        results: r,
-        assessmentIntelligence,
-        assessment,
-        citations,
-        primaryGrounding,
-        supportingReferences,
-        missingInformation
-      })}
-      </section>
+      ${boardroomMode
+        ? `${renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextStepPlan, scenarioNarrative, analystSummary })}
+           ${comparisonHighlight || recommendationCards}
+           ${renderAnalystSummaryBlock(analystSummary)}
+           <section class="results-secondary-band results-secondary-band--boardroom">
+             ${comparisonHighlight ? recommendationCards : ''}
+             ${confidenceNeedsBlock}
+           </section>`
+        : `${renderAnalystSummaryBlock(analystSummary)}
+           ${comparisonHighlight || recommendationCards}
+           <section class="results-secondary-band">
+             ${comparisonHighlight ? recommendationCards : ''}
+             ${renderTrustExplanationLayer({
+               confidenceNeedsBlock,
+               evidenceGapPlan,
+               explanationPanel,
+               impactMix,
+               thresholdModel,
+               results: r,
+               assessmentIntelligence,
+               assessment,
+               citations,
+               primaryGrounding,
+               supportingReferences,
+               missingInformation
+             })}
+           </section>`}
     </section>`;
 
   const technicalTab = `
@@ -1885,6 +1937,7 @@ function renderResults(id, isShared) {
             <details class="results-actions-disclosure">
               <summary class="btn btn--ghost btn--sm">More actions</summary>
               <div class="results-actions-disclosure-menu">
+                <button class="btn btn--secondary btn--sm" id="btn-toggle-boardroom-mode">${boardroomMode ? 'Exit Boardroom Review' : 'Open Boardroom Review'}</button>
                 <button class="btn btn--secondary btn--sm" id="btn-export-board-note">Generate Decision Memo</button>
                 <button class="btn btn--secondary btn--sm" id="btn-export-board-note-appendix">Decision Memo + Appendix</button>
                 <button class="btn btn--secondary btn--sm" id="btn-duplicate-assessment">Duplicate Assessment</button>
@@ -2037,6 +2090,14 @@ function renderResults(id, isShared) {
         button.textContent = original;
       }, 800);
     }
+  });
+  document.getElementById('btn-toggle-boardroom-mode')?.addEventListener('click', () => {
+    AppState.resultsBoardroomMode = !AppState.resultsBoardroomMode;
+    AppState.resultsTab = 'executive';
+    AppState.resultsShouldScrollTop = true;
+    AppState.resultsFocusTarget = 'panel';
+    UI.toast(AppState.resultsBoardroomMode ? 'Boardroom review mode enabled.' : 'Full executive review restored.', 'info');
+    renderResults(id, isShared || assessment._shared);
   });
   document.getElementById('btn-export-board-note')?.addEventListener('click', event => {
     const button = event.currentTarget;
