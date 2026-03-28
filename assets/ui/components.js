@@ -201,6 +201,32 @@ const UI = (() => {
     </div>`;
   }
 
+  function resultsSectionBlock({ title, intro = '', body, className = '' }) {
+    return `<section class="results-section-stack${className ? ` ${className}` : ''}">
+      <div class="results-section-heading">${title}</div>
+      ${intro ? `<div class="results-comparison-foot">${intro}</div>` : ''}
+      ${body}
+    </section>`;
+  }
+
+  function resultsSummaryCard({ label, body = '', foot = '', wide = false, className = '' }) {
+    return `<div class="results-summary-card${wide ? ' results-summary-card--wide' : ''}${className ? ` ${className}` : ''}">
+      <div class="results-driver-label">${label}</div>
+      ${body}
+      ${foot ? `<div class="results-comparison-foot" style="margin-top:var(--sp-3)">${foot}</div>` : ''}
+    </div>`;
+  }
+
+  function resultsDetailDisclosure({ summary, copy = '', body, className = '', style = '' }) {
+    return `<details class="results-detail-disclosure${className ? ` ${className}` : ''}"${style ? ` style="${style}"` : ''}>
+      <summary>${summary}</summary>
+      ${copy ? `<div class="results-detail-disclosure-copy">${copy}</div>` : ''}
+      <div class="results-disclosure-stack">
+        ${body}
+      </div>
+    </details>`;
+  }
+
 
   function wizardInputSection({ title, description = '', body, className = 'card anim-fade-in', headerExtras = '' }) {
     return `<div class="${className}">
@@ -565,5 +591,5 @@ const UI = (() => {
     return `${_getCurrencyPrefix(currency)}${displayValue.toLocaleString(currency === 'AED' ? 'en-AE' : 'en-US')}`;
   }
 
-  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, wizardAssistSkeleton, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, wizardInputSection, sectionStatusBadge, disclosureSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC };
+  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, wizardAssistSkeleton, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, resultsSectionBlock, resultsSummaryCard, resultsDetailDisclosure, wizardInputSection, sectionStatusBadge, disclosureSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC };
 })();

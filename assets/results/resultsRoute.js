@@ -95,30 +95,32 @@ function renderDecisionRail(statusTitle, statusDetail, executiveDecision, execut
 
 function renderAnalystSummaryBlock(summary) {
   if (!summary) return '';
-  return `<section class="results-section-stack">
-    <div class="results-section-heading">${escapeHtml(String(summary.title || 'Analyst summary'))}</div>
+  return UI.resultsSectionBlock({
+    title: escapeHtml(String(summary.title || 'Analyst summary')),
+    body: `
     <div class="results-analyst-summary">
       <div class="results-analyst-summary__main">
         <h3 class="results-analyst-summary__title">${escapeHtml(String(summary.opening || 'This result should be read as a decision-support view.'))}</h3>
         <p class="results-summary-copy">${escapeHtml(String(summary.meaning || ''))}</p>
       </div>
       <div class="results-analyst-summary__grid">
-        <div class="results-summary-card">
-          <div class="results-driver-label">Confidence posture</div>
-          <div class="results-summary-copy">${escapeHtml(String(summary.confidence || ''))}</div>
-        </div>
-        <div class="results-summary-card">
-          <div class="results-driver-label">Best next evidence step</div>
-          <div class="results-summary-copy">${escapeHtml(String(summary.evidence || ''))}</div>
-        </div>
-        <div class="results-summary-card results-summary-card--wide">
-          <div class="results-driver-label">Treatment view</div>
-          <div class="results-summary-copy">${escapeHtml(String(summary.treatment || ''))}</div>
-          <div class="results-comparison-foot" style="margin-top:var(--sp-3)">${escapeHtml(String(summary.close || ''))}</div>
-        </div>
+        ${UI.resultsSummaryCard({
+          label: 'Confidence posture',
+          body: `<div class="results-summary-copy">${escapeHtml(String(summary.confidence || ''))}</div>`
+        })}
+        ${UI.resultsSummaryCard({
+          label: 'Best next evidence step',
+          body: `<div class="results-summary-copy">${escapeHtml(String(summary.evidence || ''))}</div>`
+        })}
+        ${UI.resultsSummaryCard({
+          label: 'Treatment view',
+          wide: true,
+          body: `<div class="results-summary-copy">${escapeHtml(String(summary.treatment || ''))}</div>`,
+          foot: escapeHtml(String(summary.close || ''))
+        })}
       </div>
-    </div>
-  </section>`;
+    </div>`
+  });
 }
 
 function renderLifecycleNextStepCards(nextStepPlan = []) {
@@ -155,14 +157,28 @@ function renderResultsActionBlock(recommendations, executiveAction, missingInfor
 
 function renderResultsConfidenceNeedsBlock(confidenceFrame, evidenceQuality, missingInformation = [], citations = []) {
   const topGap = confidenceFrame?.topGap || missingInformation[0] || 'No major evidence gap has been recorded yet.';
-  return `<section class="results-section-stack">
-    <div class="results-section-heading">Confidence and evidence</div>
+  return UI.resultsSectionBlock({
+    title: 'Confidence and evidence',
+    body: `
     <div class="results-summary-grid results-summary-grid--primary">
-      <div class="results-summary-card"><div class="results-driver-label">Confidence for decisions</div><p class="results-summary-copy"><strong>${confidenceFrame?.label || 'Moderate confidence'}</strong></p><div class="results-comparison-foot">${confidenceFrame?.summary || 'Use this as a working decision view, then challenge the largest assumptions.'}</div></div>
-      <div class="results-summary-card"><div class="results-driver-label">Evidence base</div><p class="results-summary-copy"><strong>${evidenceQuality || 'Useful but incomplete evidence base'}</strong></p><div class="results-comparison-foot">${confidenceFrame?.evidenceSummary || `${citations.length} supporting reference${citations.length === 1 ? '' : 's'} attached`}</div></div>
-      <div class="results-summary-card results-summary-card--wide"><div class="results-driver-label">Management implication</div><p class="results-summary-copy">${confidenceFrame?.implication || topGap}</p><div class="results-comparison-foot" style="margin-top:var(--sp-3)">Best next evidence to collect: ${topGap}</div></div>
-    </div>
-  </section>`;
+      ${UI.resultsSummaryCard({
+        label: 'Confidence for decisions',
+        body: `<p class="results-summary-copy"><strong>${confidenceFrame?.label || 'Moderate confidence'}</strong></p>`,
+        foot: confidenceFrame?.summary || 'Use this as a working decision view, then challenge the largest assumptions.'
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Evidence base',
+        body: `<p class="results-summary-copy"><strong>${evidenceQuality || 'Useful but incomplete evidence base'}</strong></p>`,
+        foot: confidenceFrame?.evidenceSummary || `${citations.length} supporting reference${citations.length === 1 ? '' : 's'} attached`
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Management implication',
+        wide: true,
+        body: `<p class="results-summary-copy">${confidenceFrame?.implication || topGap}</p>`,
+        foot: `Best next evidence to collect: ${topGap}`
+      })}
+    </div>`
+  });
 }
 
 function renderResultsComparisonHighlight(comparison) {
@@ -275,52 +291,58 @@ function renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence,
     </div>`;
   }).join('');
   const topGap = missingInformation[0] || 'No major missing information was recorded for this assessment.';
-  return `<section class="results-section-stack">
-    <div class="results-section-heading">Assumption traceability</div>
+  return UI.resultsSectionBlock({
+    title: 'Assumption traceability',
+    body: `
     <div class="results-traceability-grid">
-      <div class="results-summary-card results-summary-card--wide">
-        <div class="results-driver-label">What the result is relying on</div>
-        ${traceRows || '<div class="results-summary-copy">No explicit assumption trace was saved with this assessment yet.</div>'}
-      </div>
-      <div class="results-summary-card">
-        <div class="results-driver-label">Evidence and readiness</div>
-        <div class="results-trace-stat"><strong>${citations.length}</strong><span>linked reference${citations.length === 1 ? '' : 's'}</span></div>
-        <div class="results-trace-stat"><strong>${provenance.length || primaryGrounding.length || supportingReferences.length || 0}</strong><span>tracked basis item${(provenance.length || primaryGrounding.length || supportingReferences.length || 0) === 1 ? '' : 's'}</span></div>
-        <div class="results-comparison-foot" style="margin-top:var(--sp-4)">Biggest missing information: ${escapeHtml(String(topGap))}</div>
-      </div>
-    </div>
-  </section>`;
+      ${UI.resultsSummaryCard({
+        label: 'What the result is relying on',
+        wide: true,
+        body: traceRows || '<div class="results-summary-copy">No explicit assumption trace was saved with this assessment yet.</div>'
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Evidence and readiness',
+        body: `<div class="results-trace-stat"><strong>${citations.length}</strong><span>linked reference${citations.length === 1 ? '' : 's'}</span></div>
+        <div class="results-trace-stat"><strong>${provenance.length || primaryGrounding.length || supportingReferences.length || 0}</strong><span>tracked basis item${(provenance.length || primaryGrounding.length || supportingReferences.length || 0) === 1 ? '' : 's'}</span></div>`,
+        foot: `Biggest missing information: ${escapeHtml(String(topGap))}`
+      })}
+    </div>`
+  });
 }
 
 function renderExecutiveInsightCluster({ scenarioNarrative, executiveDecision, executiveAnnualView, analystSummary, comparisonHighlight, recommendationCards }) {
-  return `<section class="results-section-stack">
-    <div class="results-section-heading">Executive meaning</div>
-    <div class="results-comparison-foot">Start here for business meaning, treatment impact, and the immediate decision.</div>
+  return UI.resultsSectionBlock({
+    title: 'Executive meaning',
+    intro: 'Start here for business meaning, treatment impact, and the immediate decision.',
+    body: `
     <div class="results-summary-grid results-summary-grid--primary">
-      <div class="results-summary-card results-summary-card--wide">
-        <div class="results-driver-label">What this means in plain language</div>
-        <p class="results-summary-copy">${scenarioNarrative}</p>
-      </div>
-      <div class="results-summary-card">
-        <div class="results-driver-label">Management posture</div>
-        <p class="results-summary-copy"><strong>${escapeHtml(String(executiveDecision?.decision || 'Review'))}</strong></p>
-        <div class="results-comparison-foot">${escapeHtml(String(executiveAnnualView || ''))}</div>
-      </div>
-      <div class="results-summary-card">
-        <div class="results-driver-label">Recommended next move</div>
-        <p class="results-summary-copy">${escapeHtml(String(executiveDecision?.priority || executiveDecision?.managementFocus || 'Confirm the next management step for this scenario.'))}</p>
-      </div>
+      ${UI.resultsSummaryCard({
+        label: 'What this means in plain language',
+        wide: true,
+        body: `<p class="results-summary-copy">${scenarioNarrative}</p>`
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Management posture',
+        body: `<p class="results-summary-copy"><strong>${escapeHtml(String(executiveDecision?.decision || 'Review'))}</strong></p>`,
+        foot: escapeHtml(String(executiveAnnualView || ''))
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Recommended next move',
+        body: `<p class="results-summary-copy">${escapeHtml(String(executiveDecision?.priority || executiveDecision?.managementFocus || 'Confirm the next management step for this scenario.'))}</p>`
+      })}
     </div>
     ${renderAnalystSummaryBlock(analystSummary)}
     ${comparisonHighlight}
     ${recommendationCards}
-  </section>`;
+  `});
 }
 
 function renderTrustExplanationLayer({ confidenceNeedsBlock, evidenceGapPlan = [], explanationPanel, impactMix, thresholdModel, results, assessmentIntelligence, assessment, citations, primaryGrounding, supportingReferences, missingInformation }) {
-  return `<section class="results-section-stack results-layer-band results-layer-band--editorial">
-    <div class="results-section-heading">Trust and explanation</div>
-    <div class="results-comparison-foot">Use this layer to understand what is driving the result, how much confidence to place in it, and what still needs evidence.</div>
+  return UI.resultsSectionBlock({
+    title: 'Trust and explanation',
+    intro: 'Use this layer to understand what is driving the result, how much confidence to place in it, and what still needs evidence.',
+    className: 'results-layer-band results-layer-band--editorial',
+    body: `
     ${confidenceNeedsBlock}
     ${evidenceGapPlan.length ? renderEvidenceGapActionPlan(evidenceGapPlan, {
       title: 'Best evidence to collect next',
@@ -330,19 +352,19 @@ function renderTrustExplanationLayer({ confidenceNeedsBlock, evidenceGapPlan = [
     }) : ''}
     ${explanationPanel}
     ${renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence, citations, primaryGrounding, supportingReferences, missingInformation })}
-    <details class="results-detail-disclosure">
-      <summary>Show supporting drivers, cost mix, and governance tracks</summary>
-      <div class="results-detail-disclosure-copy">Open this when you want the main sensitivities, cost composition, and benchmark context behind the headline view.</div>
-      <div class="results-disclosure-stack">
+    ${UI.resultsDetailDisclosure({
+      summary: 'Show supporting drivers, cost mix, and governance tracks',
+      copy: 'Open this when you want the main sensitivities, cost composition, and benchmark context behind the headline view.',
+      body: `
         ${renderExecutiveDriversSummary(assessmentIntelligence.drivers, assessment)}
         <div class="results-visual-grid">
           ${renderExecutiveImpactMix(impactMix)}
           ${renderExecutiveThresholdTracks(thresholdModel)}
         </div>
         ${renderExecutiveSignalCard(results)}
-      </div>
-    </details>
-  </section>`;
+      `
+    })}
+  `});
 }
 
 function buildAssessmentComparison(currentAssessment, baselineAssessment) {
@@ -675,16 +697,34 @@ function renderResultsExplanationPanel(assessmentIntelligence, comparison, runMe
   ].slice(0, 3);
   const treatmentDelta = comparison?.treatmentNarrative || comparison?.keyDriver || 'No treatment comparison is currently selected, so this view is explaining the current case only.';
   const runtimeNote = runMetadata?.runtimeGuardrails?.[0] || `The saved run used seed ${runMetadata?.seed ?? '—'} and ${Number(runMetadata?.iterations || 0).toLocaleString()} iterations for reproducibility.`;
-  return `<section class="results-section-stack">
-    <div class="results-section-heading">Why this result looks the way it does</div>
+  return UI.resultsSectionBlock({
+    title: 'Why this result looks the way it does',
+    body: `
     <div class="results-summary-grid results-summary-grid--primary">
-      <div class="results-summary-card"><div class="results-driver-label">Top drivers</div><div class="results-summary-copy">${topDrivers.length ? topDrivers.map(item => `• ${escapeHtml(String(item.label || 'Driver'))}: ${escapeHtml(String(item.why || ''))}`).join('<br>') : '• No dominant drivers were captured for this run.'}</div></div>
-      <div class="results-summary-card"><div class="results-driver-label">Biggest assumptions</div><div class="results-summary-copy">${assumptions.length ? assumptions.map(item => `• ${escapeHtml(String(item.text || ''))}`).join('<br>') : '• No assumptions were saved with this run.'}</div></div>
-      <div class="results-summary-card"><div class="results-driver-label">Where uncertainty matters most</div><div class="results-summary-copy">${uncertainty.length ? uncertainty.map(item => `• ${escapeHtml(String(item.label || 'Uncertainty'))}: ${escapeHtml(String(item.why || ''))}`).join('<br>') : '• No dominant uncertainty sources were captured for this run.'}</div></div>
-      <div class="results-summary-card"><div class="results-driver-label">Confidence caveats</div><div class="results-summary-copy">${caveats.length ? caveats.map(item => `• ${escapeHtml(String(item || ''))}`).join('<br>') : '• Confidence caveats were not recorded for this run.'}</div></div>
-      <div class="results-summary-card results-summary-card--wide"><div class="results-driver-label">Treatment delta explanation</div><div class="results-summary-copy">${escapeHtml(String(treatmentDelta))}</div>${comparison?.secondaryDriver ? `<div class="results-comparison-foot" style="margin-top:var(--sp-3)">${escapeHtml(String(comparison.secondaryDriver))}</div>` : ''}<div class="results-comparison-foot" style="margin-top:var(--sp-3)">${escapeHtml(String(runtimeNote))}</div></div>
-    </div>
-  </section>`;
+      ${UI.resultsSummaryCard({
+        label: 'Top drivers',
+        body: `<div class="results-summary-copy">${topDrivers.length ? topDrivers.map(item => `• ${escapeHtml(String(item.label || 'Driver'))}: ${escapeHtml(String(item.why || ''))}`).join('<br>') : '• No dominant drivers were captured for this run.'}</div>`
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Biggest assumptions',
+        body: `<div class="results-summary-copy">${assumptions.length ? assumptions.map(item => `• ${escapeHtml(String(item.text || ''))}`).join('<br>') : '• No assumptions were saved with this run.'}</div>`
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Where uncertainty matters most',
+        body: `<div class="results-summary-copy">${uncertainty.length ? uncertainty.map(item => `• ${escapeHtml(String(item.label || 'Uncertainty'))}: ${escapeHtml(String(item.why || ''))}`).join('<br>') : '• No dominant uncertainty sources were captured for this run.'}</div>`
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Confidence caveats',
+        body: `<div class="results-summary-copy">${caveats.length ? caveats.map(item => `• ${escapeHtml(String(item || ''))}`).join('<br>') : '• Confidence caveats were not recorded for this run.'}</div>`
+      })}
+      ${UI.resultsSummaryCard({
+        label: 'Treatment delta explanation',
+        wide: true,
+        body: `<div class="results-summary-copy">${escapeHtml(String(treatmentDelta))}</div>`,
+        foot: `${comparison?.secondaryDriver ? `${escapeHtml(String(comparison.secondaryDriver))} · ` : ''}${escapeHtml(String(runtimeNote))}`
+      })}
+    </div>`
+  });
 }
 
 function buildResultTrustBasis(assessment, runMetadata) {
@@ -711,9 +751,10 @@ function buildResultTrustBasis(assessment, runMetadata) {
 
 function renderModelBasisPanel(assessment, runMetadata, confidenceFrame, thresholdModel) {
   const basis = buildResultTrustBasis(assessment, runMetadata);
-  return `<section class="results-section-stack">
-    <div class="results-section-heading">Technical appendix</div>
-    <div class="results-comparison-foot">Open this layer when you want the model basis, input sources, and reproducibility detail behind the headline result.</div>
+  return UI.resultsSectionBlock({
+    title: 'Technical appendix',
+    intro: 'Open this layer when you want the model basis, input sources, and reproducibility detail behind the headline result.',
+    body: `
     <div class="results-model-basis">
       <div class="results-model-basis__intro">
         <div class="results-driver-label">Plain-language model summary</div>
@@ -747,16 +788,17 @@ function renderModelBasisPanel(assessment, runMetadata, confidenceFrame, thresho
           <span>${escapeHtml(String(thresholdModel?.single?.summary || 'The event-loss severe case is compared directly against the current tolerance threshold.'))}</span>
         </div>
       </div>
-      <details class="results-detail-disclosure" style="margin-bottom:0">
-        <summary>How the model works and what influenced this result</summary>
-        <div class="results-detail-disclosure-copy">Open this for the short scientific explanation and the live source audit behind the current result.</div>
-        <div class="results-disclosure-stack">
+      ${UI.resultsDetailDisclosure({
+        summary: 'How the model works and what influenced this result',
+        copy: 'Open this for the short scientific explanation and the live source audit behind the current result.',
+        style: 'margin-bottom:0',
+        body: `
           ${renderSimulationEquationFlow()}
           ${renderInputSourceAuditBlock(buildLiveInputSourceAssignments(assessment))}
-        </div>
-      </details>
-    </div>
-  </section>`;
+        `
+      })}
+    </div>`
+  });
 }
 
 function renderTechnicalOrientationBlock(rolePresentation, runMetadata, confidenceFrame) {
