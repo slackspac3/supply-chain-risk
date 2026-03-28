@@ -2046,6 +2046,9 @@ function renderResults(id, isShared) {
     try {
       ExportService.exportDecisionMemo(assessment, AppState.currency, AppState.fxRate, { includeAppendix: false });
       UI.toast('Decision memo prepared for print or PDF save.', 'success');
+    } catch (error) {
+      console.error('Decision memo export failed:', error);
+      UI.toast('The decision memo could not be prepared. Try again.', 'danger');
     } finally {
       window.setTimeout(() => {
         button.disabled = false;
@@ -2061,6 +2064,9 @@ function renderResults(id, isShared) {
     try {
       ExportService.exportDecisionMemo(assessment, AppState.currency, AppState.fxRate, { includeAppendix: true });
       UI.toast('Decision memo with appendix prepared for print or PDF save.', 'success');
+    } catch (error) {
+      console.error('Decision memo + appendix export failed:', error);
+      UI.toast('The decision memo with appendix could not be prepared. Try again.', 'danger');
     } finally {
       window.setTimeout(() => {
         button.disabled = false;

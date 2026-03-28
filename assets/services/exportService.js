@@ -181,6 +181,7 @@ const ExportService = (() => {
 
   function exportDecisionMemo(assessment, currency = 'USD', fxRate = 3.6725, { includeAppendix = false } = {}) {
     const memo = buildDecisionMemoModel(assessment, currency, fxRate, { includeAppendix });
+    const fmt = v => _formatCurrency(v, currency, fxRate);
     const postureClass = memo.postureTone;
     const appendix = memo.appendix;
     const html = `<!DOCTYPE html>
