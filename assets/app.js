@@ -605,7 +605,7 @@ function openShortcutHelpModal() {
         <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + N</strong><div class="form-help" style="margin-top:6px">Start a new assessment</div></div>
         <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + R</strong><div class="form-help" style="margin-top:6px">Resume your current draft</div></div>
         <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + S</strong><div class="form-help" style="margin-top:6px">Open personal settings</div></div>
-        <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + 1 / 2</strong><div class="form-help" style="margin-top:6px">Switch results tabs</div></div>
+        <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + 1 / 2 / 3</strong><div class="form-help" style="margin-top:6px">Switch results tabs</div></div>
         <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + F</strong><div class="form-help" style="margin-top:6px">Focus admin user search</div></div>
         <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + /</strong><div class="form-help" style="margin-top:6px">Open this shortcuts guide</div></div>
       </div>
@@ -3805,7 +3805,7 @@ function renderAppBar() {
       </nav>
       <div class="bar-spacer"></div>
       ${currentUser ? `
-        <button type="button" class="btn btn--ghost btn--sm" id="btn-open-shortcuts">Shortcuts</button>
+        <a href="#/help" class="btn btn--ghost btn--sm${currentHash.startsWith('#/help') ? ' active' : ''}" id="btn-open-help">Help</a>
         <span class="bar-nav-link" style="pointer-events:none">${currentUser.displayName}</span>
         <button type="button" class="btn btn--ghost btn--sm" id="btn-sign-out">Sign Out</button>
       ` : `<a href="#/login" class="bar-nav-link bar-nav-link--admin">Sign In</a>`}
@@ -3817,9 +3817,6 @@ function renderAppBar() {
     </div>`;
   document.getElementById('cur-usd').addEventListener('click', () => { AppState.currency='USD'; renderAppBar(); Router.resolve(); });
   document.getElementById('cur-aed').addEventListener('click', () => { AppState.currency='AED'; renderAppBar(); Router.resolve(); });
-  document.getElementById('btn-open-shortcuts')?.addEventListener('click', () => {
-    openShortcutHelpModal();
-  });
   document.getElementById('btn-sign-out')?.addEventListener('click', () => {
     performLogout();
   });
@@ -5268,6 +5265,545 @@ function renderUserSettings() {
   renderUserPreferences(settings);
 }
 
+function renderHelpCallout({ tone = 'best', title = '', body = '' } = {}) {
+  if (!title && !body) return '';
+  const label = tone === 'mistake'
+    ? 'Common mistake'
+    : tone === 'trust'
+      ? 'How to use it well'
+      : 'Best practice';
+  return `<div class="help-callout help-callout--${escapeHtml(String(tone || 'best'))}">
+    <div class="help-callout__label">${escapeHtml(label)}</div>
+    <div class="help-callout__title">${escapeHtml(String(title || 'Helpful note'))}</div>
+    <p class="help-callout__body">${escapeHtml(String(body || ''))}</p>
+  </div>`;
+}
+
+function renderHelpExample({ title = '', body = '' } = {}) {
+  if (!title && !body) return '';
+  return `<div class="help-example">
+    <div class="help-example__label">Worked example</div>
+    <div class="help-example__title">${escapeHtml(String(title || 'Example'))}</div>
+    <p class="help-example__body">${escapeHtml(String(body || ''))}</p>
+  </div>`;
+}
+
+function renderHelpDisclosure(sectionId, {
+  title = '',
+  summary = '',
+  body = '',
+  open = false
+} = {}) {
+  const stateKey = getDisclosureStateKey('/help', `${sectionId}:${title}`);
+  const isOpen = getDisclosureOpenState(stateKey, open);
+  return `<details class="results-detail-disclosure help-disclosure" data-disclosure-state-key="${escapeHtml(stateKey)}"${isOpen ? ' open' : ''}>
+    <summary>
+      <div>
+        <div class="help-disclosure__title">${escapeHtml(String(title || 'More detail'))}</div>
+        ${summary ? `<div class="help-disclosure__summary">${escapeHtml(String(summary))}</div>` : ''}
+      </div>
+    </summary>
+    <div class="results-disclosure-stack">${body}</div>
+  </details>`;
+}
+
+function renderHelpSection({
+  id,
+  title,
+  summary,
+  intro = '',
+  chips = [],
+  disclosures = []
+} = {}) {
+  return `<section class="help-section" id="help-${escapeHtml(String(id || 'section'))}">
+    <div class="help-section__head">
+      <div>
+        <div class="help-section__kicker">${escapeHtml(String(summary || 'Guide section'))}</div>
+        <h2 class="help-section__title">${escapeHtml(String(title || 'Help'))}</h2>
+        ${intro ? `<p class="help-section__intro">${escapeHtml(String(intro))}</p>` : ''}
+      </div>
+      ${chips.length ? `<div class="citation-chips help-chip-row">${chips.map(chip => `<span class="badge badge--neutral">${escapeHtml(String(chip))}</span>`).join('')}</div>` : ''}
+    </div>
+    <div class="help-section__body">
+      ${disclosures.join('')}
+    </div>
+  </section>`;
+}
+
+function bindHelpPageInteractions(root = document) {
+  root.querySelectorAll('[data-help-target]').forEach(button => {
+    if (button.dataset.helpBound === 'true') return;
+    button.dataset.helpBound = 'true';
+    button.addEventListener('click', () => {
+      const targetId = button.dataset.helpTarget || '';
+      const section = document.getElementById(targetId);
+      if (!section) return;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const heading = section.querySelector('h2');
+      if (heading) {
+        if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+        try {
+          heading.focus({ preventScroll: true });
+        } catch {
+          heading.focus();
+        }
+      }
+    });
+  });
+  root.querySelectorAll('[data-open-shortcuts-help]').forEach(button => {
+    if (button.dataset.helpBound === 'true') return;
+    button.dataset.helpBound = 'true';
+    button.addEventListener('click', () => openShortcutHelpModal());
+  });
+}
+
+function renderHelpPage() {
+  if (!requireAuth()) return;
+  const currentUser = AuthService.getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+  const settings = !isAdmin ? getUserSettings() : null;
+  const nonAdminCapability = currentUser && !isAdmin
+    ? getNonAdminCapabilityState(currentUser, settings, getAdminSettings())
+    : null;
+  const roleSummary = isAdmin
+    ? 'Global admin'
+    : nonAdminCapability?.canManageBusinessUnit
+      ? 'BU admin'
+      : nonAdminCapability?.canManageDepartment
+        ? 'Function admin'
+        : 'Standard user';
+
+  const sections = [
+    renderHelpSection({
+      id: 'overview',
+      title: 'What this platform does',
+      summary: 'Start here',
+      intro: 'Use the platform to turn a real business risk scenario into a challengeable quantified assessment, review the result in executive and technical language, and compare whether a better outcome materially improves the decision.',
+      chips: ['Dashboard to results', 'AI-assisted drafting', 'Monte Carlo simulation', 'Executive and technical views'],
+      disclosures: [
+        renderHelpDisclosure('overview', {
+          title: 'What the platform is for',
+          summary: 'What it handles, who it is for, and what you get out at the end.',
+          open: true,
+          body: `
+            <p class="help-body-copy">This platform is for structured risk decisions, not generic brainstorming. It supports standard users, function owners, BU admins, and global admins who need a shared way to draft scenarios, estimate loss, review evidence strength, and export decision-ready outputs.</p>
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Good fit</strong><p>Cyber, resilience, vendor, control-failure, disruption, compliance, and third-party scenarios where management needs a defendable view of exposure and next steps.</p></div>
+              <div class="help-mini-card"><strong>What you get</strong><p>A structured scenario, a plain-language estimate, Monte Carlo output, executive and technical results, treatment comparison, and exportable decision artefacts.</p></div>
+            </div>
+            ${renderHelpExample({
+              title: 'A realistic use case',
+              body: 'A team wants to understand whether a regulated customer platform outage driven by cloud misconfiguration is still within tolerance, what assumptions are carrying the estimate, and whether stronger controls materially improve the picture.'
+            })}
+          `
+        }),
+        renderHelpDisclosure('overview', {
+          title: 'What the workflow looks like',
+          summary: 'Dashboard, draft, refine, estimate, run, review, export.',
+          body: `
+            <div class="help-flow-grid">
+              ${[
+                'Dashboard: start, resume, or review work that needs attention.',
+                'AI-Assisted Risk & Context Builder: create the first scenario draft and choose what stays in scope.',
+                'Refine the Scenario: tighten the narrative into one coherent event.',
+                'Estimate the Scenario: express the loss path in plain language or advanced tuning.',
+                'Monte Carlo simulation: run the estimate through uncertainty ranges.',
+                'Executive and technical review: interpret posture, confidence, drivers, and challenge points.',
+                'Compare a better outcome: test whether a treatment materially changes the decision.',
+                'Export: create a decision memo, printable output, or other supporting artefacts.'
+              ].map((step, idx) => `<div class="help-flow-step"><span>${idx + 1}</span><p>${escapeHtml(step)}</p></div>`).join('')}
+            </div>
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'best-results',
+      title: 'How to get the best result',
+      summary: 'Set yourself up well',
+      intro: 'The platform works best when you start with one coherent event, one clear business context, and enough detail to challenge the estimate without trying to write a full report up front.',
+      chips: ['Use one event', 'Keep scope tight', 'Prefer specifics over adjectives'],
+      disclosures: [
+        renderHelpDisclosure('best-results', {
+          title: 'How to start well',
+          summary: 'When to use guided assessment, risk register upload, or preloaded scenarios.',
+          open: true,
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Guided assessment</strong><p>Best for most users. Use it when you need help turning a real situation into a clear scenario and do not already have a structured source document.</p></div>
+              <div class="help-mini-card"><strong>Upload a risk register</strong><p>Use this when you already have existing risks and want the platform to surface candidate scenarios quickly from your own source material.</p></div>
+              <div class="help-mini-card"><strong>Preloaded scenarios</strong><p>Use these when you want a faster first pass, a worked example, or a realistic starting structure to adapt.</p></div>
+            </div>
+            ${renderHelpCallout({
+              tone: 'best',
+              title: 'Start narrow, then improve',
+              body: 'A focused first draft is better than a vague comprehensive one. You can always add detail later, but it is harder to rescue a scenario that mixes multiple events at the start.'
+            })}
+          `
+        }),
+        renderHelpDisclosure('best-results', {
+          title: 'What good input looks like',
+          summary: 'Specific enough to model, but short enough to challenge.',
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Good</strong><p>“A privileged cloud configuration error exposes regulated customer data and disrupts service restoration for one business unit.”</p></div>
+              <div class="help-mini-card"><strong>Weak</strong><p>“Cyber issues could hurt the business badly.” This is too broad, hides the event path, and does not tell the model what is actually in scope.</p></div>
+            </div>
+            ${renderHelpCallout({
+              tone: 'mistake',
+              title: 'Do not write three scenarios in one',
+              body: 'If the draft mixes outage, data loss, fraud, and compliance failure as separate events, split them. The model works best when one coherent event stays in focus.'
+            })}
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'context',
+      title: 'How context is derived',
+      summary: 'Where the platform gets its context',
+      intro: 'The platform combines your direct inputs with saved role context, organisation context, benchmark-aware suggestions, and grounded source material. AI helps assemble and refine that context, but it does not replace user judgment.',
+      chips: ['User input', 'Role and org context', 'Benchmarks', 'Grounded sources'],
+      disclosures: [
+        renderHelpDisclosure('context', {
+          title: 'What comes from you, your settings, and the organisation',
+          summary: 'Direct input and retained context are both active.',
+          open: true,
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>User inputs</strong><p>Your prompts, selected risks, scenario narrative, parameter inputs, and any files you upload for the current assessment.</p></div>
+              <div class="help-mini-card"><strong>Personal settings</strong><p>Your role, focus areas, working view, preferred output style, AI notes, and optional personal overlays.</p></div>
+              <div class="help-mini-card"><strong>Organisation context</strong><p>Company, BU, and function context retained by admins or owners, including geography, regulations, appetite, and operating context.</p></div>
+            </div>
+          `
+        }),
+        renderHelpDisclosure('context', {
+          title: 'What comes from AI, benchmarks, and source material',
+          summary: 'AI suggests structure; grounded sources and benchmarks shape how confident to be.',
+          body: `
+            <p class="help-body-copy">AI in this app is assistive. It helps draft, structure, refine, and benchmark the scenario. It does not turn its own suggestions into facts. Grounding means the model can point to real context, uploaded material, retrieved references, or an explainable basis for the suggestion.</p>
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Primary grounding</strong><p>The strongest named source or context basis carrying a draft or result.</p></div>
+              <div class="help-mini-card"><strong>Supporting references</strong><p>Additional retrieved or attached material that helps explain or support the current framing.</p></div>
+              <div class="help-mini-card"><strong>Provenance</strong><p>A trace of where the current wording, estimate, or assumption came from: user input, AI suggestion, benchmark, uploaded document, or inherited context.</p></div>
+            </div>
+            ${renderHelpExample({
+              title: 'How company context shapes output',
+              body: 'If the company brief says the business operates regulated digital services in the UAE, the app will tend to surface geography, regulatory, resilience, and customer-impact considerations earlier than it would for a non-regulated internal-only service.'
+            })}
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'results-logic',
+      title: 'How results are derived',
+      summary: 'How the platform moves from wording to quantification',
+      intro: 'The platform moves from a scenario narrative into an estimate by asking: how often could this happen, how likely is it to succeed, what losses would follow, and how uncertain are those ranges. It then runs the model many times to show the likely spread of outcomes.',
+      chips: ['Scenario to model', 'FAIR-style thinking', 'Simulation', 'Confidence and evidence'],
+      disclosures: [
+        renderHelpDisclosure('results-logic', {
+          title: 'Plain-language quantification and FAIR-style thinking',
+          summary: 'What the main modelling concepts mean in this app.',
+          open: true,
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Threat capability and control strength</strong><p>Together these shape how exposed you are if the event occurs. Stronger controls usually reduce the chance that the event succeeds.</p></div>
+              <div class="help-mini-card"><strong>Frequency</strong><p>How often the event path could realistically arise in a year.</p></div>
+              <div class="help-mini-card"><strong>Primary and secondary loss</strong><p>Primary loss is the direct operational and recovery cost. Secondary loss includes regulatory, legal, customer, or reputational effects that follow.</p></div>
+            </div>
+            ${renderHelpCallout({
+              tone: 'trust',
+              title: 'What simulation does',
+              body: 'The simulation does not create facts. It repeatedly samples within your ranges to show how the result behaves under uncertainty. That is why clear ranges and honest assumptions matter.'
+            })}
+          `
+        }),
+        renderHelpDisclosure('results-logic', {
+          title: 'Executive, technical, and treatment comparison views',
+          summary: 'What each result layer is for.',
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Executive Summary</strong><p>Use this for the decision surface: current posture, key metrics, recommendation, confidence posture, and what management should do next.</p></div>
+              <div class="help-mini-card"><strong>Technical Detail</strong><p>Use this when you want to challenge assumptions, inspect drivers, understand the evidence basis, and review parameter-level reasoning.</p></div>
+              <div class="help-mini-card"><strong>Treatment comparison</strong><p>Use this to test whether a better outcome materially changes the decision and why the delta happened.</p></div>
+            </div>
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'steps',
+      title: 'How to use the main steps well',
+      summary: 'Step-by-step help',
+      intro: 'Each screen has one main job. Use the deeper detail only when it helps the current task.',
+      chips: ['Dashboard', 'Step 1', 'Step 2', 'Step 3', 'Review & Run', 'Results', 'Settings', 'Admin'],
+      disclosures: [
+        renderHelpDisclosure('steps', {
+          title: 'Dashboard',
+          summary: 'Start, resume, review, and keep an eye on what needs attention.',
+          body: `
+            <p class="help-body-copy"><strong>Purpose:</strong> know what to do next. Use the live work lane first, the watchlist second, and history last.</p>
+            <p class="help-body-copy"><strong>Common mistake:</strong> treating the dashboard as a reporting page. It is a front door and oversight lane, not the place to inspect every detail.</p>
+            ${renderHelpExample({
+              title: 'Best use',
+              body: 'Resume a live draft, open a result that needs review, or start a guided assessment only when there is no urgent queue item competing.'
+            })}
+          `
+        }),
+        renderHelpDisclosure('steps', {
+          title: 'Step 1: AI-Assisted Risk & Context Builder',
+          summary: 'Get to one plausible draft and choose what stays in scope.',
+          body: `
+            <p class="help-body-copy"><strong>What to do:</strong> answer the prompts in plain language, keep the scenario focused, then keep only the risks that clearly belong in this event path.</p>
+            <p class="help-body-copy"><strong>Good input:</strong> one triggering condition, one main asset or service, one clear impact path.</p>
+            <p class="help-body-copy"><strong>Common mistake:</strong> treating the shortlist as a basket of all possible issues instead of what genuinely belongs in this one scenario.</p>
+          `
+        }),
+        renderHelpDisclosure('steps', {
+          title: 'Step 2: Refine the Scenario',
+          summary: 'Turn the draft into one coherent scenario that can be challenged.',
+          body: `
+            <p class="help-body-copy"><strong>What to do:</strong> write one scenario in your own words, then use the coach and evidence guidance to tighten what is vague.</p>
+            <p class="help-body-copy"><strong>Common mistake:</strong> accepting AI structure without rewriting the parts that do not match the real business context.</p>
+          `
+        }),
+        renderHelpDisclosure('steps', {
+          title: 'Step 3: Estimate the Scenario',
+          summary: 'Use plain language first; open advanced tuning only when it materially improves the model.',
+          body: `
+            <p class="help-body-copy"><strong>What to do:</strong> work from frequency to exposure to cost. Use basic mode unless there is a clear reason to open advanced tuning.</p>
+            <p class="help-body-copy"><strong>Common mistake:</strong> forcing precise numbers without a rationale. If you cannot explain why a range is shaped the way it is, widen it and improve the evidence basis first.</p>
+          `
+        }),
+        renderHelpDisclosure('steps', {
+          title: 'Review & Run, Results, Settings, and Admin',
+          summary: 'How to use the final stages and role-specific controls well.',
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Review & Run</strong><p>Challenge the assumptions that matter most, then run. Do not turn this into another writing stage.</p></div>
+              <div class="help-mini-card"><strong>Results</strong><p>Read the executive story first, then challenge the technical detail, then export only after confidence and evidence feel good enough.</p></div>
+              <div class="help-mini-card"><strong>Personal Settings</strong><p>Use this to shape how the assistant helps you and to maintain context you own. Keep optional overlays secondary.</p></div>
+              <div class="help-mini-card"><strong>Admin</strong><p>Use admin screens as workbenches, not dashboards. Keep the organisation, defaults, governance, and document library current because they shape downstream suggestions.</p></div>
+            </div>
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'modeling',
+      title: 'Modelling guidance for non-technical users',
+      summary: 'Translate real-world controls into model inputs',
+      intro: 'You do not need to think in equations. The useful question is whether the real world makes the event more likely, less likely, more costly, or easier to contain.',
+      chips: ['Controls to ranges', 'Plain English first', 'Confidence matters'],
+      disclosures: [
+        renderHelpDisclosure('modeling', {
+          title: 'How real controls map into the model',
+          summary: 'Practical examples for non-technical users.',
+          open: true,
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Unpatched server, but EDR is in place</strong><p>Threat capability is still relevant because the weakness is exploitable. Control strength improves because detection and containment exist, but not enough to ignore the exposure.</p></div>
+              <div class="help-mini-card"><strong>Strong backups</strong><p>Backups usually help reduce business interruption and recovery cost. They do not automatically reduce event frequency or stop the event from succeeding.</p></div>
+              <div class="help-mini-card"><strong>MFA on privileged users</strong><p>This often improves control strength materially against identity-based compromise and can reduce how often a successful event path should be expected.</p></div>
+              <div class="help-mini-card"><strong>Network segmentation</strong><p>This can reduce spread, lower interruption duration, and limit secondary loss if the segmentation is real and well operated.</p></div>
+              <div class="help-mini-card"><strong>Weak monitoring</strong><p>Poor monitoring usually increases the chance the event succeeds for longer, raises interruption duration, and weakens confidence because detection assumptions become less certain.</p></div>
+              <div class="help-mini-card"><strong>Vendor dependency with contractual controls</strong><p>Contractual controls may help legal recovery or assurance, but they do not necessarily reduce outage frequency or immediate operational impact.</p></div>
+            </div>
+          `
+        }),
+        renderHelpDisclosure('modeling', {
+          title: 'What to do when you are unsure',
+          summary: 'How to handle imperfect knowledge responsibly.',
+          body: `
+            <p class="help-body-copy">If you are unsure, do three things: widen the range, lower the confidence you place in the result, and note what evidence would make the estimate stronger. The platform already surfaces confidence, evidence gaps, and parameter challenge points to support that workflow.</p>
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'confidence',
+      title: 'Confidence, evidence, and when to trust the output',
+      summary: 'Trust the output responsibly',
+      intro: 'A strong-looking number is not enough. Confidence, evidence quality, assumptions, and provenance tell you how much to rely on the current result and what still needs validation.',
+      chips: ['Confidence', 'Evidence quality', 'Assumptions', 'Provenance'],
+      disclosures: [
+        renderHelpDisclosure('confidence', {
+          title: 'What low confidence and missing information mean',
+          summary: 'Low confidence does not mean the result is useless. It means use it with the right level of caution.',
+          open: true,
+          body: `
+            <p class="help-body-copy">Low confidence usually means one or more important parts of the estimate are thinly evidenced, weakly sourced, or still resting on broad assumptions. Missing information points to the evidence that would most improve the current decision view.</p>
+            ${renderHelpCallout({
+              tone: 'trust',
+              title: 'What to validate before escalation',
+              body: 'Before you escalate a severe result, check whether the scenario is coherent, the most material assumptions are visible, the key ranges are credible, and the evidence caveat is acceptable for the decision you are asking management to make.'
+            })}
+          `
+        }),
+        renderHelpDisclosure('confidence', {
+          title: 'How to interpret AI suggestions and references responsibly',
+          summary: 'AI assists; it does not certify.',
+          body: `
+            <p class="help-body-copy">Use AI suggestions as a working draft. Keep what matches the business reality, edit what does not, and treat references as support for challenge, not as automatic proof that the estimate is correct. Provenance and citations help you understand how the current draft was assembled.</p>
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'mistakes',
+      title: 'Best practices and common mistakes',
+      summary: 'What separates strong assessments from weak ones',
+      intro: 'Most weak outputs come from a small set of avoidable mistakes. If you know what to watch for, the workflow becomes much easier.',
+      chips: ['Stay specific', 'Challenge AI', 'Do not over-tune'],
+      disclosures: [
+        renderHelpDisclosure('mistakes', {
+          title: 'Common mistakes to avoid',
+          summary: 'The most common ways users make the model harder to trust.',
+          open: true,
+          body: `
+            ${renderHelpCallout({ tone: 'mistake', title: 'Making scenarios too broad', body: 'If you mix multiple events, the estimate becomes harder to challenge and easier to misunderstand.' })}
+            ${renderHelpCallout({ tone: 'mistake', title: 'Treating AI suggestions as facts', body: 'AI should speed up drafting and structuring. It should not replace user confirmation or evidence checks.' })}
+            ${renderHelpCallout({ tone: 'mistake', title: 'Overusing advanced tuning', body: 'Advanced mode is for challenge and refinement, not for turning every estimate into a modelling exercise.' })}
+            ${renderHelpCallout({ tone: 'mistake', title: 'Entering numbers without rationale', body: 'If you cannot explain why a range should move up or down, the model cannot become more trustworthy just because the number is more precise.' })}
+          `
+        }),
+        renderHelpDisclosure('mistakes', {
+          title: 'A good working pattern',
+          summary: 'A reliable way to use the platform well.',
+          body: `
+            <div class="help-flow-grid">
+              ${[
+                'Get to one coherent scenario first.',
+                'Scope only the risks that genuinely belong in that event path.',
+                'Refine the narrative until a reviewer can challenge it clearly.',
+                'Estimate in plain language before touching advanced tuning.',
+                'Run the model and read executive posture before diving into technical detail.',
+                'Use evidence gaps and confidence posture to decide what to validate next.'
+              ].map((item, idx) => `<div class="help-flow-step"><span>${idx + 1}</span><p>${escapeHtml(item)}</p></div>`).join('')}
+            </div>
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'shortcuts',
+      title: 'Keyboard shortcuts and workflow tips',
+      summary: 'Use the product faster',
+      intro: 'Shortcuts are optional, but they are useful if you review many assessments or move through the workflow repeatedly.',
+      chips: ['Desktop only', 'Ignored while typing', 'Save cues stay visible'],
+      disclosures: [
+        renderHelpDisclosure('shortcuts', {
+          title: 'Current desktop shortcuts',
+          summary: 'The same shortcuts shown in the in-app overlay.',
+          open: true,
+          body: `
+            <div class="help-shortcut-grid">
+              <div class="help-shortcut-card"><strong>Alt/Option + N</strong><span>Start a new assessment</span></div>
+              <div class="help-shortcut-card"><strong>Alt/Option + R</strong><span>Resume your current draft</span></div>
+              <div class="help-shortcut-card"><strong>Alt/Option + S</strong><span>Open personal settings</span></div>
+              <div class="help-shortcut-card"><strong>Alt/Option + 1 / 2 / 3</strong><span>Switch results tabs</span></div>
+              <div class="help-shortcut-card"><strong>Alt/Option + F</strong><span>Focus admin user search</span></div>
+              <div class="help-shortcut-card"><strong>Alt/Option + /</strong><span>Open the shortcuts overlay</span></div>
+            </div>
+            <div class="flex items-center gap-3" style="margin-top:var(--sp-4);flex-wrap:wrap">
+              <button type="button" class="btn btn--secondary btn--sm" data-open-shortcuts-help>Open shortcuts overlay</button>
+              <span class="form-help">Drafts and settings save automatically. Watch the save and sync cues rather than repeatedly hunting for a manual save button.</span>
+            </div>
+          `
+        })
+      ]
+    }),
+    renderHelpSection({
+      id: 'roles',
+      title: 'Role-specific help',
+      summary: 'What good use looks like by role',
+      intro: 'Different roles should use the platform differently. The best use of the product depends on what you own and what decisions you support.',
+      chips: ['Standard user', 'Function admin', 'BU admin', 'Global admin'],
+      disclosures: [
+        renderHelpDisclosure('roles', {
+          title: 'Standard user',
+          summary: 'Draft, estimate, review, and escalate with evidence.',
+          body: `
+            <p class="help-body-copy">Focus on getting one good scenario through the workflow, using your settings to shape how the assistant helps you, and escalating results only after checking confidence and evidence posture.</p>
+          `
+        }),
+        renderHelpDisclosure('roles', {
+          title: 'Function admin and BU admin',
+          summary: 'Use the workspace as an oversight console, not as a general dashboard.',
+          body: `
+            <p class="help-body-copy">Prioritise queue items that need review, maintain the context you own, and use the dashboard watchlist and reassessment lane to keep important scenarios current. Keep owned context more up to date than optional personal overlays.</p>
+          `
+        }),
+        renderHelpDisclosure('roles', {
+          title: 'Global admin',
+          summary: 'Maintain the platform workbench that shapes everyone else’s output.',
+          body: `
+            <p class="help-body-copy">Keep the organisation structure, platform defaults, governance inputs, company context, and document library current. These settings influence how the AI drafts, what guidance users see, and how grounded the output can become.</p>
+          `
+        })
+      ]
+    })
+  ];
+
+  setPage(`
+    <main class="page help-page">
+      <div class="container help-shell">
+        <aside class="help-nav card">
+          <div class="help-nav__kicker">Help</div>
+          <div class="help-nav__title">Risk Intelligence guide</div>
+          <div class="help-nav__copy">Follow the product flow, jump to what you need, and open deeper detail only when it helps the current task.</div>
+          <div class="help-nav__role">
+            <span class="badge badge--neutral">${escapeHtml(roleSummary)}</span>
+            <span class="form-help">Tailored for the current product state</span>
+          </div>
+          <div class="help-nav__links">
+            ${[
+              ['help-overview', 'What this platform does'],
+              ['help-best-results', 'Getting the best result'],
+              ['help-context', 'How context works'],
+              ['help-results-logic', 'How results work'],
+              ['help-steps', 'Help by step'],
+              ['help-modeling', 'Non-technical modelling'],
+              ['help-confidence', 'Confidence and evidence'],
+              ['help-mistakes', 'Best practices'],
+              ['help-shortcuts', 'Shortcuts and workflow tips'],
+              ['help-roles', 'Role-specific help']
+            ].map(([id, label]) => `<button type="button" class="help-nav__link" data-help-target="${id}">${escapeHtml(label)}</button>`).join('')}
+          </div>
+        </aside>
+        <div class="help-main">
+          <section class="help-hero card">
+            <div class="help-hero__head">
+              <div>
+                <div class="help-hero__kicker">Help and FAQ</div>
+                <h1 class="help-hero__title" data-page-focus>Use the platform well without learning the whole model first.</h1>
+                <p class="help-hero__copy">This guide is structured around the actual workflow in the current app: start, refine, estimate, run, review, and export. It explains what the platform is doing, what you should do, what strong input looks like, and how to know when the result is strong enough to use.</p>
+              </div>
+              <div class="help-hero__actions">
+                <button type="button" class="btn btn--secondary" data-open-shortcuts-help>Shortcuts</button>
+                <a href="#/dashboard" class="btn btn--ghost">Back to dashboard</a>
+              </div>
+            </div>
+            <div class="help-hero__jump-strip">
+              ${[
+                ['help-best-results', 'Getting started'],
+                ['help-context', 'How context works'],
+                ['help-results-logic', 'How results work'],
+                ['help-mistakes', 'Best practices'],
+                ['help-steps', 'FAQ by step'],
+                ['help-roles', 'Role-based help']
+              ].map(([id, label]) => `<button type="button" class="help-jump-pill" data-help-target="${id}">${escapeHtml(label)}</button>`).join('')}
+            </div>
+          </section>
+          ${sections.join('')}
+        </div>
+      </div>
+    </main>
+  `);
+  bindHelpPageInteractions(document.getElementById('main-content'));
+}
+
 function getSettingsSectionStateKey(scope, title) {
   return `${scope}::${String(title || '').trim().toLowerCase()}`;
 }
@@ -6426,6 +6962,7 @@ async function init() {
     .on('/wizard/4', withAuth(renderWizard4))
     .on('/results/:id', withAuth(params => renderResults(params.id)))
     .on('/settings', renderUserSettings)
+    .on('/help', withAuth(renderHelpPage))
     .on('/admin', renderLogin)
     .on('/admin/settings', () => safeRenderAdminSettings(getPreferredAdminSection()))
     .on('/admin/settings/org', () => safeRenderAdminSettings('org'))

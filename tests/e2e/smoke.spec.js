@@ -642,6 +642,51 @@ test('personal settings shows the pilot release stamp', async ({ page }) => {
   });
 });
 
+test('help page renders and opens key workflow guidance without crashing', async ({ page }) => {
+  const seededUserSettings = {
+    userProfile: {
+      fullName: 'Alex Trafton',
+      jobTitle: 'Risk Manager',
+      businessUnit: 'G42',
+      department: 'Security',
+      focusAreas: ['Resilience'],
+      preferredOutputs: 'Executive summaries',
+      workingContext: 'Support regulated services.'
+    },
+    onboardedAt: '2026-03-17T00:00:00.000Z',
+    _overrideKeys: []
+  };
+  await seedAuthenticatedUser(page, { userSettings: seededUserSettings });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/help', async () => {
+    await expect(page.getByRole('heading', { name: /use the platform well without learning the whole model first/i })).toBeVisible();
+    await page.getByRole('button', { name: /how context works/i }).first().click();
+    await expect(page.getByRole('heading', { name: /how context is derived/i })).toBeVisible();
+    await page.getByText(/what comes from ai, benchmarks, and source material/i).click();
+    await expect(page.getByText(/primary grounding/i)).toBeVisible();
+    await page.getByRole('button', { name: /^Shortcuts$/ }).first().click();
+    await expect(page.getByRole('heading', { name: /desktop shortcuts/i })).toBeVisible();
+  });
+});
+
 test('authenticated admin shell renders without crashing', async ({ page }) => {
   await seedAuthenticatedUser(page, {
     username: 'admin',
