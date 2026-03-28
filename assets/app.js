@@ -4301,9 +4301,9 @@ function buildAssessmentWatchlist({
       const evidenceQuality = String(assessment.evidenceQuality || assessment.assessmentIntelligence?.confidence?.evidenceQuality || '').trim();
       const weakConfidence = /low/i.test(confidenceLabel) || /thin|incomplete|weak/i.test(evidenceQuality) || missingCount >= 2;
       const reasons = [];
-      const addReason = (key, label, priority, tone, summary) => {
+      const addReason = (key, label, priority, tone, summary, nextAction = '') => {
         if (!key || reasons.some(item => item.key === key)) return;
-        reasons.push({ key, label, priority, tone, summary });
+        reasons.push({ key, label, priority, tone, summary, nextAction });
       };
 
       if (results.toleranceBreached) {
@@ -4312,7 +4312,8 @@ function buildAssessmentWatchlist({
           'Above tolerance',
           100,
           'danger',
-          'The severe-case view is above tolerance and should return to active management review.'
+          'The severe-case view is above tolerance and should return to active management review.',
+          'Reopen the result and confirm the management response before conditions drift further.'
         );
       }
       if (results.nearTolerance) {
@@ -4321,7 +4322,8 @@ function buildAssessmentWatchlist({
           'Near tolerance',
           90,
           'warning',
-          'The position is still close enough to tolerance that it deserves another look before conditions drift.'
+          'The position is still close enough to tolerance that it deserves another look before conditions drift.',
+          'Check whether recent changes, new evidence, or weaker controls would push it over tolerance.'
         );
       }
       if (results.annualReviewTriggered) {
@@ -4330,7 +4332,8 @@ function buildAssessmentWatchlist({
           'Annual review due',
           82,
           'gold',
-          'The annual exposure view is at or above the review trigger, so this should come back into the formal review lane.'
+          'The annual exposure view is at or above the review trigger, so this should come back into the formal review lane.',
+          'Refresh the scenario against current operating conditions and confirm the existing posture still holds.'
         );
       }
       if (weakConfidence) {
@@ -4339,7 +4342,8 @@ function buildAssessmentWatchlist({
           'Confidence gap',
           76,
           'neutral',
-          'The result is still carrying weaker evidence or broader assumptions than you would want for a settled reference point.'
+          'The result is still carrying weaker evidence or broader assumptions than you would want for a settled reference point.',
+          'Open the result and tighten the highest-impact evidence gaps before treating it as a settled reference.'
         );
       }
       if (lifecycleStatus === 'treatment_variant') {
@@ -4348,7 +4352,8 @@ function buildAssessmentWatchlist({
           'Treatment needs validation',
           72,
           'gold',
-          'A treatment variant is saved, but the future-state change still needs confirmation before it becomes the trusted path.'
+          'A treatment variant is saved, but the future-state change still needs confirmation before it becomes the trusted path.',
+          'Review the treatment delta and validate that the planned control change is still realistic and funded.'
         );
       }
       if (daysSinceReview >= 180 && (citationCount < 2 || weakConfidence)) {
@@ -4357,7 +4362,8 @@ function buildAssessmentWatchlist({
           'Evidence basis is aging',
           68,
           'neutral',
-          'The saved result is old enough that newer evidence or changed conditions may have shifted the decision read.'
+          'The saved result is old enough that newer evidence or changed conditions may have shifted the decision read.',
+          'Refresh the evidence basis or confirm the original sources are still representative.'
         );
       }
       if (lifecycleStatus === 'baseline_locked' && daysSinceReview >= 120) {
@@ -4366,7 +4372,8 @@ function buildAssessmentWatchlist({
           'Baseline should be refreshed',
           64,
           'gold',
-          'The locked baseline is still useful, but it has not been revisited recently enough to stay a confident comparison anchor.'
+          'The locked baseline is still useful, but it has not been revisited recently enough to stay a confident comparison anchor.',
+          'Recheck the baseline assumptions so future treatment comparisons stay anchored to a current reference point.'
         );
       }
       if (daysSinceReview >= 120 && inferredCount >= 2) {
@@ -4375,19 +4382,28 @@ function buildAssessmentWatchlist({
           'Assumptions should be challenged',
           58,
           'neutral',
-          'This result still depends on older inferred assumptions that should be pressure-tested before reuse.'
+          'This result still depends on older inferred assumptions that should be pressure-tested before reuse.',
+          'Challenge the oldest inferred assumptions and replace them with fresher evidence where possible.'
         );
       }
 
       if (!reasons.length) return null;
       reasons.sort((a, b) => b.priority - a.priority);
       const topReason = reasons[0];
-      const reasonTrail = reasons.length > 1 ? ` · +${reasons.length - 1} more signal${reasons.length - 1 === 1 ? '' : 's'}` : '';
+      const reasonTrail = reasons.length > 1 ? ` +${reasons.length - 1} more signal${reasons.length - 1 === 1 ? '' : 's'}` : '';
+      const urgency = topReason.tone === 'danger'
+        ? { label: 'Act now', badgeClass: 'badge--danger' }
+        : topReason.tone === 'warning'
+          ? { label: 'Review soon', badgeClass: 'badge--warning' }
+          : topReason.tone === 'gold'
+            ? { label: 'Recheck', badgeClass: 'badge--gold' }
+            : { label: 'Check basis', badgeClass: 'badge--neutral' };
       return {
         id: assessment.id,
         title: assessment.scenarioTitle || 'Untitled assessment',
         priority: topReason.priority,
         updatedAt: completedAt,
+        businessContext: assessment.buName || assessment.businessUnit || 'Saved assessment',
         badgeLabel: topReason.label,
         badgeClass: topReason.tone === 'danger'
           ? 'badge--danger'
@@ -4396,7 +4412,10 @@ function buildAssessmentWatchlist({
             : topReason.tone === 'gold'
               ? 'badge--gold'
               : 'badge--neutral',
-        detail: `${assessment.buName || assessment.businessUnit || 'Saved assessment'} · ${topReason.summary}${reasonTrail}`,
+        detail: `${topReason.summary}${reasonTrail ? ` ·${reasonTrail}` : ''}`,
+        nextAction: topReason.nextAction,
+        urgencyLabel: urgency.label,
+        urgencyBadgeClass: urgency.badgeClass,
         reasons
       };
     })
