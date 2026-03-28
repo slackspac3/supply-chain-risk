@@ -126,6 +126,78 @@ function renderUserDashboard() {
   const watchlistDescription = isOversightUser
     ? 'Secondary revisit queue for saved results that deserve another look after the active attention lane is clear. The lane stays compact, but now groups the strongest revisit patterns.'
     : 'Saved results worth revisiting soon, kept compact so they do not compete with live work. The lane groups the strongest revisit patterns and keeps the next move explicit.';
+  const renderDashboardActionMenu = ({
+    items = [],
+    summaryLabel = 'More',
+    summaryClassName = 'btn btn--ghost btn--sm',
+    className = 'results-actions-disclosure dashboard-row-overflow'
+  } = {}) => {
+    const safeItems = (Array.isArray(items) ? items : []).filter(Boolean);
+    if (!safeItems.length) return '';
+    return `<details class="${className}">
+      <summary class="${summaryClassName}">${summaryLabel}</summary>
+      <div class="results-actions-disclosure-menu">
+        ${safeItems.join('')}
+      </div>
+    </details>`;
+  };
+  const renderAssessmentRowMenu = ({ assessmentId = '', includeDuplicate = true, includeArchive = true, includeDelete = true, includeOpen = false } = {}) => renderDashboardActionMenu({
+    items: [
+      includeOpen ? `<button type="button" class="btn btn--secondary btn--sm dashboard-open-action" data-assessment-id="${assessmentId}">Open Result</button>` : '',
+      includeDuplicate ? `<button type="button" class="btn btn--secondary btn--sm dashboard-duplicate-assessment" data-assessment-id="${assessmentId}">Duplicate</button>` : '',
+      includeArchive ? `<button type="button" class="btn btn--secondary btn--sm dashboard-archive-assessment" data-assessment-id="${assessmentId}">Archive</button>` : '',
+      includeDelete ? `<button type="button" class="btn btn--secondary btn--sm dashboard-delete-assessment" data-assessment-id="${assessmentId}">Delete</button>` : ''
+    ]
+  });
+  const renderDraftRowMenu = () => renderDashboardActionMenu({
+    items: [
+      '<button type="button" class="btn btn--secondary btn--sm dashboard-archive-draft">Archive</button>',
+      '<button type="button" class="btn btn--secondary btn--sm dashboard-delete-draft">Delete</button>'
+    ]
+  });
+  const renderWorkspaceToolsMenu = ({ includeResumeDraft = false, includeSettings = true, useSupportIds = false } = {}) => renderDashboardActionMenu({
+    items: [
+      includeResumeDraft ? '<button class="btn btn--secondary btn--sm" id="btn-dashboard-continue-draft">Resume Draft</button>' : '',
+      includeSettings ? `<button class="btn btn--secondary btn--sm" id="btn-dashboard-open-settings">${primarySettingsLabel}</button>` : '',
+      `<button class="btn btn--secondary btn--sm" id="${useSupportIds ? 'btn-dashboard-export-assessments-support' : 'btn-dashboard-export-assessments'}">Export Assessments</button>`,
+      `<button class="btn btn--secondary btn--sm" id="${useSupportIds ? 'btn-dashboard-import-assessments-support' : 'btn-dashboard-import-assessments'}">Import Assessments</button>`
+    ],
+    summaryLabel: useSupportIds ? 'Workspace tools' : 'Workspace tools',
+    summaryClassName: useSupportIds ? 'btn btn--ghost btn--sm' : 'btn btn--ghost',
+    className: useSupportIds ? 'results-actions-disclosure dashboard-hero-overflow' : 'results-actions-disclosure dashboard-hero-overflow'
+  });
+  const exportAssessmentsCollection = () => {
+    ExportService.exportDataAsJson(getAssessments(), `risk-calculator-assessments-${user?.username || 'user'}.json`);
+  };
+  const importAssessmentsCollection = () => {
+    ExportService.importJsonFile({
+      onData: parsed => {
+        if (!Array.isArray(parsed)) {
+          UI.toast('That file does not contain an assessment list.', 'warning');
+          return;
+        }
+        const existing = getAssessments();
+        const merged = [...parsed, ...existing]
+          .filter(item => item && typeof item === 'object' && item.id)
+          .reduce((acc, item) => {
+            if (!acc.find(existingItem => existingItem.id === item.id)) acc.push(item);
+            return acc;
+          }, []);
+        persistSavedAssessmentsCollection(merged);
+        renderUserDashboard();
+        UI.toast('Assessments imported.', 'success');
+      },
+      onError: () => UI.toast('That JSON file could not be imported.', 'warning')
+    });
+  };
+  const launchGuidedAssessmentStart = () => {
+    resetDraft();
+    openDraftWorkspaceRoute();
+  };
+  const launchTemplateStart = () => {
+    if (recommendedTemplate) loadTemplate(recommendedTemplate);
+  };
+  const launchSampleStart = () => launchPilotSampleAssessment();
   const renderWatchlistRows = items => items.map(item => UI.dashboardAssessmentRow({
     assessmentId: item.id,
     title: item.title,
@@ -143,14 +215,7 @@ function renderUserDashboard() {
     className: 'dashboard-assessment-row--compact dashboard-watchlist-row',
     actions: `
       <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.id}">${item.actionLabel || (item.urgencyLabel === 'Act now' ? 'Review now' : 'Open Result')}</button>
-      <details class="results-actions-disclosure dashboard-row-overflow">
-        <summary class="btn btn--ghost btn--sm">More</summary>
-        <div class="results-actions-disclosure-menu">
-          <button type="button" class="btn btn--secondary btn--sm dashboard-duplicate-assessment" data-assessment-id="${item.id}">Duplicate</button>
-          <button type="button" class="btn btn--secondary btn--sm dashboard-archive-assessment" data-assessment-id="${item.id}">Archive</button>
-          <button type="button" class="btn btn--secondary btn--sm dashboard-delete-assessment" data-assessment-id="${item.id}">Delete</button>
-        </div>
-      </details>
+      ${renderAssessmentRowMenu({ assessmentId: item.id })}
     `
   })).join('');
   const watchlistMarkup = visibleWatchlistItems.length ? `
@@ -328,14 +393,7 @@ function renderUserDashboard() {
       badgeLabel: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED || lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? lifecycle.label : assessment.results?.toleranceBreached ? 'Above tolerance' : assessment.results?.nearTolerance ? 'Close to tolerance' : lifecycle.label,
       actions: `
         <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${assessment.id}">Open</button>
-        <details class="results-actions-disclosure dashboard-row-overflow">
-          <summary class="btn btn--ghost btn--sm">More</summary>
-          <div class="results-actions-disclosure-menu">
-            <button type="button" class="btn btn--secondary btn--sm dashboard-duplicate-assessment" data-assessment-id="${assessment.id}">Duplicate</button>
-            <button type="button" class="btn btn--secondary btn--sm dashboard-archive-assessment" data-assessment-id="${assessment.id}">Archive</button>
-            <button type="button" class="btn btn--secondary btn--sm dashboard-delete-assessment" data-assessment-id="${assessment.id}">Delete</button>
-          </div>
-        </details>
+        ${renderAssessmentRowMenu({ assessmentId: assessment.id })}
       `
     });
   }).join('');
@@ -477,15 +535,7 @@ function renderUserDashboard() {
               </div>
               <div class="dashboard-hero-actions flex items-center gap-3 mt-6" style="flex-wrap:wrap">
                 <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="${roleFrontDoor.primaryActionLabel}">${roleFrontDoor.primaryActionLabel}</button>
-                <details class="results-actions-disclosure dashboard-hero-overflow">
-                  <summary class="btn btn--ghost">Workspace tools</summary>
-                  <div class="results-actions-disclosure-menu">
-                    ${hasDraft ? `<button class="btn btn--secondary btn--sm" id="btn-dashboard-continue-draft">Resume Draft</button>` : ''}
-                    <button class="btn btn--secondary btn--sm" id="btn-dashboard-open-settings">${primarySettingsLabel}</button>
-                    <button class="btn btn--secondary btn--sm" id="btn-dashboard-export-assessments">Export Assessments</button>
-                    <button class="btn btn--secondary btn--sm" id="btn-dashboard-import-assessments">Import Assessments</button>
-                  </div>
-                </details>
+                ${renderWorkspaceToolsMenu({ includeResumeDraft: hasDraft, includeSettings: true, useSupportIds: false })}
               </div>
               <div class="form-help" style="margin-top:12px;color:rgba(255,255,255,.65)">${roleFrontDoor.heroHint}</div>` : standardStartModule}
             </div>
@@ -519,14 +569,9 @@ function renderUserDashboard() {
               badgeLabel: item.status,
               actions: `
                 <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.action}">${item.actionLabel}</button>
-                <details class="results-actions-disclosure dashboard-row-overflow">
-                  <summary class="btn btn--ghost btn--sm">More</summary>
-                  <div class="results-actions-disclosure-menu">
-                    ${item.action === 'draft'
-                      ? '<button type="button" class="btn btn--secondary btn--sm dashboard-archive-draft">Archive</button><button type="button" class="btn btn--secondary btn--sm dashboard-delete-draft">Delete</button>'
-                      : `<button type="button" class="btn btn--secondary btn--sm dashboard-duplicate-assessment" data-assessment-id="${item.action}">Duplicate</button><button type="button" class="btn btn--secondary btn--sm dashboard-archive-assessment" data-assessment-id="${item.action}">Archive</button><button type="button" class="btn btn--secondary btn--sm dashboard-delete-assessment" data-assessment-id="${item.action}">Delete</button>`}
-                  </div>
-                </details>
+                ${item.action === 'draft'
+                  ? renderDraftRowMenu()
+                  : renderAssessmentRowMenu({ assessmentId: item.action })}
               `
             })).join('') : renderDashboardEmptyState({
               title: 'Nothing needs attention right now.',
@@ -644,13 +689,7 @@ function renderUserDashboard() {
                 badgeLabel: 'Archived',
                 actions: `
                   <button type="button" class="btn btn--ghost btn--sm dashboard-restore-assessment" data-assessment-id="${assessment.id}">${hasResults(assessment) ? 'Restore to Dashboard' : 'Resume as Draft'}</button>
-                  <details class="results-actions-disclosure dashboard-row-overflow">
-                    <summary class="btn btn--ghost btn--sm">More</summary>
-                    <div class="results-actions-disclosure-menu">
-                      ${hasResults(assessment) ? `<button type="button" class="btn btn--secondary btn--sm dashboard-open-action" data-assessment-id="${assessment.id}">Open Result</button>` : ''}
-                      <button type="button" class="btn btn--secondary btn--sm dashboard-delete-assessment" data-assessment-id="${assessment.id}">Delete</button>
-                    </div>
-                  </details>
+                  ${renderAssessmentRowMenu({ assessmentId: assessment.id, includeDuplicate: false, includeArchive: false, includeDelete: true, includeOpen: hasResults(assessment) })}
                 `
               })).join('') : renderDashboardEmptyState({
                 title: 'Nothing is archived right now.',
@@ -685,79 +724,41 @@ function renderUserDashboard() {
     openDraftWorkspaceRoute();
   });
   document.getElementById('btn-dashboard-start-template')?.addEventListener('click', () => {
-    if (recommendedTemplate) loadTemplate(recommendedTemplate);
+    launchTemplateStart();
   });
   document.getElementById('btn-dashboard-start-template-support')?.addEventListener('click', () => {
-    if (recommendedTemplate) loadTemplate(recommendedTemplate);
+    launchTemplateStart();
   });
-  document.getElementById('btn-dashboard-start-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
-  document.getElementById('btn-dashboard-start-next-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
+  document.getElementById('btn-dashboard-start-sample')?.addEventListener('click', () => launchSampleStart());
+  document.getElementById('btn-dashboard-start-next-sample')?.addEventListener('click', () => launchSampleStart());
   document.getElementById('btn-dashboard-start-next-guided')?.addEventListener('click', () => {
-    resetDraft();
-    openDraftWorkspaceRoute();
+    launchGuidedAssessmentStart();
   });
   document.getElementById('btn-empty-next-new')?.addEventListener('click', () => {
-    resetDraft();
-    openDraftWorkspaceRoute();
+    launchGuidedAssessmentStart();
   });
-  document.getElementById('btn-empty-next-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
+  document.getElementById('btn-empty-next-sample')?.addEventListener('click', () => launchSampleStart());
   document.getElementById('btn-empty-recent-template')?.addEventListener('click', () => {
-    if (recommendedTemplate) loadTemplate(recommendedTemplate);
+    launchTemplateStart();
   });
-  document.getElementById('btn-empty-recent-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
+  document.getElementById('btn-empty-recent-sample')?.addEventListener('click', () => launchSampleStart());
   document.getElementById('btn-empty-archived-template')?.addEventListener('click', () => {
-    if (recommendedTemplate) loadTemplate(recommendedTemplate);
+    launchTemplateStart();
   });
   document.getElementById('btn-dashboard-open-settings')?.addEventListener('click', () => Router.navigate('/settings'));
   document.getElementById('btn-dashboard-settings-secondary')?.addEventListener('click', () => Router.navigate('/settings'));
   document.getElementById('btn-dashboard-continue-draft')?.addEventListener('click', () => openDraftWorkspaceRoute());
   document.getElementById('btn-dashboard-export-assessments')?.addEventListener('click', () => {
-    ExportService.exportDataAsJson(getAssessments(), `risk-calculator-assessments-${user?.username || 'user'}.json`);
+    exportAssessmentsCollection();
   });
   document.getElementById('btn-dashboard-export-assessments-support')?.addEventListener('click', () => {
-    ExportService.exportDataAsJson(getAssessments(), `risk-calculator-assessments-${user?.username || 'user'}.json`);
+    exportAssessmentsCollection();
   });
   document.getElementById('btn-dashboard-import-assessments')?.addEventListener('click', () => {
-    ExportService.importJsonFile({
-      onData: parsed => {
-        if (!Array.isArray(parsed)) {
-          UI.toast('That file does not contain an assessment list.', 'warning');
-          return;
-        }
-        const existing = getAssessments();
-        const merged = [...parsed, ...existing]
-          .filter(item => item && typeof item === 'object' && item.id)
-          .reduce((acc, item) => {
-            if (!acc.find(existingItem => existingItem.id === item.id)) acc.push(item);
-            return acc;
-          }, []);
-        persistSavedAssessmentsCollection(merged);
-        renderUserDashboard();
-        UI.toast('Assessments imported.', 'success');
-      },
-      onError: () => UI.toast('That JSON file could not be imported.', 'warning')
-    });
+    importAssessmentsCollection();
   });
   document.getElementById('btn-dashboard-import-assessments-support')?.addEventListener('click', () => {
-    ExportService.importJsonFile({
-      onData: parsed => {
-        if (!Array.isArray(parsed)) {
-          UI.toast('That file does not contain an assessment list.', 'warning');
-          return;
-        }
-        const existing = getAssessments();
-        const merged = [...parsed, ...existing]
-          .filter(item => item && typeof item === 'object' && item.id)
-          .reduce((acc, item) => {
-            if (!acc.find(existingItem => existingItem.id === item.id)) acc.push(item);
-            return acc;
-          }, []);
-        persistSavedAssessmentsCollection(merged);
-        renderUserDashboard();
-        UI.toast('Assessments imported.', 'success');
-      },
-      onError: () => UI.toast('That JSON file could not be imported.', 'warning')
-    });
+    importAssessmentsCollection();
   });
   document.querySelector('main.page')?.addEventListener('click', async event => {
     const target = event.target.closest('button');
