@@ -33,7 +33,47 @@ function renderUserDashboard() {
   const hasDraft = Boolean(draftTitle);
   const draftLifecycle = getAssessmentLifecyclePresentation(AppState.draft || {});
   const focusAreas = Array.isArray(profile.focusAreas) ? profile.focusAreas.filter(Boolean) : [];
-  const reviewEligibleAssessments = assessments.filter(a => a?.results && (a.results.toleranceBreached || a.results.nearTolerance || a.results.annualReviewTriggered));
+  const normaliseDashboardScenarioKey = value => String(normaliseScenarioSeedText(value || ''))
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\b(suggested draft|draft|scenario|assessment|risk)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const buildScenarioTokenSet = value => new Set(
+    normaliseDashboardScenarioKey(value)
+      .split(' ')
+      .filter(token => token.length >= 4)
+  );
+  const hasMeaningfulScenarioOverlap = (left, right) => {
+    const leftTokens = buildScenarioTokenSet(left);
+    const rightTokens = buildScenarioTokenSet(right);
+    if (!leftTokens.size || !rightTokens.size) return false;
+    let overlap = 0;
+    leftTokens.forEach(token => {
+      if (rightTokens.has(token)) overlap += 1;
+    });
+    return overlap >= 2 || (overlap >= 1 && Math.min(leftTokens.size, rightTokens.size) <= 2);
+  };
+  const draftScenarioSignature = hasDraft
+    ? {
+        id: String(AppState.draft?.id || '').trim(),
+        title: draftTitle,
+        risks: new Set((Array.isArray(AppState.draft?.selectedRiskIds) ? AppState.draft.selectedRiskIds : []).filter(Boolean).map(String)),
+        buName: String(AppState.draft?.buName || profile.businessUnit || user?.businessUnit || '').trim().toLowerCase()
+      }
+    : null;
+  const isDuplicateOfLiveDraft = assessment => {
+    if (!draftScenarioSignature || !assessment) return false;
+    if (draftScenarioSignature.id && String(assessment.id || '') === draftScenarioSignature.id) return true;
+    const assessmentRisks = new Set((Array.isArray(assessment.selectedRiskIds) ? assessment.selectedRiskIds : []).filter(Boolean).map(String));
+    const sharedRiskCount = draftScenarioSignature.risks.size
+      ? Array.from(draftScenarioSignature.risks).filter(id => assessmentRisks.has(id)).length
+      : 0;
+    const sameBusinessContext = !draftScenarioSignature.buName || String(assessment.buName || '').trim().toLowerCase() === draftScenarioSignature.buName;
+    const titleOverlap = hasMeaningfulScenarioOverlap(draftScenarioSignature.title, assessment.scenarioTitle || assessment.narrative || '');
+    return sameBusinessContext && (sharedRiskCount >= 1 || titleOverlap);
+  };
+  const reviewEligibleAssessments = assessments.filter(a => a?.results && (a.results.toleranceBreached || a.results.nearTolerance || a.results.annualReviewTriggered) && !isDuplicateOfLiveDraft(a));
   const assessmentsNeedingReview = reviewEligibleAssessments.slice(0, 3);
   const lifecycleCounts = assessments.reduce((acc, assessment) => {
     const status = deriveAssessmentLifecycleStatus(assessment);
