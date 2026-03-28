@@ -4280,6 +4280,138 @@ function buildEvidenceGapActionPlan({
   return plan.slice(0, 5);
 }
 
+function buildAssessmentWatchlist({
+  assessments = [],
+  excludeAssessmentIds = [],
+  maxItems = 6,
+  now = Date.now()
+} = {}) {
+  const excluded = new Set((Array.isArray(excludeAssessmentIds) ? excludeAssessmentIds : []).filter(Boolean).map(id => String(id)));
+  const list = (Array.isArray(assessments) ? assessments : [])
+    .filter(assessment => assessment && assessment.results && !excluded.has(String(assessment.id || '')))
+    .map(assessment => {
+      const lifecycleStatus = typeof deriveAssessmentLifecycleStatus === 'function'
+        ? deriveAssessmentLifecycleStatus(assessment)
+        : String(assessment.lifecycleStatus || '').trim().toLowerCase();
+      if (lifecycleStatus === 'archived') return null;
+      const results = assessment.results || {};
+      const completedAt = new Date(assessment.completedAt || assessment.lifecycleUpdatedAt || assessment.createdAt || 0).getTime() || 0;
+      const daysSinceReview = completedAt ? Math.max(0, Math.floor((now - completedAt) / 86400000)) : 0;
+      const citationCount = Array.isArray(assessment.citations) ? assessment.citations.filter(Boolean).length : 0;
+      const missingCount = Array.isArray(assessment.missingInformation) ? assessment.missingInformation.filter(Boolean).length : 0;
+      const inferredCount = Array.isArray(assessment.inferredAssumptions) ? assessment.inferredAssumptions.filter(Boolean).length : 0;
+      const confidenceLabel = String(assessment.confidenceLabel || assessment.assessmentIntelligence?.confidence?.label || '').trim();
+      const evidenceQuality = String(assessment.evidenceQuality || assessment.assessmentIntelligence?.confidence?.evidenceQuality || '').trim();
+      const weakConfidence = /low/i.test(confidenceLabel) || /thin|incomplete|weak/i.test(evidenceQuality) || missingCount >= 2;
+      const reasons = [];
+      const addReason = (key, label, priority, tone, summary) => {
+        if (!key || reasons.some(item => item.key === key)) return;
+        reasons.push({ key, label, priority, tone, summary });
+      };
+
+      if (results.toleranceBreached) {
+        addReason(
+          'above_tolerance',
+          'Above tolerance',
+          100,
+          'danger',
+          'The severe-case view is above tolerance and should return to active management review.'
+        );
+      }
+      if (results.nearTolerance) {
+        addReason(
+          'near_tolerance',
+          'Near tolerance',
+          90,
+          'warning',
+          'The position is still close enough to tolerance that it deserves another look before conditions drift.'
+        );
+      }
+      if (results.annualReviewTriggered) {
+        addReason(
+          'annual_review',
+          'Annual review due',
+          82,
+          'gold',
+          'The annual exposure view is at or above the review trigger, so this should come back into the formal review lane.'
+        );
+      }
+      if (weakConfidence) {
+        addReason(
+          'confidence_gap',
+          'Confidence gap',
+          76,
+          'neutral',
+          'The result is still carrying weaker evidence or broader assumptions than you would want for a settled reference point.'
+        );
+      }
+      if (lifecycleStatus === 'treatment_variant') {
+        addReason(
+          'treatment_validation',
+          'Treatment needs validation',
+          72,
+          'gold',
+          'A treatment variant is saved, but the future-state change still needs confirmation before it becomes the trusted path.'
+        );
+      }
+      if (daysSinceReview >= 180 && (citationCount < 2 || weakConfidence)) {
+        addReason(
+          'stale_evidence',
+          'Evidence basis is aging',
+          68,
+          'neutral',
+          'The saved result is old enough that newer evidence or changed conditions may have shifted the decision read.'
+        );
+      }
+      if (lifecycleStatus === 'baseline_locked' && daysSinceReview >= 120) {
+        addReason(
+          'baseline_refresh',
+          'Baseline should be refreshed',
+          64,
+          'gold',
+          'The locked baseline is still useful, but it has not been revisited recently enough to stay a confident comparison anchor.'
+        );
+      }
+      if (daysSinceReview >= 120 && inferredCount >= 2) {
+        addReason(
+          'old_assumptions',
+          'Assumptions should be challenged',
+          58,
+          'neutral',
+          'This result still depends on older inferred assumptions that should be pressure-tested before reuse.'
+        );
+      }
+
+      if (!reasons.length) return null;
+      reasons.sort((a, b) => b.priority - a.priority);
+      const topReason = reasons[0];
+      const reasonTrail = reasons.length > 1 ? ` · +${reasons.length - 1} more signal${reasons.length - 1 === 1 ? '' : 's'}` : '';
+      return {
+        id: assessment.id,
+        title: assessment.scenarioTitle || 'Untitled assessment',
+        priority: topReason.priority,
+        updatedAt: completedAt,
+        badgeLabel: topReason.label,
+        badgeClass: topReason.tone === 'danger'
+          ? 'badge--danger'
+          : topReason.tone === 'warning'
+            ? 'badge--warning'
+            : topReason.tone === 'gold'
+              ? 'badge--gold'
+              : 'badge--neutral',
+        detail: `${assessment.buName || assessment.businessUnit || 'Saved assessment'} · ${topReason.summary}${reasonTrail}`,
+        reasons
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return (b.updatedAt || 0) - (a.updatedAt || 0);
+    });
+
+  return list.slice(0, Math.max(0, Number(maxItems || 0) || 0));
+}
+
 function buildScenarioQualityCoach({
   draft = {},
   selectedRisks = [],

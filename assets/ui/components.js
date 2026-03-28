@@ -170,9 +170,10 @@ const UI = (() => {
     </div>`;
   }
 
-  function dashboardAssessmentRow({ assessmentId = '', title, detail, badgeClass = 'badge--neutral', badgeLabel, actions }) {
+  function dashboardAssessmentRow({ assessmentId = '', title, detail, badgeClass = 'badge--neutral', badgeLabel, actions, className = '' }) {
     const dataAttribute = assessmentId ? ` data-assessment-id="${assessmentId}"` : '';
-    return `<div class="card dashboard-assessment-row"${dataAttribute}>
+    const classes = ['card', 'dashboard-assessment-row', className].filter(Boolean).join(' ');
+    return `<div class="${classes}"${dataAttribute}>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
           <div style="font-weight:600;color:var(--text-primary)">${title}</div>

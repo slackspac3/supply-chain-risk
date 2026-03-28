@@ -15,6 +15,7 @@ function renderUserDashboard() {
   const globalSettings = getAdminSettings();
   const profile = normaliseUserProfile(settings.userProfile, user);
   const capability = getNonAdminCapabilityState(user, settings, globalSettings);
+  const isOversightUser = capability.canManageBusinessUnit || capability.canManageDepartment;
   const allAssessments = getAssessments();
   const assessments = allAssessments
     .filter(a => deriveAssessmentLifecycleStatus(a) !== ASSESSMENT_LIFECYCLE_STATUS.ARCHIVED)
@@ -32,7 +33,8 @@ function renderUserDashboard() {
   const hasDraft = Boolean(draftTitle);
   const draftLifecycle = getAssessmentLifecyclePresentation(AppState.draft || {});
   const focusAreas = Array.isArray(profile.focusAreas) ? profile.focusAreas.filter(Boolean) : [];
-  const assessmentsNeedingReview = assessments.filter(a => a?.results && (a.results.toleranceBreached || a.results.nearTolerance || a.results.annualReviewTriggered)).slice(0, 3);
+  const reviewEligibleAssessments = assessments.filter(a => a?.results && (a.results.toleranceBreached || a.results.nearTolerance || a.results.annualReviewTriggered));
+  const assessmentsNeedingReview = reviewEligibleAssessments.slice(0, 3);
   const lifecycleCounts = assessments.reduce((acc, assessment) => {
     const status = deriveAssessmentLifecycleStatus(assessment);
     if (status === ASSESSMENT_LIFECYCLE_STATUS.READY_FOR_REVIEW) acc.readyForReview += 1;
@@ -69,6 +71,59 @@ function renderUserDashboard() {
     });
     })
   ].slice(0, 4);
+  const activeQueueAssessmentIds = openAssessmentRows
+    .map(item => item.action)
+    .filter(id => id && id !== 'draft');
+  const watchlistItems = buildAssessmentWatchlist({
+    assessments,
+    excludeAssessmentIds: activeQueueAssessmentIds,
+    maxItems: 6
+  });
+  const visibleWatchlistItems = watchlistItems.slice(0, 3);
+  const hiddenWatchlistItems = watchlistItems.slice(3);
+  const watchlistTitle = isOversightUser ? 'Reassessment lane' : 'Needs revisit';
+  const watchlistDescription = isOversightUser
+    ? 'Secondary revisit queue for saved results that deserve another look after the active attention lane is clear.'
+    : 'Saved results worth revisiting soon, kept compact so they do not compete with live work.';
+  const renderWatchlistRows = items => items.map(item => UI.dashboardAssessmentRow({
+    assessmentId: item.id,
+    title: item.title,
+    detail: item.detail,
+    badgeClass: item.badgeClass,
+    badgeLabel: item.badgeLabel,
+    className: 'dashboard-assessment-row--compact dashboard-watchlist-row',
+    actions: `
+      <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.id}">Open Result</button>
+      <details class="results-actions-disclosure dashboard-row-overflow">
+        <summary class="btn btn--ghost btn--sm">More</summary>
+        <div class="results-actions-disclosure-menu">
+          <button type="button" class="btn btn--secondary btn--sm dashboard-duplicate-assessment" data-assessment-id="${item.id}">Duplicate</button>
+          <button type="button" class="btn btn--secondary btn--sm dashboard-archive-assessment" data-assessment-id="${item.id}">Archive</button>
+          <button type="button" class="btn btn--secondary btn--sm dashboard-delete-assessment" data-assessment-id="${item.id}">Delete</button>
+        </div>
+      </details>
+    `
+  })).join('');
+  const watchlistMarkup = visibleWatchlistItems.length ? `
+    <div class="card card--elevated dashboard-section-card dashboard-section-card--secondary dashboard-watchlist-panel">
+      <div class="flex items-center justify-between" style="gap:var(--sp-3);flex-wrap:wrap">
+        <div>
+          <div class="context-panel-title">${watchlistTitle}</div>
+          <div class="form-help">${watchlistDescription}</div>
+        </div>
+        <span class="badge badge--neutral">${watchlistItems.length}</span>
+      </div>
+      <div class="dashboard-watchlist-list">
+        ${renderWatchlistRows(visibleWatchlistItems)}
+      </div>
+      ${hiddenWatchlistItems.length ? `<details class="dashboard-disclosure dashboard-watchlist-disclosure">
+        <summary>View all revisit candidates <span class="badge badge--neutral">+${hiddenWatchlistItems.length}</span></summary>
+        <div class="dashboard-disclosure-copy">Open this only when you want the longer reassessment queue behind the immediate items.</div>
+        <div class="dashboard-disclosure-body">
+          ${renderWatchlistRows(hiddenWatchlistItems)}
+        </div>
+      </details>` : ''}
+    </div>` : '';
   const quickStatus = hasDraft
     ? 'You have a draft in progress and can resume it immediately.'
     : assessmentsNeedingReview.length
@@ -112,7 +167,6 @@ function renderUserDashboard() {
   const primarySettingsLabel = capability.canManageBusinessUnit || capability.canManageDepartment
     ? capability.experience.primaryActionLabel
     : 'Personal Settings';
-  const isOversightUser = capability.canManageBusinessUnit || capability.canManageDepartment;
   const oversightContextActionLabel = capability.canManageBusinessUnit ? 'Manage BU Context' : 'Manage Function Context';
   const oversightPrimaryActionLabel = contextNeedsAttention
     ? oversightContextActionLabel
@@ -487,6 +541,7 @@ function renderUserDashboard() {
           </div>
 
           <div class="dashboard-column">
+            ${watchlistMarkup}
             <div class="card card--elevated dashboard-section-card dashboard-section-card--secondary dashboard-section-card--support">
               <div class="results-section-heading">What you can start next</div>
               <div class="context-panel-copy" style="margin-top:10px">${queueNeedsAttention

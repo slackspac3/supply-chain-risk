@@ -3518,6 +3518,31 @@ canvas { display: block; width: 100%; }
   padding: var(--sp-5);
   min-height: 0;
 }
+.dashboard-watchlist-panel {
+  padding: var(--sp-4) var(--sp-5);
+  background: linear-gradient(180deg, rgba(246,243,242,.02), rgba(246,243,242,.008));
+}
+.dashboard-watchlist-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+.dashboard-assessment-row--compact {
+  padding: var(--sp-4);
+  background: linear-gradient(180deg, rgba(246,243,242,.022), rgba(246,243,242,.008));
+}
+.dashboard-assessment-row--compact .form-help {
+  max-width: 60ch;
+}
+.dashboard-watchlist-row .badge {
+  white-space: nowrap;
+}
+.dashboard-watchlist-disclosure {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid rgba(246,243,242,.07);
+}
 .dashboard-context-card--nested { padding: var(--sp-5); background: linear-gradient(180deg, rgba(246,243,242,.026), rgba(246,243,242,.012)); }
 .dashboard-disclosure[open] > summary { margin-bottom: var(--sp-3); }
 .dashboard-assessment-row {
