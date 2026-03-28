@@ -69,6 +69,48 @@ function escapeHtml(value = '') {
     .replace(/'/g, '&#39;');
 }
 
+function formatSourceBasisSummary(value = null) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map(item => formatSourceBasisSummary(item))
+      .filter(Boolean)
+      .slice(0, 4)
+      .join(' · ');
+  }
+  if (typeof value === 'object') {
+    const preferred = [
+      value.title,
+      value.label,
+      value.sourceTitle,
+      value.name,
+      value.origin,
+      value.sourceTypeLabel,
+      value.reason,
+      value.relevanceReason,
+      value.summary,
+      value.evidenceSummary,
+      value.uploadedDocumentName,
+      value.text,
+      value.type
+    ]
+      .map(item => String(item || '').trim())
+      .filter(Boolean);
+    if (preferred.length) return Array.from(new Set(preferred)).slice(0, 4).join(' · ');
+
+    const flattened = Object.values(value)
+      .flatMap(item => Array.isArray(item) ? item : [item])
+      .map(item => (typeof item === 'object' && item ? (item.title || item.label || item.sourceTitle || item.name || item.text || '') : item))
+      .map(item => String(item || '').trim())
+      .filter(Boolean);
+    if (flattened.length) return Array.from(new Set(flattened)).slice(0, 4).join(' · ');
+  }
+  return '';
+}
+
 function getReleaseInfo() {
   return APP_RELEASE;
 }
@@ -5143,7 +5185,7 @@ function renderParameterChallengePanel(entries = [], {
         <div class="results-parameter-challenge-card__body">
           <div class="results-parameter-challenge-card__row">
             <span>Current source basis</span>
-            <p>${escapeHtml(String(item.sourceBasis || 'No source basis recorded yet.'))}</p>
+            <p>${escapeHtml(formatSourceBasisSummary(item.sourceBasis) || 'No source basis recorded yet.')}</p>
           </div>
           <div class="results-parameter-challenge-card__row">
             <span>What supports it</span>

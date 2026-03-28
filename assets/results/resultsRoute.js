@@ -325,7 +325,7 @@ function renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence,
   const provenance = Array.isArray(assessment?.inputProvenance) ? assessment.inputProvenance.filter(Boolean) : [];
   const traceRows = assumptions.map((item, index) => {
     const text = escapeHtml(String(item?.text || item || 'Unnamed assumption'));
-    const basis = item?.basis || item?.sourceBasis || provenance[index] || primaryGrounding[index] || supportingReferences[index] || '';
+    const basis = formatSourceBasisSummary(item?.basis || item?.sourceBasis || provenance[index] || primaryGrounding[index] || supportingReferences[index] || '');
     const confidence = item?.confidence || item?.strength || '';
     return `<div class="results-trace-row">
       <div class="results-trace-row__head">
@@ -333,7 +333,7 @@ function renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence,
         ${confidence ? `<span class="badge badge--neutral">${escapeHtml(String(confidence))}</span>` : ''}
       </div>
       <div class="results-summary-copy">${text}</div>
-      <div class="results-comparison-foot" style="margin-top:var(--sp-2)">${basis ? `Source basis: ${escapeHtml(String(basis))}` : 'Source basis not explicitly recorded for this assumption yet.'}</div>
+      <div class="results-comparison-foot" style="margin-top:var(--sp-2)">${basis ? `Source basis: ${escapeHtml(basis)}` : 'Source basis not explicitly recorded for this assumption yet.'}</div>
     </div>`;
   }).join('');
   const topGap = missingInformation[0] || 'No major missing information was recorded for this assessment.';
