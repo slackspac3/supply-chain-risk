@@ -727,30 +727,12 @@ function renderResultsExplanationPanel(assessmentIntelligence, comparison, runMe
   });
 }
 
-function buildResultTrustBasis(assessment, runMetadata) {
-  const assignments = buildLiveInputSourceAssignments(assessment);
-  const userEntered = assignments.filter(item => /user/i.test(String(item.origin || ''))).length;
-  const aiSuggested = assignments.filter(item => /ai/i.test(String(item.origin || ''))).length;
-  const inheritedContext = assignments.filter(item => !/user/i.test(String(item.origin || '')) && !/ai/i.test(String(item.origin || ''))).length;
-  const inferredAssumptions = Array.isArray(assessment.inferredAssumptions) ? assessment.inferredAssumptions.filter(Boolean).length : 0;
-  const citations = Array.isArray(assessment.citations) ? assessment.citations.filter(Boolean).length : 0;
-  const provenance = Array.isArray(assessment.inputProvenance) ? assessment.inputProvenance.filter(Boolean).length : 0;
-  return {
-    userEntered,
-    aiSuggested,
-    inheritedContext,
-    inferredAssumptions,
-    citations,
-    provenance,
-    seed: runMetadata?.seed ?? '—',
-    iterations: Number(runMetadata?.iterations || 0).toLocaleString(),
-    distribution: String(runMetadata?.distributions?.eventModel || 'triangular'),
-    vulnerabilityMode: String(runMetadata?.distributions?.vulnerabilityMode || 'derived')
-  };
-}
-
 function renderModelBasisPanel(assessment, runMetadata, confidenceFrame, thresholdModel) {
-  const basis = buildResultTrustBasis(assessment, runMetadata);
+  const basis = buildResultTrustBasis({
+    assessment,
+    runMetadata,
+    inputAssignments: buildLiveInputSourceAssignments(assessment)
+  });
   return UI.resultsSectionBlock({
     title: 'Technical appendix',
     intro: 'Open this layer when you want the model basis, input sources, and reproducibility detail behind the headline result.',
@@ -816,7 +798,11 @@ function renderTechnicalOrientationBlock(rolePresentation, runMetadata, confiden
 function renderTechnicalReviewSurface(results, assessmentIntelligence, confidenceFrame, assessment, thresholdModel) {
   const topDriver = Array.isArray(assessmentIntelligence?.drivers?.sensitivity) ? assessmentIntelligence.drivers.sensitivity[0] : null;
   const topAssumption = Array.isArray(assessmentIntelligence?.assumptions) ? assessmentIntelligence.assumptions[0] : null;
-  const basis = buildResultTrustBasis(assessment, results.runMetadata || null);
+  const basis = buildResultTrustBasis({
+    assessment,
+    runMetadata: results.runMetadata || null,
+    inputAssignments: buildLiveInputSourceAssignments(assessment)
+  });
   return `<section class="results-section-stack">
     <div class="results-section-heading">Technical review priorities</div>
     <div class="results-technical-surface">
@@ -857,7 +843,11 @@ function renderTechnicalReviewSurface(results, assessmentIntelligence, confidenc
 
 function renderTechnicalStoryBand(results, assessmentIntelligence, confidenceFrame, thresholdModel, assessment) {
   const sensitivity = Array.isArray(assessmentIntelligence?.drivers?.sensitivity) ? assessmentIntelligence.drivers.sensitivity.slice(0, 3) : [];
-  const basis = buildResultTrustBasis(assessment, results.runMetadata || null);
+  const basis = buildResultTrustBasis({
+    assessment,
+    runMetadata: results.runMetadata || null,
+    inputAssignments: buildLiveInputSourceAssignments(assessment)
+  });
   const threshold = Number(results.threshold || 0);
   const warningThreshold = Number(results.warningThreshold || 0);
   const severeLoss = Number(results.eventLoss?.p90 || 0);
@@ -1028,37 +1018,40 @@ function renderRunGuardrailSummary(validation) {
 }
 
 function renderPreRunReviewRail(draft, validation, selectedRisks, safeIterations) {
-  const warnings = Array.isArray(validation?.warnings) ? validation.warnings.filter(Boolean) : [];
-  const errors = Array.isArray(validation?.errors) ? validation.errors.filter(Boolean) : [];
-  const readiness = errors.length
-    ? 'Needs changes before run'
-    : warnings.length
-      ? 'Ready, but challenge the flagged assumptions'
-      : 'Ready to run';
-  const confidence = String(draft.confidenceLabel || '').trim() || 'Working estimate';
+  const review = buildReviewReadinessModel({ draft, validation, selectedRisks, safeIterations });
   return `<div class="wizard-focus-strip wizard-focus-strip--compact anim-fade-in">
     <div class="wizard-focus-card wizard-focus-card--wide">
       <span class="wizard-focus-card__label">Review gate</span>
-      <strong>${escapeHtml(readiness)}</strong>
-      <span>${escapeHtml(errors[0] || warnings[0] || 'The scenario, assumptions, and model settings are coherent enough for a pilot run. Use the checks below to decide whether to run now or tighten one input first.')}</span>
+      <strong>${escapeHtml(review.reviewGateLabel)}</strong>
+      <span>${escapeHtml(review.reviewGateCopy)}</span>
     </div>
     <div class="wizard-focus-card">
       <span class="wizard-focus-card__label">Scope and trust</span>
-      <strong>${selectedRisks.length ? `${selectedRisks.length} risk${selectedRisks.length === 1 ? '' : 's'} in scope` : 'Scenario scope only'}</strong>
-      <span>${draft.geography || 'No geography stated'} · ${safeIterations.toLocaleString('en-US')} iterations · ${escapeHtml(confidence)}</span>
+      <strong>${escapeHtml(review.scopeLabel)}</strong>
+      <span>${escapeHtml(review.scopeMeta)}</span>
     </div>
   </div>`;
 }
 
 function renderPreRunTrustSummary(draft, safeIterations) {
-  const provenanceCount = Array.isArray(draft.inputProvenance) ? draft.inputProvenance.filter(Boolean).length : 0;
-  const evidenceCount = Array.isArray(draft.citations) ? draft.citations.filter(Boolean).length : 0;
+  const trust = buildEvidenceTrustSummary({
+    confidenceLabel: draft.confidenceLabel,
+    evidenceQuality: draft.evidenceQuality,
+    evidenceSummary: draft.evidenceSummary,
+    missingInformation: draft.missingInformation,
+    inputProvenance: draft.inputProvenance,
+    citations: draft.citations,
+    primaryGrounding: draft.primaryGrounding,
+    supportingReferences: draft.supportingReferences,
+    inferredAssumptions: draft.inferredAssumptions,
+    inputAssignments: draft.inputAssignments
+  });
   const assumptions = Array.isArray(draft.inferredAssumptions) ? draft.inferredAssumptions.filter(Boolean).slice(0, 2) : [];
   return `<div class="wizard-summary-band wizard-summary-band--support anim-fade-in">
     <div>
       <div class="wizard-summary-band__label">Run trust summary</div>
-      <strong>${provenanceCount ? `${provenanceCount} tracked provenance item${provenanceCount === 1 ? '' : 's'}` : 'No tracked provenance yet'}</strong>
-      <div class="wizard-summary-band__copy">${evidenceCount ? `${evidenceCount} supporting citation${evidenceCount === 1 ? '' : 's'} are linked to the scenario.` : 'This run is still relying mainly on the scenario narrative and current judgement calls.'}${assumptions.length ? ` Main assumption to challenge: ${escapeHtml(assumptions[0])}` : ''}</div>
+      <strong>${trust.provenanceCount ? `${trust.provenanceCount} tracked provenance item${trust.provenanceCount === 1 ? '' : 's'}` : 'No tracked provenance yet'}</strong>
+      <div class="wizard-summary-band__copy">${trust.citationCount ? `${trust.citationCount} supporting citation${trust.citationCount === 1 ? '' : 's'} are linked to the scenario.` : 'This run is still relying mainly on the scenario narrative and current judgement calls.'}${assumptions.length ? ` Main assumption to challenge: ${escapeHtml(assumptions[0])}` : ''}</div>
     </div>
     <div class="wizard-summary-band__meta">
       <span class="badge badge--neutral">${safeIterations.toLocaleString('en-US')} iterations</span>
@@ -1067,23 +1060,13 @@ function renderPreRunTrustSummary(draft, safeIterations) {
   </div>`;
 }
 
-function renderPreRunActionSpotlight(validation, safeIterations, distType) {
-  const warnings = Array.isArray(validation?.warnings) ? validation.warnings.filter(Boolean) : [];
-  const errors = Array.isArray(validation?.errors) ? validation.errors.filter(Boolean) : [];
-  const readinessLabel = errors.length
-    ? 'Complete the flagged inputs before you run'
-    : warnings.length
-      ? 'Run now, but challenge the flagged assumptions'
-      : 'Run now with the current assumptions';
-  const supportCopy = errors.length
-    ? errors[0]
-    : warnings[0] || 'The run will save the current thresholds, distributions, and traced assumptions behind the result.';
-  const toneClass = errors.length ? 'wizard-run-band--blocked' : warnings.length ? 'wizard-run-band--caution' : '';
-  return `<section class="wizard-run-band ${toneClass} anim-fade-in">
+function renderPreRunActionSpotlight(draft, validation, safeIterations, distType, selectedRisks) {
+  const review = buildReviewReadinessModel({ draft, validation, selectedRisks, safeIterations });
+  return `<section class="wizard-run-band ${review.toneClass} anim-fade-in">
     <div class="wizard-run-band__summary">
       <div class="wizard-summary-band__label">Run decision</div>
-      <strong>${escapeHtml(readinessLabel)}</strong>
-      <p class="wizard-summary-band__copy">${escapeHtml(supportCopy)}</p>
+      <strong>${escapeHtml(review.runDecisionLabel)}</strong>
+      <p class="wizard-summary-band__copy">${escapeHtml(review.runDecisionCopy)}</p>
       <div class="wizard-summary-band__meta">
         <span class="badge badge--neutral">${safeIterations.toLocaleString('en-US')} iterations</span>
         <span class="badge badge--neutral">${escapeHtml(String(distType || 'triangular'))} model</span>
@@ -1155,7 +1138,7 @@ function renderWizard4() {
             disclosureTitle: 'Show full quality coaching',
             className: 'anim-fade-in'
           })}
-          ${renderPreRunActionSpotlight(validation, safeIterations, p.distType)}
+          ${renderPreRunActionSpotlight(draft, validation, safeIterations, p.distType, selectedRisks)}
           ${evidenceGapPlan.length ? renderEvidenceGapActionPlan(evidenceGapPlan, {
             title: 'Before you run, improve one of these',
             subtitle: 'Keep this secondary to the run decision. Tighten one gap only if it would materially change confidence or the range.',

@@ -4278,6 +4278,221 @@ function buildEvidenceGapActionPlan({
   return plan.slice(0, 5);
 }
 
+function buildInputOriginMix(inputAssignments = []) {
+  const assignments = Array.isArray(inputAssignments) ? inputAssignments.filter(Boolean) : [];
+  const userEntered = assignments.filter(item => /user/i.test(String(item?.origin || ''))).length;
+  const aiSuggested = assignments.filter(item => /ai/i.test(String(item?.origin || ''))).length;
+  const inheritedContext = assignments.filter(item => !/user/i.test(String(item?.origin || '')) && !/ai/i.test(String(item?.origin || ''))).length;
+  return {
+    userEntered,
+    aiSuggested,
+    inheritedContext,
+    total: userEntered + aiSuggested + inheritedContext
+  };
+}
+
+function buildEvidenceTrustSummary({
+  confidenceLabel = '',
+  evidenceQuality = '',
+  evidenceSummary = '',
+  missingInformation = [],
+  inputProvenance = [],
+  citations = [],
+  primaryGrounding = [],
+  supportingReferences = [],
+  inferredAssumptions = [],
+  inputAssignments = []
+} = {}) {
+  const missing = Array.isArray(missingInformation) ? missingInformation.filter(Boolean) : [];
+  const provenance = Array.isArray(inputProvenance) ? inputProvenance.filter(Boolean) : [];
+  const citationList = normaliseCitations(citations);
+  const primary = Array.isArray(primaryGrounding) ? primaryGrounding.filter(Boolean) : [];
+  const supporting = Array.isArray(supportingReferences) ? supportingReferences.filter(Boolean) : [];
+  const inferred = Array.isArray(inferredAssumptions) ? inferredAssumptions.filter(Boolean) : [];
+  const inputOriginMix = buildInputOriginMix(inputAssignments);
+  const sourceBasisCount = provenance.length + citationList.length + primary.length + supporting.length;
+  const totalEvidenceCount = citationList.length + primary.length + supporting.length + provenance.length;
+  return {
+    confidenceLabel: String(confidenceLabel || '').trim() || 'Working estimate',
+    evidenceQuality: String(evidenceQuality || '').trim(),
+    evidenceSummary: String(evidenceSummary || '').trim(),
+    missingInformation: missing,
+    topGap: missing[0] || '',
+    provenanceCount: provenance.length,
+    citationCount: citationList.length,
+    primaryGroundingCount: primary.length,
+    supportingReferenceCount: supporting.length,
+    inferredAssumptionsCount: inferred.length,
+    sourceBasisCount,
+    totalEvidenceCount,
+    inputOriginMix,
+    hasThinEvidence: /low/i.test(String(confidenceLabel || '')) || /thin|incomplete|weak/i.test(String(evidenceQuality || '')) || totalEvidenceCount < 2
+  };
+}
+
+function buildQuantReadinessModel({
+  draft = {},
+  validation = {},
+  selectedRisks = []
+} = {}) {
+  const citations = Array.isArray(draft.citations) ? draft.citations.filter(Boolean) : [];
+  const provenance = Array.isArray(draft.inputProvenance) ? draft.inputProvenance.filter(Boolean) : [];
+  const assumptions = Array.isArray(draft.inferredAssumptions) ? draft.inferredAssumptions.filter(Boolean) : [];
+  const missing = Array.isArray(draft.missingInformation) ? draft.missingInformation.filter(Boolean) : [];
+  const p = draft.fairParams || {};
+  const narrativeReady = !!String(draft.enhancedNarrative || draft.narrative || '').trim();
+  const requiredEstimateFields = [
+    'tefLikely',
+    'threatCapLikely',
+    'controlStrLikely',
+    'irLikely',
+    'biLikely',
+    'dbLikely'
+  ];
+  const estimateCoverage = requiredEstimateFields.filter(key => Number.isFinite(Number(p[key])) && Number(p[key]) > 0).length;
+  const errors = Array.isArray(validation?.errors) ? validation.errors.filter(Boolean) : [];
+  const warnings = Array.isArray(validation?.warnings) ? validation.warnings.filter(Boolean) : [];
+
+  const scenarioScore = narrativeReady ? 15 : 0;
+  const scopeScore = selectedRisks.length ? 10 : 0;
+  const evidenceScore = Math.min(15, citations.length * 5) + Math.min(10, provenance.length * 2);
+  const estimateScore = Math.round((estimateCoverage / requiredEstimateFields.length) * 30);
+  const challengeScore = Math.max(0, 15 - (missing.length * 4) - (errors.length * 8) - (warnings.length * 2)) + Math.min(5, assumptions.length * 2);
+  const totalScore = Math.max(0, Math.min(100, scenarioScore + scopeScore + evidenceScore + estimateScore + challengeScore));
+  const status = totalScore >= 80
+    ? 'Run-ready'
+    : totalScore >= 60
+      ? 'Usable with challenge'
+      : 'Needs more grounding';
+  const tone = totalScore >= 80 ? 'success' : totalScore >= 60 ? 'warning' : 'danger';
+  const nextFocus = errors[0]
+    || missing[0]
+    || warnings[0]
+    || (!narrativeReady ? 'Tighten the scenario wording before relying on the estimate.' : '')
+    || (!selectedRisks.length ? 'Confirm the risk shortlist so the estimate has a clear scope.' : '')
+    || (estimateCoverage < requiredEstimateFields.length ? 'Complete the main frequency, exposure, and cost rows before you run.' : '')
+    || 'The scenario is grounded enough to proceed into review and simulation.';
+  return {
+    totalScore,
+    status,
+    tone,
+    nextFocus,
+    factors: [
+      {
+        label: 'Scenario clarity',
+        value: narrativeReady ? 'Defined' : 'Thin',
+        copy: narrativeReady
+          ? 'The scenario narrative is clear enough to quantify.'
+          : 'Narrative wording is still too thin for a high-trust run.'
+      },
+      {
+        label: 'Scope and context',
+        value: selectedRisks.length ? `${selectedRisks.length} in scope` : 'Scope not locked',
+        copy: selectedRisks.length
+          ? 'Selected risks give the model a cleaner assessment boundary.'
+          : 'Confirm which risks belong in this case before relying on the result.'
+      },
+      {
+        label: 'Evidence posture',
+        value: `${citations.length + provenance.length} basis item${citations.length + provenance.length === 1 ? '' : 's'}`,
+        copy: citations.length || provenance.length
+          ? 'Sources, citations, or tracked provenance are available for challenge.'
+          : 'The model is still relying mainly on working judgement and seeded inputs.'
+      },
+      {
+        label: 'Estimate coverage',
+        value: `${estimateCoverage}/${requiredEstimateFields.length}`,
+        copy: estimateCoverage === requiredEstimateFields.length
+          ? 'The core FAIR input groups are complete enough for a useful pilot run.'
+          : 'Finish the main frequency, exposure, and cost rows for a stronger run.'
+      }
+    ]
+  };
+}
+
+function buildReviewReadinessModel({
+  draft = {},
+  validation = {},
+  selectedRisks = [],
+  safeIterations = 0
+} = {}) {
+  const warnings = Array.isArray(validation?.warnings) ? validation.warnings.filter(Boolean) : [];
+  const errors = Array.isArray(validation?.errors) ? validation.errors.filter(Boolean) : [];
+  const trust = buildEvidenceTrustSummary({
+    confidenceLabel: draft.confidenceLabel,
+    evidenceQuality: draft.evidenceQuality,
+    evidenceSummary: draft.evidenceSummary,
+    missingInformation: draft.missingInformation,
+    inputProvenance: draft.inputProvenance,
+    citations: draft.citations,
+    primaryGrounding: draft.primaryGrounding,
+    supportingReferences: draft.supportingReferences,
+    inferredAssumptions: draft.inferredAssumptions,
+    inputAssignments: draft.inputAssignments
+  });
+  const reviewGateLabel = errors.length
+    ? 'Needs changes before run'
+    : warnings.length
+      ? 'Ready, but challenge the flagged assumptions'
+      : 'Ready to run';
+  const reviewGateCopy = errors[0] || warnings[0] || 'The scenario, assumptions, and model settings are coherent enough for a pilot run. Use the checks below to decide whether to run now or tighten one input first.';
+  const runDecisionLabel = errors.length
+    ? 'Complete the flagged inputs before you run'
+    : warnings.length
+      ? 'Run now, but challenge the flagged assumptions'
+      : 'Run now with the current assumptions';
+  const runDecisionCopy = errors[0]
+    ? errors[0]
+    : warnings[0] || 'The run will save the current thresholds, distributions, and traced assumptions behind the result.';
+  return {
+    reviewGateLabel,
+    reviewGateCopy,
+    scopeLabel: selectedRisks.length ? `${selectedRisks.length} risk${selectedRisks.length === 1 ? '' : 's'} in scope` : 'Scenario scope only',
+    scopeMeta: `${draft.geography || 'No geography stated'} · ${Number(safeIterations || 0).toLocaleString('en-US')} iterations · ${trust.confidenceLabel}`,
+    runDecisionLabel,
+    runDecisionCopy,
+    toneClass: errors.length ? 'wizard-run-band--blocked' : warnings.length ? 'wizard-run-band--caution' : '',
+    trustHeadline: trust.provenanceCount ? `${trust.provenanceCount} tracked provenance item${trust.provenanceCount === 1 ? '' : 's'}` : 'No tracked provenance yet',
+    trustCopy: `${trust.citationCount ? `${trust.citationCount} supporting citation${trust.citationCount === 1 ? '' : 's'} are linked to the scenario.` : 'This run is still relying mainly on the scenario narrative and current judgement calls.'}${trust.inferredAssumptionsCount ? ` Main assumption to challenge: ${trust.topGap || (Array.isArray(draft.inferredAssumptions) ? draft.inferredAssumptions.filter(Boolean)[0] || '' : '')}` : ''}`,
+    topGap: trust.topGap,
+    trust,
+    warnings,
+    errors
+  };
+}
+
+function buildResultTrustBasis({
+  assessment = {},
+  runMetadata = null,
+  inputAssignments = []
+} = {}) {
+  const originMix = buildInputOriginMix(inputAssignments);
+  const trust = buildEvidenceTrustSummary({
+    confidenceLabel: assessment.confidenceLabel,
+    evidenceQuality: assessment.evidenceQuality,
+    evidenceSummary: assessment.evidenceSummary,
+    missingInformation: assessment.missingInformation,
+    inputProvenance: assessment.inputProvenance,
+    citations: assessment.citations,
+    primaryGrounding: assessment.primaryGrounding,
+    supportingReferences: assessment.supportingReferences,
+    inferredAssumptions: assessment.inferredAssumptions,
+    inputAssignments
+  });
+  return {
+    userEntered: originMix.userEntered,
+    aiSuggested: originMix.aiSuggested,
+    inheritedContext: originMix.inheritedContext,
+    inferredAssumptions: trust.inferredAssumptionsCount,
+    citations: trust.citationCount,
+    provenance: trust.provenanceCount,
+    seed: runMetadata?.seed ?? '—',
+    iterations: Number(runMetadata?.iterations || 0).toLocaleString(),
+    distribution: String(runMetadata?.distributions?.eventModel || 'triangular'),
+    vulnerabilityMode: String(runMetadata?.distributions?.vulnerabilityMode || 'derived')
+  };
+}
+
 function buildAssessmentWatchlist({
   assessments = [],
   excludeAssessmentIds = [],
