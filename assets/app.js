@@ -4301,9 +4301,9 @@ function buildAssessmentWatchlist({
       const evidenceQuality = String(assessment.evidenceQuality || assessment.assessmentIntelligence?.confidence?.evidenceQuality || '').trim();
       const weakConfidence = /low/i.test(confidenceLabel) || /thin|incomplete|weak/i.test(evidenceQuality) || missingCount >= 2;
       const reasons = [];
-      const addReason = (key, label, priority, tone, summary, nextAction = '') => {
+      const addReason = (key, label, priority, tone, summary, nextAction = '', family = 'review') => {
         if (!key || reasons.some(item => item.key === key)) return;
-        reasons.push({ key, label, priority, tone, summary, nextAction });
+        reasons.push({ key, label, priority, tone, summary, nextAction, family });
       };
 
       if (results.toleranceBreached) {
@@ -4313,7 +4313,8 @@ function buildAssessmentWatchlist({
           100,
           'danger',
           'The severe-case view is above tolerance and should return to active management review.',
-          'Reopen the result and confirm the management response before conditions drift further.'
+          'Reopen the result and confirm the management response before conditions drift further.',
+          'posture'
         );
       }
       if (results.nearTolerance) {
@@ -4323,7 +4324,8 @@ function buildAssessmentWatchlist({
           90,
           'warning',
           'The position is still close enough to tolerance that it deserves another look before conditions drift.',
-          'Check whether recent changes, new evidence, or weaker controls would push it over tolerance.'
+          'Check whether recent changes, new evidence, or weaker controls would push it over tolerance.',
+          'posture'
         );
       }
       if (results.annualReviewTriggered) {
@@ -4333,7 +4335,8 @@ function buildAssessmentWatchlist({
           82,
           'gold',
           'The annual exposure view is at or above the review trigger, so this should come back into the formal review lane.',
-          'Refresh the scenario against current operating conditions and confirm the existing posture still holds.'
+          'Refresh the scenario against current operating conditions and confirm the existing posture still holds.',
+          'timing'
         );
       }
       if (weakConfidence) {
@@ -4343,7 +4346,8 @@ function buildAssessmentWatchlist({
           76,
           'neutral',
           'The result is still carrying weaker evidence or broader assumptions than you would want for a settled reference point.',
-          'Open the result and tighten the highest-impact evidence gaps before treating it as a settled reference.'
+          'Open the result and tighten the highest-impact evidence gaps before treating it as a settled reference.',
+          'evidence'
         );
       }
       if (lifecycleStatus === 'treatment_variant') {
@@ -4353,7 +4357,8 @@ function buildAssessmentWatchlist({
           72,
           'gold',
           'A treatment variant is saved, but the future-state change still needs confirmation before it becomes the trusted path.',
-          'Review the treatment delta and validate that the planned control change is still realistic and funded.'
+          'Review the treatment delta and validate that the planned control change is still realistic and funded.',
+          'validation'
         );
       }
       if (daysSinceReview >= 180 && (citationCount < 2 || weakConfidence)) {
@@ -4363,7 +4368,8 @@ function buildAssessmentWatchlist({
           68,
           'neutral',
           'The saved result is old enough that newer evidence or changed conditions may have shifted the decision read.',
-          'Refresh the evidence basis or confirm the original sources are still representative.'
+          'Refresh the evidence basis or confirm the original sources are still representative.',
+          'evidence'
         );
       }
       if (lifecycleStatus === 'baseline_locked' && daysSinceReview >= 120) {
@@ -4373,7 +4379,8 @@ function buildAssessmentWatchlist({
           64,
           'gold',
           'The locked baseline is still useful, but it has not been revisited recently enough to stay a confident comparison anchor.',
-          'Recheck the baseline assumptions so future treatment comparisons stay anchored to a current reference point.'
+          'Recheck the baseline assumptions so future treatment comparisons stay anchored to a current reference point.',
+          'baseline'
         );
       }
       if (daysSinceReview >= 120 && inferredCount >= 2) {
@@ -4383,7 +4390,8 @@ function buildAssessmentWatchlist({
           58,
           'neutral',
           'This result still depends on older inferred assumptions that should be pressure-tested before reuse.',
-          'Challenge the oldest inferred assumptions and replace them with fresher evidence where possible.'
+          'Challenge the oldest inferred assumptions and replace them with fresher evidence where possible.',
+          'evidence'
         );
       }
 
@@ -4398,6 +4406,26 @@ function buildAssessmentWatchlist({
           : topReason.tone === 'gold'
             ? { label: 'Recheck', badgeClass: 'badge--gold' }
             : { label: 'Check basis', badgeClass: 'badge--neutral' };
+      const actionLabel = topReason.key === 'treatment_validation'
+        ? 'Validate treatment'
+        : topReason.key === 'baseline_refresh'
+          ? 'Refresh baseline'
+          : topReason.family === 'evidence'
+            ? 'Refresh evidence'
+            : topReason.tone === 'danger'
+              ? 'Review now'
+              : 'Open Result';
+      const reviewAgeLabel = completedAt
+        ? (daysSinceReview >= 365
+          ? `Reviewed ${Math.floor(daysSinceReview / 30)} months ago`
+          : daysSinceReview >= 30
+            ? `Reviewed ${Math.floor(daysSinceReview / 30)} months ago`
+            : daysSinceReview >= 7
+              ? `Reviewed ${Math.floor(daysSinceReview / 7)} weeks ago`
+              : daysSinceReview > 0
+                ? `Reviewed ${daysSinceReview} day${daysSinceReview === 1 ? '' : 's'} ago`
+                : 'Reviewed recently')
+        : 'Review date not available';
       return {
         id: assessment.id,
         title: assessment.scenarioTitle || 'Untitled assessment',
@@ -4416,6 +4444,9 @@ function buildAssessmentWatchlist({
         nextAction: topReason.nextAction,
         urgencyLabel: urgency.label,
         urgencyBadgeClass: urgency.badgeClass,
+        actionLabel,
+        reviewAgeLabel,
+        reasonFamily: topReason.family || 'review',
         reasons
       };
     })
@@ -4426,6 +4457,37 @@ function buildAssessmentWatchlist({
     });
 
   return list.slice(0, Math.max(0, Number(maxItems || 0) || 0));
+}
+
+function buildAssessmentWatchlistSummary(items = []) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return [];
+  const groups = [
+    { key: 'posture', label: 'management review', order: 1 },
+    { key: 'evidence', label: 'evidence refresh', order: 2 },
+    { key: 'validation', label: 'validation check', order: 3 },
+    { key: 'timing', label: 'scheduled revisit', order: 4 },
+    { key: 'baseline', label: 'baseline refresh', order: 5 },
+    { key: 'review', label: 'review follow-up', order: 6 }
+  ];
+  const counts = new Map();
+  list.forEach(item => {
+    const key = item?.reasonFamily || 'review';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return groups
+    .map(group => {
+      const count = counts.get(group.key) || 0;
+      if (!count) return null;
+      return {
+        key: group.key,
+        order: group.order,
+        label: `${count} ${group.label}${count === 1 ? '' : 's'}`
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.order - b.order)
+    .slice(0, 3);
 }
 
 function buildScenarioQualityCoach({

@@ -119,18 +119,20 @@ function renderUserDashboard() {
     excludeAssessmentIds: activeQueueAssessmentIds,
     maxItems: 6
   });
+  const watchlistSummary = buildAssessmentWatchlistSummary(watchlistItems);
   const visibleWatchlistItems = watchlistItems.slice(0, 3);
   const hiddenWatchlistItems = watchlistItems.slice(3);
   const watchlistTitle = isOversightUser ? 'Reassessment lane' : 'Needs revisit';
   const watchlistDescription = isOversightUser
-    ? 'Secondary revisit queue for saved results that deserve another look after the active attention lane is clear. Each item shows why it surfaced and the next review move.'
-    : 'Saved results worth revisiting soon, kept compact so they do not compete with live work. Each item shows why it surfaced and what to do next.';
+    ? 'Secondary revisit queue for saved results that deserve another look after the active attention lane is clear. The lane stays compact, but now groups the strongest revisit patterns.'
+    : 'Saved results worth revisiting soon, kept compact so they do not compete with live work. The lane groups the strongest revisit patterns and keeps the next move explicit.';
   const renderWatchlistRows = items => items.map(item => UI.dashboardAssessmentRow({
     assessmentId: item.id,
     title: item.title,
     detail: `
       <div class="dashboard-watchlist-meta">
         <span>${item.businessContext}</span>
+        <span>${item.reviewAgeLabel || 'Reviewed recently'}</span>
         <span class="badge ${item.urgencyBadgeClass || 'badge--neutral'}">${item.urgencyLabel || 'Check basis'}</span>
       </div>
       <div class="dashboard-watchlist-why"><strong>Why now:</strong> ${item.detail}</div>
@@ -140,7 +142,7 @@ function renderUserDashboard() {
     badgeLabel: item.badgeLabel,
     className: 'dashboard-assessment-row--compact dashboard-watchlist-row',
     actions: `
-      <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.id}">${item.urgencyLabel === 'Act now' ? 'Review now' : 'Open Result'}</button>
+      <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.id}">${item.actionLabel || (item.urgencyLabel === 'Act now' ? 'Review now' : 'Open Result')}</button>
       <details class="results-actions-disclosure dashboard-row-overflow">
         <summary class="btn btn--ghost btn--sm">More</summary>
         <div class="results-actions-disclosure-menu">
@@ -160,12 +162,15 @@ function renderUserDashboard() {
         </div>
         <span class="badge badge--neutral">${watchlistItems.length}</span>
       </div>
+      ${watchlistSummary.length ? `<div class="dashboard-watchlist-summary" aria-label="Watchlist summary">
+        ${watchlistSummary.map(item => `<span class="dashboard-watchlist-summary__item">${item.label}</span>`).join('')}
+      </div>` : ''}
       <div class="dashboard-watchlist-list">
         ${renderWatchlistRows(visibleWatchlistItems)}
       </div>
       ${hiddenWatchlistItems.length ? `<details class="dashboard-disclosure dashboard-watchlist-disclosure">
-        <summary>View all revisit candidates <span class="badge badge--neutral">+${hiddenWatchlistItems.length}</span></summary>
-        <div class="dashboard-disclosure-copy">Open this only when you want the longer reassessment queue behind the immediate items. The top reason and the next review move stay visible on each row.</div>
+        <summary>View full reassessment queue <span class="badge badge--neutral">+${hiddenWatchlistItems.length}</span></summary>
+        <div class="dashboard-disclosure-copy">Open this only when you want the longer reassessment queue behind the immediate items. Each row keeps the trigger, urgency, and expected next move visible.</div>
         <div class="dashboard-disclosure-body">
           ${renderWatchlistRows(hiddenWatchlistItems)}
         </div>

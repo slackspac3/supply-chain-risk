@@ -3528,6 +3528,25 @@ canvas { display: block; width: 100%; }
   gap: var(--sp-3);
   margin-top: var(--sp-4);
 }
+.dashboard-watchlist-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.dashboard-watchlist-summary__item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(246,243,242,.035);
+  border: 1px solid rgba(246,243,242,.08);
+  color: rgba(246,243,242,.72);
+  font-size: .75rem;
+  font-weight: 500;
+  letter-spacing: .01em;
+}
 .dashboard-assessment-row--compact {
   padding: var(--sp-4);
   background: linear-gradient(180deg, rgba(246,243,242,.022), rgba(246,243,242,.008));
