@@ -645,6 +645,26 @@ function renderSensitivitySummary(drivers) {
   return `<div class="results-summary-card"><div class="results-section-heading">The 2-3 inputs driving this result most</div><div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">${items.map(item => `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-weight:700;color:var(--text-primary)">${escapeHtml(String(item.label || 'Driver'))}</div><div class="results-summary-copy" style="margin-top:6px">${escapeHtml(String(item.why || ''))}</div></div>`).join('')}</div></div>`;
 }
 
+function renderTechnicalChallengePanel(assessment, technicalInputs, assessmentIntelligence, confidenceFrame, comparison) {
+  const entries = buildParameterChallengeEntries({
+    technicalInputs,
+    inputAssignments: buildLiveInputSourceAssignments(assessment),
+    confidence: assessmentIntelligence?.confidence,
+    missingInformation: assessment.missingInformation,
+    citations: assessment.citations,
+    primaryGrounding: assessment.primaryGrounding,
+    supportingReferences: assessment.supportingReferences,
+    assumptions: assessmentIntelligence?.assumptions,
+    comparison
+  });
+  return renderParameterChallengePanel(entries, {
+    title: 'Challenge a key parameter',
+    subtitle: confidenceFrame?.summary
+      ? `Use this when you want to challenge one important assumption at a time. ${confidenceFrame.summary}`
+      : 'Use this when you want to challenge one important assumption at a time before accepting the technical read.'
+  });
+}
+
 function renderResultsExplanationPanel(assessmentIntelligence, comparison, runMetadata) {
   const topDrivers = Array.isArray(assessmentIntelligence?.drivers?.sensitivity) ? assessmentIntelligence.drivers.sensitivity.slice(0, 3) : [];
   const assumptions = Array.isArray(assessmentIntelligence?.assumptions) ? assessmentIntelligence.assumptions.slice(0, 3) : [];
@@ -1620,6 +1640,7 @@ function renderResults(id, isShared) {
         <div class="results-section-heading">Review-ready metrics and sensitivities</div>
         <div class="results-detail-disclosure-copy">Start here when you want to challenge the size of the result, the dominant sensitivities, and whether the ranges are credible enough for management use.</div>
         <div class="results-disclosure-stack">
+          ${renderTechnicalChallengePanel(assessment, technicalInputs, assessmentIntelligence, confidenceFrame, comparison)}
           <div class="grid-3 mb-6 anim-fade-in results-metric-band">
             <div class="metric-card"><div class="metric-label">Typical conditional event loss</div><div class="metric-value">${fmtCurrency(r.eventLoss.p50)}</div><div class="metric-sub">Midpoint successful-event view</div></div>
             <div class="metric-card"><div class="metric-label">Severe conditional event loss</div><div class="metric-value ${r.toleranceBreached ? 'danger' : ''}">${fmtCurrency(r.eventLoss.p90)}</div><div class="metric-sub">Used for tolerance check</div></div>

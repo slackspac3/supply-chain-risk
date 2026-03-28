@@ -4020,6 +4020,69 @@ canvas { display: block; width: 100%; }
   font-size: .8rem;
   line-height: 1.55;
 }
+.results-parameter-challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+.results-parameter-challenge-card {
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: 22px;
+  border: 1px solid rgba(246,243,242,.08);
+  background: linear-gradient(180deg, rgba(246,243,242,.024), rgba(246,243,242,.01));
+}
+.results-parameter-challenge-card summary {
+  list-style: none;
+  cursor: pointer;
+}
+.results-parameter-challenge-card summary::-webkit-details-marker {
+  display: none;
+}
+.results-parameter-challenge-card[open] {
+  border-color: rgba(3,209,168,.14);
+  background:
+    radial-gradient(circle at top right, rgba(3,209,168,.06), transparent 30%),
+    linear-gradient(180deg, rgba(246,243,242,.03), rgba(246,243,242,.012));
+}
+.results-parameter-challenge-card__summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.results-parameter-challenge-card__summary strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: .98rem;
+  line-height: 1.25;
+}
+.results-parameter-challenge-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+  padding-left: var(--sp-4);
+  border-left: 1px solid rgba(246,243,242,.07);
+}
+.results-parameter-challenge-card__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.results-parameter-challenge-card__row span {
+  color: rgba(246,243,242,.54);
+  font-size: .7rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.results-parameter-challenge-card__row p {
+  color: var(--text-secondary);
+  font-size: .82rem;
+  line-height: 1.62;
+}
 .results-metric-band .metric-card {
   background: linear-gradient(180deg, rgba(246,243,242,.03), rgba(246,243,242,.012));
   border-color: rgba(246,243,242,.08);
@@ -4402,6 +4465,7 @@ canvas { display: block; width: 100%; }
   }
   .dashboard-glance-strip,
   .results-technical-story-grid,
+  .results-parameter-challenge-grid,
   .evidence-gap-plan__grid,
   .results-tech-driver-story__grid,
   .wizard-advanced-grid,

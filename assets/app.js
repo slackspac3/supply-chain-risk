@@ -4639,6 +4639,240 @@ function renderEvidenceGapActionPlan(plan = [], {
   </div>`;
 }
 
+function buildParameterChallengeEntries({
+  technicalInputs = {},
+  inputAssignments = [],
+  confidence = null,
+  missingInformation = [],
+  citations = [],
+  primaryGrounding = [],
+  supportingReferences = [],
+  assumptions = [],
+  comparison = null
+} = {}) {
+  const assignmentList = Array.isArray(inputAssignments) ? inputAssignments.filter(Boolean) : [];
+  const assumptionList = Array.isArray(assumptions) ? assumptions.filter(Boolean) : [];
+  const missingList = Array.isArray(missingInformation) ? missingInformation.filter(Boolean) : [];
+  const citationList = Array.isArray(citations) ? citations.filter(Boolean) : [];
+  const groundingList = Array.isArray(primaryGrounding) ? primaryGrounding.filter(Boolean) : [];
+  const supportingList = Array.isArray(supportingReferences) ? supportingReferences.filter(Boolean) : [];
+  const assignmentById = new Map(assignmentList.map(item => [String(item.id || '').trim(), item]));
+  const assignmentByLabel = new Map(assignmentList.map(item => [String(item.label || '').trim().toLowerCase(), item]));
+  const confidenceWeakness = Array.isArray(confidence?.improvements) ? confidence.improvements.filter(Boolean) : [];
+  const confidenceReasons = Array.isArray(confidence?.reasons) ? confidence.reasons.filter(Boolean) : [];
+  const confidenceSummary = String(confidence?.summary || '').trim();
+  const findAssignment = (...keys) => {
+    for (const key of keys) {
+      const normalised = String(key || '').trim();
+      if (!normalised) continue;
+      if (assignmentById.has(normalised)) return assignmentById.get(normalised);
+      if (assignmentByLabel.has(normalised.toLowerCase())) return assignmentByLabel.get(normalised.toLowerCase());
+    }
+    return null;
+  };
+  const pickEvidenceSupport = (...needles) => {
+    const pattern = new RegExp(needles.filter(Boolean).join('|'), 'i');
+    const support = [];
+    const addSupport = value => {
+      const text = typeof value === 'string'
+        ? value
+        : (value?.title || value?.label || value?.sourceTitle || value?.relevanceReason || '');
+      const trimmed = String(text || '').trim();
+      if (!trimmed || support.includes(trimmed)) return;
+      support.push(trimmed);
+    };
+    groundingList.forEach(item => { if (!needles.length || pattern.test(String(item))) addSupport(item); });
+    supportingList.forEach(item => { if (!needles.length || pattern.test(String(item?.title || item?.sourceTitle || item?.relevanceReason || item))) addSupport(item); });
+    citationList.forEach(item => { if (!needles.length || pattern.test(String(item?.title || item?.relevanceReason || item?.excerpt || ''))) addSupport(item); });
+    return support.slice(0, 3);
+  };
+  const pickAssumptions = (...needles) => {
+    const pattern = new RegExp(needles.filter(Boolean).join('|'), 'i');
+    return assumptionList
+      .map(item => String(item?.text || item || '').trim())
+      .filter(Boolean)
+      .filter(item => !needles.length || pattern.test(item))
+      .slice(0, 2);
+  };
+  const buildEntry = ({
+    id,
+    title,
+    currentValue,
+    assignment = null,
+    support = [],
+    weakens = [],
+    raise,
+    lower
+  }) => {
+    const cleanedSupport = support.filter(Boolean).slice(0, 3);
+    const cleanedWeakens = weakens.filter(Boolean).slice(0, 3);
+    return {
+      id,
+      title,
+      currentValue,
+      sourceBasis: assignment
+        ? `${assignment.origin || 'Saved input'}${assignment.sourceTypeLabel ? ` · ${assignment.sourceTypeLabel}` : ''}${assignment.reason ? ` · ${assignment.reason}` : ''}`
+        : 'This parameter is using the currently saved model inputs.',
+      support: cleanedSupport.length ? cleanedSupport : ['No direct supporting reference has been attached to this parameter yet.'],
+      weakensConfidence: cleanedWeakens.length ? cleanedWeakens : ['No specific weakness is recorded for this parameter yet, so use general confidence posture and assumptions when you challenge it.'],
+      raiseJustification: raise,
+      lowerJustification: lower
+    };
+  };
+
+  const entries = [];
+  const eventFrequencyAssignment = findAssignment('event-frequency', 'Event frequency');
+  entries.push(buildEntry({
+    id: 'event-frequency',
+    title: 'Event frequency',
+    currentValue: `${technicalInputs.tefMin ?? '—'}–${technicalInputs.tefLikely ?? '—'}–${technicalInputs.tefMax ?? '—'} events/year`,
+    assignment: eventFrequencyAssignment,
+    support: [
+      eventFrequencyAssignment?.reason,
+      ...pickEvidenceSupport('frequency', 'incident', 'history', 'event'),
+      ...pickAssumptions('Frequency', 'incident', 'year')
+    ],
+    weakens: [
+      ...missingList.filter(item => /frequency|incident|history|internal/i.test(String(item))),
+      ...confidenceWeakness.filter(item => /frequency|incident/i.test(String(item))),
+      ...confidenceReasons.filter(item => /frequency range/i.test(String(item))),
+      confidenceSummary
+    ],
+    raise: 'Raise this only if internal incident history, threat activity, or control drift shows the event path is more common than the current working case.',
+    lower: 'Lower this only if operating evidence shows the triggering conditions are rarer, better contained, or no longer relevant at the current cadence.'
+  }));
+  const successAssignment = findAssignment('threat-capability', 'Threat capability');
+  const controlAssignment = findAssignment('control-strength', 'Control strength');
+  entries.push(buildEntry({
+    id: 'event-success',
+    title: 'Event success likelihood',
+    currentValue: technicalInputs.vulnDirect
+      ? `${technicalInputs.vulnMin ?? '—'}–${technicalInputs.vulnLikely ?? '—'}–${technicalInputs.vulnMax ?? '—'} direct exposure`
+      : `Threat ${technicalInputs.threatCapMin ?? '—'}–${technicalInputs.threatCapLikely ?? '—'}–${technicalInputs.threatCapMax ?? '—'} vs control ${technicalInputs.controlStrMin ?? '—'}–${technicalInputs.controlStrLikely ?? '—'}–${technicalInputs.controlStrMax ?? '—'}`,
+    assignment: controlAssignment || successAssignment,
+    support: [
+      successAssignment?.reason,
+      controlAssignment?.reason,
+      ...pickEvidenceSupport('control', 'threat', 'access', 'response', 'capability'),
+      ...pickAssumptions('Exposure', 'Threat', 'control')
+    ],
+    weakens: [
+      ...missingList.filter(item => /control|response|access|security|capability|evidence/i.test(String(item))),
+      ...confidenceWeakness.filter(item => /control|response|evidence/i.test(String(item))),
+      ...confidenceReasons.filter(item => /AI-assisted|control strength/i.test(String(item)))
+    ],
+    raise: 'Raise this only if control testing, incident response evidence, or attacker capability evidence shows the current controls are less effective than assumed.',
+    lower: 'Lower this only if control strength, detection, containment, or resilience evidence shows attempted events are less likely to become successful loss events.'
+  }));
+  const biAssignment = findAssignment('business-interruption', 'Business interruption');
+  entries.push(buildEntry({
+    id: 'business-interruption',
+    title: 'Business interruption',
+    currentValue: `${fmtCurrency(technicalInputs.biMin || 0)}–${fmtCurrency(technicalInputs.biLikely || 0)}–${fmtCurrency(technicalInputs.biMax || 0)}`,
+    assignment: biAssignment,
+    support: [
+      biAssignment?.reason,
+      ...pickEvidenceSupport('business interruption', 'outage', 'service', 'recovery', 'downtime'),
+      ...pickAssumptions('Loss', 'service', 'impact')
+    ],
+    weakens: [
+      ...missingList.filter(item => /business|disruption|outage|recovery|service/i.test(String(item))),
+      ...confidenceWeakness.filter(item => /loss ranges|operations|finance/i.test(String(item))),
+      ...confidenceReasons.filter(item => /loss ranges/i.test(String(item)))
+    ],
+    raise: 'Raise this only if outage evidence, recovery sequencing, customer harm, or service dependency analysis shows the disruption would last longer or hit harder than currently assumed.',
+    lower: 'Lower this only if recovery evidence, resilience controls, or service continuity planning shows the operational disruption would be shorter or less severe.'
+  }));
+  const rlAssignment = findAssignment('regulatory-legal', 'Regulatory and legal');
+  entries.push(buildEntry({
+    id: 'regulatory-legal',
+    title: 'Regulatory and legal impact',
+    currentValue: `${fmtCurrency(technicalInputs.rlMin || 0)}–${fmtCurrency(technicalInputs.rlLikely || 0)}–${fmtCurrency(technicalInputs.rlMax || 0)}`,
+    assignment: rlAssignment,
+    support: [
+      rlAssignment?.reason,
+      ...pickEvidenceSupport('regulat', 'legal', 'privacy', 'compliance', 'contract'),
+      ...pickAssumptions('Regulatory', 'legal')
+    ],
+    weakens: [
+      ...missingList.filter(item => /regulat|legal|privacy|compliance|contract|obligation/i.test(String(item))),
+      ...confidenceWeakness.filter(item => /evidence|references/i.test(String(item))),
+      confidenceSummary
+    ],
+    raise: 'Raise this only if counsel input, notification obligations, contract penalties, or regulatory exposure suggests the severe tail is materially larger than the current case.',
+    lower: 'Lower this only if the applicable obligations are narrower, notification consequences are lighter, or contractual downside is better bounded than assumed.'
+  }));
+  if (comparison) {
+    entries.push(buildEntry({
+      id: 'treatment-delta',
+      title: 'Treatment delta',
+      currentValue: `${comparison.severeEvent.formatted} severe-event delta`,
+      assignment: null,
+      support: [
+        comparison.treatmentNarrative,
+        comparison.keyDriver,
+        comparison.secondaryDriver
+      ],
+      weakens: [
+        comparison.caveat,
+        ...missingList.slice(0, 2)
+      ],
+      raise: 'Treat the treatment as more effective only if the changed controls, recovery steps, or resilience assumptions are realistic enough to hold in practice.',
+      lower: 'Treat the treatment as less effective if the improved-state assumptions are optimistic, weakly evidenced, or not yet validated by the owning team.'
+    }));
+  }
+
+  return entries.slice(0, comparison ? 5 : 4);
+}
+
+function renderParameterChallengePanel(entries = [], {
+  title = 'Challenge a key parameter',
+  subtitle = '',
+  disclosureTitle = 'Open the challenge detail'
+} = {}) {
+  const items = Array.isArray(entries) ? entries.filter(Boolean) : [];
+  if (!items.length) return '';
+  return `<section class="results-section-stack">
+    <div class="results-section-heading">${escapeHtml(String(title))}</div>
+    ${subtitle ? `<div class="results-detail-disclosure-copy">${escapeHtml(String(subtitle))}</div>` : ''}
+    <div class="results-parameter-challenge-grid">
+      ${items.map(item => `<details class="results-parameter-challenge-card">
+        <summary>
+          <div class="results-parameter-challenge-card__summary">
+            <div>
+              <div class="results-driver-label">${escapeHtml(String(item.title || 'Parameter'))}</div>
+              <strong>${escapeHtml(String(item.currentValue || 'Current value not recorded'))}</strong>
+            </div>
+            <span class="badge badge--neutral">${escapeHtml(String(disclosureTitle))}</span>
+          </div>
+        </summary>
+        <div class="results-parameter-challenge-card__body">
+          <div class="results-parameter-challenge-card__row">
+            <span>Current source basis</span>
+            <p>${escapeHtml(String(item.sourceBasis || 'No source basis recorded yet.'))}</p>
+          </div>
+          <div class="results-parameter-challenge-card__row">
+            <span>What supports it</span>
+            <p>${item.support.map(value => `• ${escapeHtml(String(value))}`).join('<br>')}</p>
+          </div>
+          <div class="results-parameter-challenge-card__row">
+            <span>What weakens confidence</span>
+            <p>${item.weakensConfidence.map(value => `• ${escapeHtml(String(value))}`).join('<br>')}</p>
+          </div>
+          <div class="results-parameter-challenge-card__row">
+            <span>What would justify raising it</span>
+            <p>${escapeHtml(String(item.raiseJustification || 'Raise only when the direct evidence points clearly upward.'))}</p>
+          </div>
+          <div class="results-parameter-challenge-card__row">
+            <span>What would justify lowering it</span>
+            <p>${escapeHtml(String(item.lowerJustification || 'Lower only when the direct evidence points clearly downward.'))}</p>
+          </div>
+        </div>
+      </details>`).join('')}
+    </div>
+  </section>`;
+}
+
 
 function renderScenarioAssistSummaryBlock({ workflowGuidance = [], confidenceLabel = '', evidenceQuality = '', evidenceSummary = '', missingInformation = [], benchmarkBasis = '', inputProvenance = [], citations = [] } = {}) {
   const guidance = Array.isArray(workflowGuidance) ? workflowGuidance.filter(Boolean).slice(0, 2) : [];
