@@ -540,7 +540,7 @@ function renderEstimateHandoffCard(draft) {
   const structured = draft.structuredScenario || {};
   const scopeItems = [
     structured.assetService ? `Asset / service: ${structured.assetService}` : '',
-    structured.attackType ? `Threat type: ${structured.attackType}` : '',
+    structured.attackType ? `Event path: ${structured.attackType}` : '',
     scenarioGeographies.length ? `Geography: ${scenarioGeographies.join(', ')}` : '',
     selectedRisks.length ? `Selected risks: ${selectedRisks.slice(0, 3).map(risk => risk.title).join(', ')}` : ''
   ].filter(Boolean);
@@ -558,7 +558,7 @@ function renderEstimateScopeSummaryBand(draft) {
   const structured = draft.structuredScenario || {};
   const scopeItems = [
     structured.assetService ? `Asset / service: ${structured.assetService}` : '',
-    structured.attackType ? `Threat type: ${structured.attackType}` : '',
+    structured.attackType ? `Event path: ${structured.attackType}` : '',
     scenarioGeographies.length ? `Geography: ${scenarioGeographies.join(', ')}` : '',
     selectedRisks.length ? `Selected risks: ${selectedRisks.slice(0, 3).map(risk => risk.title).join(', ')}` : ''
   ].filter(Boolean);

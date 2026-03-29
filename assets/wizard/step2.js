@@ -176,7 +176,7 @@ function renderWizard2() {
                 <input class="form-input" id="asset-service" type="text" placeholder="e.g. Payment gateway" value="${draft.structuredScenario?.assetService||''}">
               </div>
               <div class="form-group">
-                <label class="form-label" for="threat-type">Threat Type</label>
+                <label class="form-label" for="threat-type">Event path</label>
                 <select class="form-select" id="threat-type">
                   <option value="">— Select —</option>
                   ${threatTypeOptions.map((t) => `<option value="${escapeHtml(t)}"${currentThreatType === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}
@@ -301,7 +301,7 @@ function renderStep2QuantBridge(draft, selectedRisks, scenarioGeographies) {
   const costFocus = inferStep2CostFocus(draft);
   const scopeChips = [
     structured.assetService ? `Asset / service: ${structured.assetService}` : '',
-    structured.attackType ? `Threat type: ${structured.attackType}` : '',
+    structured.attackType ? `Event path: ${structured.attackType}` : '',
     scenarioGeographies.length ? `Geography: ${scenarioGeographies.join(', ')}` : '',
     Array.isArray(draft.applicableRegulations) && draft.applicableRegulations.length ? `Regulations: ${draft.applicableRegulations.slice(0, 3).join(', ')}` : ''
   ].filter(Boolean);
@@ -363,7 +363,7 @@ function renderStep2StructuredSummary(draft, selectedRisks, scenarioGeographies)
   const sourceBasis = normaliseCitations(draft.citations || []).slice(0, 2);
   const chips = [
     structured.assetService ? `Asset / service: ${structured.assetService}` : '',
-    structured.attackType ? `Threat type: ${structured.attackType}` : '',
+    structured.attackType ? `Event path: ${structured.attackType}` : '',
     selectedRisks.length ? `In scope: ${selectedRisks.length} risk${selectedRisks.length === 1 ? '' : 's'}` : '',
     scenarioGeographies.length ? `Geography: ${scenarioGeographies.join(', ')}` : ''
   ].filter(Boolean);
@@ -615,7 +615,7 @@ async function runLLMAssist() {
           <div style="font-size:.75rem;color:var(--text-muted)">AI-structured · FAIR inputs pre-loaded to Step 3</div>
         </div>
       </div>
-      ${result.structuredScenario?`<div class="grid-2"><div><div class="form-label" style="font-size:.7rem">Threat Community</div><p style="font-size:.85rem;margin-top:4px">${escapeHtml(String(result.structuredScenario.threatCommunity || 'Not specified'))}</p></div><div><div class="form-label" style="font-size:.7rem">Attack Vector</div><p style="font-size:.85rem;margin-top:4px">${escapeHtml(String(result.structuredScenario.attackType || 'Not specified'))}</p></div></div>`:''}
+      ${result.structuredScenario?`<div class="grid-2"><div><div class="form-label" style="font-size:.7rem">Primary driver</div><p style="font-size:.85rem;margin-top:4px">${escapeHtml(String(result.structuredScenario.threatCommunity || 'Not specified'))}</p></div><div><div class="form-label" style="font-size:.7rem">Event path</div><p style="font-size:.85rem;margin-top:4px">${escapeHtml(String(result.structuredScenario.attackType || 'Not specified'))}</p></div></div>`:''}
     </div>${renderScenarioAssistSummaryBlock({
       workflowGuidance: AppState.draft.workflowGuidance,
       confidenceLabel: AppState.draft.confidenceLabel,

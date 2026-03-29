@@ -858,8 +858,8 @@ const ExportService = (() => {
           <h3>Scenario details</h3>
           <div class="summary-grid">
             <div class="card"><div class="section-label">Asset / Service</div><div class="body-copy">${assessment.structuredScenario.assetService || '—'}</div></div>
-            <div class="card"><div class="section-label">Threat community</div><div class="body-copy">${assessment.structuredScenario.threatCommunity || '—'}</div></div>
-            <div class="card"><div class="section-label">Attack type</div><div class="body-copy">${assessment.structuredScenario.attackType || '—'}</div></div>
+            <div class="card"><div class="section-label">Primary driver</div><div class="body-copy">${assessment.structuredScenario.threatCommunity || '—'}</div></div>
+            <div class="card"><div class="section-label">Event path</div><div class="body-copy">${assessment.structuredScenario.attackType || '—'}</div></div>
             <div class="card"><div class="section-label">Effect</div><div class="body-copy">${assessment.structuredScenario.effect || '—'}</div></div>
           </div>
         </div>` : ''}

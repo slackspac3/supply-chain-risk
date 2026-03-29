@@ -117,8 +117,8 @@
               <div class="grid-2">
                 ${Object.entries({
                   'Asset / Service': assessment.structuredScenario.assetService,
-                  'Threat Community': assessment.structuredScenario.threatCommunity,
-                  'Attack Type': assessment.structuredScenario.attackType,
+                  'Primary driver': assessment.structuredScenario.threatCommunity,
+                  'Event path': assessment.structuredScenario.attackType,
                   'Effect': assessment.structuredScenario.effect
                 }).map(([k, v]) => `<div style="background:var(--bg-elevated);padding:var(--sp-3) var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${k}</div><div style="font-size:.85rem;color:var(--text-secondary);margin-top:4px">${v || '—'}</div></div>`).join('')}
               </div>
