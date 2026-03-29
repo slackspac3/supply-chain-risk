@@ -427,6 +427,32 @@ function renderUserDashboard() {
         spotlightTitle: 'Worked example and templates',
         spotlightCopy: 'Use the worked example when you want a fast demo path. Open templates when you want structure without starting from a blank assessment.'
       };
+  const inheritedContextModel = buildInheritedContextDisplayModel({
+    user,
+    userSettings: settings,
+    effectiveSettings: getEffectiveSettings(),
+    globalSettings
+  });
+  const inheritedContextMarkup = (inheritedContextModel.highlights.length || inheritedContextModel.visibleDetails.length || inheritedContextModel.hasHiddenDetails) ? `
+    <section class="dashboard-primary-band dashboard-primary-band--context">
+      ${UI.dashboardSectionCard({
+        title: 'Inherited assessment context',
+        description: 'These shared defaults and retained summaries shape new assessments before your personal working context is applied.',
+        className: 'dashboard-section-card--secondary',
+        body: `
+          ${inheritedContextModel.highlights.length ? `<div class="citation-chips">
+            ${inheritedContextModel.highlights.map(item => `<span class="badge badge--neutral">${escapeDashboardText(item.label)}: ${escapeDashboardText(item.value)}</span>`).join('')}
+          </div>` : ''}
+          ${inheritedContextModel.visibleDetails.length ? `<div style="display:flex;flex-direction:column;gap:12px">
+            ${inheritedContextModel.visibleDetails.map(item => `<div>
+              <div class="results-driver-label">${escapeDashboardText(item.label)}</div>
+              <div class="results-summary-copy">${escapeDashboardText(item.value)}</div>
+            </div>`).join('')}
+          </div>` : ''}
+          ${inheritedContextModel.hasHiddenDetails ? `<div class="form-help">Additional governed context is applied to your assessments by the organisation, but its detail is intentionally hidden from this workspace.</div>` : ''}
+        `
+      })}
+    </section>` : '';
   const compactRecentRows = compactRecentAssessments.map(assessment => {
     const lifecycle = getAssessmentLifecyclePresentation(assessment);
     return UI.dashboardAssessmentRow({
@@ -598,6 +624,8 @@ function renderUserDashboard() {
             </aside>`}
           </div>
         </section>
+
+        ${inheritedContextMarkup}
 
         <section class="dashboard-primary-band dashboard-primary-band--work">
           <div class="results-section-heading">Do the work</div>

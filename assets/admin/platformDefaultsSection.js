@@ -93,6 +93,11 @@ const AdminPlatformDefaultsSection = (() => {
     <div class="form-group mt-4">
       <label class="form-label" for="admin-context-summary">Admin Context Summary</label>
       <textarea class="form-textarea" id="admin-context-summary" rows="2">${settings.adminContextSummary}</textarea>
+      <label class="form-checkbox" style="margin-top:10px">
+        <input type="checkbox" id="admin-context-visible-users" ${settings.adminContextVisibleToUsers !== false ? 'checked' : ''}>
+        <span>Show this shared platform context summary to end users</span>
+      </label>
+      <span class="form-help">When off, this context still shapes inherited assessment behavior and AI grounding, but the summary is not shown in lower-layer dashboards.</span>
     </div>
     <div class="form-group mt-4">
       <label class="form-label">Applicable Regulations</label>

@@ -55,6 +55,7 @@ const DEFAULT_ADMIN_SETTINGS = {
   warningThresholdUsd: 3_000_000,
   annualReviewThresholdUsd: 12_000_000,
   adminContextSummary: 'Use this workspace to maintain geography, regulations, thresholds, and AI guidance for the platform.',
+  adminContextVisibleToUsers: true,
   escalationGuidance: 'Escalate to leadership when the scenario is above tolerance, close to tolerance, or materially affects regulated services.',
   typicalDepartments: [...DEFAULT_TYPICAL_DEPARTMENTS]
 };
@@ -1931,6 +1932,81 @@ function joinDistinctText(parts = []) {
     .join('\n\n');
 }
 
+function isContextVisibleToChildUsers(flagValue) {
+  return flagValue !== false;
+}
+
+function buildInheritedContextDisplayModel(options = {}) {
+  const globalSettings = options.globalSettings || getAdminSettings();
+  const user = options.user || AuthService.getCurrentUser();
+  if (!user || user.role === 'admin') {
+    return { highlights: [], visibleDetails: [], hasHiddenDetails: false };
+  }
+  const userSettings = options.userSettings || getUserSettings();
+  const effective = options.effectiveSettings || getEffectiveSettings();
+  const selection = resolveUserOrganisationSelection(user, userSettings, globalSettings);
+  const draftBu = options.buId
+    ? getBUList().find(item => item.id === options.buId)
+    : (AppState.draft?.buId ? getBUList().find(item => item.id === AppState.draft.buId) : null);
+  const scopedBusinessUnitEntityId = String(options.businessUnitEntityId || draftBu?.orgEntityId || selection.businessUnitEntityId || '').trim();
+  const scopedDepartmentEntityId = String(options.departmentEntityId || selection.departmentEntityId || '').trim();
+  const businessNode = getEntityById(globalSettings.companyStructure || [], scopedBusinessUnitEntityId);
+  const departmentNode = getEntityById(globalSettings.companyStructure || [], scopedDepartmentEntityId);
+  const businessLayer = getEntityLayerById(globalSettings, scopedBusinessUnitEntityId);
+  const departmentLayer = getEntityLayerById(globalSettings, scopedDepartmentEntityId);
+  const buOverride = draftBu || getBUList().find(item => item.orgEntityId === scopedBusinessUnitEntityId) || null;
+  const highlights = [];
+  const visibleDetails = [];
+  let hasHiddenDetails = false;
+
+  if (businessNode?.name || draftBu?.name) {
+    highlights.push({ label: 'Business unit', value: draftBu?.name || businessNode?.name || 'Inherited' });
+  }
+  if (departmentNode?.name) {
+    highlights.push({ label: 'Function', value: departmentNode.name });
+  }
+  if (effective?.geography) {
+    highlights.push({ label: 'Geography', value: effective.geography });
+  }
+  const effectiveRegs = Array.isArray(effective?.applicableRegulations) ? effective.applicableRegulations.filter(Boolean) : [];
+  if (effectiveRegs.length) {
+    highlights.push({
+      label: 'Regulations',
+      value: effectiveRegs.length <= 3 ? effectiveRegs.join(', ') : `${effectiveRegs.length} inherited tags`
+    });
+  }
+
+  const businessContextSource = String(businessLayer?.contextSummary || buOverride?.contextSummary || '').trim();
+  if (businessContextSource) {
+    if (isContextVisibleToChildUsers(businessLayer?.visibleToChildUsers) && isContextVisibleToChildUsers(buOverride?.contextVisibleToUsers)) {
+      visibleDetails.push({ label: 'Business unit context', value: businessContextSource });
+    } else {
+      hasHiddenDetails = true;
+    }
+  }
+  const departmentContextSource = String(departmentLayer?.contextSummary || '').trim();
+  if (departmentContextSource) {
+    if (isContextVisibleToChildUsers(departmentLayer?.visibleToChildUsers)) {
+      visibleDetails.push({ label: 'Function context', value: departmentContextSource });
+    } else {
+      hasHiddenDetails = true;
+    }
+  }
+  const organisationContextSource = String(globalSettings?.adminContextSummary || '').trim();
+  if (organisationContextSource) {
+    if (isContextVisibleToChildUsers(globalSettings?.adminContextVisibleToUsers)) {
+      visibleDetails.push({ label: 'Organisation guidance', value: organisationContextSource });
+    } else {
+      hasHiddenDetails = true;
+    }
+  }
+  if (!hasHiddenDetails && !isContextVisibleToChildUsers(globalSettings?.adminContextVisibleToUsers) && String(globalSettings?.companyContextProfile || '').trim()) {
+    // The platform can still apply hidden company context even when the user-facing summary is suppressed.
+    hasHiddenDetails = true;
+  }
+  return { highlights, visibleDetails, hasHiddenDetails };
+}
+
 function buildCurrentAIAssistContext(options = {}) {
   const globalSettings = getAdminSettings();
   const user = AuthService.getCurrentUser();
@@ -2890,6 +2966,11 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       <div class="form-group mt-4">
         <label class="form-label" for="entity-layer-summary">Context Summary</label>
         <textarea class="form-textarea" id="entity-layer-summary" rows="4" placeholder="Describe the remit, critical processes, dependencies, and regulatory exposure.">${existingLayer.contextSummary || entity.profile || ''}</textarea>
+        <label class="form-checkbox" style="margin-top:10px">
+          <input type="checkbox" id="entity-layer-visible-users" ${existingLayer.visibleToChildUsers !== false ? 'checked' : ''}>
+          <span>Show this retained context summary to lower-layer users</span>
+        </label>
+        <span class="form-help">When off, the context still applies to inherited assessment behavior and AI grounding, but users below this layer only see that governed context is active.</span>
       </div>
       <div class="form-group mt-4">
         <label class="form-label" for="entity-layer-appetite">Risk Appetite</label>
@@ -3065,6 +3146,7 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       entityName: entity.name,
       geography: geoEl.value.trim(),
       contextSummary: summaryEl.value.trim(),
+      visibleToChildUsers: document.getElementById('entity-layer-visible-users')?.checked !== false,
       riskAppetiteStatement: appetiteEl.value.trim(),
       applicableRegulations: regsInput.getTags(),
       aiInstructions: aiEl.value.trim(),
@@ -6864,6 +6946,7 @@ function renderAdminSettings(activeSection = 'org') {
         aiInstructions: getInputValue('admin-ai-instructions', currentSettings.aiInstructions || ''),
         benchmarkStrategy: getInputValue('admin-benchmark-strategy', currentSettings.benchmarkStrategy || DEFAULT_ADMIN_SETTINGS.benchmarkStrategy) || DEFAULT_ADMIN_SETTINGS.benchmarkStrategy,
         adminContextSummary: getInputValue('admin-context-summary', currentSettings.adminContextSummary || DEFAULT_ADMIN_SETTINGS.adminContextSummary) || DEFAULT_ADMIN_SETTINGS.adminContextSummary,
+        adminContextVisibleToUsers: document.getElementById('admin-context-visible-users') ? document.getElementById('admin-context-visible-users').checked : currentSettings.adminContextVisibleToUsers !== false,
         escalationGuidance: getInputValue('admin-escalation-guidance', currentSettings.escalationGuidance || DEFAULT_ADMIN_SETTINGS.escalationGuidance) || DEFAULT_ADMIN_SETTINGS.escalationGuidance
       }
     };
@@ -7380,6 +7463,11 @@ function openBUEditor(bu, options = {}) {
     <div class="form-group mt-4"><label class="form-label">Data Types</label><div class="tag-input-wrap" id="ti-datatypes"></div></div>
     <div class="form-group mt-4"><label class="form-label">Regulatory Tags</label><div class="tag-input-wrap" id="ti-regtags"></div></div>
     <div class="form-group mt-4"><label class="form-label">Business Unit Context Summary</label><textarea class="form-textarea" id="bu-context" rows="3">${bu?.contextSummary||''}</textarea></div>
+    <label class="form-checkbox mt-3">
+      <input type="checkbox" id="bu-context-visible-users" ${bu?.contextVisibleToUsers !== false ? 'checked' : ''}>
+      <span>Show this BU context summary to end users</span>
+    </label>
+    <div class="form-help" style="margin-top:6px">When off, the BU context still shapes inherited assessment behavior and AI grounding but is not shown verbatim in lower-layer dashboards.</div>
     <div class="grid-2 mt-4" style="gap:12px">
       <div class="form-group">
         <label class="form-label">BU Linked-Risk Default</label>
@@ -7485,6 +7573,7 @@ function openBUEditor(bu, options = {}) {
       dataTypes: ti.datatypes.getTags(),
       regulatoryTags: ti.regtags.getTags(),
       contextSummary: document.getElementById('bu-context').value.trim(),
+      contextVisibleToUsers: document.getElementById('bu-context-visible-users')?.checked !== false,
       aiGuidance: document.getElementById('bu-ai-guidance').value.trim(),
       benchmarkStrategy: document.getElementById('bu-benchmark-strategy').value.trim(),
       defaultLinkMode: linkModeValue === 'inherit' ? null : linkModeValue === 'yes',

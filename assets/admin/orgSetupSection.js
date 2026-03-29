@@ -78,6 +78,7 @@ const AdminOrgSetupSection = (() => {
             <span class="badge badge--gold">${escapeHtml(String(node?.type || 'Saved layer'))}</span>
             <strong style="color:var(--text-primary)">${escapeHtml(String(node?.name || layer.entityName || 'Saved layer'))}</strong>
             ${layer.geography ? `<span class="form-help" style="margin-top:0">${escapeHtml(String(layer.geography))}</span>` : ''}
+            <span class="badge ${layer.visibleToChildUsers === false ? 'badge--warning' : 'badge--neutral'}">${layer.visibleToChildUsers === false ? 'Hidden from child users' : 'Visible to child users'}</span>
             <button class="btn btn--ghost btn--sm admin-layer-edit" data-layer-id="${escapeHtml(String(layer.entityId || ''))}" type="button">Edit</button>
             <button class="btn btn--ghost btn--sm admin-layer-delete" data-layer-id="${escapeHtml(String(layer.entityId || ''))}" type="button">Remove</button>
           </div>
