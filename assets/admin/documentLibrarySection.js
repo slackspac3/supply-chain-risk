@@ -1,6 +1,35 @@
 'use strict';
 
 const AdminDocumentLibrarySection = (() => {
+  const LENS_TAG_ORDER = [
+    'strategic',
+    'operational',
+    'cyber',
+    'third-party',
+    'regulatory',
+    'financial',
+    'esg',
+    'compliance',
+    'supply-chain',
+    'procurement',
+    'business-continuity',
+    'hse'
+  ];
+
+  function sortDocumentTags(tags = []) {
+    const values = Array.from(new Set((Array.isArray(tags) ? tags : []).map(tag => String(tag || '').trim()).filter(Boolean)));
+    return values.sort((a, b) => {
+      const ai = LENS_TAG_ORDER.indexOf(String(a).toLowerCase());
+      const bi = LENS_TAG_ORDER.indexOf(String(b).toLowerCase());
+      if (ai !== -1 || bi !== -1) {
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        if (ai !== bi) return ai - bi;
+      }
+      return String(a).localeCompare(String(b));
+    });
+  }
+
   function renderRoute() {
     if (!requireAdmin()) return;
     const docList = getDocList();
@@ -13,7 +42,7 @@ const AdminDocumentLibrarySection = (() => {
         }
       });
     }
-    const availableTags = Array.from(new Set(docList.flatMap(doc => Array.isArray(doc.tags) ? doc.tags : []))).sort((a, b) => String(a).localeCompare(String(b)));
+    const availableTags = sortDocumentTags(docList.flatMap(doc => Array.isArray(doc.tags) ? doc.tags : []));
     setPage(adminLayout('docs', `
       ${UI.adminSectionHeader({
         title: 'Document Library',
@@ -51,7 +80,7 @@ const AdminDocumentLibrarySection = (() => {
             <thead><tr><th>Document</th><th>Tags</th><th>Updated</th><th>Actions</th></tr></thead>
             <tbody>${docList.map(doc => `<tr class="admin-doc-row" data-search="${escapeHtml([doc.title, doc.id, ...(doc.tags || [])].join(' ').toLowerCase())}" data-tags="${escapeHtml((doc.tags || []).join('|').toLowerCase())}">
               <td><div class="table-primary-cell"><strong style="color:var(--text-primary);font-size:.875rem">${doc.title}</strong><span>${doc.id}</span></div></td>
-              <td><div class="table-tag-stack">${(doc.tags || []).slice(0, 2).map(t => `<span class="badge badge--primary" style="font-size:.6rem">${t}</span>`).join('')}${(doc.tags || []).length > 2 ? `<span class="table-more-pill">+${(doc.tags || []).length - 2} more</span>` : ''}</div></td>
+              <td><div class="table-tag-stack">${sortDocumentTags(doc.tags || []).slice(0, 2).map(t => `<span class="badge badge--primary" style="font-size:.6rem">${t}</span>`).join('')}${(doc.tags || []).length > 2 ? `<span class="table-more-pill">+${(doc.tags || []).length - 2} more</span>` : ''}</div></td>
               <td style="font-size:.8rem;white-space:nowrap">${doc.lastUpdated || '—'}</td>
               <td class="table-actions-cell">
                 <div class="table-actions-row">

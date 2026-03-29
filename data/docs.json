@@ -4,6 +4,9 @@
     "title": "UAE NESA IAS v2.0 \u2013 Information Assurance Standards",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "regulatory",
+      "compliance",
       "regulatory",
       "uae",
       "all-bu",
@@ -18,6 +21,8 @@
     "title": "ISO 27001:2022 Internal Compliance Mapping",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "compliance",
       "iso",
       "compliance",
       "all-bu",
@@ -31,6 +36,9 @@
     "title": "Cyber Incident Response Playbook v4.2",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "operational",
+      "business-continuity",
       "incident-response",
       "all-bu",
       "operations",
@@ -44,6 +52,8 @@
     "title": "Cloud Security Baseline & Architecture Standards",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "operational",
       "cloud",
       "architecture",
       "security",
@@ -57,6 +67,8 @@
     "title": "Data Classification & Handling Policy v3.0",
     "url": "#/admin/docs",
     "tags": [
+      "regulatory",
+      "compliance",
       "data",
       "classification",
       "privacy",
@@ -70,6 +82,7 @@
     "title": "GDPR Compliance & Data Subject Rights Procedures",
     "url": "#/admin/docs",
     "tags": [
+      "compliance",
       "gdpr",
       "privacy",
       "eu",
@@ -85,6 +98,8 @@
     "title": "Data Classification Standard \u2013 Handling Matrix",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "compliance",
       "classification",
       "security",
       "data",
@@ -111,6 +126,9 @@
     "title": "PCI-DSS 4.0 Compliance Program & Scope",
     "url": "#/admin/docs",
     "tags": [
+      "financial",
+      "cyber",
+      "regulatory",
       "pci-dss",
       "payments",
       "compliance",
@@ -124,6 +142,8 @@
     "title": "Business Continuity & DR Planning Framework",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
+      "business-continuity",
       "bcp",
       "dr",
       "resilience",
@@ -137,6 +157,8 @@
     "title": "Vulnerability Management & Patch Policy",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "operational",
       "vulnerability",
       "patch",
       "operations",
@@ -150,6 +172,8 @@
     "title": "Insider Threat Program & Indicators of Compromise",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "compliance",
       "insider-threat",
       "personnel",
       "dlp",
@@ -163,6 +187,10 @@
     "title": "NIST SP 800-53 Rev. 5 Control Baseline Reference",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "compliance",
+      "third-party",
+      "business-continuity",
       "nist",
       "controls",
       "risk-management",
@@ -177,6 +205,9 @@
     "title": "NIST Risk Management Framework Implementation Guide",
     "url": "#/admin/docs",
     "tags": [
+      "strategic",
+      "operational",
+      "compliance",
       "nist",
       "rmf",
       "risk-management",
@@ -191,6 +222,10 @@
     "title": "ISO 27002 Control Guidance Reference",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "compliance",
+      "third-party",
+      "business-continuity",
       "iso",
       "controls",
       "isms",
@@ -204,6 +239,7 @@
     "title": "ISO 27005 Information Security Risk Management Guidance",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
       "iso",
       "risk-management",
       "cyber",
@@ -217,6 +253,8 @@
     "title": "ISO 27017 Cloud Security Control Guidance",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
+      "third-party",
       "iso",
       "cloud",
       "security",
@@ -230,6 +268,8 @@
     "title": "ISO 27018 Protection of PII in Public Cloud",
     "url": "#/admin/docs",
     "tags": [
+      "compliance",
+      "regulatory",
       "iso",
       "privacy",
       "cloud",
@@ -244,6 +284,8 @@
     "title": "ISO 27701 Privacy Information Management Reference",
     "url": "#/admin/docs",
     "tags": [
+      "compliance",
+      "regulatory",
       "iso",
       "privacy",
       "pims",
@@ -257,6 +299,7 @@
     "title": "ISO 22301 Business Continuity Management Reference",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
       "iso",
       "business-continuity",
       "resilience",
@@ -270,6 +313,7 @@
     "title": "ISO 22313 Business Continuity Guidance",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
       "iso",
       "business-continuity",
       "guidance",
@@ -283,6 +327,8 @@
     "title": "ISO 27036 Supplier and Supply Chain Security Guidance",
     "url": "#/admin/docs",
     "tags": [
+      "procurement",
+      "compliance",
       "iso",
       "supplier",
       "supply-chain",
@@ -297,6 +343,8 @@
     "title": "ISO 28000 Supply Chain Security Management Reference",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
+      "business-continuity",
       "iso",
       "supply-chain",
       "resilience",
@@ -310,6 +358,8 @@
     "title": "ISO 31000 Enterprise Risk Management Principles",
     "url": "#/admin/docs",
     "tags": [
+      "strategic",
+      "operational",
       "iso",
       "risk-management",
       "enterprise-risk",
@@ -323,6 +373,8 @@
     "title": "COSO Enterprise Risk Management - Strategy and Performance",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
+      "financial",
       "strategic",
       "enterprise-risk",
       "governance",
@@ -336,6 +388,7 @@
     "title": "ISO 37301 Compliance Management Systems Reference",
     "url": "#/admin/docs",
     "tags": [
+      "regulatory",
       "compliance",
       "governance",
       "controls",
@@ -349,6 +402,7 @@
     "title": "IFRS S1 and IFRS S2 Sustainability Disclosure Baseline",
     "url": "#/admin/docs",
     "tags": [
+      "strategic",
       "esg",
       "sustainability",
       "climate",
@@ -362,6 +416,7 @@
     "title": "GRI Universal Standards Governance and Impact Reference",
     "url": "#/admin/docs",
     "tags": [
+      "strategic",
       "esg",
       "sustainability",
       "reporting",
@@ -375,6 +430,7 @@
     "title": "ISO 20400 Sustainable Procurement Guidance",
     "url": "#/admin/docs",
     "tags": [
+      "compliance",
       "procurement",
       "sourcing",
       "supply-chain",
@@ -388,6 +444,7 @@
     "title": "ISO 45001 Occupational Health and Safety Management Reference",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
       "hse",
       "health-safety",
       "operations",
@@ -401,6 +458,8 @@
     "title": "ISO 14001 Environmental Management Systems Reference",
     "url": "#/admin/docs",
     "tags": [
+      "regulatory",
+      "compliance",
       "hse",
       "environment",
       "esg",
@@ -414,6 +473,7 @@
     "title": "NFPA 1600 Crisis and Continuity Program Reference",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
       "business-continuity",
       "crisis-management",
       "resilience",
@@ -427,6 +487,7 @@
     "title": "COSO Internal Control Framework for Financial and Compliance Risk",
     "url": "#/admin/docs",
     "tags": [
+      "regulatory",
       "financial",
       "compliance",
       "controls",
@@ -440,6 +501,9 @@
     "title": "EU Digital Operational Resilience Act (DORA) Reference",
     "url": "#/admin/docs",
     "tags": [
+      "cyber",
+      "third-party",
+      "business-continuity",
       "eu",
       "operational",
       "resilience",
@@ -454,6 +518,9 @@
     "title": "EU NIS2 Directive Cyber and Operational Resilience Baseline",
     "url": "#/admin/docs",
     "tags": [
+      "third-party",
+      "business-continuity",
+      "compliance",
       "eu",
       "cyber",
       "regulatory",
@@ -468,6 +535,9 @@
     "title": "EU CSRD and ESRS Sustainability Reporting Reference",
     "url": "#/admin/docs",
     "tags": [
+      "strategic",
+      "compliance",
+      "regulatory",
       "eu",
       "esg",
       "sustainability",
@@ -482,6 +552,9 @@
     "title": "NIST Cybersecurity Framework 2.0 Reference",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
+      "third-party",
+      "business-continuity",
       "us",
       "cyber",
       "governance",
@@ -496,6 +569,8 @@
     "title": "US SEC Cybersecurity Disclosure Rules Reference",
     "url": "#/admin/docs",
     "tags": [
+      "regulatory",
+      "compliance",
       "us",
       "cyber",
       "financial",
@@ -510,6 +585,8 @@
     "title": "US HIPAA Security and Breach Notification Reference",
     "url": "#/admin/docs",
     "tags": [
+      "compliance",
+      "cyber",
       "us",
       "health",
       "privacy",
@@ -524,6 +601,8 @@
     "title": "Basel Committee Principles for Operational Resilience",
     "url": "#/admin/docs",
     "tags": [
+      "third-party",
+      "business-continuity",
       "global",
       "financial",
       "operational",
@@ -538,6 +617,8 @@
     "title": "BCBS 239 Risk Data Aggregation and Reporting Reference",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
+      "regulatory",
       "global",
       "financial",
       "governance",
@@ -552,6 +633,8 @@
     "title": "UAE Sustainable Finance Principles Reference",
     "url": "#/admin/docs",
     "tags": [
+      "strategic",
+      "regulatory",
       "uae",
       "esg",
       "sustainability",
@@ -566,6 +649,9 @@
     "title": "ADX ESG Disclosure Guidance Reference",
     "url": "#/admin/docs",
     "tags": [
+      "strategic",
+      "regulatory",
+      "compliance",
       "uae",
       "esg",
       "reporting",
@@ -580,6 +666,9 @@
     "title": "Abu Dhabi EHSMS Regulatory Framework Reference",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
+      "compliance",
+      "regulatory",
       "uae",
       "hse",
       "environment",
@@ -594,6 +683,9 @@
     "title": "UAE Fire and Life Safety Code Reference",
     "url": "#/admin/docs",
     "tags": [
+      "operational",
+      "compliance",
+      "regulatory",
       "uae",
       "hse",
       "business-continuity",
@@ -608,6 +700,8 @@
     "title": "UNCITRAL Model Law on Public Procurement Reference",
     "url": "#/admin/docs",
     "tags": [
+      "compliance",
+      "regulatory",
       "global",
       "procurement",
       "public-sector",
@@ -622,6 +716,8 @@
     "title": "World Bank Procurement Framework Reference",
     "url": "#/admin/docs",
     "tags": [
+      "compliance",
+      "operational",
       "global",
       "procurement",
       "sourcing",
