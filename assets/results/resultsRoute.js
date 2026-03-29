@@ -233,6 +233,7 @@ function renderAnalystSummaryBlock(summary) {
   if (!summary) return '';
   return UI.resultsSectionBlock({
     title: escapeHtml(String(summary.title || 'Analyst summary')),
+    className: 'results-section-stack--analyst',
     body: `
     <div class="results-analyst-summary">
       <div class="results-analyst-summary__main">
@@ -330,6 +331,7 @@ function renderTreatmentRecommendationLens(comparison, recommendations = [], exe
     intro: comparison
       ? 'Use this to decide whether the proposed better-outcome path is credible enough to sponsor.'
       : 'Use this to keep the result action-oriented without dropping into the full technical layer.',
+    className: 'results-section-stack--recommendation',
     body: `<div class="results-recommendations-grid">
       ${cards.map(card => UI.resultsSummaryCard({
         label: card.label,
@@ -355,6 +357,7 @@ function renderBoardroomModeIntro(comparison) {
 function renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextStepPlan = [], scenarioNarrative, analystSummary }) {
   return UI.resultsSectionBlock({
     title: 'Executive mode readout',
+    className: 'results-section-stack--boardroom-summary',
     body: `
     <div class="results-summary-grid results-summary-grid--primary results-summary-grid--bg">
       ${UI.resultsSummaryCard({
@@ -395,6 +398,7 @@ function renderResultsConfidenceNeedsBlock(confidenceFrame, evidenceQuality, mis
   );
   return UI.resultsSectionBlock({
     title: 'Confidence and evidence',
+    className: 'results-section-stack--confidence',
     body: `
     <div class="results-summary-grid results-summary-grid--primary results-summary-grid--bg">
       ${UI.resultsSummaryCard({
@@ -648,6 +652,7 @@ function renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence,
   const topGap = missingInformation[0] || 'No major missing information was recorded for this assessment.';
   return UI.resultsSectionBlock({
     title: 'Assumption traceability',
+    className: 'results-section-stack--traceability',
     body: `
     <div class="results-traceability-grid">
       ${UI.resultsSummaryCard({
@@ -669,6 +674,7 @@ function renderExecutiveInsightCluster({ scenarioNarrative, executiveDecision, e
   return UI.resultsSectionBlock({
     title: 'Executive meaning',
     intro: 'Start here for business meaning, treatment impact, and the immediate decision.',
+    className: 'results-section-stack--insight',
     body: `
     <div class="results-summary-grid results-summary-grid--primary">
       ${UI.resultsSummaryCard({
