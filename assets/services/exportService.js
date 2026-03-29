@@ -311,7 +311,6 @@ const ExportService = (() => {
         </div>
         <div class="card">
           <div class="section-label">Economic framing</div>
-          <div class="body-copy">Directional internal cost avoided at the current rate card: <strong>${memo.valueSummary.internalCostAvoided}</strong>.</div>
           <div class="decision-row"><div class="section-label">External-equivalent value</div><div class="body-copy"><strong>${memo.valueSummary.externalEquivalentValue}</strong><br>Use this as the comparable Big 4-style UAE advisory benchmark, not as booked savings.</div></div>
           <div class="decision-row"><div class="section-label">Modelled annual reduction</div><div class="body-copy"><strong>${memo.valueSummary.modelledReduction || 'Not quantified yet'}</strong><br>${memo.valueSummary.modelledReductionSource}</div></div>
         </div>
@@ -670,7 +669,6 @@ const ExportService = (() => {
         </div>
         <div class="card">
           <div class="section-label">Economic framing</div>
-          <div class="body-copy">Directional internal cost avoided at the current rate card: <strong>${fmt(valueModel.cost?.internalCostAvoidedUsd || 0)}</strong>.</div>
           <div class="decision-row"><div class="section-label">External-equivalent value</div><div class="body-copy"><strong>${fmt(valueModel.cost?.externalEquivalentValueUsd || 0)}</strong><br>Comparable external-specialist benchmark rather than booked savings.</div></div>
           <div class="decision-row"><div class="section-label">Modelled annual reduction</div><div class="body-copy"><strong>${valueModel.modelled?.available ? fmt(valueModel.modelled.annualReductionUsd || 0) : 'Not quantified yet'}</strong><br>${valueModel.modelled?.available ? valueModel.modelled.sourceLabel : (valueModel.modelled?.title || 'Create a better-outcome comparison to quantify modelled reduction.')}</div></div>
         </div>
@@ -1026,9 +1024,9 @@ const ExportService = (() => {
           { label: 'Internal effort avoided', value: valueSummary.internalHoursAvoided, copy: `Directional effort avoided versus the ${valueSummary.domainLabel.toLowerCase()} baseline.` },
           { label: 'External specialist equivalent', value: valueSummary.externalEquivalentDays, copy: `Directional Big 4-style UAE advisory benchmark for ${valueSummary.complexityLabel.toLowerCase()} work.` },
           {
-            label: valueSummary.modelledReduction ? 'Modelled annual reduction' : 'Directional internal cost avoided',
-            value: valueSummary.modelledReduction || valueSummary.internalCostAvoided,
-            copy: valueSummary.modelledReductionSource || `Directional value at the current ${valueSummary.domainLabel.toLowerCase()} rate card.`
+            label: valueSummary.modelledReduction ? 'Modelled annual reduction' : 'External-equivalent value',
+            value: valueSummary.modelledReduction || valueSummary.externalEquivalentValue,
+            copy: valueSummary.modelledReductionSource || 'Comparable Big 4-style UAE advisory benchmark, not booked savings.'
           }
         ]
       : [];
