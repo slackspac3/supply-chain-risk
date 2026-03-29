@@ -41,6 +41,14 @@ function renderWizard2() {
     inferredAssumptions: draft.inferredAssumptions,
     citations: draft.citations
   });
+  const readinessModel = buildAssessmentReadinessModel({
+    draft,
+    selectedRisks,
+    scenarioGeographies
+  });
+  const contextPreviewModel = buildContextInfluencePreviewModel({
+    buId: draft.buId
+  });
   setPage(`
     <main class="page">
       <div class="wizard-layout container container--narrow">
@@ -60,6 +68,8 @@ function renderWizard2() {
             <div class="form-help" style="margin-top:8px">Write one coherent scenario first. Keep the support modules below as optional aids rather than part of the main task.</div>
           </section>
           ${renderStep2FocusStrip(draft, selectedRisks, scenarioGeographies)}
+          ${renderAssessmentReadinessStrip(readinessModel)}
+          ${renderContextInfluencePreview(contextPreviewModel)}
           ${UI.wizardInputSection({
             title: 'Risk scenario narrative <span class="required">*</span>',
             description: 'This is the one required task on this step. Keep the wording to one coherent assessment scope so the estimate stays credible.',

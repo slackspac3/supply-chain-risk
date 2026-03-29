@@ -88,6 +88,34 @@ function renderUserDashboard() {
     const titleOverlap = hasMeaningfulScenarioOverlap(draftScenarioSignature.title, assessment.scenarioTitle || assessment.narrative || '');
     return sameBusinessContext && (sharedRiskCount >= 1 || titleOverlap);
   };
+  const buildWorkspaceMemoryCue = assessment => {
+    if (!assessment || typeof assessment !== 'object') return '';
+    if (assessment.comparisonBaselineId) {
+      const baseline = allAssessments.find(item => item.id === assessment.comparisonBaselineId);
+      return `Built as a treatment case from ${baseline?.scenarioTitle || 'a saved baseline'}.`;
+    }
+    const lifecycleStatus = deriveAssessmentLifecycleStatus(assessment);
+    if (lifecycleStatus === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED) {
+      return 'Protected as a comparison baseline for future better-outcome testing.';
+    }
+    const priorMatch = allAssessments.find(item => {
+      if (!item || item.id === assessment.id) return false;
+      const priorTs = new Date(item.completedAt || item.createdAt || 0).getTime();
+      const currentTs = new Date(assessment.completedAt || assessment.createdAt || 0).getTime();
+      return priorTs < currentTs && hasMeaningfulScenarioOverlap(
+        item.scenarioTitle || item.narrative || '',
+        assessment.scenarioTitle || assessment.narrative || ''
+      );
+    });
+    if (priorMatch) {
+      // Keep memory cues lightweight so the dashboard feels continuous without becoming a new analysis layer.
+      return `Shares a scenario pattern with ${String(priorMatch.scenarioTitle || 'an earlier saved assessment').trim()}.`;
+    }
+    if (assessment.assessmentChallenge?.createdAt) {
+      return 'A saved challenge review is attached to this result.';
+    }
+    return '';
+  };
   const reviewEligibleAssessments = assessments.filter(a => a?.results && (a.results.toleranceBreached || a.results.nearTolerance || a.results.annualReviewTriggered) && !isDuplicateOfLiveDraft(a));
   const assessmentsNeedingReview = reviewEligibleAssessments.slice(0, 3);
   const lifecycleCounts = assessments.reduce((acc, assessment) => {
@@ -455,10 +483,11 @@ function renderUserDashboard() {
     </section>` : '';
   const compactRecentRows = compactRecentAssessments.map(assessment => {
     const lifecycle = getAssessmentLifecyclePresentation(assessment);
+    const memoryCue = buildWorkspaceMemoryCue(assessment);
     return UI.dashboardAssessmentRow({
       assessmentId: assessment.id,
       title: escapeDashboardText(assessment.scenarioTitle || 'Untitled assessment'),
-      detail: `${escapeDashboardText(assessment.buName || profile.businessUnit || user?.businessUnit || 'Business unit not set')} · ${escapeDashboardText(new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }))}`,
+      detail: `${escapeDashboardText(assessment.buName || profile.businessUnit || user?.businessUnit || 'Business unit not set')} · ${escapeDashboardText(new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }))}${memoryCue ? `<div class="dashboard-memory-cue">${escapeDashboardText(memoryCue)}</div>` : ''}`,
       badgeClass: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED ? 'badge--gold' : assessment.results?.toleranceBreached ? 'badge--danger' : assessment.results?.nearTolerance ? 'badge--warning' : lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? 'badge--gold' : 'badge--success',
       badgeLabel: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED || lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? lifecycle.label : assessment.results?.toleranceBreached ? 'Above tolerance' : assessment.results?.nearTolerance ? 'Close to tolerance' : lifecycle.label,
       actions: `

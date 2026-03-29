@@ -2007,6 +2007,61 @@ function buildInheritedContextDisplayModel(options = {}) {
   return { highlights, visibleDetails, hasHiddenDetails };
 }
 
+function buildContextInfluencePreviewModel(options = {}) {
+  const effective = options.effectiveSettings || getEffectiveSettings();
+  const inherited = buildInheritedContextDisplayModel(options);
+  const appliedItems = [];
+  if (effective?.geography) {
+    appliedItems.push({ label: 'Default geography', value: effective.geography });
+  }
+  const regulations = Array.isArray(effective?.applicableRegulations)
+    ? effective.applicableRegulations.filter(Boolean)
+    : [];
+  if (regulations.length) {
+    appliedItems.push({
+      label: 'Regulations carried forward',
+      value: regulations.length <= 3 ? regulations.join(', ') : `${regulations.length} regulation tags`
+    });
+  }
+  const aiInstructions = String(effective?.aiInstructions || '').trim();
+  if (aiInstructions) {
+    appliedItems.push({
+      label: 'AI guidance',
+      value: 'Shared governance guidance is active'
+    });
+  }
+  return {
+    title: 'What is already shaping this assessment',
+    summary: 'Inherited business, function, geography, and governance context are applied before your personal working context and edits.',
+    appliedItems,
+    visibleDetails: inherited.visibleDetails,
+    hasHiddenDetails: inherited.hasHiddenDetails
+  };
+}
+
+function renderContextInfluencePreview(model = {}) {
+  const appliedItems = Array.isArray(model.appliedItems) ? model.appliedItems.filter(Boolean) : [];
+  const visibleDetails = Array.isArray(model.visibleDetails) ? model.visibleDetails.filter(Boolean) : [];
+  if (!appliedItems.length && !visibleDetails.length && !model.hasHiddenDetails) return '';
+  return `<section class="card card--background wizard-context-preview anim-fade-in">
+    <div class="wizard-premium-head">
+      <div>
+        <div class="context-panel-title">${escapeHtml(String(model.title || 'Context influence preview'))}</div>
+        <p class="context-panel-copy" style="margin-top:var(--sp-2)">${escapeHtml(String(model.summary || 'Inherited platform context is active for this assessment.'))}</p>
+      </div>
+      <span class="badge badge--neutral">Applied context</span>
+    </div>
+    ${appliedItems.length ? `<div class="citation-chips" style="margin-top:var(--sp-4)">${appliedItems.map(item => `<span class="badge badge--neutral">${escapeHtml(String(item.label || 'Context'))}: ${escapeHtml(String(item.value || 'Active'))}</span>`).join('')}</div>` : ''}
+    ${visibleDetails.length ? `<div class="wizard-context-preview__details">
+      ${visibleDetails.map(item => `<div class="wizard-context-preview__detail">
+        <div class="results-driver-label">${escapeHtml(String(item.label || 'Context detail'))}</div>
+        <div class="results-summary-copy">${escapeHtml(String(item.value || ''))}</div>
+      </div>`).join('')}
+    </div>` : ''}
+    ${model.hasHiddenDetails ? '<div class="form-help" style="margin-top:var(--sp-4)">Additional governed context is active for this assessment, but its detail is intentionally hidden in this workspace.</div>' : ''}
+  </section>`;
+}
+
 function buildCurrentAIAssistContext(options = {}) {
   const globalSettings = getAdminSettings();
   const user = AuthService.getCurrentUser();
@@ -4649,6 +4704,92 @@ function buildQuantReadinessModel({
       }
     ]
   };
+}
+
+function buildAssessmentReadinessModel({
+  draft = {},
+  selectedRisks = [],
+  scenarioGeographies = [],
+  validation = {}
+} = {}) {
+  const trust = buildEvidenceTrustSummary({
+    confidenceLabel: draft.confidenceLabel,
+    evidenceQuality: draft.evidenceQuality,
+    evidenceSummary: draft.evidenceSummary,
+    missingInformation: draft.missingInformation,
+    inputProvenance: draft.inputProvenance,
+    citations: draft.citations,
+    primaryGrounding: draft.primaryGrounding,
+    supportingReferences: draft.supportingReferences,
+    inferredAssumptions: draft.inferredAssumptions,
+    inputAssignments: draft.inputAssignments
+  });
+  const p = draft.fairParams || {};
+  const narrativeReady = !!String(draft.enhancedNarrative || draft.narrative || '').trim();
+  const hasContextScope = !!String(draft.buId || '').trim();
+  const estimateSeedCount = [
+    'tefLikely',
+    'threatCapLikely',
+    'controlStrLikely',
+    'irLikely',
+    'biLikely',
+    'dbLikely'
+  ].filter(key => Number.isFinite(Number(p[key])) && Number(p[key]) > 0).length;
+  const errors = Array.isArray(validation?.errors) ? validation.errors.filter(Boolean) : [];
+  const warnings = Array.isArray(validation?.warnings) ? validation.warnings.filter(Boolean) : [];
+  let score = 0;
+  if (narrativeReady) score += 25;
+  if (selectedRisks.length) score += 20;
+  if (hasContextScope) score += 10;
+  if (scenarioGeographies.length) score += 5;
+  score += Math.min(20, trust.totalEvidenceCount * 4);
+  score += Math.min(20, estimateSeedCount * 3);
+  score -= Math.min(15, errors.length * 8);
+  score -= Math.min(10, warnings.length * 3);
+  score = Math.max(0, Math.min(100, score));
+  const label = score >= 80
+    ? 'Decision-ready'
+    : score >= 55
+      ? 'Well grounded'
+      : 'Lightly grounded';
+  const tone = score >= 80 ? 'success' : score >= 55 ? 'warning' : 'neutral';
+  const summary = errors[0]
+    || trust.topGap
+    || warnings[0]
+    || (!narrativeReady ? 'Add a coherent scenario narrative first.' : '')
+    || (!selectedRisks.length ? 'Confirm which risks stay in scope.' : '')
+    || (!hasContextScope ? 'Pick the business unit so inherited context and regulations carry forward.' : '')
+    || (estimateSeedCount < 3 ? 'Pre-load or enter the core estimate ranges before the run.' : '')
+    || 'The current scenario, context, and evidence are strong enough to support a management read.';
+  return {
+    label,
+    tone,
+    score,
+    summary,
+    stats: [
+      { label: 'Narrative', value: narrativeReady ? 'In place' : 'Missing' },
+      { label: 'Scope', value: selectedRisks.length ? `${selectedRisks.length} selected` : 'Not set' },
+      { label: 'Evidence', value: trust.totalEvidenceCount ? `${trust.totalEvidenceCount} basis item${trust.totalEvidenceCount === 1 ? '' : 's'}` : 'Thin' }
+    ]
+  };
+}
+
+function renderAssessmentReadinessStrip(model = {}) {
+  const stats = Array.isArray(model.stats) ? model.stats.filter(Boolean) : [];
+  if (!model.label) return '';
+  return `<section class="wizard-readiness-strip wizard-readiness-strip--${escapeHtml(String(model.tone || 'neutral'))} anim-fade-in">
+    <div class="wizard-readiness-strip__main">
+      <div class="wizard-readiness-strip__label">Assessment readiness</div>
+      <strong>${escapeHtml(String(model.label || 'Working draft'))}</strong>
+      <span>${escapeHtml(String(model.summary || ''))}</span>
+    </div>
+    ${stats.length ? `<div class="wizard-readiness-strip__meta">
+      ${stats.map(item => `<div class="wizard-readiness-strip__stat">
+        <span>${escapeHtml(String(item.label || 'Signal'))}</span>
+        <strong>${escapeHtml(String(item.value || ''))}</strong>
+      </div>`).join('')}
+    </div>` : ''}
+  </section>`;
 }
 
 function buildReviewReadinessModel({

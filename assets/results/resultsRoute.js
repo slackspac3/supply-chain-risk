@@ -291,21 +291,70 @@ function renderResultsActionBlock(recommendations, executiveAction, missingInfor
   </section>`;
 }
 
+function renderTreatmentRecommendationLens(comparison, recommendations = [], executiveDecision = null, nextStepPlan = []) {
+  const fastestLever = typeof ReportPresentation !== 'undefined' &&
+    ReportPresentation.buildFastestReductionLever
+      ? ReportPresentation.buildFastestReductionLever(recommendations, executiveDecision)
+      : '';
+  const treatmentDecision = comparison ? ReportPresentation.buildTreatmentDecisionSummary(comparison) : null;
+  const assist = comparison ? buildTreatmentDecisionAssist(comparison, treatmentDecision) : null;
+  const cards = [
+    {
+      label: comparison ? 'Decision signal' : 'Best next move',
+      title: comparison
+        ? (assist?.decisionLabel || 'Review treatment delta')
+        : (nextStepPlan[0]?.title || recommendations?.[0]?.title || executiveDecision?.priority || 'Confirm the next management step'),
+      copy: comparison
+        ? (assist?.decisionNow || comparison.summary || 'Validate the treatment delta before relying on it.')
+        : (recommendations?.[0]?.why || nextStepPlan[0]?.copy || 'Use the current result to agree the most credible next action.')
+    },
+    {
+      label: 'Fastest reduction lever',
+      title: fastestLever || 'No explicit reduction lever saved yet',
+      copy: comparison
+        ? (comparison.keyDriver || assist?.whyChanged || 'No dominant treatment driver has been called out yet.')
+        : (recommendations?.[1]?.why || 'The current recommendation set has not yet identified a clearly faster lever.')
+    },
+    {
+      label: comparison ? 'Validate before sponsorship' : 'What to pressure-test next',
+      title: comparison
+        ? (assist?.validateNext || comparison.caveat || 'Validate the treatment assumptions before sponsorship.')
+        : (nextStepPlan[1]?.title || 'Close the biggest evidence gap'),
+      copy: comparison
+        ? (assist?.technicalPrompt || 'Pressure-test the assumptions that are moving the delta most.')
+        : (nextStepPlan[1]?.copy || recommendations?.[2]?.why || 'Challenge the biggest assumption before you escalate or commit.')
+    }
+  ];
+  return UI.resultsSectionBlock({
+    title: comparison ? 'Treatment recommendation lens' : 'Recommendation lens',
+    intro: comparison
+      ? 'Use this to decide whether the proposed better-outcome path is credible enough to sponsor.'
+      : 'Use this to keep the result action-oriented without dropping into the full technical layer.',
+    body: `<div class="results-recommendations-grid">
+      ${cards.map(card => UI.resultsSummaryCard({
+        label: card.label,
+        body: `<p class="results-summary-copy"><strong>${escapeHtml(String(card.title || 'Review'))}</strong></p>`,
+        foot: escapeHtml(String(card.copy || ''))
+      })).join('')}
+    </div>`
+  });
+}
+
 function renderBoardroomModeIntro(comparison) {
   return `<section class="results-section-stack">
     <div class="results-boardroom-banner">
       <div>
-        <div class="results-driver-label">Boardroom review mode</div>
+        <div class="results-driver-label">Executive mode</div>
         <h3 class="results-boardroom-banner__title">This view compresses the assessment into the clearest management read, then leaves the deeper challenge layers one step lower.</h3>
       </div>
-      <div class="results-boardroom-banner__meta">${comparison ? 'Treatment comparison is still included because it changes the management decision.' : 'Use this mode when you need a committee-ready read without the full executive support stack.'}</div>
+      <div class="results-boardroom-banner__meta">${comparison ? 'Treatment comparison is still included because it changes the management decision.' : 'Use this mode when you need a board-ready or committee-ready read without the full executive support stack.'}</div>
     </div>
   </section>`;
 }
 
 function renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextStepPlan = [], scenarioNarrative, analystSummary }) {
   return UI.resultsSectionBlock({
-    title: 'Boardroom readout',
+    title: 'Executive mode readout',
     body: `
     <div class="results-summary-grid results-summary-grid--primary results-summary-grid--bg">
       ${UI.resultsSummaryCard({
@@ -1911,6 +1960,7 @@ function renderResults(id, isShared) {
   const recommendationCards = renderResultsActionBlock(recommendations, executiveAction, missingInformation, nextStepPlan);
   const confidenceNeedsBlock = renderResultsConfidenceNeedsBlock(confidenceFrame, assessment.evidenceQuality, missingInformation, citations, baselineAssessment);
   const comparisonHighlight = renderResultsComparisonHighlight(comparison);
+  const treatmentRecommendationLens = renderTreatmentRecommendationLens(comparison, recommendations, executiveDecision, nextStepPlan);
   const explanationPanel = renderResultsExplanationPanel(assessmentIntelligence, comparison, runMetadata);
   const analystSummary = ReportPresentation.buildAnalystAdvisorySummary({
     assessment,
@@ -1924,13 +1974,13 @@ function renderResults(id, isShared) {
 
   const executiveHero = `<div class="results-hero ${statusClass}">
     <div class="results-hero-main">
-      <div class="results-kicker">${boardroomMode ? 'Boardroom review' : 'Assessment outcome'}</div>
+      <div class="results-kicker">${boardroomMode ? 'Executive mode' : 'Assessment outcome'}</div>
       <h2 class="results-hero-title">${executiveHeadline}</h2>
       <p class="results-hero-copy">${statusDetail}</p>
       <div class="results-hero-tags">
         <span class="badge ${r.toleranceBreached ? 'badge--danger' : r.nearTolerance ? 'badge--warning' : 'badge--success'}">${statusTitle}</span>
         <span class="badge badge--${lifecycle.tone}">${lifecycle.label}</span>
-        ${boardroomMode ? '<span class="badge badge--neutral">Boardroom mode</span>' : ''}
+        ${boardroomMode ? '<span class="badge badge--neutral">Executive mode</span>' : ''}
       </div>
       <div class="results-hero-meta">${escapeHtml(String(assessment.buName || 'No business unit'))} · ${escapeHtml(String(assessment.geography || 'No geography'))} · ${escapeHtml(String(completedLabel))}</div>
     </div>
@@ -1985,6 +2035,7 @@ function renderResults(id, isShared) {
       </div>
       ${boardroomMode
         ? `${renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextStepPlan, scenarioNarrative, analystSummary })}
+           ${treatmentRecommendationLens}
            ${comparisonHighlight || recommendationCards}
            ${renderAnalystSummaryBlock(analystSummary)}
            <section class="results-secondary-band results-secondary-band--boardroom">
@@ -1992,6 +2043,7 @@ function renderResults(id, isShared) {
              ${confidenceNeedsBlock}
            </section>`
         : `${renderAnalystSummaryBlock(analystSummary)}
+           ${treatmentRecommendationLens}
            ${comparisonHighlight || recommendationCards}
            <section class="results-secondary-band">
              ${comparisonHighlight ? recommendationCards : ''}
@@ -2178,7 +2230,7 @@ function renderResults(id, isShared) {
             <details class="results-actions-disclosure">
               <summary class="btn btn--ghost btn--sm">More actions</summary>
               <div class="results-actions-disclosure-menu">
-                <button class="btn btn--secondary btn--sm" id="btn-toggle-boardroom-mode">${boardroomMode ? 'Exit Boardroom Review' : 'Open Boardroom Review'}</button>
+                <button class="btn btn--secondary btn--sm" id="btn-toggle-boardroom-mode">${boardroomMode ? 'Exit Executive Mode' : 'Open Executive Mode'}</button>
                 <button class="btn btn--secondary btn--sm" id="btn-export-board-note">Generate Decision Memo</button>
                 <button class="btn btn--secondary btn--sm" id="btn-export-board-note-appendix">Decision Memo + Appendix</button>
                 <button class="btn btn--secondary btn--sm" id="btn-duplicate-assessment">Duplicate Assessment</button>
@@ -2356,7 +2408,7 @@ function renderResults(id, isShared) {
     AppState.resultsTab = 'executive';
     AppState.resultsShouldScrollTop = true;
     AppState.resultsFocusTarget = 'panel';
-    UI.toast(AppState.resultsBoardroomMode ? 'Boardroom review mode enabled.' : 'Full executive review restored.', 'info');
+    UI.toast(AppState.resultsBoardroomMode ? 'Executive mode enabled.' : 'Full executive review restored.', 'info');
     renderResults(id, isShared || assessment._shared);
   });
   document.getElementById('btn-export-board-note')?.addEventListener('click', event => {

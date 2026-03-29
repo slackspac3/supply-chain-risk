@@ -618,6 +618,15 @@ function renderWizard1() {
   const hasScenarioDraft = !!String(draft.narrative || draft.sourceNarrative || '').trim();
   const hasImportedSource = !!String(draft.uploadedRegisterName || '').trim() || (riskCandidates || []).some(risk => risk.source === 'register' || risk.source === 'ai+register');
   const stepReady = !!(hasScenarioDraft || selectedRisks.length);
+  const readinessModel = buildAssessmentReadinessModel({
+    draft,
+    selectedRisks,
+    scenarioGeographies
+  });
+  const contextPreviewModel = buildContextInfluencePreviewModel({
+    buId: draft.buId,
+    effectiveSettings: settings
+  });
 
   setPage(`
     <main class="page">
@@ -633,6 +642,8 @@ function renderWizard1() {
           </div>
         </div>
         <div class="wizard-body">
+          ${renderAssessmentReadinessStrip(readinessModel)}
+          ${renderContextInfluencePreview(contextPreviewModel)}
           ${renderStep1GuidedBuilderCard(draft, recommendation)}
           ${renderStep1SupportBand({ draft, hasScenarioDraft, hasImportedSource, featuredDryRun, activeDryRun, buList, scenarioGeographies, regs, settings })}
           ${renderStep1ScopeBand({ draft, selectedRisks, riskCandidates, regs })}
