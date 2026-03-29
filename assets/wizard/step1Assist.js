@@ -1,48 +1,18 @@
 (function(global) {
   'use strict';
 
-  function applyStep1AssistResult(result, {
-    narrative = '',
-    assistSeed = '',
-    bu = null,
-    citations = [],
-    nextNarrative = ''
-  } = {}) {
-    const resolvedNarrative = nextNarrative || result.enhancedStatement || narrative;
-    AppState.draft.llmAssisted = true;
-    AppState.draft.sourceNarrative = assistSeed || narrative;
-    AppState.draft.narrative = assistSeed || narrative;
-    AppState.draft.enhancedNarrative = resolvedNarrative;
-    AppState.draft.intakeSummary = result.summary || AppState.draft.intakeSummary || '';
-    AppState.draft.linkAnalysis = result.linkAnalysis || AppState.draft.linkAnalysis || '';
-    AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
-    AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;
-    AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
-    AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
-    AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';
-    AppState.draft.primaryGrounding = Array.isArray(result.primaryGrounding) ? result.primaryGrounding : (AppState.draft.primaryGrounding || []);
-    AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
-    AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
-    AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
-    appendRiskCandidates(result.risks || guessRisksFromText(resolvedNarrative || narrative), { selectNew: true });
-    AppState.draft.applicableRegulations = Array.from(new Set([
-      ...(deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()) || []),
-      ...(result.regulations || [])
-    ]));
-    AppState.draft.citations = normaliseCitations(result.citations || citations);
-    if (!AppState.draft.scenarioTitle && getSelectedRisks()[0]) AppState.draft.scenarioTitle = getSelectedRisks()[0].title;
-  }
+  const draftScenarioState = global.DraftScenarioState;
 
   async function runIntakeAssist() {
     const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
-    const assistSeed = getIntakeAssistSeedNarrative(narrative || AppState.draft.registerFindings);
+    const assistSeed = draftScenarioState.getIntakeAssistSeedNarrative(narrative || AppState.draft.registerFindings);
     const output = document.getElementById('intake-output');
     const bu = getBUList().find(b => b.id === (document.getElementById('wizard-bu')?.value || AppState.draft.buId));
     if (!narrative && !AppState.draft.registerFindings) {
       UI.toast('Add a risk statement or upload a risk register first.', 'warning');
       return;
     }
-    output.innerHTML = UI.wizardAssistSkeleton();
+    if (output) output.innerHTML = UI.wizardAssistSkeleton();
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, assistSeed || AppState.draft.registerFindings, 5);
@@ -57,7 +27,7 @@
         citations,
         adminSettings: aiContext.adminSettings
       });
-      applyStep1AssistResult(result, {
+      draftScenarioState.applyScenarioAssistResultToDraft(result, {
         narrative,
         assistSeed,
         bu,
@@ -68,13 +38,13 @@
       renderWizard1();
       UI.toast(result.usedFallback ? 'Suggested draft loaded with fallback guidance. Review before continuing.' : 'Suggested draft intake completed.', result.usedFallback ? 'warning' : 'success', 5000);
     } catch (error) {
-      output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI intake error: ${error.message}</span></div>`;
+      if (output) output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI intake error: ${error.message}</span></div>`;
     }
   }
 
   async function enhanceNarrativeWithAI() {
     const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
-    const assistSeed = getIntakeAssistSeedNarrative(narrative);
+    const assistSeed = draftScenarioState.getIntakeAssistSeedNarrative(narrative);
     const output = document.getElementById('intake-output');
     const bu = getBUList().find(b => b.id === (document.getElementById('wizard-bu')?.value || AppState.draft.buId));
     if (!narrative) {
@@ -83,7 +53,7 @@
     }
     const button = document.getElementById('btn-enhance-risk-statement');
     const resetButton = _setStep1ButtonBusy(button, 'Enhancing…');
-    output.innerHTML = UI.wizardAssistSkeleton();
+    if (output) output.innerHTML = UI.wizardAssistSkeleton();
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, assistSeed || narrative, 5);
@@ -98,7 +68,7 @@
         citations,
         adminSettings: aiContext.adminSettings
       });
-      applyStep1AssistResult(result, {
+      draftScenarioState.applyScenarioAssistResultToDraft(result, {
         narrative,
         assistSeed,
         bu,
@@ -109,7 +79,7 @@
       renderWizard1();
       UI.toast(result.usedFallback ? 'Suggested draft enhancement loaded with fallback guidance. Review before continuing.' : 'Suggested draft enhancement loaded.', result.usedFallback ? 'warning' : 'success', 5000);
     } catch (error) {
-      output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI enhancement is unavailable right now. Try again in a moment.</span></div>`;
+      if (output) output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI enhancement is unavailable right now. Try again in a moment.</span></div>`;
     } finally {
       resetButton();
     }
@@ -143,19 +113,7 @@
         UI.toast('No usable risk lines were found in that file. Try a cleaner TXT/CSV export or paste the risks directly.', 'warning', 7000);
         return;
       }
-      appendRiskCandidates(extractedRisks, { selectNew: true });
-      const workbookSummary = AppState.draft.registerMeta?.sheetCount > 1 ? ` across ${AppState.draft.registerMeta.sheetCount} sheets` : '';
-      AppState.draft.intakeSummary = result.summary || `Extracted ${getSelectedRisks().length} risks from ${AppState.draft.uploadedRegisterName}${workbookSummary}.`;
-      AppState.draft.linkAnalysis = result.linkAnalysis || AppState.draft.linkAnalysis;
-      AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
-      AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;
-      AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
-      AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
-      AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';
-      AppState.draft.primaryGrounding = Array.isArray(result.primaryGrounding) ? result.primaryGrounding : (AppState.draft.primaryGrounding || []);
-      AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
-      AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
-      AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
+      draftScenarioState.applyRegisterAnalysisResultToDraft(result, { parsedFallback });
       saveDraft();
       renderWizard1();
       UI.toast(result.usedFallback ? getRegisterFallbackToastCopy(result) : 'Suggested draft register analysis loaded.', result.usedFallback ? 'warning' : 'success', 7000);

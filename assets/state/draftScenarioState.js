@@ -1,0 +1,299 @@
+(function(global) {
+  'use strict';
+
+  const GENERIC_RISK_TITLES = new Set([
+    'material technology and cyber risk requiring structured assessment',
+    'technology outage affecting core business services'
+  ]);
+
+  function normaliseRisk(risk, source = 'manual') {
+    const parsedLine = typeof risk === 'string' ? parseStructuredRiskLine(risk) : parseStructuredRiskLine(risk?.title);
+    const title = prettifyRiskText(parsedLine?.title || risk?.title || risk?.name || risk || '');
+    if (!title || isNoiseRiskText(title)) return null;
+    const description = prettifyRiskText(parsedLine?.description || risk?.description || '');
+    const category = prettifyRiskText(parsedLine?.category || risk?.category || 'General');
+    if (title === '-' || category === '-') return null;
+    return {
+      id: risk?.id || ('risk-' + slugify(title) + '-' + Math.random().toString(36).slice(2, 7)),
+      title,
+      category,
+      description,
+      source: risk?.source || source,
+      regulations: Array.isArray(risk?.regulations) ? risk.regulations : [],
+      linkedTo: Array.isArray(risk?.linkedTo) ? risk.linkedTo : []
+    };
+  }
+
+  function mergeRisks(existing, incoming) {
+    const map = new Map();
+    [...existing, ...incoming]
+      .map((risk) => normaliseRisk(risk))
+      .filter(Boolean)
+      .forEach((risk) => {
+        const key = risk.title.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, risk);
+          return;
+        }
+        const previous = map.get(key);
+        map.set(key, {
+          ...previous,
+          ...risk,
+          regulations: Array.from(new Set([...(previous.regulations || []), ...(risk.regulations || [])])),
+          linkedTo: Array.from(new Set([...(previous.linkedTo || []), ...(risk.linkedTo || [])]))
+        });
+      });
+    return Array.from(map.values());
+  }
+
+  function getRiskCandidates() {
+    return mergeRisks(AppState.draft.riskCandidates || [], AppState.draft.selectedRisks || []);
+  }
+
+  function syncRiskSelection(defaultSelectAll = false) {
+    const candidates = getRiskCandidates();
+    const validIds = new Set(candidates.map((risk) => risk.id));
+    let selectedIds = Array.isArray(AppState.draft.selectedRiskIds)
+      ? AppState.draft.selectedRiskIds.filter((id) => validIds.has(id))
+      : [];
+    if (!selectedIds.length && defaultSelectAll && candidates.length) {
+      selectedIds = candidates.map((risk) => risk.id);
+    }
+    AppState.draft.riskCandidates = candidates;
+    AppState.draft.selectedRiskIds = selectedIds;
+    AppState.draft.selectedRisks = candidates.filter((risk) => selectedIds.includes(risk.id));
+    return AppState.draft.selectedRisks;
+  }
+
+  function getSelectedRisks() {
+    return syncRiskSelection().filter(Boolean);
+  }
+
+  function appendRiskCandidates(incoming, { selectNew = true } = {}) {
+    const incomingRisks = mergeRisks([], incoming || []);
+    const incomingTitles = new Set(incomingRisks.map((risk) => risk.title.toLowerCase()));
+    const hasSpecificIncoming = incomingRisks.some((risk) => !GENERIC_RISK_TITLES.has(risk.title.toLowerCase()));
+    const baseCandidates = hasSpecificIncoming
+      ? getRiskCandidates().filter((risk) => !GENERIC_RISK_TITLES.has(String(risk.title || '').toLowerCase()))
+      : getRiskCandidates();
+    const merged = mergeRisks(baseCandidates, incomingRisks);
+    const existingIds = new Set(Array.isArray(AppState.draft.selectedRiskIds) ? AppState.draft.selectedRiskIds : []);
+    const selectedIds = merged
+      .filter((risk) => existingIds.has(risk.id) || (selectNew && incomingTitles.has(risk.title.toLowerCase())))
+      .map((risk) => risk.id);
+    AppState.draft.riskCandidates = merged;
+    AppState.draft.selectedRiskIds = selectedIds;
+    AppState.draft.selectedRisks = merged.filter((risk) => selectedIds.includes(risk.id));
+  }
+
+  function getLinkedRiskRecommendations(selectedRisks) {
+    const groups = [
+      {
+        label: 'Technology control weakness -> service disruption',
+        test: (risk) => /patch|monitor|control|documentation|issue tracking|assessment/i.test(`${risk.title} ${risk.description}`)
+      },
+      {
+        label: 'Third-party governance -> operational disruption',
+        test: (risk) => /vendor|supplier|third-party|supplier assurance|due diligence/i.test(`${risk.title} ${risk.description}`)
+      },
+      {
+        label: 'Compliance lapse -> regulatory exposure',
+        test: (risk) => /compliance|certification|policy|attestation/i.test(`${risk.title} ${risk.description}`)
+      }
+    ];
+    return groups
+      .map((group) => ({
+        label: group.label,
+        risks: selectedRisks.filter(group.test).map((risk) => risk.title)
+      }))
+      .filter((group) => group.risks.length > 1);
+  }
+
+  function getScenarioMultipliers() {
+    const riskCount = Math.max(1, getSelectedRisks().length);
+    const linked = !!AppState.draft.linkedRisks && riskCount > 1;
+    return {
+      riskCount,
+      linked,
+      tefMultiplier: 1 + (riskCount - 1) * (linked ? 0.35 : 0.18),
+      lossMultiplier: 1 + (riskCount - 1) * (linked ? 0.22 : 0.10),
+      secondaryMultiplier: 1 + (riskCount - 1) * (linked ? 0.25 : 0.08)
+    };
+  }
+
+  function deriveApplicableRegulations(bu, selectedRisks = [], geographies = getScenarioGeographies()) {
+    const settings = getEffectiveSettings();
+    const tags = [
+      ...settings.applicableRegulations,
+      ...(AppState.draft.applicableRegulations || []),
+      ...(bu?.regulatoryTags || []),
+      ...deriveGeographyRegulations(geographies),
+      ...selectedRisks.flatMap((risk) => risk.regulations || [])
+    ].filter(Boolean);
+    return Array.from(new Set(tags));
+  }
+
+  function normaliseCitations(citations) {
+    const list = Array.isArray(citations) ? citations : [];
+    const seen = new Set();
+    const unique = list.filter((citation) => {
+      const key = [citation?.docId || '', citation?.title || '', citation?.url || '', citation?.excerpt || '']
+        .join('|')
+        .trim()
+        .toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const sourcePriority = (citation) => {
+      const type = String(citation?.sourceType || '').toLowerCase();
+      if (type.includes('standard') || type.includes('regulatory')) return 0;
+      if (type.includes('internal')) return 1;
+      if (type.includes('reference')) return 2;
+      return 3;
+    };
+    return unique.sort((a, b) => {
+      const scoreDiff = Number(b?.score || 0) - Number(a?.score || 0);
+      if (scoreDiff) return scoreDiff;
+      const sourceDiff = sourcePriority(a) - sourcePriority(b);
+      if (sourceDiff) return sourceDiff;
+      return new Date(b?.lastUpdated || 0).getTime() - new Date(a?.lastUpdated || 0).getTime();
+    });
+  }
+
+  function getScenarioAssistSeedNarrative(currentValue) {
+    const current = String(currentValue || '').trim();
+    const enhanced = String(AppState.draft.enhancedNarrative || '').trim();
+    const base = String(AppState.draft.narrative || '').trim();
+    if (current && enhanced && base && current === enhanced) return base;
+    return current || enhanced || base;
+  }
+
+  function normaliseScenarioSeedText(value) {
+    const raw = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+    const sentences = raw.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
+    const seen = new Set();
+    const filtered = sentences.filter((sentence) => {
+      const key = sentence.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      if (/^in .*faces a material .*scenario in which/i.test(sentence)) return false;
+      if (/^this scenario should be assessed/i.test(sentence)) return false;
+      if (/^a likely progression is/i.test(sentence)) return false;
+      if (/^in practice, this can drive/i.test(sentence)) return false;
+      if (/^given the stated urgency/i.test(sentence)) return false;
+      if (/^current urgency is assessed as /i.test(sentence)) return false;
+      return true;
+    });
+    return filtered.join(' ').trim() || raw;
+  }
+
+  function getIntakeAssistSeedNarrative(currentValue) {
+    const current = normaliseScenarioSeedText(currentValue);
+    const source = normaliseScenarioSeedText(AppState.draft.sourceNarrative || '');
+    const base = normaliseScenarioSeedText(AppState.draft.narrative || '');
+    const enhanced = normaliseScenarioSeedText(AppState.draft.enhancedNarrative || '');
+    if (current && enhanced && current === enhanced && (source || base)) return source || base;
+    return source || current || base || enhanced;
+  }
+
+  function buildScenarioNarrative(introOverride = '') {
+    const selected = getSelectedRisks();
+    const titles = selected.map((risk) => risk.title);
+    const intro = String(introOverride || AppState.draft.enhancedNarrative || AppState.draft.narrative || '').trim();
+    if (!titles.length) return intro;
+    const linkage = AppState.draft.linkedRisks && titles.length > 1
+      ? 'These risks should be treated as linked and capable of cascading into one another.'
+      : 'These risks may be assessed together but should be treated as distinct drivers.';
+    return `${intro}\n\nSelected risks:\n- ${titles.join('\n- ')}\n\n${linkage}`.trim();
+  }
+
+  // Keep scenario-assist and register-ingestion mutations in one seam so Step 1 orchestration
+  // no longer owns the draft-shaping rules itself.
+  function applyScenarioAssistResultToDraft(result, {
+    narrative = '',
+    assistSeed = '',
+    bu = null,
+    citations = [],
+    nextNarrative = ''
+  } = {}) {
+    const resolvedNarrative = nextNarrative || result.enhancedStatement || narrative;
+    AppState.draft.llmAssisted = true;
+    AppState.draft.sourceNarrative = assistSeed || narrative;
+    AppState.draft.narrative = assistSeed || narrative;
+    AppState.draft.enhancedNarrative = resolvedNarrative;
+    AppState.draft.intakeSummary = result.summary || AppState.draft.intakeSummary || '';
+    AppState.draft.linkAnalysis = result.linkAnalysis || AppState.draft.linkAnalysis || '';
+    AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
+    AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;
+    AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
+    AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
+    AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';
+    AppState.draft.primaryGrounding = Array.isArray(result.primaryGrounding) ? result.primaryGrounding : (AppState.draft.primaryGrounding || []);
+    AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
+    AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
+    AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
+    appendRiskCandidates(result.risks || guessRisksFromText(resolvedNarrative || narrative), { selectNew: true });
+    AppState.draft.applicableRegulations = Array.from(new Set([
+      ...(deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()) || []),
+      ...(result.regulations || [])
+    ]));
+    AppState.draft.citations = normaliseCitations(result.citations || citations);
+    if (!AppState.draft.scenarioTitle && getSelectedRisks()[0]) AppState.draft.scenarioTitle = getSelectedRisks()[0].title;
+  }
+
+  function applyRegisterAnalysisResultToDraft(result, { parsedFallback = [] } = {}) {
+    const extractedRisks = Array.isArray(result?.risks) && result.risks.length ? result.risks : parsedFallback;
+    appendRiskCandidates(extractedRisks, { selectNew: true });
+    const workbookSummary = AppState.draft.registerMeta?.sheetCount > 1 ? ` across ${AppState.draft.registerMeta.sheetCount} sheets` : '';
+    AppState.draft.intakeSummary = result.summary || `Extracted ${getSelectedRisks().length} risks from ${AppState.draft.uploadedRegisterName}${workbookSummary}.`;
+    AppState.draft.linkAnalysis = result.linkAnalysis || AppState.draft.linkAnalysis;
+    AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
+    AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;
+    AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
+    AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
+    AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';
+    AppState.draft.primaryGrounding = Array.isArray(result.primaryGrounding) ? result.primaryGrounding : (AppState.draft.primaryGrounding || []);
+    AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
+    AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
+    AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
+    return extractedRisks;
+  }
+
+  global.DraftScenarioState = {
+    normaliseRisk,
+    mergeRisks,
+    getRiskCandidates,
+    syncRiskSelection,
+    getSelectedRisks,
+    appendRiskCandidates,
+    getLinkedRiskRecommendations,
+    getScenarioMultipliers,
+    deriveApplicableRegulations,
+    normaliseCitations,
+    normaliseScenarioSeedText,
+    getScenarioAssistSeedNarrative,
+    getIntakeAssistSeedNarrative,
+    buildScenarioNarrative,
+    applyScenarioAssistResultToDraft,
+    applyRegisterAnalysisResultToDraft
+  };
+
+  Object.assign(global, {
+    normaliseRisk,
+    mergeRisks,
+    getRiskCandidates,
+    syncRiskSelection,
+    getSelectedRisks,
+    appendRiskCandidates,
+    getLinkedRiskRecommendations,
+    getScenarioMultipliers,
+    deriveApplicableRegulations,
+    normaliseCitations,
+    normaliseScenarioSeedText,
+    getScenarioAssistSeedNarrative,
+    getIntakeAssistSeedNarrative,
+    buildScenarioNarrative
+  });
+})(window);
