@@ -162,7 +162,10 @@ function duplicateAssessmentToDraft(id) {
   delete duplicate._shared;
   delete duplicate.lifecycleMeta;
   delete duplicate.lifecycleUpdatedAt;
+  const duplicateStartedAt = Date.now();
   duplicate.id = 'a_' + Date.now();
+  duplicate.startedAt = duplicateStartedAt;
+  duplicate.createdAt = duplicateStartedAt;
   duplicate.scenarioTitle = `${duplicate.scenarioTitle || 'Untitled assessment'} copy`;
   duplicate.treatmentImprovementRequest = '';
   duplicate.lifecycleStatus = deriveAssessmentLifecycleStatus(duplicate);
@@ -314,9 +317,12 @@ function loadDraft() {
   } catch {}
 }
 function resetDraft() {
+  const resetAt = Date.now();
   dispatchDraftAction('RESET_DRAFT', {
     draft: {
     id: 'a_' + Date.now(),
+    startedAt: resetAt,
+    createdAt: resetAt,
     lifecycleStatus: ASSESSMENT_LIFECYCLE_STATUS.DRAFT,
     templateId: null,
     buId: null, buName: null, contextNotes: '',

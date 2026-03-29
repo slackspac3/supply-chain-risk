@@ -12,7 +12,8 @@
       departmentEntities,
       managedAccounts,
       preferredAdminRoute,
-      docCount
+      docCount,
+      valueSummary
     }) {
       return adminLayout('home', `
         <div class="settings-shell">
@@ -54,6 +55,43 @@
               })
             ].join('')}
           </div>
+          ${valueSummary && valueSummary.completedAssessments ? `<div style="margin-top:var(--sp-6)">
+            ${UI.dashboardSectionCard({
+              title: 'Platform value snapshot',
+              description: 'Measured cycle time, directional effort avoided, and modelled better-outcome value stay separate so the pilot story is easier to defend with leadership.',
+              className: 'dashboard-section-card--secondary admin-value-summary',
+              body: `
+                <div class="admin-overview-grid admin-overview-grid--compact">
+                  ${[
+                    UI.dashboardOverviewCard({
+                      label: 'Decision-ready outputs',
+                      value: valueSummary.completedAssessments,
+                      foot: `${valueSummary.completedAssessments} completed assessment${valueSummary.completedAssessments === 1 ? '' : 's'} are contributing to the platform value story.`
+                    }),
+                    UI.dashboardOverviewCard({
+                      label: 'Average cycle time',
+                      value: valueSummary.averageCycleLabel,
+                      foot: 'Measured from the first saved draft to the completed result.'
+                    }),
+                    UI.dashboardOverviewCard({
+                      label: 'Internal effort avoided',
+                      value: valueSummary.internalHoursAvoidedLabel,
+                      foot: 'Directional hours avoided versus the domain baseline library.'
+                    }),
+                    UI.dashboardOverviewCard({
+                      label: 'External specialist equivalent',
+                      value: valueSummary.externalEquivalentDaysLabel,
+                      foot: 'Directional UAE-style advisory effort benchmark across the completed set.'
+                    })
+                  ].join('')}
+                </div>
+                <div class="admin-value-summary__foot">
+                  <span>Directional value at the current rate card: <strong>${fmtCurrency(valueSummary.internalCostAvoidedUsd)}</strong> internal cost avoided and <strong>${fmtCurrency(valueSummary.externalEquivalentValueUsd)}</strong> external-equivalent value.</span>
+                  <span>${valueSummary.trackedReductionCases ? `Modelled annual exposure reduction from saved better-outcome cases: ${fmtCurrency(valueSummary.totalModelledReductionUsd)}.` : 'No saved better-outcome case is attached yet, so modelled reduction is not included.'}</span>
+                </div>
+              `
+            })}
+          </div>` : ''}
           <div class="grid-2" style="margin-top:var(--sp-6);align-items:start">
             ${UI.dashboardSectionCard({
               title: 'Assessment workspace',

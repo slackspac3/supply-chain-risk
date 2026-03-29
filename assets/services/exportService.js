@@ -122,6 +122,12 @@ const ExportService = (() => {
     const impactMix = _buildExecutiveImpactMix(technicalInputs);
     const comparison = _buildDecisionMemoComparison(assessment);
     const treatmentDecision = comparison ? _buildTreatmentDecisionSummary(comparison) : null;
+    const valueModel = typeof ValueQuantService !== 'undefined'
+      ? ValueQuantService.buildAssessmentValueModel(assessment, {
+          assessments: typeof getAssessments === 'function' ? getAssessments() : [],
+          benchmarkSettings: typeof getAdminSettings === 'function' ? getAdminSettings().valueBenchmarkSettings : {}
+        })
+      : null;
     const lifecycleStatus = typeof deriveAssessmentLifecycleStatus === 'function'
       ? deriveAssessmentLifecycleStatus(assessment)
       : '';
@@ -170,6 +176,17 @@ const ExportService = (() => {
       analystSummary,
       treatmentDecision,
       comparison,
+      valueSummary: valueModel ? {
+        domainLabel: valueModel.domain?.label || 'General enterprise',
+        complexityLabel: valueModel.complexity?.label || 'Working complexity',
+        cycleTime: valueModel.measured?.platformDurationLabel || 'No measured cycle time yet',
+        internalHoursAvoided: valueModel.directional?.internalHoursAvoidedLabel || '0 hours',
+        externalEquivalentDays: valueModel.directional?.externalEquivalentDaysLabel || 'No specialist-day benchmark yet',
+        internalCostAvoided: fmt(valueModel.cost?.internalCostAvoidedUsd || 0),
+        externalEquivalentValue: fmt(valueModel.cost?.externalEquivalentValueUsd || 0),
+        modelledReduction: valueModel.modelled?.available ? fmt(valueModel.modelled.annualReductionUsd || 0) : '',
+        modelledReductionSource: valueModel.modelled?.available ? valueModel.modelled.sourceLabel : (valueModel.modelled?.title || 'Create a better-outcome comparison to quantify modelled reduction.')
+      } : null,
       metrics: safeMetrics,
       appendix: includeAppendix ? {
         assumptions: Array.isArray(intelligence.assumptions) ? intelligence.assumptions.slice(0, 4) : [],
@@ -284,6 +301,21 @@ const ExportService = (() => {
       <div class="metrics">
         ${(Array.isArray(memo.metrics) ? memo.metrics : []).map(item => `<div class="card"><div class="section-label">${item.label}</div><div class="metric-value">${item.value}</div><div class="metric-copy">${item.copy}</div></div>`).join('')}
       </div>
+
+      ${memo.valueSummary ? `<div class="mid-grid">
+        <div class="card">
+          <div class="section-label">Value created by this assessment</div>
+          <div class="decision-row"><div class="section-label">Measured cycle time</div><div class="body-copy"><strong>${memo.valueSummary.cycleTime}</strong><br>Measured from the first saved draft to the completed assessment.</div></div>
+          <div class="decision-row"><div class="section-label">Directional internal effort avoided</div><div class="body-copy"><strong>${memo.valueSummary.internalHoursAvoided}</strong><br>Directional effort avoided versus the ${memo.valueSummary.domainLabel.toLowerCase()} baseline.</div></div>
+          <div class="decision-row"><div class="section-label">External specialist equivalent</div><div class="body-copy"><strong>${memo.valueSummary.externalEquivalentDays}</strong><br>Directional UAE-style advisory benchmark for ${memo.valueSummary.complexityLabel.toLowerCase()} work.</div></div>
+        </div>
+        <div class="card">
+          <div class="section-label">Economic framing</div>
+          <div class="body-copy">Directional internal cost avoided at the current rate card: <strong>${memo.valueSummary.internalCostAvoided}</strong>.</div>
+          <div class="decision-row"><div class="section-label">External-equivalent value</div><div class="body-copy"><strong>${memo.valueSummary.externalEquivalentValue}</strong><br>Use this as the comparable UAE external-specialist benchmark, not as booked savings.</div></div>
+          <div class="decision-row"><div class="section-label">Modelled annual reduction</div><div class="body-copy"><strong>${memo.valueSummary.modelledReduction || 'Not quantified yet'}</strong><br>${memo.valueSummary.modelledReductionSource}</div></div>
+        </div>
+      </div>` : ''}
 
       <div class="mid-grid">
         <div class="card">
@@ -475,6 +507,12 @@ const ExportService = (() => {
           });
         })()
       : null;
+    const valueModel = typeof ValueQuantService !== 'undefined'
+      ? ValueQuantService.buildAssessmentValueModel(assessment, {
+          assessments: typeof getAssessments === 'function' ? getAssessments() : [],
+          benchmarkSettings: typeof getAdminSettings === 'function' ? getAdminSettings().valueBenchmarkSettings : {}
+        })
+      : null;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -622,6 +660,21 @@ const ExportService = (() => {
           <div class="metric-copy">Use this as the more severe yearly view for resilience, capital, and escalation discussions.</div>
         </div>
       </div>
+
+      ${valueModel ? `<div class="decision-grid">
+        <div class="card">
+          <div class="section-label">Value created by this assessment</div>
+          <div class="decision-row"><div class="section-label">Measured cycle time</div><div class="body-copy"><strong>${valueModel.measured?.platformDurationLabel || 'No measured cycle time yet'}</strong><br>Measured from the first saved draft to the completed result.</div></div>
+          <div class="decision-row"><div class="section-label">Directional internal effort avoided</div><div class="body-copy"><strong>${valueModel.directional?.internalHoursAvoidedLabel || '0 hours'}</strong><br>Against the ${String(valueModel.domain?.label || 'general enterprise').toLowerCase()} baseline for this complexity.</div></div>
+          <div class="decision-row"><div class="section-label">External specialist equivalent</div><div class="body-copy"><strong>${valueModel.directional?.externalEquivalentDaysLabel || 'No specialist-day benchmark yet'}</strong><br>Directional UAE-style advisory benchmark.</div></div>
+        </div>
+        <div class="card">
+          <div class="section-label">Economic framing</div>
+          <div class="body-copy">Directional internal cost avoided at the current rate card: <strong>${fmt(valueModel.cost?.internalCostAvoidedUsd || 0)}</strong>.</div>
+          <div class="decision-row"><div class="section-label">External-equivalent value</div><div class="body-copy"><strong>${fmt(valueModel.cost?.externalEquivalentValueUsd || 0)}</strong><br>Comparable external-specialist benchmark rather than booked savings.</div></div>
+          <div class="decision-row"><div class="section-label">Modelled annual reduction</div><div class="body-copy"><strong>${valueModel.modelled?.available ? fmt(valueModel.modelled.annualReductionUsd || 0) : 'Not quantified yet'}</strong><br>${valueModel.modelled?.available ? valueModel.modelled.sourceLabel : (valueModel.modelled?.title || 'Create a better-outcome comparison to quantify modelled reduction.')}</div></div>
+        </div>
+      </div>` : ''}
 
       <div class="visual-grid">
         <div class="card">

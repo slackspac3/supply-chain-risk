@@ -8,11 +8,11 @@
 const TOLERANCE_THRESHOLD = 5_000_000;
 const DEFAULT_FX_RATE = 3.6725;
 const DEFAULT_COMPASS_PROXY_URL = resolveCompassProxyUrl();
-const APP_ASSET_VERSION = '20260327g42a';
+const APP_ASSET_VERSION = '20260329v1';
 const APP_RELEASE = Object.freeze((typeof window !== 'undefined' && window.__RISK_CALCULATOR_RELEASE__) || {
   version: '0.10.0-pilot.1',
   channel: 'pilot',
-  build: '2026-03-27-g42a',
+  build: '2026-03-29-roi1',
   assetVersion: APP_ASSET_VERSION
 });
 const GLOBAL_ADMIN_STORAGE_KEY = 'rq_admin_settings';
@@ -57,7 +57,10 @@ const DEFAULT_ADMIN_SETTINGS = {
   adminContextSummary: 'Use this workspace to maintain geography, regulations, thresholds, and AI guidance for the platform.',
   adminContextVisibleToUsers: true,
   escalationGuidance: 'Escalate to leadership when the scenario is above tolerance, close to tolerance, or materially affects regulated services.',
-  typicalDepartments: [...DEFAULT_TYPICAL_DEPARTMENTS]
+  typicalDepartments: [...DEFAULT_TYPICAL_DEPARTMENTS],
+  valueBenchmarkSettings: typeof window !== 'undefined' && window.ValueQuantService
+    ? window.ValueQuantService.getDefaultBenchmarkSettings()
+    : { internalHourlyRatesUsd: {}, externalDayRatesUsd: {} }
 };
 
 
@@ -186,6 +189,9 @@ function normaliseAdminSettings(settings = {}) {
     typicalDepartments: Array.isArray(settings.typicalDepartments) && settings.typicalDepartments.length
       ? settings.typicalDepartments.map(name => String(name || '').trim()).filter(Boolean)
       : [...(DEFAULT_ADMIN_SETTINGS.typicalDepartments || [])],
+    valueBenchmarkSettings: typeof window !== 'undefined' && window.ValueQuantService
+      ? window.ValueQuantService.normaliseBenchmarkSettings(settings.valueBenchmarkSettings || DEFAULT_ADMIN_SETTINGS.valueBenchmarkSettings)
+      : cloneSerializableState(settings.valueBenchmarkSettings, DEFAULT_ADMIN_SETTINGS.valueBenchmarkSettings),
     _meta: {
       revision: Number(settings._meta?.revision || 0),
       updatedAt: Number(settings._meta?.updatedAt || 0)
@@ -1483,8 +1489,11 @@ function activateAuthenticatedState() {
 }
 
 function ensureDraftShape() {
+  const draftStartedAt = Number(AppState.draft.startedAt || AppState.draft.createdAt || Date.now());
   AppState.draft = {
     id: AppState.draft.id || 'a_' + Date.now(),
+    startedAt: draftStartedAt,
+    createdAt: Number(AppState.draft.createdAt || draftStartedAt),
     templateId: AppState.draft.templateId || null,
     buId: AppState.draft.buId || null,
     buName: AppState.draft.buName || null,
@@ -5644,6 +5653,11 @@ function renderAdminHome() {
   const managedAccounts = getManagedAccountsForAdmin(settings);
   const preferredAdminRoute = `/admin/settings/${getPreferredAdminSection()}`;
   const docCount = getDocList().length;
+  const valueSummary = typeof ValueQuantService !== 'undefined'
+    ? ValueQuantService.buildWorkspaceValueSummary(completedAssessments, {
+        benchmarkSettings: settings.valueBenchmarkSettings
+      })
+    : null;
 
   setPage(window.AdminHomeSection.render({
     settings,
@@ -5655,7 +5669,8 @@ function renderAdminHome() {
     departmentEntities,
     managedAccounts,
     preferredAdminRoute,
-    docCount
+    docCount,
+    valueSummary
   }));
   // Admins should land on a real home view, not be thrown directly into a settings subsection or wizard step.
   window.AdminHomeSection.bind({ preferredAdminRoute });
@@ -6433,6 +6448,31 @@ function renderAdminSettings(activeSection = 'org') {
       const raw = String(el?.value || '').replace(/,/g, '').trim();
       return Math.max(0, parseFloat(raw) || fallback);
     };
+    const benchmarkDomains = typeof ValueQuantService !== 'undefined'
+      ? ValueQuantService.getBenchmarkDomains()
+      : [];
+    const valueBenchmarkSettings = typeof ValueQuantService !== 'undefined'
+      ? ValueQuantService.normaliseBenchmarkSettings({
+          internalHourlyRatesUsd: benchmarkDomains.reduce((acc, domain) => {
+            acc[domain.key] = getNumericValue(
+              `admin-value-internal-${domain.key}`,
+              currentSettings.valueBenchmarkSettings?.internalHourlyRatesUsd?.[domain.key]
+                || DEFAULT_ADMIN_SETTINGS.valueBenchmarkSettings?.internalHourlyRatesUsd?.[domain.key]
+                || 0
+            );
+            return acc;
+          }, {}),
+          externalDayRatesUsd: benchmarkDomains.reduce((acc, domain) => {
+            acc[domain.key] = getNumericValue(
+              `admin-value-external-${domain.key}`,
+              currentSettings.valueBenchmarkSettings?.externalDayRatesUsd?.[domain.key]
+                || DEFAULT_ADMIN_SETTINGS.valueBenchmarkSettings?.externalDayRatesUsd?.[domain.key]
+                || 0
+            );
+            return acc;
+          }, {})
+        })
+      : currentSettings.valueBenchmarkSettings;
     const warningThresholdUsd = getNumericValue('admin-warning-threshold', currentSettings.warningThresholdUsd || DEFAULT_ADMIN_SETTINGS.warningThresholdUsd);
     const toleranceThresholdUsd = getNumericValue('admin-tolerance-threshold', currentSettings.toleranceThresholdUsd || TOLERANCE_THRESHOLD);
     const annualReviewThresholdUsd = getNumericValue('admin-annual-threshold', currentSettings.annualReviewThresholdUsd || DEFAULT_ADMIN_SETTINGS.annualReviewThresholdUsd);
@@ -6468,7 +6508,8 @@ function renderAdminSettings(activeSection = 'org') {
         benchmarkStrategy: getInputValue('admin-benchmark-strategy', currentSettings.benchmarkStrategy || DEFAULT_ADMIN_SETTINGS.benchmarkStrategy) || DEFAULT_ADMIN_SETTINGS.benchmarkStrategy,
         adminContextSummary: getInputValue('admin-context-summary', currentSettings.adminContextSummary || DEFAULT_ADMIN_SETTINGS.adminContextSummary) || DEFAULT_ADMIN_SETTINGS.adminContextSummary,
         adminContextVisibleToUsers: document.getElementById('admin-context-visible-users') ? document.getElementById('admin-context-visible-users').checked : currentSettings.adminContextVisibleToUsers !== false,
-        escalationGuidance: getInputValue('admin-escalation-guidance', currentSettings.escalationGuidance || DEFAULT_ADMIN_SETTINGS.escalationGuidance) || DEFAULT_ADMIN_SETTINGS.escalationGuidance
+        escalationGuidance: getInputValue('admin-escalation-guidance', currentSettings.escalationGuidance || DEFAULT_ADMIN_SETTINGS.escalationGuidance) || DEFAULT_ADMIN_SETTINGS.escalationGuidance,
+        valueBenchmarkSettings
       }
     };
   }

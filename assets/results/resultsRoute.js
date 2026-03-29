@@ -698,6 +698,51 @@ function renderExecutiveInsightCluster({ scenarioNarrative, executiveDecision, e
   `});
 }
 
+function renderAssessmentValueBand(valueModel) {
+  if (!valueModel) return '';
+  const internalValueNote = valueModel.cost?.internalCostAvoidedUsd
+    ? `Directional internal cost avoided at the current rate card: ${fmtCurrency(valueModel.cost.internalCostAvoidedUsd)}.`
+    : 'Directional internal cost avoided is not available yet.';
+  const externalValueNote = valueModel.cost?.externalEquivalentValueUsd
+    ? `External-equivalent value at the current rate card: ${fmtCurrency(valueModel.cost.externalEquivalentValueUsd)}.`
+    : 'External-equivalent value is not available yet.';
+  return `<section class="results-value-band card card--elevated anim-fade-in">
+    <div class="results-value-band__head">
+      <div>
+        <div class="results-section-heading">Value created by this assessment</div>
+        <div class="form-help">Measured cycle time, directional effort avoided, and modelled downside reduction stay separate so the economics are easier to defend with leadership.</div>
+      </div>
+      <span class="badge badge--neutral">${escapeHtml(String(valueModel.domain?.label || 'General enterprise'))} · ${escapeHtml(String(valueModel.complexity?.label || 'Working complexity'))}</span>
+    </div>
+    <div class="results-value-grid">
+      <article class="results-value-card">
+        <span class="results-value-card__label">Measured cycle time</span>
+        <strong>${escapeHtml(String(valueModel.measured?.platformDurationLabel || 'No measured cycle time yet'))}</strong>
+        <span class="results-value-card__foot">From the first saved draft to the completed result.</span>
+      </article>
+      <article class="results-value-card">
+        <span class="results-value-card__label">Directional internal effort avoided</span>
+        <strong>${escapeHtml(String(valueModel.directional?.internalHoursAvoidedLabel || '0 hours'))}</strong>
+        <span class="results-value-card__foot">Against a ${escapeHtml(String(valueModel.domain?.label || 'general enterprise').toLowerCase())} baseline of ${escapeHtml(String(valueModel.directional?.manualBaselineLabel || '0 analyst hours'))}.</span>
+      </article>
+      <article class="results-value-card">
+        <span class="results-value-card__label">External specialist equivalent</span>
+        <strong>${escapeHtml(String(valueModel.directional?.externalEquivalentDaysLabel || 'No specialist-day benchmark yet'))}</strong>
+        <span class="results-value-card__foot">Directional UAE-style advisory equivalent for this domain and complexity.</span>
+      </article>
+      <article class="results-value-card">
+        <span class="results-value-card__label">Modelled annual reduction</span>
+        <strong>${valueModel.modelled?.available ? escapeHtml(String(fmtCurrency(valueModel.modelled.annualReductionUsd))) : 'Build a treatment case'}</strong>
+        <span class="results-value-card__foot">${escapeHtml(String(valueModel.modelled?.available ? valueModel.modelled.sourceLabel : valueModel.modelled?.title || 'Create a better-outcome comparison to quantify modelled reduction.'))}</span>
+      </article>
+    </div>
+    <div class="results-value-band__foot">
+      <span>${escapeHtml(internalValueNote)}</span>
+      <span>${escapeHtml(externalValueNote)}</span>
+    </div>
+  </section>`;
+}
+
 function renderTrustExplanationLayer({ confidenceNeedsBlock, evidenceGapPlan = [], explanationPanel, impactMix, thresholdModel, results, assessmentIntelligence, assessment, citations, primaryGrounding, supportingReferences, missingInformation }) {
   return UI.resultsSectionBlock({
     title: 'Trust and explanation',
@@ -861,6 +906,7 @@ function applyTreatmentPrompt(promptId) {
 function createTreatmentDraftFromAssessment(assessment) {
   const clone = JSON.parse(JSON.stringify(assessment || {}));
   const originalTitle = clone.scenarioTitle || 'Untitled assessment';
+  const treatmentStartedAt = Date.now();
   delete clone.results;
   delete clone.completedAt;
   delete clone.archivedAt;
@@ -874,6 +920,8 @@ function createTreatmentDraftFromAssessment(assessment) {
     draft: {
     ...clone,
     id: 'a_' + Date.now(),
+    startedAt: treatmentStartedAt,
+    createdAt: treatmentStartedAt,
     scenarioTitle: `${originalTitle} — Treatment case`,
     learningNote: `Cloned from ${originalTitle} so you can compare a stronger future-state view against the current baseline.`,
     comparisonBaselineId: assessment.id,
@@ -2085,6 +2133,7 @@ function renderResults(id, isShared) {
     treatmentRecommendationLens,
     explanationPanel,
     analystSummary,
+    assessmentValue,
     rolePresentation
   } = window.ResultsViewModel.buildResultsRenderModel(assessment, { isShared });
 
@@ -2148,6 +2197,7 @@ function renderResults(id, isShared) {
         ${renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, assessmentIntelligence.confidence, rolePresentation)}
         ${boardroomMode ? renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView) : ''}
         ${executiveMetrics}
+        ${renderAssessmentValueBand(assessmentValue)}
       </div>
       ${boardroomMode
         ? `${renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextStepPlan, scenarioNarrative, analystSummary })}

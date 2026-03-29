@@ -41,6 +41,7 @@ function renderUserDashboard() {
     .slice()
     .sort((a, b) => new Date(b.archivedAt || b.completedAt || b.createdAt || 0).getTime() - new Date(a.archivedAt || a.completedAt || a.createdAt || 0).getTime())
     .slice(0, 6);
+  const completedAssessments = assessments.filter(item => item?.results);
   const recentAssessments = assessments.slice(0, 4);
   const latestAssessment = recentAssessments[0] || null;
   const compactRecentAssessments = assessments.slice(0, 3);
@@ -522,6 +523,11 @@ function renderUserDashboard() {
       tone: lifecycleCounts.baselines ? 'gold' : 'neutral'
     }
   ];
+  const workspaceValueSummary = typeof ValueQuantService !== 'undefined'
+    ? ValueQuantService.buildWorkspaceValueSummary(completedAssessments, {
+        benchmarkSettings: globalSettings.valueBenchmarkSettings
+      })
+    : null;
   const orientationCards = [
     {
       label: hasDraft ? 'Draft in progress' : assessmentsNeedingReview.length ? 'Review queue active' : 'Clear to start',
@@ -776,6 +782,47 @@ function renderUserDashboard() {
             </div>
           `).join('')}
         </section>
+
+        ${workspaceValueSummary && workspaceValueSummary.completedAssessments ? `
+          <section class="dashboard-open-band dashboard-open-band--compact dashboard-value-band" style="margin-top:var(--sp-8)">
+            <div class="results-section-heading">Workspace value so far</div>
+            <div class="form-help" style="margin-top:8px">Use this to explain the working value of the platform without mixing measured cycle time, directional savings, and modelled better-outcome reduction into one inflated ROI number.</div>
+          </section>
+          <section class="dashboard-glance-strip dashboard-glance-strip--value" style="margin-top:var(--sp-4)">
+            ${[
+              {
+                label: 'Completed outputs',
+                value: workspaceValueSummary.completedAssessments,
+                foot: `${workspaceValueSummary.completedAssessments} saved result${workspaceValueSummary.completedAssessments === 1 ? '' : 's'} are currently contributing to the workspace story.`
+              },
+              {
+                label: 'Average cycle time',
+                value: workspaceValueSummary.averageCycleLabel,
+                foot: 'Measured from first saved draft to completed assessment.'
+              },
+              {
+                label: 'Internal effort avoided',
+                value: workspaceValueSummary.internalHoursAvoidedLabel,
+                foot: 'Directional hours avoided versus the domain baseline library.'
+              },
+              {
+                label: 'External specialist equivalent',
+                value: workspaceValueSummary.externalEquivalentDaysLabel,
+                foot: 'Directional UAE-style advisory effort benchmark.'
+              }
+            ].map(card => `
+              <div class="dashboard-glance-stat">
+                <span class="dashboard-glance-stat__label">${card.label}</span>
+                <strong>${card.value}</strong>
+                <span>${card.foot}</span>
+              </div>
+            `).join('')}
+          </section>
+          <div class="dashboard-value-note">
+            <span>Directional value at the current rate card: <strong>${fmtCurrency(workspaceValueSummary.internalCostAvoidedUsd)}</strong> internal cost avoided and <strong>${fmtCurrency(workspaceValueSummary.externalEquivalentValueUsd)}</strong> external-equivalent value.</span>
+            <span>${workspaceValueSummary.trackedReductionCases ? `Modelled annual reduction from saved better-outcome cases: ${fmtCurrency(workspaceValueSummary.totalModelledReductionUsd)}.` : 'No saved better-outcome case is attached yet, so modelled reduction is not included.'}</span>
+          </div>
+        ` : ''}
 
         <section class="grid-2 dashboard-secondary-grid dashboard-secondary-grid--history">
           <div class="dashboard-column">

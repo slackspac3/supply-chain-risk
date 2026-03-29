@@ -27,6 +27,12 @@ const AdminPlatformDefaultsSection = (() => {
   }
 
   function renderDefaultsBody(settings) {
+    const valueBenchmarks = typeof ValueQuantService !== 'undefined'
+      ? ValueQuantService.normaliseBenchmarkSettings(settings.valueBenchmarkSettings || {})
+      : { internalHourlyRatesUsd: {}, externalDayRatesUsd: {} };
+    const benchmarkDomains = typeof ValueQuantService !== 'undefined'
+      ? ValueQuantService.getBenchmarkDomains()
+      : [];
     return `<div class="admin-workbench-strip">
       <div>
         <div class="admin-workbench-strip__label">Current fallback</div>
@@ -74,7 +80,38 @@ const AdminPlatformDefaultsSection = (() => {
     <div class="form-group mt-4">
       <label class="form-label" for="admin-appetite">Risk Appetite Statement</label>
       <textarea class="form-textarea" id="admin-appetite" rows="4">${settings.riskAppetiteStatement}</textarea>
-    </div>`;
+    </div>
+    <details class="dashboard-disclosure card mt-5 admin-value-rate-card">
+      <summary>Pilot value assumptions <span class="badge badge--neutral">Phase 2</span></summary>
+      <div class="dashboard-disclosure-copy">Directional ROI and advisory-equivalent value use these domain-specific assumptions. Keep them conservative and tune them before using AED totals in leadership reporting.</div>
+      <div class="dashboard-disclosure-body">
+        <div class="admin-workbench-strip admin-workbench-strip--compact">
+          <div>
+            <div class="admin-workbench-strip__label">Measured vs directional</div>
+            <strong>Measured cycle time comes from saved draft and completion timestamps. The rate card below only affects the AED value estimates layered on top.</strong>
+            <span>Internal effort avoided and external specialist equivalents stay domain-adjusted for finance, compliance, procurement, ESG, continuity, HSE, strategic, operational, and cyber work.</span>
+          </div>
+        </div>
+        <div class="value-rate-card-grid">
+          ${benchmarkDomains.map(domain => `<div class="value-rate-card-row">
+            <div class="value-rate-card-row__head">
+              <strong>${escapeHtml(domain.label)}</strong>
+              <span>Directional UAE benchmark</span>
+            </div>
+            <div class="value-rate-card-row__inputs">
+              <div class="form-group">
+                <label class="form-label" for="admin-value-internal-${domain.key}">Internal hourly rate (USD)</label>
+                <input class="form-input money-input" id="admin-value-internal-${domain.key}" type="text" inputmode="numeric" value="${formatCurrencyInputValue(valueBenchmarks.internalHourlyRatesUsd?.[domain.key] || 0, 'USD')}">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="admin-value-external-${domain.key}">External day rate (USD)</label>
+                <input class="form-input money-input" id="admin-value-external-${domain.key}" type="text" inputmode="numeric" value="${formatCurrencyInputValue(valueBenchmarks.externalDayRatesUsd?.[domain.key] || 0, 'USD')}">
+              </div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>
+    </details>`;
   }
 
   function renderGovernanceBody(settings) {

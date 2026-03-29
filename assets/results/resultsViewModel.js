@@ -224,6 +224,12 @@
       missingInformation,
       lifecycle
     });
+    const assessmentValue = typeof ValueQuantService !== 'undefined'
+      ? ValueQuantService.buildAssessmentValueModel(assessment, {
+          assessments: getAssessments(),
+          benchmarkSettings: getAdminSettings().valueBenchmarkSettings
+        })
+      : null;
     return {
       capability,
       rolePresentation,
@@ -269,7 +275,8 @@
       comparisonHighlight,
       treatmentRecommendationLens,
       explanationPanel,
-      analystSummary
+      analystSummary,
+      assessmentValue
     };
   }
 
