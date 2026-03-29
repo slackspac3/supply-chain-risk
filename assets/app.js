@@ -3931,7 +3931,7 @@ function renderAppBar() {
   const navLinks = currentUser?.role === 'admin'
     ? [
         // Keep the app bar at the section level so detailed admin destinations only live in the sidebar.
-        { href: '#/wizard/1', label: 'Assessment Workspace', active: currentHash.startsWith('#/wizard/') || currentHash.startsWith('#/results/') },
+        { href: '#/wizard/1', label: 'Platform Home', active: currentHash.startsWith('#/wizard/') || currentHash.startsWith('#/results/') },
         { href: '#/admin/settings/org', label: 'Admin Console', active: currentHash.startsWith('#/admin/') }
       ]
     : currentUser
