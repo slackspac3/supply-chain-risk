@@ -321,6 +321,7 @@ function resetDraft() {
     templateId: null,
     buId: null, buName: null, contextNotes: '',
     narrative: '', structuredScenario: null,
+    scenarioLens: null,
     scenarioTitle: '', loadedDryRunId: '', llmAssisted: false,
     citations: [], recommendations: [],
     fairParams: {}, results: null,

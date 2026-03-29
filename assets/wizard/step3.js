@@ -93,6 +93,36 @@ function getEstimatePresetLibrary() {
         rcMin: 15000, rcLikely: 70000, rcMax: 250000
       }
     },
+    identity: {
+      label: 'Identity compromise example',
+      summary: 'Moderate-to-high frequency, elevated response effort, and meaningful downstream fraud or service-disruption risk.',
+      values: {
+        tefMin: 0.8, tefLikely: 3.2, tefMax: 10,
+        threatCapMin: 0.45, threatCapLikely: 0.66, threatCapMax: 0.84,
+        controlStrMin: 0.4, controlStrLikely: 0.58, controlStrMax: 0.78,
+        irMin: 60000, irLikely: 180000, irMax: 520000,
+        biMin: 90000, biLikely: 320000, biMax: 1200000,
+        dbMin: 40000, dbLikely: 140000, dbMax: 500000,
+        rlMin: 10000, rlLikely: 80000, rlMax: 450000,
+        tpMin: 10000, tpLikely: 60000, tpMax: 260000,
+        rcMin: 50000, rcLikely: 180000, rcMax: 700000
+      }
+    },
+    cloud: {
+      label: 'Cloud exposure example',
+      summary: 'Moderate frequency, stronger remediation and continuity cost pattern, with lighter third-party spillover.',
+      values: {
+        tefMin: 0.6, tefLikely: 2.2, tefMax: 8,
+        threatCapMin: 0.42, threatCapLikely: 0.62, threatCapMax: 0.82,
+        controlStrMin: 0.38, controlStrLikely: 0.56, controlStrMax: 0.76,
+        irMin: 50000, irLikely: 160000, irMax: 480000,
+        biMin: 80000, biLikely: 280000, biMax: 1100000,
+        dbMin: 70000, dbLikely: 220000, dbMax: 850000,
+        rlMin: 20000, rlLikely: 90000, rlMax: 500000,
+        tpMin: 0, tpLikely: 40000, tpMax: 180000,
+        rcMin: 50000, rcLikely: 170000, rcMax: 620000
+      }
+    },
     ransomware: {
       label: 'Ransomware / outage example',
       summary: 'Lower frequency than phishing, but heavier business disruption and recovery effort.',
@@ -122,11 +152,178 @@ function getEstimatePresetLibrary() {
         tpMin: 10000, tpLikely: 50000, tpMax: 250000,
         rcMin: 40000, rcLikely: 160000, rcMax: 700000
       }
+    },
+    strategic: {
+      label: 'Strategic downside example',
+      summary: 'Lower annual frequency, but heavier contract, reputation, and execution drag once the issue materialises.',
+      values: {
+        tefMin: 0.2, tefLikely: 0.8, tefMax: 3,
+        threatCapMin: 0.24, threatCapLikely: 0.44, threatCapMax: 0.68,
+        controlStrMin: 0.38, controlStrLikely: 0.56, controlStrMax: 0.76,
+        irMin: 40000, irLikely: 120000, irMax: 360000,
+        biMin: 180000, biLikely: 620000, biMax: 2400000,
+        dbMin: 0, dbLikely: 5000, dbMax: 30000,
+        rlMin: 10000, rlLikely: 90000, rlMax: 420000,
+        tpMin: 0, tpLikely: 30000, tpMax: 180000,
+        rcMin: 160000, rcLikely: 620000, rcMax: 2400000
+      }
+    },
+    operational: {
+      label: 'Operational breakdown example',
+      summary: 'Moderate frequency with business interruption as the dominant cost driver and only secondary regulatory exposure.',
+      values: {
+        tefMin: 0.5, tefLikely: 2, tefMax: 9,
+        threatCapMin: 0.3, threatCapLikely: 0.5, threatCapMax: 0.74,
+        controlStrMin: 0.34, controlStrLikely: 0.52, controlStrMax: 0.74,
+        irMin: 35000, irLikely: 110000, irMax: 340000,
+        biMin: 160000, biLikely: 620000, biMax: 2400000,
+        dbMin: 0, dbLikely: 0, dbMax: 20000,
+        rlMin: 10000, rlLikely: 50000, rlMax: 240000,
+        tpMin: 0, tpLikely: 30000, tpMax: 180000,
+        rcMin: 80000, rcLikely: 240000, rcMax: 920000
+      }
+    },
+    regulatory: {
+      label: 'Regulatory breach example',
+      summary: 'Lower frequency, lighter interruption, and stronger legal or enforcement cost pattern.',
+      values: {
+        tefMin: 0.2, tefLikely: 1, tefMax: 4,
+        threatCapMin: 0.3, threatCapLikely: 0.48, threatCapMax: 0.7,
+        controlStrMin: 0.4, controlStrLikely: 0.58, controlStrMax: 0.78,
+        irMin: 30000, irLikely: 90000, irMax: 300000,
+        biMin: 50000, biLikely: 180000, biMax: 700000,
+        dbMin: 0, dbLikely: 10000, dbMax: 50000,
+        rlMin: 150000, rlLikely: 520000, rlMax: 2200000,
+        tpMin: 0, tpLikely: 20000, tpMax: 140000,
+        rcMin: 80000, rcLikely: 280000, rcMax: 1100000
+      }
+    },
+    financial: {
+      label: 'Financial control / fraud example',
+      summary: 'Moderate frequency with direct loss, investigation effort, and third-party or contractual spillover.',
+      values: {
+        tefMin: 0.6, tefLikely: 2.4, tefMax: 10,
+        threatCapMin: 0.36, threatCapLikely: 0.56, threatCapMax: 0.8,
+        controlStrMin: 0.36, controlStrLikely: 0.54, controlStrMax: 0.76,
+        irMin: 30000, irLikely: 100000, irMax: 320000,
+        biMin: 40000, biLikely: 150000, biMax: 620000,
+        dbMin: 0, dbLikely: 5000, dbMax: 30000,
+        rlMin: 30000, rlLikely: 150000, rlMax: 760000,
+        tpMin: 30000, tpLikely: 150000, tpMax: 760000,
+        rcMin: 70000, rcLikely: 250000, rcMax: 980000
+      }
+    },
+    esg: {
+      label: 'ESG / sustainability example',
+      summary: 'Lower frequency with disclosure, remediation, and stakeholder-confidence loss weighted above direct disruption.',
+      values: {
+        tefMin: 0.2, tefLikely: 0.9, tefMax: 4,
+        threatCapMin: 0.24, threatCapLikely: 0.4, threatCapMax: 0.64,
+        controlStrMin: 0.34, controlStrLikely: 0.5, controlStrMax: 0.72,
+        irMin: 25000, irLikely: 85000, irMax: 260000,
+        biMin: 30000, biLikely: 120000, biMax: 500000,
+        dbMin: 0, dbLikely: 0, dbMax: 15000,
+        rlMin: 30000, rlLikely: 140000, rlMax: 650000,
+        tpMin: 0, tpLikely: 15000, tpMax: 90000,
+        rcMin: 140000, rcLikely: 460000, rcMax: 1700000
+      }
+    },
+    compliance: {
+      label: 'Compliance assurance example',
+      summary: 'Moderate frequency with remediation, assurance, and legal exposure weighted above direct disruption.',
+      values: {
+        tefMin: 0.4, tefLikely: 1.5, tefMax: 6,
+        threatCapMin: 0.3, threatCapLikely: 0.46, threatCapMax: 0.68,
+        controlStrMin: 0.34, controlStrLikely: 0.5, controlStrMax: 0.72,
+        irMin: 25000, irLikely: 85000, irMax: 260000,
+        biMin: 30000, biLikely: 120000, biMax: 500000,
+        dbMin: 0, dbLikely: 5000, dbMax: 25000,
+        rlMin: 60000, rlLikely: 220000, rlMax: 920000,
+        tpMin: 0, tpLikely: 20000, tpMax: 120000,
+        rcMin: 70000, rcLikely: 220000, rcMax: 820000
+      }
+    },
+    thirdParty: {
+      label: 'Third-party dependency example',
+      summary: 'Moderate frequency with supplier-driven interruption and contractual spillover as the main cost pattern.',
+      values: {
+        tefMin: 0.4, tefLikely: 1.8, tefMax: 6,
+        threatCapMin: 0.4, threatCapLikely: 0.6, threatCapMax: 0.8,
+        controlStrMin: 0.34, controlStrLikely: 0.5, controlStrMax: 0.72,
+        irMin: 25000, irLikely: 90000, irMax: 280000,
+        biMin: 140000, biLikely: 520000, biMax: 2200000,
+        dbMin: 0, dbLikely: 10000, dbMax: 50000,
+        rlMin: 10000, rlLikely: 60000, rlMax: 260000,
+        tpMin: 40000, tpLikely: 180000, tpMax: 850000,
+        rcMin: 80000, rcLikely: 260000, rcMax: 980000
+      }
+    },
+    procurement: {
+      label: 'Procurement governance example',
+      summary: 'Lower-to-moderate frequency with commercial leakage, supplier underperformance, and contract-control exposure.',
+      values: {
+        tefMin: 0.3, tefLikely: 1.1, tefMax: 5,
+        threatCapMin: 0.28, threatCapLikely: 0.46, threatCapMax: 0.68,
+        controlStrMin: 0.34, controlStrLikely: 0.5, controlStrMax: 0.72,
+        irMin: 20000, irLikely: 70000, irMax: 220000,
+        biMin: 120000, biLikely: 400000, biMax: 1500000,
+        dbMin: 0, dbLikely: 0, dbMax: 15000,
+        rlMin: 10000, rlLikely: 70000, rlMax: 320000,
+        tpMin: 30000, tpLikely: 160000, tpMax: 780000,
+        rcMin: 50000, rcLikely: 190000, rcMax: 760000
+      }
+    },
+    supplyChain: {
+      label: 'Supply chain disruption example',
+      summary: 'Lower-to-moderate frequency with delivery disruption, substitute cost, and contract pressure.',
+      values: {
+        tefMin: 0.3, tefLikely: 1.4, tefMax: 6,
+        threatCapMin: 0.3, threatCapLikely: 0.5, threatCapMax: 0.74,
+        controlStrMin: 0.32, controlStrLikely: 0.48, controlStrMax: 0.7,
+        irMin: 25000, irLikely: 80000, irMax: 260000,
+        biMin: 180000, biLikely: 700000, biMax: 2600000,
+        dbMin: 0, dbLikely: 0, dbMax: 15000,
+        rlMin: 10000, rlLikely: 50000, rlMax: 240000,
+        tpMin: 30000, tpLikely: 140000, tpMax: 700000,
+        rcMin: 70000, rcLikely: 220000, rcMax: 920000
+      }
+    },
+    businessContinuity: {
+      label: 'Business continuity example',
+      summary: 'Lower frequency but severe outage and recovery cost pattern once the event breaks through continuity assumptions.',
+      values: {
+        tefMin: 0.2, tefLikely: 1.1, tefMax: 5,
+        threatCapMin: 0.26, threatCapLikely: 0.44, threatCapMax: 0.68,
+        controlStrMin: 0.34, controlStrLikely: 0.52, controlStrMax: 0.74,
+        irMin: 50000, irLikely: 170000, irMax: 520000,
+        biMin: 220000, biLikely: 820000, biMax: 3200000,
+        dbMin: 0, dbLikely: 0, dbMax: 20000,
+        rlMin: 10000, rlLikely: 60000, rlMax: 280000,
+        tpMin: 0, tpLikely: 30000, tpMax: 180000,
+        rcMin: 90000, rcLikely: 300000, rcMax: 1200000
+      }
+    },
+    hse: {
+      label: 'HSE incident example',
+      summary: 'Lower frequency with elevated shutdown, remediation, and regulatory or legal exposure.',
+      values: {
+        tefMin: 0.15, tefLikely: 0.8, tefMax: 3,
+        threatCapMin: 0.24, threatCapLikely: 0.42, threatCapMax: 0.64,
+        controlStrMin: 0.38, controlStrLikely: 0.56, controlStrMax: 0.76,
+        irMin: 50000, irLikely: 160000, irMax: 500000,
+        biMin: 160000, biLikely: 580000, biMax: 2200000,
+        dbMin: 0, dbLikely: 0, dbMax: 10000,
+        rlMin: 100000, rlLikely: 320000, rlMax: 1400000,
+        tpMin: 10000, tpLikely: 70000, tpMax: 320000,
+        rcMin: 100000, rcLikely: 320000, rcMax: 1200000
+      }
     }
   };
 }
 
 function recommendEstimatePreset(draft) {
+  const lensPresetKey = String(draft?.scenarioLens?.estimatePresetKey || '').trim();
+  if (lensPresetKey && getEstimatePresetLibrary()[lensPresetKey]) return lensPresetKey;
   const text = [
     draft.scenarioTitle,
     draft.enhancedNarrative,
@@ -136,8 +333,20 @@ function recommendEstimatePreset(draft) {
     ...(getSelectedRisks().map(r => r.title || ''))
   ].join(' ').toLowerCase();
   if (/(phish|bec|email compromise|business email|invoice fraud)/.test(text)) return 'phishing';
+  if (/(identity|entra|sso|directory|mailbox compromise|session hijack|account takeover)/.test(text)) return 'identity';
+  if (/(cloud|bucket|tenant|misconfig|public exposure|saas)/.test(text)) return 'cloud';
   if (/(ransom|encrypt|extortion|outage|business interruption|recovery)/.test(text)) return 'ransomware';
   if (/(privacy|breach|exfiltrat|data leak|personal data|pii|phi)/.test(text)) return 'dataBreach';
+  if (/(strategy|strategic|market shift|competitive|transformation|portfolio|investment)/.test(text)) return 'strategic';
+  if (/(operational|process failure|control failure|breakdown|backlog|service failure)/.test(text)) return 'operational';
+  if (/(regulator|regulatory|licen|filing|supervisory|sanction)/.test(text)) return 'regulatory';
+  if (/(fraud|payment|invoice|treasury|liquidity|capital|financial)/.test(text)) return 'financial';
+  if (/(compliance|policy breach|conduct|ethics|assurance)/.test(text)) return 'compliance';
+  if (/(third[- ]party|supplier|vendor|outsourc)/.test(text)) return 'thirdParty';
+  if (/(procurement|sourcing|tender|bid|contract award|vendor selection|purchasing)/.test(text)) return 'procurement';
+  if (/(supply chain|logistics|shipment|inventory|single source|upstream)/.test(text)) return 'supplyChain';
+  if (/(business continuity|continuity|disaster recovery|rto|rpo|crisis management)/.test(text)) return 'businessContinuity';
+  if (/(hse|health and safety|safety|injury|environmental|spill|worker)/.test(text)) return 'hse';
   return '';
 }
 
@@ -158,6 +367,71 @@ function buildStep3FocusHint(draft) {
       primary: 'Event frequency',
       secondary: 'Third-party liability',
       why: 'Phishing and BEC scenarios happen more often than other types. Frequency and downstream fraud exposure matter most here.'
+    },
+    identity: {
+      primary: 'Event frequency',
+      secondary: 'Business interruption',
+      why: 'Identity-led scenarios often hinge on how often a compromise path is plausible and how widely access disruption would spread once core identity services are affected.'
+    },
+    cloud: {
+      primary: 'Data remediation',
+      secondary: 'Business interruption',
+      why: 'Cloud exposure scenarios usually turn on how much sensitive data or service continuity is actually in scope once the weak control is triggered.'
+    },
+    strategic: {
+      primary: 'Reputation / contract loss',
+      secondary: 'Business interruption',
+      why: 'Strategic scenarios are usually less frequent, but the downside comes from execution drag, stakeholder pressure, and the cost of recovering the objective.'
+    },
+    operational: {
+      primary: 'Business interruption',
+      secondary: 'Event frequency',
+      why: 'Operational scenarios are driven mainly by service strain and recovery effort. Set the disruption range first, then calibrate how often it could occur.'
+    },
+    regulatory: {
+      primary: 'Regulatory and legal cost',
+      secondary: 'Incident response',
+      why: 'Regulatory scenarios are shaped primarily by enforcement, remediation, and management response effort rather than direct data-remediation cost.'
+    },
+    financial: {
+      primary: 'Third-party liability',
+      secondary: 'Incident response',
+      why: 'Financial-control scenarios usually turn on direct loss and how quickly the organisation can detect, recover, and limit downstream commercial exposure.'
+    },
+    esg: {
+      primary: 'Reputation / contract loss',
+      secondary: 'Regulatory and legal cost',
+      why: 'ESG scenarios are typically shaped by disclosure remediation, stakeholder confidence, and any follow-on supervisory or investor scrutiny once the issue becomes visible.'
+    },
+    compliance: {
+      primary: 'Regulatory and legal cost',
+      secondary: 'Reputation / contract loss',
+      why: 'Compliance scenarios are mostly about remediation, assurance pressure, and the secondary trust impact if the issue becomes visible to leadership or regulators.'
+    },
+    thirdParty: {
+      primary: 'Business interruption',
+      secondary: 'Third-party liability',
+      why: 'Third-party scenarios are usually shaped first by service disruption and then by the commercial or contractual spillover created by the supplier event.'
+    },
+    procurement: {
+      primary: 'Third-party liability',
+      secondary: 'Business interruption',
+      why: 'Procurement scenarios typically surface as commercial leakage, weak supplier fit, or contract-control failure that then spills into delivery or service pressure.'
+    },
+    supplyChain: {
+      primary: 'Business interruption',
+      secondary: 'Reputation / contract loss',
+      why: 'Supply-chain scenarios mainly turn on delivery disruption, substitute cost, and whether the issue starts to affect customer commitments or executive confidence.'
+    },
+    businessContinuity: {
+      primary: 'Business interruption',
+      secondary: 'Incident response',
+      why: 'Continuity scenarios are mostly about outage duration and the recovery effort needed to restore a credible operating state.'
+    },
+    hse: {
+      primary: 'Regulatory and legal cost',
+      secondary: 'Business interruption',
+      why: 'HSE scenarios are typically driven by shutdown, remediation, and regulatory consequence once a safety or environmental control fails.'
     }
   };
   if (!presetKey || !hints[presetKey]) return null;

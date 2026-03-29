@@ -891,6 +891,50 @@ ${businessUnit.selectedDepartmentContext}` : ''
     };
   }
 
+  function _buildScenarioLens(classification = {}) {
+    const key = String(classification?.key || 'general').trim() || 'general';
+    const map = {
+      ransomware: { label: 'Cyber', functionKey: 'technology', estimatePresetKey: 'ransomware' },
+      identity: { label: 'Cyber', functionKey: 'technology', estimatePresetKey: 'identity' },
+      phishing: { label: 'Cyber', functionKey: 'technology', estimatePresetKey: 'phishing' },
+      insider: { label: 'Cyber', functionKey: 'technology', estimatePresetKey: 'identity' },
+      cloud: { label: 'Cyber', functionKey: 'technology', estimatePresetKey: 'cloud' },
+      'data-breach': { label: 'Cyber', functionKey: 'technology', estimatePresetKey: 'dataBreach' },
+      'third-party': { label: 'Third-party', functionKey: 'procurement', estimatePresetKey: 'thirdParty' },
+      strategic: { label: 'Strategic', functionKey: 'strategic', estimatePresetKey: 'strategic' },
+      operational: { label: 'Operational', functionKey: 'operations', estimatePresetKey: 'operational' },
+      regulatory: { label: 'Regulatory', functionKey: 'compliance', estimatePresetKey: 'regulatory' },
+      financial: { label: 'Financial', functionKey: 'finance', estimatePresetKey: 'financial' },
+      esg: { label: 'ESG', functionKey: 'strategic', estimatePresetKey: 'esg' },
+      compliance: { label: 'Compliance', functionKey: 'compliance', estimatePresetKey: 'compliance' },
+      'supply-chain': { label: 'Supply chain', functionKey: 'procurement', estimatePresetKey: 'supplyChain' },
+      procurement: { label: 'Procurement', functionKey: 'procurement', estimatePresetKey: 'procurement' },
+      'business-continuity': { label: 'Business continuity', functionKey: 'operations', estimatePresetKey: 'businessContinuity' },
+      hse: { label: 'HSE', functionKey: 'hse', estimatePresetKey: 'hse' },
+      general: { label: 'General enterprise risk', functionKey: 'general', estimatePresetKey: 'general' }
+    };
+    const profile = map[key] || map.general;
+    return {
+      key,
+      label: profile.label,
+      functionKey: profile.functionKey,
+      estimatePresetKey: profile.estimatePresetKey
+    };
+  }
+
+  function _normaliseScenarioLens(lens = {}, fallback = {}) {
+    const merged = {
+      ...fallback,
+      ...(lens && typeof lens === 'object' ? lens : {})
+    };
+    return {
+      key: String(merged.key || fallback.key || 'general').trim() || 'general',
+      label: _cleanUserFacingText(merged.label || fallback.label || 'General enterprise risk', { maxSentences: 1, stripTrailingPeriod: true }) || 'General enterprise risk',
+      functionKey: String(merged.functionKey || fallback.functionKey || 'general').trim() || 'general',
+      estimatePresetKey: String(merged.estimatePresetKey || fallback.estimatePresetKey || 'general').trim() || 'general'
+    };
+  }
+
   function _cleanUserFacingText(value = '', { maxSentences = 0, stripTrailingPeriod = false } = {}) {
     let text = _dedupeSentences(String(value || '').replace(/\s+/g, ' ').trim());
     if (!text) return '';
@@ -966,6 +1010,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
 
   function _generateStub(narrative, buContext, citations, benchmarkCandidates = []) {
     const classification = _classifyScenario(narrative);
+    const scenarioLens = _buildScenarioLens(classification);
 
     let scenarioType = classification.scenarioType;
     let tef = { ...classification.tef };
@@ -1008,12 +1053,89 @@ ${businessUnit.selectedDepartmentContext}` : ''
         { title: 'BEC Payment Verification Controls', why: 'Out-of-band verification and approval hardening reduce direct fraud loss.', impact: 'Cuts the main financial-loss path in many BEC cases and improves executive confidence in payment governance.' },
         { title: 'Security Awareness and Simulation Programme', why: 'Human detection remains an important last line of defence.', impact: 'Reduces click-through, improves early reporting, and supports better measurement of people risk over time.' }
       ];
+    } else if (classification.key === 'third-party') {
+      recommendations = [
+        { title: 'Tiered Critical Supplier Assurance', why: 'A lightweight but disciplined criticality model keeps the most important suppliers under the strongest assurance and continuity expectations.', impact: 'Improves visibility over inherited exposure and reduces surprise disruption from key dependencies.' },
+        { title: 'Contracted Resilience And Exit Clauses', why: 'Recovery obligations, notification triggers, and exit rights reduce dependence on goodwill during a supplier incident.', impact: 'Improves leverage, shortens response ambiguity, and reduces downstream recovery delay.' },
+        { title: 'Concentration And Single-Point-Of-Failure Review', why: 'Third-party scenarios are often amplified by hidden concentration risk or non-substitutable services.', impact: 'Reduces severe disruption exposure and gives management clearer fallback options.' },
+        { title: 'Shared Incident And Escalation Runbook', why: 'Joint response quality matters as much as vendor due diligence once a disruption begins.', impact: 'Improves coordination speed and reduces operational confusion during a supplier-led event.' }
+      ];
+    } else if (classification.key === 'strategic') {
+      recommendations = [
+        { title: 'Decision Gate Review For The Strategic Assumption', why: 'Strategic scenarios usually hinge on one assumption that is being treated as fixed when it should be challenged.', impact: 'Improves early course correction and reduces expensive late-stage programme drag.' },
+        { title: 'Trigger-Based Management Reporting', why: 'Clear leading indicators help management intervene before the issue becomes a full strategic miss.', impact: 'Creates earlier escalation and a more defensible executive response path.' },
+        { title: 'Recovery Options And Contingency Playbook', why: 'Strategic issues get more expensive when there is no prepared alternative path.', impact: 'Shortens correction time and narrows downside if the primary plan fails.' },
+        { title: 'Portfolio Exposure Review', why: 'Many strategic risks are concentrated in one initiative, market assumption, or dependency.', impact: 'Improves capital allocation and reduces the chance of cascading execution drag.' }
+      ];
+    } else if (classification.key === 'operational') {
+      recommendations = [
+        { title: 'Control Point Stabilisation', why: 'Operational scenarios usually start with a weak handoff, control, or capacity choke point.', impact: 'Reduces repeat failure and improves the reliability of the day-to-day operating path.' },
+        { title: 'Backlog And Capacity Triggers', why: 'Waiting until service degradation is obvious makes operational losses more expensive.', impact: 'Improves early intervention and reduces severe service strain.' },
+        { title: 'Fallback Workflow And Manual Workaround Design', why: 'Operational resilience improves when teams have a controlled degraded mode instead of improvising under pressure.', impact: 'Narrows disruption cost and keeps core service outputs moving during stress.' },
+        { title: 'Root-Cause Review With Ownership', why: 'Sustained operational loss usually reflects repeatable control or process weakness.', impact: 'Converts firefighting into durable improvement and reduces recurrence.' }
+      ];
+    } else if (classification.key === 'regulatory') {
+      recommendations = [
+        { title: 'Obligation Mapping And Ownership Refresh', why: 'Regulatory loss often follows unclear ownership of filings, licence conditions, or supervisory commitments.', impact: 'Reduces surprise non-compliance and improves accountability for regulated activity.' },
+        { title: 'Regulator-Ready Evidence Pack', why: 'Being able to show control evidence quickly changes the tone and cost of a regulatory event.', impact: 'Reduces remediation friction and helps management defend the current position credibly.' },
+        { title: 'Supervisory Escalation Runbook', why: 'Regulatory incidents become more expensive when the escalation path is improvised.', impact: 'Improves timeliness of disclosure and reduces management uncertainty during enforcement pressure.' },
+        { title: 'Control Testing On The Highest-Risk Obligation', why: 'A small number of obligations usually drive the majority of downside.', impact: 'Improves assurance quality and lowers the chance of repeat findings.' }
+      ];
+    } else if (classification.key === 'financial') {
+      recommendations = [
+        { title: 'Out-Of-Band Approval Controls', why: 'Financial-loss scenarios often succeed because a critical approval or release point is too easy to bypass.', impact: 'Directly reduces fraud and payment-manipulation loss paths.' },
+        { title: 'Exception And Reconciliation Monitoring', why: 'Faster detection changes the size of financial loss materially.', impact: 'Improves recovery, shortens exposure duration, and raises executive confidence in the control environment.' },
+        { title: 'Control Segregation Review', why: 'Financial incidents are amplified by weak segregation or emergency-access sprawl.', impact: 'Narrows the likelihood and blast radius of internal or external manipulation.' },
+        { title: 'Fraud Response Playbook With Treasury And Legal', why: 'The early hours matter when funds, approvals, or commercial obligations are involved.', impact: 'Improves containment and reduces follow-on contractual or liquidity stress.' }
+      ];
+    } else if (classification.key === 'esg') {
+      recommendations = [
+        { title: 'Disclosure Control And Evidence Review', why: 'ESG downside often comes from weak support for claims rather than a single headline event.', impact: 'Improves reporting defensibility and reduces greenwashing or disclosure-challenge risk.' },
+        { title: 'Management Trigger Thresholds', why: 'Material ESG deterioration needs earlier escalation than most teams currently use.', impact: 'Improves intervention timing and reduces reactive remediation cost.' },
+        { title: 'Supplier And Data Lineage Checks', why: 'Sustainability metrics frequently rely on upstream data with uneven quality.', impact: 'Improves confidence in the operating and reporting baseline.' },
+        { title: 'Stakeholder Communication Runbook', why: 'Reputational pressure grows quickly when the narrative gets ahead of the facts.', impact: 'Improves consistency of management response during stakeholder scrutiny.' }
+      ];
+    } else if (classification.key === 'compliance') {
+      recommendations = [
+        { title: 'Policy-To-Control Mapping Refresh', why: 'Compliance failures often persist because obligations and operating controls are only loosely connected.', impact: 'Improves assurance integrity and reduces repeat remediation cycles.' },
+        { title: 'Targeted Assurance On The Weakest Control Family', why: 'A narrow assurance pass is often the fastest way to change the real risk posture.', impact: 'Improves confidence in the scenario and reduces unverified control assumptions.' },
+        { title: 'Issue Closure Discipline', why: 'Compliance risk remains elevated when remediation is tracked but not truly embedded.', impact: 'Improves closure quality and reduces the chance of repeat findings.' },
+        { title: 'Leadership Accountability For Exceptions', why: 'Unowned exceptions often become the hidden path to larger compliance failure.', impact: 'Improves escalation clarity and strengthens the operating control environment.' }
+      ];
+    } else if (classification.key === 'supply-chain') {
+      recommendations = [
+        { title: 'Critical Dependency Diversification Review', why: 'Supply-chain downside is concentrated when substitutes are weak or lead times are long.', impact: 'Reduces severe disruption risk and improves continuity options.' },
+        { title: 'Buffer And Recovery Trigger Design', why: 'Inventory, lead-time, and recovery triggers shape whether a disruption becomes a crisis.', impact: 'Improves response speed and narrows service or delivery loss.' },
+        { title: 'Supplier Transparency For Tier-2 Dependencies', why: 'Many supply shocks surface through hidden upstream concentration.', impact: 'Improves resilience planning and reduces surprise dependency exposure.' },
+        { title: 'Commercial Prioritisation Plan', why: 'When disruption occurs, management needs a clear prioritisation of products, customers, and obligations.', impact: 'Improves decision quality and reduces downstream contractual or reputational damage.' }
+      ];
+    } else if (classification.key === 'procurement') {
+      recommendations = [
+        { title: 'Critical Sourcing Decision Review', why: 'Procurement scenarios often begin with a sourcing shortcut that looked efficient but weakened control or resilience.', impact: 'Improves vendor fit and reduces downstream operational or compliance strain.' },
+        { title: 'Tender And Award Control Strengthening', why: 'Clear challenge points in evaluation and approval reduce the chance of weak awards or commercial leakage.', impact: 'Improves governance quality and reduces rework or supplier underperformance.' },
+        { title: 'Contract-Control Obligation Register', why: 'Many procurement losses emerge after award because operational obligations are not tracked tightly enough.', impact: 'Improves enforcement of service, assurance, and remediation terms.' },
+        { title: 'Supplier Performance Escalation Thresholds', why: 'Management needs an earlier signal when a supplier relationship is drifting out of tolerance.', impact: 'Improves intervention timing and reduces avoidable continuity or commercial loss.' }
+      ];
+    } else if (classification.key === 'business-continuity') {
+      recommendations = [
+        { title: 'Recovery Objective Validation', why: 'Continuity scenarios often expose recovery assumptions that were never tested against real operating tolerance.', impact: 'Improves realism in the continuity posture and reduces surprise recovery failure.' },
+        { title: 'Fallback Operating Mode Design', why: 'Controlled degraded-mode operations are a major lever on continuity loss.', impact: 'Reduces prolonged outage cost and preserves core service delivery under stress.' },
+        { title: 'Executive Crisis Decision Playbook', why: 'Continuity failures escalate when leadership thresholds and choices are not pre-aligned.', impact: 'Improves speed and consistency of management response.' },
+        { title: 'Dependency Recovery Testing', why: 'Recovery assumptions break most often at interfaces between teams, vendors, and shared services.', impact: 'Improves confidence in continuity readiness and narrows downstream disruption.' }
+      ];
+    } else if (classification.key === 'hse') {
+      recommendations = [
+        { title: 'Critical Control Verification', why: 'HSE scenarios are heavily shaped by whether the highest-consequence controls truly exist and are working.', impact: 'Reduces the chance of severe harm and improves assurance over the operating baseline.' },
+        { title: 'Stop-Work And Escalation Triggers', why: 'Clear intervention thresholds reduce hesitation when conditions deteriorate.', impact: 'Improves response speed and reduces harm escalation.' },
+        { title: 'Incident Learning Loop', why: 'Near misses and weak signals often contain the evidence needed to prevent a more serious event.', impact: 'Improves operating discipline and lowers recurrence risk.' },
+        { title: 'Emergency And Remediation Coordination Drill', why: 'The response path matters as much as prevention when a people or environmental event occurs.', impact: 'Improves recovery quality and reduces shutdown or regulatory pressure.' }
+      ];
     } else {
       recommendations = [
-        { title: 'Risk-Based Vulnerability Management', why: 'Exploitability-led prioritisation reduces the most likely technical entry paths.', impact: 'Addresses a major driver of severe incidents and gives teams a more defensible remediation focus.' },
-        { title: 'Zero Trust Architecture', why: 'Reducing implicit trust limits lateral movement and blast radius.', impact: 'Can materially reduce breach scope, service disruption, and recovery effort.' },
-        { title: 'Third-Party Security Assessment Programme', why: 'Supplier and dependency risks often amplify core scenarios.', impact: 'Improves identification of inherited exposure and helps separate internal versus external treatment choices.' },
-        { title: 'Security Operations Maturity', why: 'Faster detection and response remains one of the strongest levers on loss magnitude.', impact: 'Reduces dwell time, downstream business loss, and uncertainty around incident progression.' }
+        { title: 'Control Weakness Review', why: 'Generic scenarios still benefit from identifying the single most material control weakness in the chain.', impact: 'Improves prioritisation and reduces assumption drift before management review.' },
+        { title: 'Evidence-Led Range Challenge', why: 'The fastest way to improve a scenario is to challenge the most uncertain frequency or impact assumption with real evidence.', impact: 'Improves decision confidence and reduces avoidable estimate volatility.' },
+        { title: 'Escalation Trigger Definition', why: 'Management action is clearer when the scenario includes a crisp escalation threshold.', impact: 'Improves readiness and helps users move from analysis to response planning.' },
+        { title: 'Dependency And Consequence Review', why: 'Even broad enterprise scenarios usually hide one or two dependencies that amplify the downside materially.', impact: 'Improves treatment choice and clarifies where reduction effort should go first.' }
       ];
     }
 
@@ -1062,6 +1184,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
 
     return {
       scenarioTitle: scenarioType,
+      scenarioLens,
       structuredScenario: {
         assetService: buContext?.criticalServices?.[0] || 'Core application platform',
         threatCommunity: classification.threatCommunity,
@@ -1257,6 +1380,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const riskStatement = input.riskStatement || '';
     const registerText = input.registerText || '';
     const joined = [riskStatement, registerText].filter(Boolean).join('\n');
+    const classification = _classifyScenario(joined || riskStatement);
     const scenarioExpansion = _buildScenarioExpansion(input);
     const risks = scenarioExpansion.riskTitles.map((risk, idx) => ({
       id: `stub-risk-${idx + 1}`,
@@ -1283,10 +1407,11 @@ ${businessUnit.selectedDepartmentContext}` : ''
       linkAnalysis: risks.length > 1
         ? 'Several selected risks appear capable of cascading together. Treat them as linked if one event could trigger operational, regulatory, or third-party consequences in the same chain.'
         : 'A single primary risk driver was identified from the intake.',
+      scenarioLens: _buildScenarioLens(classification),
       risks,
       regulations: Array.from(new Set([...(input.applicableRegulations || []), ...risks.flatMap(r => r.regulations || [])])),
       workflowGuidance,
-      benchmarkBasis: 'Prefer GCC and UAE benchmark references for regulatory exposure, downtime, and cyber response assumptions. Where those are unavailable, use the best available global benchmark and explain the fallback clearly.',
+      benchmarkBasis: 'Prefer GCC and UAE benchmark references where credible, then fall back to the closest global enterprise comparator. Explain clearly when the starting values come from a scenario-calibration baseline instead of a published benchmark.',
       citations: input.citations || []
     };
   }
@@ -1318,6 +1443,7 @@ The applicable regulations, geographic scope, and benchmark strategy will be pro
 Respond ONLY with valid JSON matching this exact schema:
 {
   "scenarioTitle": "string",
+  "scenarioLens": { "key": "string", "label": "string", "functionKey": "string", "estimatePresetKey": "string" },
   "structuredScenario": { "assetService": "string", "threatCommunity": "string", "attackType": "string", "effect": "string" },
   "workflowGuidance": ["string"],
   "benchmarkBasis": "string",
@@ -1393,6 +1519,7 @@ ${evidenceMeta.promptBlock}`;
             ...fallback,
             ...parsed,
             scenarioTitle: _cleanUserFacingText(keepFallbackClassification ? fallback.scenarioTitle : (cleanedTitle || fallback.scenarioTitle), { maxSentences: 1, stripTrailingPeriod: true }),
+            scenarioLens: _normaliseScenarioLens(parsed.scenarioLens, fallback.scenarioLens),
             structuredScenario: (() => {
               const mergedStructured = {
                 ...fallback.structuredScenario,
@@ -1475,6 +1602,7 @@ Return JSON only with this schema:
   "enhancedStatement": "string",
   "summary": "string",
   "linkAnalysis": "string",
+  "scenarioLens": { "key": "string", "label": "string", "functionKey": "string", "estimatePresetKey": "string" },
   "workflowGuidance": ["string"],
   "benchmarkBasis": "string",
   "risks": [
@@ -1532,6 +1660,7 @@ ${evidenceMeta.promptBlock}`;
           const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
           return _decorateAiResult(_withEvidenceMeta({
             ...parsed,
+            scenarioLens: _normaliseScenarioLens(parsed.scenarioLens, _buildScenarioLens(_classifyScenario(input.riskStatement || input.registerText || ''))),
             enhancedStatement: _buildEnhancedNarrative(input, parsed.enhancedStatement),
             summary: _cleanUserFacingText(parsed.summary || '', { maxSentences: 3 }),
             linkAnalysis: _cleanUserFacingText(parsed.linkAnalysis || '', { maxSentences: 3 }),

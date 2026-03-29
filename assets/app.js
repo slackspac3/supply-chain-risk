@@ -364,11 +364,46 @@ function persistDraftRecoverySnapshot(draft = AppState.draft, username = AuthSer
   } catch {}
 }
 
+function inferStoredScenarioFunctionKey(source = {}) {
+  const direct = String(source?.scenarioLens?.functionKey || source?.functionKey || '').trim().toLowerCase();
+  if (direct) return direct;
+  const lensKey = String(source?.scenarioLens?.key || '').trim().toLowerCase();
+  if (lensKey === 'financial') return 'finance';
+  if (['procurement', 'supply-chain', 'third-party'].includes(lensKey)) return 'procurement';
+  if (['compliance', 'regulatory'].includes(lensKey)) return 'compliance';
+  if (lensKey === 'hse') return 'hse';
+  if (lensKey === 'strategic' || lensKey === 'esg') return 'strategic';
+  if (['operational', 'business-continuity'].includes(lensKey)) return 'operations';
+  if (['ransomware', 'identity', 'phishing', 'insider', 'cloud', 'data-breach', 'cyber'].includes(lensKey)) return 'technology';
+  const haystack = [
+    source?.scenarioTitle,
+    source?.title,
+    source?.narrative,
+    source?.enhancedNarrative,
+    source?.structuredScenario?.attackType,
+    source?.structuredScenario?.threatCommunity,
+    ...(Array.isArray(source?.selectedRisks) ? source.selectedRisks.map(item => item?.title || item?.category || '') : []),
+    ...(Array.isArray(source?.selectedRiskTitles) ? source.selectedRiskTitles : [])
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (/procurement|sourcing|vendor|supplier|purchase|third[- ]party|supply chain/.test(haystack)) return 'procurement';
+  if (/compliance|regulatory|legal|privacy|policy|governance|controls|audit/.test(haystack)) return 'compliance';
+  if (/finance|treasury|accounting|financial|cash|payment|payroll|credit|collections|ledger|fraud/.test(haystack)) return 'finance';
+  if (/hse|ehs|health|safety|environment|workplace safety|injury|spill/.test(haystack)) return 'hse';
+  if (/strategy|strategic|enterprise|portfolio|transformation|market|growth|investment|esg|sustainability/.test(haystack)) return 'strategic';
+  if (/technology|cyber|security|identity|cloud|infrastructure|it\b|digital|phishing|ransomware|breach/.test(haystack)) return 'technology';
+  if (/operations|resilience|continuity|service delivery|manufacturing|logistics|facilities|workforce|process failure|backlog/.test(haystack)) return 'operations';
+  return 'general';
+}
+
 function extractScenarioPattern(assessment) {
   if (!assessment || !assessment.results) return null;
   return {
     id: String(assessment.id || '').trim(),
     buId: String(assessment.buId || '').trim(),
+    functionKey: inferStoredScenarioFunctionKey(assessment),
+    scenarioLens: assessment?.scenarioLens && typeof assessment.scenarioLens === 'object'
+      ? { ...assessment.scenarioLens }
+      : null,
     title: String(assessment.scenarioTitle || assessment.structuredScenario?.attackType || '').trim(),
     scenarioType: String(assessment.structuredScenario?.attackType || assessment.scenarioTitle || '').trim(),
     geography: String(assessment.geography || '').trim(),
@@ -3402,6 +3437,10 @@ function setPage(html) {
 async function loadJSON(path) {
   const separator = String(path).includes('?') ? '&' : '?';
   const res = await fetch(`${path}${separator}v=${APP_ASSET_VERSION}`);
+  if (!res.ok) {
+    // Silent empty-data fallback makes grounding issues hard to diagnose during init.
+    throw new Error(`Asset request failed for ${path} (${res.status})`);
+  }
   return res.json();
 }
 

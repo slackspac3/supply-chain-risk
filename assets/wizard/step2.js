@@ -15,8 +15,31 @@ function renderStep2TopEvidenceNudge(draft) {
   </div>`;
 }
 
+const STEP2_SCENARIO_TYPE_OPTIONS = [
+  'Strategic shift / programme failure',
+  'Operational breakdown / control failure',
+  'Regulatory breach / filing failure',
+  'Financial control breakdown / fraud',
+  'Compliance assurance gap',
+  'Procurement governance / sourcing failure',
+  'Supply chain disruption',
+  'Business continuity / recovery failure',
+  'HSE incident / environmental control breakdown',
+  'Third-party dependency failure',
+  'Ransomware',
+  'Data Breach / Exfiltration',
+  'Phishing / BEC',
+  'Cloud Misconfiguration',
+  'Insider Threat',
+  'Identity / access compromise'
+];
+
 function renderWizard2() {
   const draft = AppState.draft;
+  const currentThreatType = String(draft.structuredScenario?.attackType || '').trim();
+  const threatTypeOptions = currentThreatType && !STEP2_SCENARIO_TYPE_OPTIONS.includes(currentThreatType)
+    ? [currentThreatType, ...STEP2_SCENARIO_TYPE_OPTIONS]
+    : STEP2_SCENARIO_TYPE_OPTIONS;
   const selectedRisks = getSelectedRisks();
   const scenarioGeographies = getScenarioGeographies();
   const scenarioQualityCoach = buildScenarioQualityCoach({
@@ -156,7 +179,7 @@ function renderWizard2() {
                 <label class="form-label" for="threat-type">Threat Type</label>
                 <select class="form-select" id="threat-type">
                   <option value="">— Select —</option>
-                  ${['Ransomware','Data Breach / Exfiltration','Phishing / BEC','Cloud Misconfiguration','Insider Threat','Supply Chain','DDoS','Zero-day Exploit'].map(t=>`<option value="${t}">${t}</option>`).join('')}
+                  ${threatTypeOptions.map((t) => `<option value="${escapeHtml(t)}"${currentThreatType === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}
                 </select>
               </div>
             </div>`
@@ -173,6 +196,8 @@ function renderWizard2() {
   document.getElementById('narrative').addEventListener('input', function() {
     AppState.draft.enhancedNarrative = this.value;
     if (!AppState.draft.narrative) AppState.draft.narrative = this.value;
+    // Narrative edits can change the scenario family, so clear the previous AI lens until the user reruns assist or proceeds on text-based inference.
+    AppState.draft.scenarioLens = null;
     markDraftDirty();
     scheduleDraftAutosave();
   });
@@ -547,6 +572,9 @@ async function runLLMAssist() {
       selectedDepartmentContext: aiContext.adminSettings.departmentContext
     }, citations, benchmarkCandidates);
     AppState.draft.scenarioTitle = result.scenarioTitle;
+    AppState.draft.scenarioLens = result?.scenarioLens && typeof result.scenarioLens === 'object'
+      ? { ...result.scenarioLens }
+      : (AppState.draft.scenarioLens || null);
     AppState.draft.structuredScenario = result.structuredScenario;
     AppState.draft.llmAssisted = true;
     AppState.draft.enhancedNarrative = narrative;

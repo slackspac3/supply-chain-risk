@@ -191,15 +191,14 @@ const ExportService = (() => {
 <meta charset="UTF-8">
 <title>Decision Memo — ${memo.title}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; }
-  body { margin: 0; font-family: 'DM Sans', sans-serif; background: #f3f3ef; color: #212822; }
+  body { margin: 0; font-family: 'DM Sans', 'Segoe UI', Arial, sans-serif; background: #f3f3ef; color: #212822; }
   .page { max-width: 980px; margin: 0 auto; padding: 32px; }
   .sheet { background: #f6f3f2; border: 1px solid rgba(33,40,34,.12); border-radius: 24px; padding: 30px; box-shadow: 0 18px 54px rgba(18, 24, 20, 0.12); }
   .sheet + .sheet { margin-top: 24px; }
   .sheet--appendix { background: #f3f0ee; }
   .eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: rgba(33,40,34,.55); margin-bottom: 8px; }
-  h1, h2, h3 { font-family: 'Syne', sans-serif; margin: 0; color: #212822; }
+  h1, h2, h3 { font-family: 'Syne', 'Avenir Next', 'Segoe UI', sans-serif; margin: 0; color: #212822; }
   h1 { font-size: 34px; line-height: 1.05; max-width: 14ch; }
   h2 { font-size: 18px; margin-bottom: 12px; }
   h3 { font-size: 15px; margin-bottom: 6px; }
@@ -221,7 +220,7 @@ const ExportService = (() => {
   .signal-ring.success { background: radial-gradient(circle at center, rgba(3,209,168,.16), rgba(3,209,168,.03) 65%); }
   .signal-ring.warning { background: radial-gradient(circle at center, rgba(242,251,90,.22), rgba(242,251,90,.05) 65%); }
   .signal-ring.danger { background: radial-gradient(circle at center, rgba(172,67,46,.16), rgba(172,67,46,.04) 65%); }
-  .signal-inner { width: 74px; height: 74px; border-radius: 50%; background: #f6f3f2; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 28px; }
+  .signal-inner { width: 74px; height: 74px; border-radius: 50%; background: #f6f3f2; display: flex; align-items: center; justify-content: center; font-family: 'Syne', 'Avenir Next', 'Segoe UI', sans-serif; font-size: 28px; }
   .signal-copy { font-size: 13px; line-height: 1.7; color: rgba(33,40,34,.72); text-align: center; }
   .metrics, .mid-grid, .appendix-grid { display: grid; gap: 16px; margin-top: 22px; }
   .metrics { grid-template-columns: repeat(3, 1fr); }
@@ -483,14 +482,13 @@ const ExportService = (() => {
 <meta charset="UTF-8">
 <title>Risk Quantifier — ${assessment.scenarioTitle || 'Assessment'}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; }
-  body { margin: 0; font-family: 'DM Sans', sans-serif; color: #172033; background: #f5f7fb; }
+  body { margin: 0; font-family: 'DM Sans', 'Segoe UI', Arial, sans-serif; color: #172033; background: #f5f7fb; }
   .page { max-width: 980px; margin: 0 auto; padding: 36px; }
   .sheet { background: #ffffff; border: 1px solid #d8e0ea; border-radius: 22px; padding: 34px; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08); }
   .header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 28px; }
   .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: #6c7892; margin-bottom: 6px; }
-  h1, h2, h3 { font-family: 'Syne', sans-serif; margin: 0; color: #10203b; }
+  h1, h2, h3 { font-family: 'Syne', 'Avenir Next', 'Segoe UI', sans-serif; margin: 0; color: #10203b; }
   h1 { font-size: 30px; line-height: 1.05; max-width: 14ch; }
   h2 { font-size: 18px; margin-bottom: 14px; }
   h3 { font-size: 15px; margin-bottom: 8px; }
@@ -512,7 +510,7 @@ const ExportService = (() => {
   .signal-ring.above { box-shadow: 0 0 0 16px rgba(220, 38, 38, 0.08), inset 0 0 0 1px rgba(220, 38, 38, 0.24); }
   .signal-ring.warning { box-shadow: 0 0 0 16px rgba(217, 119, 6, 0.08), inset 0 0 0 1px rgba(217, 119, 6, 0.24); }
   .signal-ring.within { box-shadow: 0 0 0 16px rgba(5, 150, 105, 0.08), inset 0 0 0 1px rgba(5, 150, 105, 0.24); }
-  .signal-inner { width: 86px; height: 86px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #ffffff; font-size: 36px; }
+  .signal-inner { width: 86px; height: 86px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #ffffff; font-size: 36px; font-family: 'Syne', 'Avenir Next', 'Segoe UI', sans-serif; }
   .signal-copy { font-size: 13px; color: #53607a; line-height: 1.6; max-width: 18ch; }
   .metric-grid, .visual-grid, .decision-grid, .summary-grid, .appendix-grid { display: grid; gap: 16px; margin-top: 22px; }
   .metric-grid { grid-template-columns: repeat(3, 1fr); }
@@ -967,7 +965,6 @@ const ExportService = (() => {
 <meta charset="UTF-8">
 <title>Board Note — ${memo.title}</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --ink: #1a1e1b;
@@ -982,7 +979,7 @@ const ExportService = (() => {
 }
 html { font-size: 16px; -webkit-font-smoothing: antialiased; }
 body {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'DM Sans', 'Segoe UI', Arial, sans-serif;
   background: var(--surface);
   color: var(--ink);
   line-height: 1.6;

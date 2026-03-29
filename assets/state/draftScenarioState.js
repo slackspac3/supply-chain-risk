@@ -225,6 +225,10 @@
     AppState.draft.enhancedNarrative = resolvedNarrative;
     AppState.draft.intakeSummary = result.summary || AppState.draft.intakeSummary || '';
     AppState.draft.linkAnalysis = result.linkAnalysis || AppState.draft.linkAnalysis || '';
+    // Keep one canonical scenario lens on the draft so Step 3, learning, and benchmarking stop re-inferring the scenario in different ways.
+    AppState.draft.scenarioLens = result?.scenarioLens && typeof result.scenarioLens === 'object'
+      ? { ...result.scenarioLens }
+      : (AppState.draft.scenarioLens || null);
     AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
     AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;
     AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
@@ -249,6 +253,9 @@
     const workbookSummary = AppState.draft.registerMeta?.sheetCount > 1 ? ` across ${AppState.draft.registerMeta.sheetCount} sheets` : '';
     AppState.draft.intakeSummary = result.summary || `Extracted ${getSelectedRisks().length} risks from ${AppState.draft.uploadedRegisterName}${workbookSummary}.`;
     AppState.draft.linkAnalysis = result.linkAnalysis || AppState.draft.linkAnalysis;
+    AppState.draft.scenarioLens = result?.scenarioLens && typeof result.scenarioLens === 'object'
+      ? { ...result.scenarioLens }
+      : (AppState.draft.scenarioLens || null);
     AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
     AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;
     AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';

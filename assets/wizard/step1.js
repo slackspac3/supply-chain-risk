@@ -59,6 +59,17 @@ const STEP1_DRY_RUN_FUNCTION_LABELS = {
   general: 'Cross-functional'
 };
 
+const STEP1_FUNCTION_TO_SCENARIO_LENS = {
+  finance: { key: 'financial', label: 'Financial', functionKey: 'finance', estimatePresetKey: 'financial' },
+  procurement: { key: 'procurement', label: 'Procurement', functionKey: 'procurement', estimatePresetKey: 'procurement' },
+  compliance: { key: 'compliance', label: 'Compliance', functionKey: 'compliance', estimatePresetKey: 'compliance' },
+  operations: { key: 'operational', label: 'Operational', functionKey: 'operations', estimatePresetKey: 'operational' },
+  technology: { key: 'cyber', label: 'Cyber', functionKey: 'technology', estimatePresetKey: 'identity' },
+  strategic: { key: 'strategic', label: 'Strategic', functionKey: 'strategic', estimatePresetKey: 'strategic' },
+  hse: { key: 'hse', label: 'HSE', functionKey: 'hse', estimatePresetKey: 'hse' },
+  general: { key: 'general', label: 'General enterprise risk', functionKey: 'general', estimatePresetKey: 'general' }
+};
+
 function createStep1DryRunScenario(input = {}) {
   return {
     id: String(input.id || '').trim(),
@@ -119,6 +130,7 @@ function buildStep1LearnedDryRunExamples(functionKey, buId, limit = 3) {
     .filter(pattern => {
       if (!String(pattern?.title || pattern?.scenarioType || pattern?.narrative || '').trim()) return false;
       if (functionKey === 'general') return true;
+      if (String(pattern?.functionKey || '').trim().toLowerCase() === functionKey) return true;
       const haystack = [
         pattern?.functionKey,
         pattern?.title,
@@ -1206,6 +1218,7 @@ function resetStep1DryRunContent() {
   AppState.draft.narrative = '';
   AppState.draft.sourceNarrative = '';
   AppState.draft.enhancedNarrative = '';
+  AppState.draft.scenarioLens = null;
   AppState.draft.intakeSummary = '';
   AppState.draft.linkAnalysis = '';
   AppState.draft.scenarioTitle = '';
@@ -1267,6 +1280,9 @@ function applyDryRunScenario(example) {
   AppState.draft.selectedRiskIds = seededRisks.map(risk => risk.id);
   AppState.draft.selectedRisks = seededRisks.slice();
   AppState.draft.scenarioTitle = example.title;
+  AppState.draft.scenarioLens = {
+    ...(STEP1_FUNCTION_TO_SCENARIO_LENS[example.functionKey] || STEP1_FUNCTION_TO_SCENARIO_LENS.general)
+  };
   AppState.draft.loadedDryRunId = example.id;
   AppState.draft.applicableRegulations = deriveApplicableRegulations(
     getBUList().find(b => b.id === AppState.draft.buId),
@@ -1367,6 +1383,8 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
   document.getElementById('intake-risk-statement').addEventListener('input', function() {
     AppState.draft.narrative = this.value;
     AppState.draft.sourceNarrative = this.value;
+    // Freeform edits can materially change the scenario family, so drop any previously seeded lens until AI or the user re-establishes it.
+    AppState.draft.scenarioLens = null;
     clearLoadedDryRunFlag();
     markDraftDirty();
     scheduleDraftAutosave();
@@ -1382,6 +1400,9 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
     }
     AppState.draft.narrative = composed;
     AppState.draft.sourceNarrative = composed;
+    AppState.draft.scenarioLens = {
+      ...(STEP1_FUNCTION_TO_SCENARIO_LENS[inferStep1FunctionKey(settings, AppState.draft)] || STEP1_FUNCTION_TO_SCENARIO_LENS.general)
+    };
     document.getElementById('intake-risk-statement').value = composed;
     const seededCount = seedRisksFromScenarioDraft(composed, { force: !getRiskCandidates().length });
     persistAndRenderStep1();

@@ -36,6 +36,35 @@ const LearningStore = (() => {
     return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
   }
 
+  function _inferFunctionKey(source = {}) {
+    const direct = String(source?.scenarioLens?.functionKey || source?.functionKey || '').trim().toLowerCase();
+    if (direct) return direct;
+    const lensKey = String(source?.scenarioLens?.key || '').trim().toLowerCase();
+    if (lensKey === 'financial') return 'finance';
+    if (['procurement', 'supply-chain', 'third-party'].includes(lensKey)) return 'procurement';
+    if (['compliance', 'regulatory'].includes(lensKey)) return 'compliance';
+    if (lensKey === 'hse') return 'hse';
+    if (lensKey === 'strategic' || lensKey === 'esg') return 'strategic';
+    if (['operational', 'business-continuity'].includes(lensKey)) return 'operations';
+    if (['ransomware', 'identity', 'phishing', 'insider', 'cloud', 'data-breach', 'cyber'].includes(lensKey)) return 'technology';
+    const haystack = [
+      source?.title,
+      source?.scenarioTitle,
+      source?.scenarioType,
+      source?.narrative,
+      source?.structuredScenario?.attackType,
+      ...(Array.isArray(source?.selectedRiskTitles) ? source.selectedRiskTitles : [])
+    ].filter(Boolean).join(' ').toLowerCase();
+    if (/procurement|sourcing|vendor|supplier|purchase|third[- ]party|supply chain/.test(haystack)) return 'procurement';
+    if (/compliance|regulatory|legal|privacy|policy|governance|controls|audit/.test(haystack)) return 'compliance';
+    if (/finance|treasury|accounting|financial|cash|payment|payroll|credit|collections|ledger|fraud/.test(haystack)) return 'finance';
+    if (/hse|ehs|health|safety|environment|workplace safety|injury|spill/.test(haystack)) return 'hse';
+    if (/strategy|strategic|enterprise|portfolio|transformation|market|growth|investment|esg|sustainability/.test(haystack)) return 'strategic';
+    if (/technology|cyber|security|identity|cloud|infrastructure|it\b|digital|phishing|ransomware|breach/.test(haystack)) return 'technology';
+    if (/operations|resilience|continuity|service delivery|manufacturing|logistics|facilities|workforce|process failure|backlog/.test(haystack)) return 'operations';
+    return 'general';
+  }
+
   function getLearningStore(username) {
     try {
       const raw = localStorage.getItem(_buildStorageKey(username));
@@ -68,6 +97,7 @@ const LearningStore = (() => {
       id: String(template?.id || _generateId('tmpl')).trim(),
       title: String(template?.title || '').trim(),
       scenarioType: String(template?.scenarioType || '').trim(),
+      functionKey: _inferFunctionKey(template),
       buId: String(template?.buId || '').trim(),
       buName: String(template?.buName || '').trim(),
       geography: String(template?.geography || '').trim(),
@@ -97,6 +127,7 @@ const LearningStore = (() => {
       id: String(draft?.templateId || '').trim(),
       title: String(draft?.scenarioTitle || '').trim(),
       scenarioType: String(draft?.structuredScenario?.attackType || '').trim(),
+      functionKey: _inferFunctionKey(draft),
       buId: String(draft?.buId || '').trim(),
       buName: String(draft?.buName || '').trim(),
       geography: String(draft?.geography || '').trim(),
@@ -128,6 +159,10 @@ const LearningStore = (() => {
       const savedPattern = {
         id: String(pattern?.id || _generateId('pattern')).trim(),
         buId: String(pattern?.buId || '').trim(),
+        functionKey: _inferFunctionKey(pattern),
+        scenarioLens: pattern?.scenarioLens && typeof pattern.scenarioLens === 'object'
+          ? { ...pattern.scenarioLens }
+          : null,
         title: String(pattern?.title || '').trim(),
         scenarioType: String(pattern?.scenarioType || '').trim(),
         geography: String(pattern?.geography || '').trim(),
@@ -166,6 +201,10 @@ const LearningStore = (() => {
     return {
       id: String(assessment.id || '').trim(),
       buId: String(assessment.buId || '').trim(),
+      functionKey: _inferFunctionKey(assessment),
+      scenarioLens: assessment?.scenarioLens && typeof assessment.scenarioLens === 'object'
+        ? { ...assessment.scenarioLens }
+        : null,
       title: String(assessment.scenarioTitle || assessment.structuredScenario?.attackType || '').trim(),
       scenarioType: String(assessment.structuredScenario?.attackType || assessment.scenarioTitle || '').trim(),
       geography: String(assessment.geography || '').trim(),
