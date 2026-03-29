@@ -1727,6 +1727,298 @@ async function runSimulation() {
 }
 
 // ─── RESULTS ──────────────────────────────────────────────────
+function renderMissingResultsState(id) {
+  setPage(`<main class="page"><div class="container container--narrow" style="padding:var(--sp-12) var(--sp-6)">
+    <div class="card card--elevated" style="padding:var(--sp-8)">
+      <div class="landing-badge">Results</div>
+      <h2 style="margin-top:var(--sp-4)">This result is not available in this workspace</h2>
+      <p style="margin-top:var(--sp-4);color:var(--text-muted)">The saved assessment with ID "${escapeHtml(String(id))}" could not be found here. It may have been deleted, archived in another browser, or not imported into this pilot workspace yet.</p>
+      ${renderPilotWarningBanner('poc', { compact: true, text: 'Pilot results are stored per user workspace unless they were explicitly exported, shared, or imported.' })}
+      <div class="flex items-center gap-3" style="margin-top:var(--sp-6);flex-wrap:wrap">
+        <a href="#/dashboard" class="btn btn--primary">← Dashboard</a>
+        <button class="btn btn--secondary" id="btn-results-missing-template" type="button">Start from Template</button>
+        <button class="btn btn--ghost" id="btn-results-missing-sample" type="button">Try Sample Assessment</button>
+      </div>
+    </div>
+  </div></main>`);
+  document.getElementById('btn-results-missing-template')?.addEventListener('click', () => loadScenarioTemplateById(ScenarioTemplates?.[0]?.id));
+  document.getElementById('btn-results-missing-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
+}
+
+function renderResultsFailureState(id, isShared, error) {
+  setPage(`
+    <main class="page">
+      <div class="container container--narrow" style="padding:var(--sp-12) var(--sp-6)">
+        <div class="card">
+          <h2 style="margin-bottom:var(--sp-3)">This result could not be opened cleanly</h2>
+          <p style="color:var(--text-muted);margin-bottom:var(--sp-5)">The saved assessment data is missing something the results page expected. The assessment is still stored, but this view needed a safer fallback.${error?.message ? ' Error: ' + String(error.message) : ''}</p>
+          <div class="flex items-center gap-3" style="flex-wrap:wrap">
+            <a href="#/dashboard" class="btn btn--primary">Go to dashboard</a>
+            <button class="btn btn--secondary" id="btn-results-retry" type="button">Try again</button>
+          </div>
+        </div>
+      </div>
+    </main>`);
+  document.getElementById('btn-results-retry')?.addEventListener('click', () => renderResults(id, isShared));
+}
+
+function hydrateResultsRuntimeState(assessment) {
+  const rawResults = assessment.results || {};
+  // Reopened/imported results should become the canonical runtime source so all result helpers read the same assessment.
+  AppState.simulation = {
+    ...(AppState.simulation || {}),
+    assessment,
+    results: rawResults
+  };
+  return rawResults;
+}
+
+function applyResultsToleranceClass(assessment) {
+  const pageRoot = document.querySelector('.page');
+  if (!pageRoot) return;
+  pageRoot.classList.remove(
+    'results-page--above-tolerance',
+    'results-page--near-tolerance',
+    'results-page--within-tolerance'
+  );
+  const activeResults = assessment.results || AppState.simulation?.results || {};
+  if (activeResults.toleranceBreached) {
+    pageRoot.classList.add('results-page--above-tolerance');
+  } else if (activeResults.nearTolerance) {
+    pageRoot.classList.add('results-page--near-tolerance');
+  } else {
+    pageRoot.classList.add('results-page--within-tolerance');
+  }
+}
+
+function drawResultsTechnicalCharts(r) {
+  requestAnimationFrame(() => {
+    const hc = document.getElementById('chart-hist');
+    const lc = document.getElementById('chart-lec');
+    if (hc) UI.drawHistogram(hc, r.histogram, r.threshold, AppState.currency, AppState.fxRate);
+    if (lc) UI.drawLEC(lc, r.lec, r.threshold, AppState.currency, AppState.fxRate);
+    attachCitationHandlers();
+  });
+}
+
+function withResultsActionBusy(button, busyLabel, resetDelayMs, callback) {
+  if (!button || typeof callback !== 'function') return;
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = busyLabel;
+  try {
+    callback();
+  } finally {
+    window.setTimeout(() => {
+      button.disabled = false;
+      button.textContent = original;
+    }, resetDelayMs);
+  }
+}
+
+function bindResultsTabBar({ activeTab, activateResultsTab }) {
+  document.querySelectorAll('[data-results-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activateResultsTab(btn.dataset.resultsTab, { focusTarget: 'tab' });
+    });
+    btn.addEventListener('keydown', event => {
+      const tabs = Array.from(document.querySelectorAll('[data-results-tab]'));
+      const currentIndex = tabs.indexOf(btn);
+      if (currentIndex < 0) return;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        event.preventDefault();
+        const nextIndex = event.key === 'ArrowRight'
+          ? (currentIndex + 1) % tabs.length
+          : (currentIndex - 1 + tabs.length) % tabs.length;
+        const nextTab = tabs[nextIndex];
+        if (!nextTab) return;
+        activateResultsTab(nextTab.dataset.resultsTab, { focusTarget: 'tab' });
+        window.requestAnimationFrame(() => {
+          document.querySelector(`[data-results-tab="${nextTab.dataset.resultsTab}"]`)?.focus();
+        });
+      }
+      if (event.key === 'Home' || event.key === 'End') {
+        event.preventDefault();
+        const nextTab = event.key === 'Home' ? tabs[0] : tabs[tabs.length - 1];
+        if (!nextTab) return;
+        activateResultsTab(nextTab.dataset.resultsTab, { focusTarget: 'tab' });
+        window.requestAnimationFrame(() => {
+          document.querySelector(`[data-results-tab="${nextTab.dataset.resultsTab}"]`)?.focus();
+        });
+      }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        if (AppState.resultsTab === btn.dataset.resultsTab) {
+          document.querySelector(`[data-results-panel="${btn.dataset.resultsTab}"]`)?.focus();
+          return;
+        }
+        activateResultsTab(btn.dataset.resultsTab, { focusTarget: 'panel' });
+      }
+    });
+  });
+
+  if (AppState.resultsShouldScrollTop || AppState.resultsFocusTarget) {
+    const focusTarget = AppState.resultsFocusTarget || 'tab';
+    AppState.resultsShouldScrollTop = false;
+    AppState.resultsFocusTarget = null;
+    window.requestAnimationFrame(() => {
+      document.querySelector('.results-tabbar')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      if (focusTarget === 'panel') {
+        document.querySelector(`[data-results-panel="${activeTab}"]`)?.focus();
+      } else {
+        document.querySelector(`[data-results-tab="${activeTab}"]`)?.focus();
+      }
+    });
+  }
+}
+
+function bindResultsInteractions({
+  id,
+  isShared,
+  assessment,
+  activeTab,
+  r,
+  assessmentIntelligence,
+  missingInformation
+}) {
+  const activateResultsTab = (tabName, { focusTarget = 'tab' } = {}) => {
+    const nextTab = String(tabName || '').trim();
+    if (!nextTab || AppState.resultsTab === nextTab) {
+      AppState.resultsFocusTarget = focusTarget;
+      return;
+    }
+    AppState.resultsShouldScrollTop = true;
+    AppState.resultsFocusTarget = focusTarget;
+    AppState.resultsTab = nextTab;
+    renderResults(id, isShared || assessment._shared);
+  };
+
+  bindResultsTabBar({ activeTab, activateResultsTab });
+  if (activeTab === 'appendix') drawResultsTechnicalCharts(r);
+  else attachCitationHandlers();
+
+  document.getElementById('btn-share-results')?.addEventListener('click', event => {
+    withResultsActionBusy(event.currentTarget, 'Copying…', 600, () => {
+      ShareService.copyShareLink(assessment);
+    });
+  });
+  document.getElementById('btn-export-json')?.addEventListener('click', event => {
+    withResultsActionBusy(event.currentTarget, 'Exporting…', 600, () => {
+      ExportService.exportJSON(assessment);
+      UI.toast('JSON exported.', 'success');
+    });
+  });
+  document.getElementById('results-compare-select')?.addEventListener('change', (event) => {
+    AppState.resultsComparisonId = event.target.value || '';
+    renderResults(id, isShared || assessment._shared);
+  });
+  document.getElementById('btn-export-pdf')?.addEventListener('click', event => {
+    withResultsActionBusy(event.currentTarget, 'Preparing PDF…', 800, () => {
+      ExportService.exportPDF(assessment, AppState.currency, AppState.fxRate);
+    });
+  });
+  document.getElementById('btn-toggle-boardroom-mode')?.addEventListener('click', () => {
+    AppState.resultsBoardroomMode = !AppState.resultsBoardroomMode;
+    AppState.resultsTab = 'executive';
+    AppState.resultsShouldScrollTop = true;
+    AppState.resultsFocusTarget = 'panel';
+    UI.toast(AppState.resultsBoardroomMode ? 'Executive mode enabled.' : 'Full executive review restored.', 'info');
+    renderResults(id, isShared || assessment._shared);
+  });
+  document.getElementById('btn-export-board-note')?.addEventListener('click', event => {
+    withResultsActionBusy(event.currentTarget, 'Preparing…', 800, () => {
+      try {
+        ExportService.exportBoardNote(assessment, AppState.currency, AppState.fxRate);
+        UI.toast('Board note prepared for print or PDF save.', 'success');
+      } catch (error) {
+        console.error('Board note export failed:', error);
+        UI.toast('The board note could not be prepared. Try again.', 'danger');
+      }
+    });
+  });
+  document.getElementById('btn-export-board-note-appendix')?.addEventListener('click', event => {
+    withResultsActionBusy(event.currentTarget, 'Preparing…', 800, () => {
+      try {
+        ExportService.exportDecisionMemo(assessment, AppState.currency, AppState.fxRate, { includeAppendix: true });
+        UI.toast('Decision memo with appendix prepared for print or PDF save.', 'success');
+      } catch (error) {
+        console.error('Decision memo + appendix export failed:', error);
+        UI.toast('The decision memo with appendix could not be prepared. Try again.', 'danger');
+      }
+    });
+  });
+  const challengeButton = document.getElementById('btn-challenge-assessment');
+  if (challengeButton) challengeButton.addEventListener('click', async () => {
+    const status = document.getElementById('assessment-challenge-status');
+    challengeButton.disabled = true;
+    if (status) status.textContent = 'Reviewing the assessment challenge points...';
+    try {
+      const aiContext = buildCurrentAIAssistContext({ buId: assessment.buId });
+      const result = await LLMService.challengeAssessment({
+        scenarioTitle: assessment.scenarioTitle,
+        narrative: assessment.enhancedNarrative || assessment.narrative || '',
+        geography: assessment.geography,
+        businessUnitName: assessment.buName,
+        businessUnit: aiContext.businessUnit || getBusinessUnitById(assessment.buId),
+        adminSettings: aiContext.adminSettings,
+        confidence: assessmentIntelligence.confidence,
+        drivers: assessmentIntelligence.drivers,
+        assumptions: assessmentIntelligence.assumptions,
+        missingInformation: missingInformation || [],
+        applicableRegulations: assessment.applicableRegulations || [],
+        citations: assessment.citations || []
+      });
+      const next = updateAssessmentRecord(assessment.id, current => ({
+        ...current,
+        assessmentChallenge: {
+          ...result,
+          createdAt: Date.now(),
+          confidenceLabel: assessment.confidenceLabel || '',
+          evidenceQuality: assessment.evidenceQuality || ''
+        }
+      }));
+      if (!next) throw new Error('Could not update the saved assessment.');
+      UI.toast(result.usedFallback ? 'Fallback challenge review loaded. Review the suggested questions and evidence gaps.' : 'Suggested challenge review loaded.', result.usedFallback ? 'warning' : 'success', 5000);
+      renderResults(assessment.id, isShared || assessment._shared);
+    } catch (error) {
+      if (status) status.textContent = 'Challenge review could not be generated.';
+      UI.toast('The challenge review is unavailable right now. Try again in a moment.', 'danger');
+    } finally {
+      challengeButton.disabled = false;
+    }
+  });
+  document.getElementById('btn-export-pptx')?.addEventListener('click', event => {
+    withResultsActionBusy(event.currentTarget, 'Exporting…', 600, () => {
+      ExportService.exportPPTXSpec(assessment, AppState.currency, AppState.fxRate);
+      UI.toast('PPTX spec exported as JSON. See README.', 'info', 5000);
+    });
+  });
+  document.getElementById('btn-create-treatment-case')?.addEventListener('click', event => {
+    const button = event.currentTarget;
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Preparing…';
+    createTreatmentDraftFromAssessment(assessment);
+    UI.toast('Improvement test created. Adjust the assumptions and rerun to compare against the original.', 'success');
+    window.setTimeout(() => {
+      button.disabled = false;
+      button.textContent = original;
+      Router.navigate('/wizard/3');
+    }, 200);
+  });
+  document.getElementById('btn-duplicate-assessment')?.addEventListener('click', () => {
+    const duplicated = duplicateAssessmentToDraft(assessment.id);
+    if (!duplicated) {
+      UI.toast('That assessment could not be duplicated right now.', 'warning');
+      return;
+    }
+    UI.toast('Assessment duplicated into a new draft.', 'success');
+    Router.navigate('/wizard/1');
+  });
+  document.getElementById('btn-new-assess')?.addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
+  document.getElementById('btn-new-assess-top')?.addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
+}
+
 function renderResults(id, isShared) {
   if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }));
@@ -1740,21 +2032,7 @@ function renderResults(id, isShared) {
   }
   const assessment = getAssessmentById(id);
   if (!assessment || !assessment.results) {
-    setPage(`<main class="page"><div class="container container--narrow" style="padding:var(--sp-12) var(--sp-6)">
-      <div class="card card--elevated" style="padding:var(--sp-8)">
-        <div class="landing-badge">Results</div>
-        <h2 style="margin-top:var(--sp-4)">This result is not available in this workspace</h2>
-        <p style="margin-top:var(--sp-4);color:var(--text-muted)">The saved assessment with ID "${escapeHtml(String(id))}" could not be found here. It may have been deleted, archived in another browser, or not imported into this pilot workspace yet.</p>
-        ${renderPilotWarningBanner('poc', { compact: true, text: 'Pilot results are stored per user workspace unless they were explicitly exported, shared, or imported.' })}
-        <div class="flex items-center gap-3" style="margin-top:var(--sp-6);flex-wrap:wrap">
-          <a href="#/dashboard" class="btn btn--primary">← Dashboard</a>
-          <button class="btn btn--secondary" id="btn-results-missing-template" type="button">Start from Template</button>
-          <button class="btn btn--ghost" id="btn-results-missing-sample" type="button">Try Sample Assessment</button>
-        </div>
-      </div>
-    </div></main>`);
-    document.getElementById('btn-results-missing-template')?.addEventListener('click', () => loadScenarioTemplateById(ScenarioTemplates?.[0]?.id));
-    document.getElementById('btn-results-missing-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
+    renderMissingResultsState(id);
     return;
   }
 
@@ -1854,13 +2132,7 @@ function renderResults(id, isShared) {
       aiSummary: 'Show AI reasoning and evidence'
     }
   }[roleMode];
-  const rawResults = assessment.results || {};
-  // Reopened/imported results should become the canonical runtime source so all result helpers read the same assessment.
-  AppState.simulation = {
-    ...(AppState.simulation || {}),
-    assessment,
-    results: rawResults
-  };
+  const rawResults = hydrateResultsRuntimeState(assessment);
   const r = {
     ...rawResults,
     lm: rawResults.lm || rawResults.eventLoss || { mean: 0, p50: 0, p90: 0, p95: 0, min: 0, max: 0 },
@@ -2268,277 +2540,19 @@ function renderResults(id, isShared) {
       </div>
     </main>`);
 
-  // Apply tolerance-state class to results page root
-  (function applyResultsToleranceClass() {
-    const pageRoot = document.querySelector('.page');
-    if (!pageRoot) return;
-    pageRoot.classList.remove(
-      'results-page--above-tolerance',
-      'results-page--near-tolerance',
-      'results-page--within-tolerance'
-    );
-    const activeResults = assessment.results || AppState.simulation?.results || {};
-    if (activeResults.toleranceBreached) {
-      pageRoot.classList.add('results-page--above-tolerance');
-    } else if (activeResults.nearTolerance) {
-      pageRoot.classList.add('results-page--near-tolerance');
-    } else {
-      pageRoot.classList.add('results-page--within-tolerance');
-    }
-  })();
-
-  function drawTechnicalCharts() {
-    requestAnimationFrame(() => {
-      const hc = document.getElementById('chart-hist');
-      const lc = document.getElementById('chart-lec');
-      if (hc) UI.drawHistogram(hc, r.histogram, r.threshold, AppState.currency, AppState.fxRate);
-      if (lc) UI.drawLEC(lc, r.lec, r.threshold, AppState.currency, AppState.fxRate);
-      attachCitationHandlers();
-    });
-  }
-
-  const activateResultsTab = (tabName, { focusTarget = 'tab' } = {}) => {
-    const nextTab = String(tabName || '').trim();
-    if (!nextTab || AppState.resultsTab === nextTab) {
-      AppState.resultsFocusTarget = focusTarget;
-      return;
-    }
-    AppState.resultsShouldScrollTop = true;
-    AppState.resultsFocusTarget = focusTarget;
-    AppState.resultsTab = nextTab;
-    renderResults(id, isShared || assessment._shared);
-  };
-
-  document.querySelectorAll('[data-results-tab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      activateResultsTab(btn.dataset.resultsTab, { focusTarget: 'tab' });
-    });
-    btn.addEventListener('keydown', event => {
-      const tabs = Array.from(document.querySelectorAll('[data-results-tab]'));
-      const currentIndex = tabs.indexOf(btn);
-      if (currentIndex < 0) return;
-      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-        event.preventDefault();
-        const nextIndex = event.key === 'ArrowRight'
-          ? (currentIndex + 1) % tabs.length
-          : (currentIndex - 1 + tabs.length) % tabs.length;
-        const nextTab = tabs[nextIndex];
-        if (!nextTab) return;
-        activateResultsTab(nextTab.dataset.resultsTab, { focusTarget: 'tab' });
-        window.requestAnimationFrame(() => {
-          document.querySelector(`[data-results-tab="${nextTab.dataset.resultsTab}"]`)?.focus();
-        });
-      }
-      if (event.key === 'Home' || event.key === 'End') {
-        event.preventDefault();
-        const nextTab = event.key === 'Home' ? tabs[0] : tabs[tabs.length - 1];
-        if (!nextTab) return;
-        activateResultsTab(nextTab.dataset.resultsTab, { focusTarget: 'tab' });
-        window.requestAnimationFrame(() => {
-          document.querySelector(`[data-results-tab="${nextTab.dataset.resultsTab}"]`)?.focus();
-        });
-      }
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        if (AppState.resultsTab === btn.dataset.resultsTab) {
-          document.querySelector(`[data-results-panel="${btn.dataset.resultsTab}"]`)?.focus();
-          return;
-        }
-        activateResultsTab(btn.dataset.resultsTab, { focusTarget: 'panel' });
-      }
-    });
+  applyResultsToleranceClass(assessment);
+  bindResultsInteractions({
+    id,
+    isShared,
+    assessment,
+    activeTab,
+    r,
+    assessmentIntelligence,
+    missingInformation
   });
-  if (AppState.resultsShouldScrollTop || AppState.resultsFocusTarget) {
-    const focusTarget = AppState.resultsFocusTarget || 'tab';
-    AppState.resultsShouldScrollTop = false;
-    AppState.resultsFocusTarget = null;
-    window.requestAnimationFrame(() => {
-      document.querySelector('.results-tabbar')?.scrollIntoView({ block: 'start', behavior: 'auto' });
-      if (focusTarget === 'panel') {
-        document.querySelector(`[data-results-panel="${activeTab}"]`)?.focus();
-      } else {
-        document.querySelector(`[data-results-tab="${activeTab}"]`)?.focus();
-      }
-    });
-  }
-  if (activeTab === 'appendix') drawTechnicalCharts();
-  else attachCitationHandlers();
-  document.getElementById('btn-share-results')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Copying…';
-    try {
-      ShareService.copyShareLink(assessment);
-    } finally {
-      window.setTimeout(() => {
-        button.disabled = false;
-        button.textContent = original;
-      }, 600);
-    }
-  });
-  document.getElementById('btn-export-json')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Exporting…';
-    try {
-      ExportService.exportJSON(assessment); UI.toast('JSON exported.','success');
-    } finally {
-      window.setTimeout(() => {
-        button.disabled = false;
-        button.textContent = original;
-      }, 600);
-    }
-  });
-  document.getElementById('results-compare-select')?.addEventListener('change', (event) => {
-    AppState.resultsComparisonId = event.target.value || '';
-    renderResults(id, isShared || assessment._shared);
-  });
-  document.getElementById('btn-export-pdf')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Preparing PDF…';
-    try {
-      ExportService.exportPDF(assessment, AppState.currency, AppState.fxRate);
-    } finally {
-      window.setTimeout(() => {
-        button.disabled = false;
-        button.textContent = original;
-      }, 800);
-    }
-  });
-  document.getElementById('btn-toggle-boardroom-mode')?.addEventListener('click', () => {
-    AppState.resultsBoardroomMode = !AppState.resultsBoardroomMode;
-    AppState.resultsTab = 'executive';
-    AppState.resultsShouldScrollTop = true;
-    AppState.resultsFocusTarget = 'panel';
-    UI.toast(AppState.resultsBoardroomMode ? 'Executive mode enabled.' : 'Full executive review restored.', 'info');
-    renderResults(id, isShared || assessment._shared);
-  });
-  document.getElementById('btn-export-board-note')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Preparing…';
-    try {
-      ExportService.exportBoardNote(assessment, AppState.currency, AppState.fxRate);
-      UI.toast('Board note prepared for print or PDF save.', 'success');
-    } catch (error) {
-      console.error('Board note export failed:', error);
-      UI.toast('The board note could not be prepared. Try again.', 'danger');
-    } finally {
-      window.setTimeout(() => {
-        button.disabled = false;
-        button.textContent = original;
-      }, 800);
-    }
-  });
-  document.getElementById('btn-export-board-note-appendix')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Preparing…';
-    try {
-      ExportService.exportDecisionMemo(assessment, AppState.currency, AppState.fxRate, { includeAppendix: true });
-      UI.toast('Decision memo with appendix prepared for print or PDF save.', 'success');
-    } catch (error) {
-      console.error('Decision memo + appendix export failed:', error);
-      UI.toast('The decision memo with appendix could not be prepared. Try again.', 'danger');
-    } finally {
-      window.setTimeout(() => {
-        button.disabled = false;
-        button.textContent = original;
-      }, 800);
-    }
-  });
-  const challengeButton = document.getElementById('btn-challenge-assessment');
-  if (challengeButton) challengeButton.addEventListener('click', async () => {
-    const status = document.getElementById('assessment-challenge-status');
-    challengeButton.disabled = true;
-    if (status) status.textContent = 'Reviewing the assessment challenge points...';
-    try {
-      const aiContext = buildCurrentAIAssistContext({ buId: assessment.buId });
-      const result = await LLMService.challengeAssessment({
-        scenarioTitle: assessment.scenarioTitle,
-        narrative: assessment.enhancedNarrative || assessment.narrative || '',
-        geography: assessment.geography,
-        businessUnitName: assessment.buName,
-        businessUnit: aiContext.businessUnit || getBusinessUnitById(assessment.buId),
-        adminSettings: aiContext.adminSettings,
-        confidence: assessmentIntelligence.confidence,
-        drivers: assessmentIntelligence.drivers,
-        assumptions: assessmentIntelligence.assumptions,
-        missingInformation: missingInformation || [],
-        applicableRegulations: assessment.applicableRegulations || [],
-        citations: assessment.citations || []
-      });
-      const next = updateAssessmentRecord(assessment.id, current => ({ ...current, assessmentChallenge: { ...result, createdAt: Date.now(), confidenceLabel: assessment.confidenceLabel || '', evidenceQuality: assessment.evidenceQuality || '' } }));
-      if (!next) throw new Error('Could not update the saved assessment.');
-      UI.toast(result.usedFallback ? 'Fallback challenge review loaded. Review the suggested questions and evidence gaps.' : 'Suggested challenge review loaded.', result.usedFallback ? 'warning' : 'success', 5000);
-      renderResults(assessment.id, isShared || assessment._shared);
-    } catch (error) {
-      if (status) status.textContent = 'Challenge review could not be generated.';
-      UI.toast('The challenge review is unavailable right now. Try again in a moment.', 'danger');
-    } finally {
-      challengeButton.disabled = false;
-    }
-  });
-  document.getElementById('btn-export-pptx')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Exporting…';
-    try {
-      ExportService.exportPPTXSpec(assessment, AppState.currency, AppState.fxRate); UI.toast('PPTX spec exported as JSON. See README.','info',5000);
-    } finally {
-      window.setTimeout(() => {
-        button.disabled = false;
-        button.textContent = original;
-      }, 600);
-    }
-  });
-  document.getElementById('btn-create-treatment-case')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Preparing…';
-    createTreatmentDraftFromAssessment(assessment);
-    UI.toast('Improvement test created. Adjust the assumptions and rerun to compare against the original.', 'success');
-    window.setTimeout(() => {
-      button.disabled = false;
-      button.textContent = original;
-      Router.navigate('/wizard/3');
-    }, 200);
-  });
-  document.getElementById('btn-duplicate-assessment')?.addEventListener('click', () => {
-    const duplicated = duplicateAssessmentToDraft(assessment.id);
-    if (!duplicated) {
-      UI.toast('That assessment could not be duplicated right now.', 'warning');
-      return;
-    }
-    UI.toast('Assessment duplicated into a new draft.', 'success');
-    Router.navigate('/wizard/1');
-  });
-  document.getElementById('btn-new-assess')?.addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
-  document.getElementById('btn-new-assess-top')?.addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
   } catch (error) {
     console.error('renderResults failed:', error);
-    setPage(`
-      <main class="page">
-        <div class="container container--narrow" style="padding:var(--sp-12) var(--sp-6)">
-          <div class="card">
-            <h2 style="margin-bottom:var(--sp-3)">This result could not be opened cleanly</h2>
-            <p style="color:var(--text-muted);margin-bottom:var(--sp-5)">The saved assessment data is missing something the results page expected. The assessment is still stored, but this view needed a safer fallback.${error?.message ? ' Error: ' + String(error.message) : ''}</p>
-            <div class="flex items-center gap-3" style="flex-wrap:wrap">
-              <a href="#/dashboard" class="btn btn--primary">Go to dashboard</a>
-              <button class="btn btn--secondary" id="btn-results-retry" type="button">Try again</button>
-            </div>
-          </div>
-        </div>
-      </main>`);
-    document.getElementById('btn-results-retry')?.addEventListener('click', () => renderResults(id, isShared));
+    renderResultsFailureState(id, isShared, error);
   }
 }
 

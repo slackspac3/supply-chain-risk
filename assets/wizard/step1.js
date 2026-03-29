@@ -1298,6 +1298,204 @@ function seedRisksFromScenarioDraft(narrative, { force = false } = {}) {
   return extractedRisks.length;
 }
 
+function updateStep1ApplicableRegulations(buList = getBUList(), scenarioGeographies = getScenarioGeographies()) {
+  AppState.draft.applicableRegulations = deriveApplicableRegulations(
+    (Array.isArray(buList) ? buList : []).find(b => b.id === AppState.draft.buId),
+    getSelectedRisks(),
+    scenarioGeographies
+  );
+}
+
+function persistAndRenderStep1({
+  buList = getBUList(),
+  scenarioGeographies = getScenarioGeographies(),
+  refreshRegulations = false
+} = {}) {
+  if (refreshRegulations) updateStep1ApplicableRegulations(buList, scenarioGeographies);
+  saveDraft();
+  renderWizard1();
+}
+
+function updateStep1GuidedPreview() {
+  const preview = document.getElementById('guided-preview');
+  if (!preview) return;
+  preview.textContent = composeGuidedNarrative(AppState.draft.guidedInput)
+    || 'Complete the guided questions and click “Build Scenario Draft”.';
+}
+
+function createStep1GeographySyncHandler({ buList, settings }) {
+  return nextGeographies => {
+    AppState.draft.geographies = normaliseScenarioGeographies(nextGeographies, settings.geography);
+    AppState.draft.geography = formatScenarioGeographies(AppState.draft.geographies, settings.geography);
+    persistAndRenderStep1({ buList, scenarioGeographies: AppState.draft.geographies, refreshRegulations: true });
+  };
+}
+
+function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
+  document.getElementById('wizard-bu').addEventListener('change', function() {
+    const bu = buList.find(b => b.id === this.value) || null;
+    AppState.draft.buId = bu?.id || null;
+    AppState.draft.buName = bu?.name || null;
+    persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
+  });
+
+  document.querySelectorAll('.wizard-geo-chip').forEach(button => {
+    button.addEventListener('click', () => {
+      const next = Array.from(new Set([...(wizardGeographyInput.getTags() || []), button.dataset.geo]));
+      wizardGeographyInput.setTags(next);
+    });
+  });
+
+  ['event', 'asset', 'cause', 'impact'].forEach(key => {
+    document.getElementById(`guided-${key}`).addEventListener('input', function() {
+      AppState.draft.guidedInput[key] = this.value;
+      clearLoadedDryRunFlag();
+      updateStep1GuidedPreview();
+      markDraftDirty();
+      scheduleDraftAutosave();
+    });
+  });
+
+  document.getElementById('guided-urgency').addEventListener('change', function() {
+    AppState.draft.guidedInput.urgency = this.value;
+    clearLoadedDryRunFlag();
+    updateStep1GuidedPreview();
+    markDraftDirty();
+    scheduleDraftAutosave();
+  });
+
+  document.getElementById('intake-risk-statement').addEventListener('input', function() {
+    AppState.draft.narrative = this.value;
+    AppState.draft.sourceNarrative = this.value;
+    clearLoadedDryRunFlag();
+    markDraftDirty();
+    scheduleDraftAutosave();
+  });
+}
+
+function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
+  document.getElementById('btn-build-guided-narrative').addEventListener('click', () => {
+    const composed = composeGuidedNarrative(AppState.draft.guidedInput);
+    if (!composed) {
+      UI.toast('Answer at least one guided question first.', 'warning');
+      return;
+    }
+    AppState.draft.narrative = composed;
+    AppState.draft.sourceNarrative = composed;
+    document.getElementById('intake-risk-statement').value = composed;
+    const seededCount = seedRisksFromScenarioDraft(composed, { force: !getRiskCandidates().length });
+    persistAndRenderStep1();
+    UI.toast(seededCount ? `Scenario draft created and ${seededCount} risk${seededCount === 1 ? '' : 's'} added to the shortlist.` : 'Scenario draft created from guided answers.', 'success');
+  });
+
+  document.querySelectorAll('.guided-prompt-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      AppState.draft.guidedInput.event = btn.dataset.prompt;
+      document.getElementById('guided-event').value = btn.dataset.prompt;
+      updateStep1GuidedPreview();
+      markDraftDirty();
+      scheduleDraftAutosave();
+    });
+  });
+
+  document.querySelectorAll('.btn-load-dry-run').forEach(button => {
+    button.addEventListener('click', () => {
+      const example = (exampleModel.availableExamples || []).find(entry => entry.id === button.dataset.dryRunId);
+      if (!example) return;
+      if (hasStep1Content() && !window.confirm('Load this dry-run example and replace the current step-1 scenario draft and shortlist?')) return;
+      applyDryRunScenario(example);
+    });
+  });
+
+  document.getElementById('btn-clear-dry-run')?.addEventListener('click', () => {
+    resetStep1DryRunContent();
+  });
+
+  document.getElementById('linked-risks-toggle')?.addEventListener('change', function() {
+    AppState.draft.linkedRisks = this.checked;
+    saveDraft();
+  });
+
+  document.getElementById('btn-add-manual-risk').addEventListener('click', () => {
+    const input = document.getElementById('manual-risk-add');
+    const value = input.value.trim();
+    if (!value) return;
+    clearLoadedDryRunFlag();
+    appendRiskCandidates([{ title: value, category: 'Manual', source: 'manual' }], { selectNew: true });
+    input.value = '';
+    persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
+  });
+
+  document.getElementById('risk-register-file').addEventListener('change', handleRegisterUpload);
+  document.getElementById('btn-enhance-risk-statement').addEventListener('click', enhanceNarrativeWithAI);
+
+  document.getElementById('btn-generate-risks-from-draft')?.addEventListener('click', () => {
+    const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
+    if (!narrative) {
+      UI.toast('Enter or build a scenario draft first.', 'warning');
+      return;
+    }
+    const seededCount = seedRisksFromScenarioDraft(narrative, { force: true });
+    AppState.draft.narrative = narrative;
+    AppState.draft.sourceNarrative = AppState.draft.sourceNarrative || narrative;
+    persistAndRenderStep1();
+    UI.toast(seededCount ? `Added ${seededCount} risk${seededCount === 1 ? '' : 's'} from the scenario draft.` : 'No additional risks were generated from that draft.', seededCount ? 'success' : 'warning');
+  });
+
+  document.getElementById('btn-register-analyse').addEventListener('click', analyseUploadedRegister);
+}
+
+function bindStep1NavigationActions({ buList, settings, wizardGeographyInput }) {
+  document.getElementById('btn-next-1').addEventListener('click', () => {
+    const buId = document.getElementById('wizard-bu').value;
+    let narrative = document.getElementById('intake-risk-statement').value.trim();
+    let selected = getSelectedRisks();
+    if (!buId) {
+      const framingDisclosure = Array.from(document.querySelectorAll('.wizard-support-band details'))
+        .find(node => /assessment framing and defaults/i.test(node.querySelector('summary')?.textContent || ''));
+      if (framingDisclosure) framingDisclosure.open = true;
+      document.getElementById('wizard-bu')?.focus();
+      UI.toast('Select the business unit in the support section before continuing.', 'warning');
+      return;
+    }
+    if (!narrative) {
+      const composed = composeGuidedNarrative(AppState.draft.guidedInput);
+      if (composed) {
+        AppState.draft.narrative = composed;
+        AppState.draft.sourceNarrative = composed;
+        document.getElementById('intake-risk-statement').value = composed;
+        narrative = composed;
+      }
+    }
+    if (narrative && !selected.length && !getRiskCandidates().length) {
+      seedRisksFromScenarioDraft(narrative, { force: true });
+      selected = getSelectedRisks();
+    }
+    if (!narrative && selected.length) {
+      const selectedTitles = selected.slice(0, 3).map(item => item.title).filter(Boolean);
+      const buLabel = buList.find(b => b.id === buId)?.name || AppState.draft.buName || 'the selected business unit';
+      const geographyLabel = formatScenarioGeographies(wizardGeographyInput.getTags(), settings.geography);
+      // Selected-risk-only starts left Step 2 with a blank narrative, so seed a minimal editable scenario before continuing.
+      narrative = `Assess the potential impact of ${selectedTitles.join(', ') || 'the selected risks'} affecting ${buLabel}${geographyLabel ? ` in ${geographyLabel}` : ''}.`;
+      AppState.draft.narrative = narrative;
+      AppState.draft.sourceNarrative = narrative;
+      document.getElementById('intake-risk-statement').value = narrative;
+    }
+    if (!String(AppState.draft.narrative || narrative || '').trim() && !selected.length) { UI.toast('Please complete the guided questions, enter a risk statement, or select at least one risk.', 'warning'); return; }
+    AppState.draft.geographies = normaliseScenarioGeographies(wizardGeographyInput.getTags(), settings.geography);
+    AppState.draft.geography = formatScenarioGeographies(AppState.draft.geographies, settings.geography);
+    AppState.draft.narrative = AppState.draft.narrative.trim();
+    AppState.draft.sourceNarrative = normaliseScenarioSeedText(AppState.draft.sourceNarrative || AppState.draft.narrative);
+    AppState.draft.enhancedNarrative = AppState.draft.enhancedNarrative || AppState.draft.narrative;
+    AppState.draft.applicableRegulations = deriveApplicableRegulations(buList.find(b => b.id === buId), selected, AppState.draft.geographies);
+    if (!AppState.draft.scenarioTitle) {
+      AppState.draft.scenarioTitle = selected.length === 1 ? selected[0].title : `${selected.length || 1}-risk scenario for ${AppState.draft.buName}`;
+    }
+    saveDraft();
+    Router.navigate('/wizard/2');
+  });
+}
+
 function renderWizard1() {
   ensureDraftShape();
   const draft = AppState.draft;
@@ -1379,169 +1577,13 @@ function renderWizard1() {
     }, 0);
   }
 
-  document.getElementById('wizard-bu').addEventListener('change', function() {
-    const bu = buList.find(b => b.id === this.value) || null;
-    AppState.draft.buId = bu?.id || null;
-    AppState.draft.buName = bu?.name || null;
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies());
-    saveDraft();
-    renderWizard1();
-  });
-  const syncWizardGeographies = nextGeographies => {
-    AppState.draft.geographies = normaliseScenarioGeographies(nextGeographies, settings.geography);
-    AppState.draft.geography = formatScenarioGeographies(AppState.draft.geographies, settings.geography);
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(buList.find(b => b.id === AppState.draft.buId), getSelectedRisks(), AppState.draft.geographies);
-    saveDraft();
-    renderWizard1();
-  };
+  const syncWizardGeographies = createStep1GeographySyncHandler({ buList, settings });
   const wizardGeographyInput = UI.tagInput('ti-wizard-geographies', scenarioGeographies, syncWizardGeographies);
   updateWizardSaveState();
-  document.querySelectorAll('.wizard-geo-chip').forEach(button => {
-    button.addEventListener('click', () => {
-      const next = Array.from(new Set([...(wizardGeographyInput.getTags() || []), button.dataset.geo]));
-      wizardGeographyInput.setTags(next);
-    });
-  });
-  ['event', 'asset', 'cause', 'impact'].forEach(key => {
-    document.getElementById(`guided-${key}`).addEventListener('input', function() {
-      AppState.draft.guidedInput[key] = this.value;
-      clearLoadedDryRunFlag();
-      document.getElementById('guided-preview').textContent = composeGuidedNarrative(AppState.draft.guidedInput) || 'Complete the guided questions and click “Build Scenario Draft”.';
-      markDraftDirty();
-      scheduleDraftAutosave();
-    });
-  });
-  document.getElementById('guided-urgency').addEventListener('change', function() {
-    AppState.draft.guidedInput.urgency = this.value;
-    clearLoadedDryRunFlag();
-    document.getElementById('guided-preview').textContent = composeGuidedNarrative(AppState.draft.guidedInput) || 'Complete the guided questions and click “Build Scenario Draft”.';
-    markDraftDirty();
-    scheduleDraftAutosave();
-  });
-  document.getElementById('intake-risk-statement').addEventListener('input', function() {
-    AppState.draft.narrative = this.value;
-    AppState.draft.sourceNarrative = this.value;
-    clearLoadedDryRunFlag();
-    markDraftDirty();
-    scheduleDraftAutosave();
-  });
-  document.getElementById('btn-build-guided-narrative').addEventListener('click', () => {
-    const composed = composeGuidedNarrative(AppState.draft.guidedInput);
-    if (!composed) {
-      UI.toast('Answer at least one guided question first.', 'warning');
-      return;
-    }
-    AppState.draft.narrative = composed;
-    AppState.draft.sourceNarrative = composed;
-    document.getElementById('intake-risk-statement').value = composed;
-    const seededCount = seedRisksFromScenarioDraft(composed, { force: !getRiskCandidates().length });
-    saveDraft();
-    renderWizard1();
-    UI.toast(seededCount ? `Scenario draft created and ${seededCount} risk${seededCount === 1 ? '' : 's'} added to the shortlist.` : 'Scenario draft created from guided answers.', 'success');
-  });
-  document.querySelectorAll('.guided-prompt-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      AppState.draft.guidedInput.event = btn.dataset.prompt;
-      document.getElementById('guided-event').value = btn.dataset.prompt;
-      document.getElementById('guided-preview').textContent = composeGuidedNarrative(AppState.draft.guidedInput);
-      markDraftDirty();
-      scheduleDraftAutosave();
-      markDraftDirty();
-      scheduleDraftAutosave();
-    });
-  });
-  document.querySelectorAll('.btn-load-dry-run').forEach(button => {
-    button.addEventListener('click', () => {
-      const example = (exampleModel.availableExamples || []).find(entry => entry.id === button.dataset.dryRunId);
-      if (!example) return;
-      if (hasStep1Content() && !window.confirm('Load this dry-run example and replace the current step-1 scenario draft and shortlist?')) return;
-      applyDryRunScenario(example);
-    });
-  });
-  document.getElementById('btn-clear-dry-run')?.addEventListener('click', () => {
-    resetStep1DryRunContent();
-  });
-  document.getElementById('linked-risks-toggle')?.addEventListener('change', function() {
-    AppState.draft.linkedRisks = this.checked;
-    saveDraft();
-  });
-  document.getElementById('btn-add-manual-risk').addEventListener('click', () => {
-    const input = document.getElementById('manual-risk-add');
-    const value = input.value.trim();
-    if (!value) return;
-    clearLoadedDryRunFlag();
-    appendRiskCandidates([{ title: value, category: 'Manual', source: 'manual' }], { selectNew: true });
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(buList.find(b => b.id === AppState.draft.buId), getSelectedRisks(), getScenarioGeographies());
-    input.value = '';
-    saveDraft();
-    renderWizard1();
-  });
-  document.getElementById('risk-register-file').addEventListener('change', handleRegisterUpload);
-  document.getElementById('btn-enhance-risk-statement').addEventListener('click', enhanceNarrativeWithAI);
-  document.getElementById('btn-generate-risks-from-draft')?.addEventListener('click', () => {
-    const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
-    if (!narrative) {
-      UI.toast('Enter or build a scenario draft first.', 'warning');
-      return;
-    }
-    const seededCount = seedRisksFromScenarioDraft(narrative, { force: true });
-    AppState.draft.narrative = narrative;
-    AppState.draft.sourceNarrative = AppState.draft.sourceNarrative || narrative;
-    saveDraft();
-    renderWizard1();
-    UI.toast(seededCount ? `Added ${seededCount} risk${seededCount === 1 ? '' : 's'} from the scenario draft.` : 'No additional risks were generated from that draft.', seededCount ? 'success' : 'warning');
-  });
-  document.getElementById('btn-register-analyse').addEventListener('click', analyseUploadedRegister);
-  document.getElementById('btn-next-1').addEventListener('click', () => {
-    const buId = document.getElementById('wizard-bu').value;
-    let narrative = document.getElementById('intake-risk-statement').value.trim();
-    let selected = getSelectedRisks();
-    if (!buId) {
-      const framingDisclosure = Array.from(document.querySelectorAll('.wizard-support-band details'))
-        .find(node => /assessment framing and defaults/i.test(node.querySelector('summary')?.textContent || ''));
-      if (framingDisclosure) framingDisclosure.open = true;
-      document.getElementById('wizard-bu')?.focus();
-      UI.toast('Select the business unit in the support section before continuing.', 'warning');
-      return;
-    }
-    if (!narrative) {
-      const composed = composeGuidedNarrative(AppState.draft.guidedInput);
-      if (composed) {
-        AppState.draft.narrative = composed;
-        AppState.draft.sourceNarrative = composed;
-        document.getElementById('intake-risk-statement').value = composed;
-        narrative = composed;
-      }
-    }
-    if (narrative && !selected.length && !getRiskCandidates().length) {
-      seedRisksFromScenarioDraft(narrative, { force: true });
-      selected = getSelectedRisks();
-    }
-    if (!narrative && selected.length) {
-      const selectedTitles = selected.slice(0, 3).map(item => item.title).filter(Boolean);
-      const buLabel = buList.find(b => b.id === buId)?.name || AppState.draft.buName || 'the selected business unit';
-      const geographyLabel = formatScenarioGeographies(wizardGeographyInput.getTags(), settings.geography);
-      // Selected-risk-only starts left Step 2 with a blank narrative, so seed a minimal editable scenario before continuing.
-      narrative = `Assess the potential impact of ${selectedTitles.join(', ') || 'the selected risks'} affecting ${buLabel}${geographyLabel ? ` in ${geographyLabel}` : ''}.`;
-      AppState.draft.narrative = narrative;
-      AppState.draft.sourceNarrative = narrative;
-      document.getElementById('intake-risk-statement').value = narrative;
-    }
-    if (!String(AppState.draft.narrative || narrative || '').trim() && !selected.length) { UI.toast('Please complete the guided questions, enter a risk statement, or select at least one risk.', 'warning'); return; }
-    AppState.draft.geographies = normaliseScenarioGeographies(wizardGeographyInput.getTags(), settings.geography);
-    AppState.draft.geography = formatScenarioGeographies(AppState.draft.geographies, settings.geography);
-    AppState.draft.narrative = AppState.draft.narrative.trim();
-    AppState.draft.sourceNarrative = normaliseScenarioSeedText(AppState.draft.sourceNarrative || AppState.draft.narrative);
-    AppState.draft.enhancedNarrative = AppState.draft.enhancedNarrative || AppState.draft.narrative;
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(buList.find(b => b.id === buId), selected, AppState.draft.geographies);
-    if (!AppState.draft.scenarioTitle) {
-      AppState.draft.scenarioTitle = selected.length === 1 ? selected[0].title : `${selected.length || 1}-risk scenario for ${AppState.draft.buName}`;
-    }
-    saveDraft();
-    Router.navigate('/wizard/2');
-  });
-
-  bindRiskCardActions();
+  bindStep1PrimaryInputs({ buList, wizardGeographyInput });
+  bindStep1ScenarioActions({ buList, settings, exampleModel });
+  bindStep1NavigationActions({ buList, settings, wizardGeographyInput });
+  bindRiskCardActions({ buList });
 }
 
 function normaliseAssessmentTokens(text) {
@@ -1686,12 +1728,11 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
   ${extras.length ? `<details class="wizard-disclosure" data-disclosure-state-key="${escapeHtml(additionalRisksDisclosureKey)}" ${getDisclosureOpenState(additionalRisksDisclosureKey, false) ? 'open' : ''}><summary>Show additional possible risks <span class="badge badge--neutral">${extras.length}</span></summary><div class="wizard-disclosure-body">${renderRiskSelectionSection('Available but likely out of scope', 'Keep these only if they clearly belong in the same event path or business outcome.', extras, selectedIds, regulations)}</div></details>` : ''}`;
 }
 
-function bindRiskCardActions() {
+function bindRiskCardActions({ buList = getBUList() } = {}) {
   document.getElementById('btn-generate-risks-empty-state')?.addEventListener('click', () => {
     const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeGuidedNarrative(AppState.draft.guidedInput) || '';
     const seededCount = seedRisksFromScenarioDraft(narrative, { force: true });
-    saveDraft();
-    renderWizard1();
+    persistAndRenderStep1();
     UI.toast(seededCount ? `Added ${seededCount} risk${seededCount === 1 ? '' : 's'} from the current draft.` : 'No additional risks were generated from that draft.', seededCount ? 'success' : 'warning');
   });
   document.querySelectorAll('.risk-select-checkbox').forEach(box => {
@@ -1701,33 +1742,25 @@ function bindRiskCardActions() {
       else selectedIds.delete(box.dataset.riskId);
       AppState.draft.selectedRiskIds = Array.from(selectedIds);
       syncRiskSelection();
-      AppState.draft.applicableRegulations = deriveApplicableRegulations(getBUList().find(b => b.id === AppState.draft.buId), getSelectedRisks(), getScenarioGeographies());
-      saveDraft();
-      renderWizard1();
+      persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
     });
   });
   document.getElementById('btn-select-all-risks')?.addEventListener('click', () => {
     AppState.draft.selectedRiskIds = getRiskCandidates().map(risk => risk.id);
     syncRiskSelection();
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(getBUList().find(b => b.id === AppState.draft.buId), getSelectedRisks(), getScenarioGeographies());
-    saveDraft();
-    renderWizard1();
+    persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
   });
   document.getElementById('btn-clear-all-risks')?.addEventListener('click', () => {
     AppState.draft.selectedRiskIds = [];
     syncRiskSelection();
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(getBUList().find(b => b.id === AppState.draft.buId), getSelectedRisks(), getScenarioGeographies());
-    saveDraft();
-    renderWizard1();
+    persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
   });
   document.querySelectorAll('.btn-remove-risk').forEach(btn => {
     btn.addEventListener('click', () => {
       AppState.draft.riskCandidates = getRiskCandidates().filter(r => r.id !== btn.dataset.riskId);
       AppState.draft.selectedRiskIds = (AppState.draft.selectedRiskIds || []).filter(id => id !== btn.dataset.riskId);
       syncRiskSelection();
-      AppState.draft.applicableRegulations = deriveApplicableRegulations(getBUList().find(b => b.id === AppState.draft.buId), getSelectedRisks(), getScenarioGeographies());
-      saveDraft();
-      renderWizard1();
+      persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
     });
   });
 }

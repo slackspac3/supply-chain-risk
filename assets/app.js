@@ -333,51 +333,11 @@ function applyUserStateSnapshotLocally(username, state = {}) {
 }
 
 async function loadSharedAdminSettings() {
-  try {
-    const data = await requestSharedSettings('GET');
-    if (data?.settings) {
-      let localSaved = null;
-      try {
-        localSaved = JSON.parse(localStorage.getItem(GLOBAL_ADMIN_STORAGE_KEY) || 'null');
-      } catch {}
-      const sharedSettings = {
-        ...DEFAULT_ADMIN_SETTINGS,
-        ...data.settings,
-        applicableRegulations: Array.isArray(data.settings.applicableRegulations) ? data.settings.applicableRegulations : [...DEFAULT_ADMIN_SETTINGS.applicableRegulations]
-      };
-      const localHasStructure = Array.isArray(localSaved?.companyStructure) && localSaved.companyStructure.length;
-      const sharedHasStructure = Array.isArray(sharedSettings.companyStructure) && sharedSettings.companyStructure.length;
-      const localHasLayers = Array.isArray(localSaved?.entityContextLayers) && localSaved.entityContextLayers.length;
-      const sharedHasLayers = Array.isArray(sharedSettings.entityContextLayers) && sharedSettings.entityContextLayers.length;
-      const merged = {
-        ...sharedSettings,
-        companyStructure: sharedHasStructure ? sharedSettings.companyStructure : (localHasStructure ? localSaved.companyStructure : sharedSettings.companyStructure),
-        entityContextLayers: sharedHasLayers ? sharedSettings.entityContextLayers : (localHasLayers ? localSaved.entityContextLayers : sharedSettings.entityContextLayers),
-        companyContextSections: sharedSettings.companyContextSections || localSaved?.companyContextSections || null
-      };
-      const normalisedMerged = applySharedSettingsLocally(merged);
-      if ((!sharedHasStructure && localHasStructure) || (!sharedHasLayers && localHasLayers)) {
-        syncSharedAdminSettings(normalisedMerged, { category: 'settings', eventType: 'shared_settings_rehydrated', target: 'global_settings', details: { reason: 'local_backup_richer_than_shared' } }).catch(error => console.warn('shared settings rehydrate failed:', error.message));
-      }
-      return normalisedMerged;
-    }
-  } catch (error) {
-    console.warn('loadSharedAdminSettings fallback:', error.message);
-  }
-  return null;
+  return window.AppSharedStateClient.loadSharedAdminSettings();
 }
 
 function syncSharedAdminSettings(settings, audit = null) {
-  const normalised = normaliseAdminSettings(settings);
-  return requestSharedSettings(
-    'PUT',
-    {
-      settings: normalised,
-      expectedMeta: buildExpectedMeta(getAdminSettings()._meta),
-      audit
-    },
-    { includeAdminSecret: true }
-  );
+  return window.AppSharedStateClient.syncSharedAdminSettings(settings, audit);
 }
 
 function getSafeRetryAfterMs(error) {
@@ -1039,57 +999,11 @@ function getUserStateApiUrl() {
 }
 
 async function requestUserState(method = 'GET', username, payload, audit = null) {
-  const safeUsername = String(username || '').trim().toLowerCase();
-  const url = method === 'GET'
-    ? `${getUserStateApiUrl()}?username=${encodeURIComponent(safeUsername)}`
-    : getUserStateApiUrl();
-  const headers = {
-    'Content-Type': 'application/json'
-  };
-  if (AuthService.getApiSessionToken()) headers['x-session-token'] = AuthService.getApiSessionToken();
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: method === 'GET'
-      ? undefined
-      : JSON.stringify(
-          method === 'PATCH'
-            ? {
-                username: safeUsername,
-                patch: payload?.patch && typeof payload.patch === 'object' ? payload.patch : (payload || {}),
-                expectedMeta: buildExpectedMeta(payload?.expectedMeta),
-                audit
-              }
-            : {
-                username: safeUsername,
-                state: payload?.state && typeof payload.state === 'object' ? payload.state : (payload || {}),
-                expectedMeta: buildExpectedMeta(payload?.expectedMeta || payload?.state?._meta),
-                audit
-              }
-        )
-  });
-  const text = await res.text();
-  let parsed = null;
-  try { parsed = text ? JSON.parse(text) : null; } catch {}
-  if (!res.ok) {
-    AuthService.handleApiAuthFailure(res.status, parsed);
-    throw AuthService.buildApiError(res, parsed, text || `User state request failed with HTTP ${res.status}`);
-  }
-  return parsed || {};
+  return window.AppSharedStateClient.requestUserState(method, username, payload, audit);
 }
 
 async function loadSharedUserState(username = AuthService.getCurrentUser()?.username || '') {
-  const safeUsername = String(username || '').trim().toLowerCase();
-  if (!safeUsername) return null;
-  try {
-    const data = await requestUserState('GET', safeUsername);
-    const state = data?.state || {};
-    applyUserStateSnapshotLocally(safeUsername, state);
-    return AppState.userStateCache;
-  } catch (error) {
-    console.warn('loadSharedUserState fallback:', error.message);
-    return null;
-  }
+  return window.AppSharedStateClient.loadSharedUserState(username);
 }
 
 async function handleUserStateConflict(error, retry) {
@@ -3478,41 +3392,11 @@ function applyPageNavigationEffects(root = document) {
 }
 
 function updateWizardProgressBar(step) {
-  const bar = document.getElementById('app-bar');
-  if (!bar) return;
-  const currentStep = String(step || '');
-  const normalisedStep = currentStep.startsWith('/results/')
-    ? '/results'
-    : currentStep;
-  const progressMap = {
-    '/wizard/1': '25%',
-    '/wizard/2': '50%',
-    '/wizard/3': '75%',
-    '/wizard/review': '90%',
-    '/wizard/4': '90%',
-    '/results': '100%'
-  };
-  const progress = progressMap[normalisedStep] || '0%';
-  bar.style.setProperty('--wizard-progress', progress);
+  window.AppShellPage.updateWizardProgressBar(step);
 }
 
 function setPage(html) {
-  const root = document.getElementById('main-content');
-  root.innerHTML = html;
-  // Route changes were visually abrupt; a lightweight entry class makes screen changes feel deliberate without changing layout or timing.
-  const pageShell = root.querySelector('.page, .dashboard-shell, .wizard-layout, .admin-shell');
-  if (pageShell) {
-    pageShell.classList.add('page-enter');
-    window.requestAnimationFrame(() => {
-      pageShell.classList.add('page-enter-active');
-      window.setTimeout(() => {
-        pageShell.classList.remove('page-enter', 'page-enter-active');
-      }, 280);
-    });
-  }
-  bindDisclosureState(root);
-  applyPageNavigationEffects(root);
-  updateWizardProgressBar(window.location.hash.replace('#', ''));
+  window.AppShellPage.setPage(html);
 }
 
 async function loadJSON(path) {
