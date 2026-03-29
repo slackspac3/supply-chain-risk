@@ -602,6 +602,16 @@ function renderUserDashboard() {
         <section class="dashboard-primary-band dashboard-primary-band--work">
           <div class="results-section-heading">Do the work</div>
           <div class="form-help" style="margin-top:8px;margin-bottom:var(--sp-4)">Start here for the next item to assess, review, or resume.</div>
+          ${isOversightUser ? `<div class="card card--background dashboard-section-card dashboard-section-card--secondary" style="margin-bottom:var(--sp-4)">
+            <div class="flex items-center justify-between" style="gap:var(--sp-4);flex-wrap:wrap">
+              <div>
+                <div class="context-panel-title">Start new work when needed</div>
+                <div class="form-help">Oversight stays review-first, but the guided path remains available here when you need to start a fresh assessment.</div>
+              </div>
+              <!-- Keep a second visible start path in the work lane so oversight users do not have to hunt through overflow actions. -->
+              <button class="btn btn--secondary" id="btn-dashboard-new-assessment-support" type="button">Start Guided Assessment</button>
+            </div>
+          </div>` : ''}
           ${UI.dashboardSectionCard({
             title: roleFrontDoor.nextUpTitle,
             description: roleFrontDoor.nextUpDescription,
