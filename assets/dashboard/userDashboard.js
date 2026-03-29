@@ -173,7 +173,7 @@ function renderUserDashboard() {
   const renderWorkspaceToolsMenu = ({ includeResumeDraft = false, includeSettings = true, useSupportIds = false, includeNewAssessment = true } = {}) => renderDashboardActionMenu({
     items: [
       includeResumeDraft ? '<button class="btn btn--secondary btn--sm" id="btn-dashboard-continue-draft">Resume Draft</button>' : '',
-      `<button class="btn btn--ghost btn--sm" id="btn-dashboard-run-demo">Live Demo</button>`,
+      typeof DemoMode !== 'undefined' ? `<button class="btn btn--ghost btn--sm" id="btn-dashboard-run-demo">Live Demo</button>` : '',
       includeSettings ? `<button class="btn btn--secondary btn--sm" id="btn-dashboard-open-settings">${primarySettingsLabel}</button>` : '',
       `<button class="btn btn--secondary btn--sm" id="${useSupportIds ? 'btn-dashboard-export-assessments-support' : 'btn-dashboard-export-assessments'}">Export Assessments</button>`,
       `<button class="btn btn--secondary btn--sm" id="${useSupportIds ? 'btn-dashboard-import-assessments-support' : 'btn-dashboard-import-assessments'}">Import Assessments</button>`,
