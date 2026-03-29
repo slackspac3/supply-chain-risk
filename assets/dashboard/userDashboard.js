@@ -580,7 +580,7 @@ function renderUserDashboard() {
               <div class="dashboard-hero-actions flex items-center gap-3 mt-6" style="flex-wrap:wrap">
                 <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="${roleFrontDoor.primaryActionLabel}">${roleFrontDoor.primaryActionLabel}</button>
                 <!-- Keep start-new visible for oversight users instead of burying it in the overflow menu. -->
-                <button class="btn btn--secondary btn--lg" id="btn-dashboard-new-assessment-oversight" aria-label="Start New Assessment">Start New Assessment</button>
+                <button class="btn btn--secondary btn--lg" id="btn-dashboard-new-assessment-oversight" aria-label="Start Guided Assessment">Start Guided Assessment</button>
                 ${renderWorkspaceToolsMenu({ includeResumeDraft: hasDraft, includeSettings: true, useSupportIds: false, includeNewAssessment: false })}
               </div>
               <div class="form-help" style="margin-top:12px;color:rgba(255,255,255,.65)">${roleFrontDoor.heroHint}</div>` : standardStartModule}
@@ -602,14 +602,14 @@ function renderUserDashboard() {
         <section class="dashboard-primary-band dashboard-primary-band--work">
           <div class="results-section-heading">Do the work</div>
           <div class="form-help" style="margin-top:8px;margin-bottom:var(--sp-4)">Start here for the next item to assess, review, or resume.</div>
-          ${isOversightUser ? `<div class="card card--background dashboard-section-card dashboard-section-card--secondary" style="margin-bottom:var(--sp-4)">
-            <div class="flex items-center justify-between" style="gap:var(--sp-4);flex-wrap:wrap">
-              <div>
-                <div class="context-panel-title">Start new work when needed</div>
-                <div class="form-help">Oversight stays review-first, but the guided path remains available here when you need to start a fresh assessment.</div>
+          ${isOversightUser ? `<div class="card dashboard-section-card dashboard-section-card--spotlight" style="margin-bottom:var(--sp-4)">
+            <div class="flex items-center justify-between" style="gap:var(--sp-4);flex-wrap:wrap;align-items:flex-start">
+              <div style="max-width:60ch">
+                <div class="context-panel-title">Need to start a fresh scenario?</div>
+                <div class="form-help" style="margin-top:8px">The queue stays primary, but you can still open the guided builder directly from here when a new issue, escalation, or management question needs its own assessment.</div>
               </div>
-              <!-- Keep a second visible start path in the work lane so oversight users do not have to hunt through overflow actions. -->
-              <button class="btn btn--secondary" id="btn-dashboard-new-assessment-support" type="button">Start Guided Assessment</button>
+              <!-- Give oversight users a full-width secondary work lane instead of a utility-style action row. -->
+              <button class="btn btn--secondary btn--lg" id="btn-dashboard-new-assessment-support" type="button">Start Guided Assessment</button>
             </div>
           </div>` : ''}
           ${UI.dashboardSectionCard({
