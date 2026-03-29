@@ -3470,6 +3470,17 @@ function updateWizardProgressBar(step) {
 function setPage(html) {
   const root = document.getElementById('main-content');
   root.innerHTML = html;
+  // Route changes were visually abrupt; a lightweight entry class makes screen changes feel deliberate without changing layout or timing.
+  const pageShell = root.querySelector('.page, .dashboard-shell, .wizard-layout, .admin-shell');
+  if (pageShell) {
+    pageShell.classList.add('page-enter');
+    window.requestAnimationFrame(() => {
+      pageShell.classList.add('page-enter-active');
+      window.setTimeout(() => {
+        pageShell.classList.remove('page-enter', 'page-enter-active');
+      }, 280);
+    });
+  }
   bindDisclosureState(root);
   applyPageNavigationEffects(root);
   updateWizardProgressBar(window.location.hash.replace('#', ''));
