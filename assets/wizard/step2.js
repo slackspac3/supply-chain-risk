@@ -196,8 +196,8 @@ function renderWizard2() {
   document.getElementById('narrative').addEventListener('input', function() {
     AppState.draft.enhancedNarrative = this.value;
     if (!AppState.draft.narrative) AppState.draft.narrative = this.value;
-    // Narrative edits can change the scenario family, so clear the previous AI lens until the user reruns assist or proceeds on text-based inference.
-    AppState.draft.scenarioLens = null;
+    // Preserve the working lens through scenario edits so Step 2 does not throw away the domain context before the next AI or estimate step.
+    AppState.draft.scenarioLens = AppState.draft.scenarioLens || null;
     markDraftDirty();
     scheduleDraftAutosave();
   });
@@ -563,6 +563,7 @@ async function runLLMAssist() {
     });
     const result = await LLMService.generateScenarioAndInputs(scenarioText, {
       ...(aiContext.businessUnit || bu || {}),
+      scenarioLensHint: AppState.draft.scenarioLens,
       regulatoryTags: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
       geography: formatScenarioGeographies(getScenarioGeographies()),
       benchmarkStrategy: aiContext.adminSettings.benchmarkStrategy,

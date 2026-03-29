@@ -110,6 +110,21 @@ function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppSta
   return 'general';
 }
 
+function getStep1PreferredScenarioLens(settings = getEffectiveSettings(), draft = AppState.draft || {}) {
+  if (draft?.scenarioLens?.key) return { ...draft.scenarioLens };
+  return {
+    ...(STEP1_FUNCTION_TO_SCENARIO_LENS[inferStep1FunctionKey(settings, draft)] || STEP1_FUNCTION_TO_SCENARIO_LENS.general)
+  };
+}
+
+function composeStep1GuidedNarrative(guidedInput = (AppState.draft?.guidedInput || {}), settings = getEffectiveSettings(), draft = AppState.draft || {}) {
+  const lens = getStep1PreferredScenarioLens(settings, draft);
+  return composeGuidedNarrative(guidedInput, {
+    lensKey: lens?.key || '',
+    lensLabel: lens?.label || ''
+  });
+}
+
 function getStep1LearnedExampleSummary(pattern = {}) {
   const parts = [
     pattern.geography ? `Completed in ${pattern.geography}` : '',
@@ -249,7 +264,7 @@ function renderStep1FeaturedExampleCard(example, recommendedExamples = [], learn
 }
 
 function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'your role', promptSuggestions = []) {
-  const draftPreview = composeGuidedNarrative(draft.guidedInput);
+  const draftPreview = composeStep1GuidedNarrative(draft.guidedInput, getEffectiveSettings(), draft);
   const optionalContextDisclosureKey = getDisclosureStateKey('/wizard/1', 'add more context only if you need it');
   const promptCards = promptSuggestions.length
     ? promptSuggestions
@@ -1198,6 +1213,9 @@ function buildDryRunNarrative(example) {
     cause: example.cause,
     impact: example.impact,
     urgency: example.urgency
+  }, {
+    lensKey: STEP1_FUNCTION_TO_SCENARIO_LENS[example.functionKey]?.key || '',
+    lensLabel: STEP1_FUNCTION_TO_SCENARIO_LENS[example.functionKey]?.label || ''
   });
 }
 
@@ -1301,7 +1319,7 @@ function seedRisksFromScenarioDraft(narrative, { force = false } = {}) {
   const existingCandidates = getRiskCandidates();
   const selectedRisks = getSelectedRisks();
   if (!force && (selectedRisks.length || existingCandidates.length)) return 0;
-  const extractedRisks = guessRisksFromText(draftText)
+  const extractedRisks = guessRisksFromText(draftText, { lensHint: AppState.draft.scenarioLens })
     .filter(risk => !isNoiseRiskText(risk.title))
     .map(risk => ({
       ...risk,
@@ -1335,7 +1353,7 @@ function persistAndRenderStep1({
 function updateStep1GuidedPreview() {
   const preview = document.getElementById('guided-preview');
   if (!preview) return;
-  preview.textContent = composeGuidedNarrative(AppState.draft.guidedInput)
+  preview.textContent = composeStep1GuidedNarrative(AppState.draft.guidedInput)
     || 'Complete the guided questions and click “Build Scenario Draft”.';
 }
 
@@ -1383,8 +1401,8 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
   document.getElementById('intake-risk-statement').addEventListener('input', function() {
     AppState.draft.narrative = this.value;
     AppState.draft.sourceNarrative = this.value;
-    // Freeform edits can materially change the scenario family, so drop any previously seeded lens until AI or the user re-establishes it.
-    AppState.draft.scenarioLens = null;
+    // Preserve the current function-aware lens while the user edits so later shortlist and AI steps do not reclassify the draft from scratch on every keystroke.
+    AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft);
     clearLoadedDryRunFlag();
     markDraftDirty();
     scheduleDraftAutosave();
@@ -1393,16 +1411,14 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
 
 function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
   document.getElementById('btn-build-guided-narrative').addEventListener('click', () => {
-    const composed = composeGuidedNarrative(AppState.draft.guidedInput);
+    const composed = composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft);
     if (!composed) {
       UI.toast('Answer at least one guided question first.', 'warning');
       return;
     }
     AppState.draft.narrative = composed;
     AppState.draft.sourceNarrative = composed;
-    AppState.draft.scenarioLens = {
-      ...(STEP1_FUNCTION_TO_SCENARIO_LENS[inferStep1FunctionKey(settings, AppState.draft)] || STEP1_FUNCTION_TO_SCENARIO_LENS.general)
-    };
+    AppState.draft.scenarioLens = getStep1PreferredScenarioLens(settings, AppState.draft);
     document.getElementById('intake-risk-statement').value = composed;
     const seededCount = seedRisksFromScenarioDraft(composed, { force: !getRiskCandidates().length });
     persistAndRenderStep1();
@@ -1480,7 +1496,7 @@ function bindStep1NavigationActions({ buList, settings, wizardGeographyInput }) 
       return;
     }
     if (!narrative) {
-      const composed = composeGuidedNarrative(AppState.draft.guidedInput);
+      const composed = composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft);
       if (composed) {
         AppState.draft.narrative = composed;
         AppState.draft.sourceNarrative = composed;
@@ -1721,7 +1737,7 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
     return `<div class="empty-state"><div>No candidate risks yet. Start with the guided builder, refine a scenario draft with AI, or import a register to build your shortlist.</div>${hasDraft ? `<div style="margin-top:var(--sp-4)"><button class="btn btn--secondary" id="btn-generate-risks-empty-state" type="button">Generate Risks From Current Draft</button></div>` : ''}</div>`;
   }
   const linkedRecommendations = getLinkedRiskRecommendations(selectedRisks || []);
-  const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeGuidedNarrative(AppState.draft.guidedInput) || '';
+  const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft) || '';
   const assessmentSignals = buildStep1AssessmentSignals(narrative);
   const ranked = cleanedRisks
     .map(risk => {
@@ -1751,7 +1767,7 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
 
 function bindRiskCardActions({ buList = getBUList() } = {}) {
   document.getElementById('btn-generate-risks-empty-state')?.addEventListener('click', () => {
-    const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeGuidedNarrative(AppState.draft.guidedInput) || '';
+    const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft) || '';
     const seededCount = seedRisksFromScenarioDraft(narrative, { force: true });
     persistAndRenderStep1();
     UI.toast(seededCount ? `Added ${seededCount} risk${seededCount === 1 ? '' : 's'} from the current draft.` : 'No additional risks were generated from that draft.', seededCount ? 'success' : 'warning');

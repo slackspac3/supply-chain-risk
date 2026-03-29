@@ -86,6 +86,77 @@
     AppState.draft.selectedRisks = merged.filter((risk) => selectedIds.includes(risk.id));
   }
 
+  function normaliseLensKey(lens) {
+    const rawValues = lens && typeof lens === 'object'
+      ? [lens.key, lens.label, lens.functionKey, lens.estimatePresetKey]
+      : [lens];
+    const aliasMap = {
+      ransomware: 'ransomware',
+      identity: 'identity',
+      phishing: 'phishing',
+      insider: 'insider',
+      cloud: 'cloud',
+      'data breach': 'data-breach',
+      'data-breach': 'data-breach',
+      technology: 'cyber',
+      cyber: 'cyber',
+      'third party': 'third-party',
+      'third-party': 'third-party',
+      procurement: 'procurement',
+      'supply chain': 'supply-chain',
+      'supply-chain': 'supply-chain',
+      strategic: 'strategic',
+      operations: 'operational',
+      operational: 'operational',
+      regulatory: 'regulatory',
+      finance: 'financial',
+      financial: 'financial',
+      esg: 'esg',
+      compliance: 'compliance',
+      continuity: 'business-continuity',
+      'business continuity': 'business-continuity',
+      'business-continuity': 'business-continuity',
+      hse: 'hse',
+      general: 'general'
+    };
+    for (const raw of rawValues) {
+      const key = String(raw || '').trim().toLowerCase();
+      if (!key) continue;
+      if (aliasMap[key]) return aliasMap[key];
+    }
+    return '';
+  }
+
+  function riskMatchesLens(risk, lens) {
+    const lensKey = normaliseLensKey(lens);
+    if (!lensKey || lensKey === 'general') return true;
+    const category = String(risk?.category || '').trim().toLowerCase();
+    const title = String(risk?.title || '').trim().toLowerCase();
+    const compatibility = {
+      procurement: ['procurement', 'supply chain', 'third-party', 'third party'],
+      'supply-chain': ['supply chain', 'procurement', 'third-party', 'third party'],
+      'third-party': ['third-party', 'third party', 'procurement', 'supply chain'],
+      compliance: ['compliance', 'regulatory'],
+      regulatory: ['regulatory', 'compliance'],
+      operational: ['operational', 'business continuity'],
+      'business-continuity': ['business continuity', 'operational'],
+      strategic: ['strategic'],
+      financial: ['financial'],
+      esg: ['esg'],
+      hse: ['hse'],
+      cyber: ['cyber', 'identity', 'data protection', 'operational resilience', 'financial crime']
+    };
+    return (compatibility[lensKey] || [lensKey]).some(term => category.includes(term) || title.includes(term));
+  }
+
+  function getAlignedRiskSeed(aiRisks, narrative, lens) {
+    const resolvedAiRisks = Array.isArray(aiRisks) ? aiRisks : [];
+    const hintedRisks = guessRisksFromText(narrative, { lensHint: lens });
+    const alignedAiRisks = resolvedAiRisks.filter((risk) => riskMatchesLens(risk, lens));
+    if (alignedAiRisks.length) return mergeRisks(alignedAiRisks, hintedRisks);
+    return hintedRisks.length ? hintedRisks : resolvedAiRisks;
+  }
+
   function getLinkedRiskRecommendations(selectedRisks) {
     const groups = [
       {
@@ -238,7 +309,11 @@
     AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
     AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
     AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
-    appendRiskCandidates(result.risks || guessRisksFromText(resolvedNarrative || narrative), { selectNew: true });
+    // AI summaries can drift away from the active domain lens; if no shortlist items align, prefer a lens-aware local shortlist over unrelated cards.
+    appendRiskCandidates(
+      getAlignedRiskSeed(result.risks, resolvedNarrative || narrative, AppState.draft.scenarioLens),
+      { selectNew: true }
+    );
     AppState.draft.applicableRegulations = Array.from(new Set([
       ...(deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()) || []),
       ...(result.regulations || [])

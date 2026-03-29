@@ -3495,32 +3495,110 @@ function parseStructuredRiskLine(raw) {
   };
 }
 
-function guessRisksFromText(text) {
+function normaliseScenarioLensHint(value) {
+  const rawValues = value && typeof value === 'object'
+    ? [value.key, value.label, value.functionKey, value.estimatePresetKey]
+    : [value];
+  const aliasMap = {
+    ransomware: 'ransomware',
+    identity: 'identity',
+    phishing: 'phishing',
+    insider: 'insider',
+    cloud: 'cloud',
+    'data breach': 'data-breach',
+    'data-breach': 'data-breach',
+    technology: 'cyber',
+    'cyber risk': 'cyber',
+    cyber: 'cyber',
+    'third party': 'third-party',
+    'third-party': 'third-party',
+    procurement: 'procurement',
+    'supply chain': 'supply-chain',
+    'supply-chain': 'supply-chain',
+    strategic: 'strategic',
+    operations: 'operational',
+    operational: 'operational',
+    regulatory: 'regulatory',
+    finance: 'financial',
+    financial: 'financial',
+    esg: 'esg',
+    compliance: 'compliance',
+    continuity: 'business-continuity',
+    'business continuity': 'business-continuity',
+    'business-continuity': 'business-continuity',
+    hse: 'hse',
+    general: 'general'
+  };
+  for (const raw of rawValues) {
+    const key = String(raw || '').trim().toLowerCase();
+    if (!key) continue;
+    if (aliasMap[key]) return aliasMap[key];
+  }
+  return '';
+}
+
+function guessRisksFromText(text, { lensHint = null } = {}) {
   const source = String(text || '').toLowerCase();
+  const lensKey = normaliseScenarioLensHint(lensHint);
   const patterns = [
-    { title: 'Strategic execution or market-position risk', category: 'Strategic', regulations: ['ISO 31000', 'COSO ERM'], terms: ['strategy', 'strategic', 'expansion', 'transformation', 'growth', 'market', 'competitive', 'portfolio', 'investment'] },
-    { title: 'Operational breakdown affecting core services', category: 'Operational', regulations: ['ISO 31000', 'ISO 22301'], terms: ['outage', 'availability', 'disruption', 'failure', 'breakdown', 'backlog', 'capacity', 'process failure'] },
-    { title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'ISO 27001'], terms: ['ransom', 'malware', 'phish', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud', 'misconfig', 'vulnerability', 'privileged'] },
-    { title: 'Third-party dependency or supplier failure', category: 'Third-Party', regulations: ['ISO 27036', 'ISO 28000'], terms: ['vendor', 'supplier', 'third-party', 'third party', 'outsourc', 'dependency', 'subprocessor', 'partner'] },
-    { title: 'Regulatory or licensing exposure', category: 'Regulatory', regulations: ['BIS Export Controls', 'OFAC Sanctions'], terms: ['regulator', 'regulatory', 'licence', 'license', 'supervisory', 'filing', 'notification', 'sanction', 'export control'] },
-    { title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'financial reporting', 'misstatement'] },
-    { title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure'] },
-    { title: 'Compliance control or policy breakdown', category: 'Compliance', regulations: ['ISO 37301', 'UAE PDPL'], terms: ['policy breach', 'control failure', 'non-compliance', 'compliance', 'obligation', 'conduct', 'ethics'] },
-    { title: 'Supply chain resilience disruption', category: 'Supply Chain', regulations: ['ISO 28000', 'ISO 22301'], terms: ['supply chain', 'logistics', 'inventory', 'fulfilment', 'shipment', 'single source', 'upstream'] },
-    { title: 'Procurement governance or sourcing risk', category: 'Procurement', regulations: ['ISO 20400', 'ISO 37301'], terms: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'vendor selection', 'purchasing'] },
-    { title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management'] },
-    { title: 'Health, safety, and environmental incident exposure', category: 'HSE', regulations: ['ISO 45001', 'ISO 14001'], terms: ['hse', 'health and safety', 'safety', 'injury', 'environmental', 'spill', 'incident', 'worker'] }
+    { key: 'strategic', title: 'Strategic execution or market-position risk', category: 'Strategic', regulations: ['ISO 31000', 'COSO ERM'], terms: ['strategy', 'strategic', 'expansion', 'transformation', 'growth', 'market', 'competitive', 'portfolio', 'investment'] },
+    { key: 'operational', title: 'Operational breakdown affecting core services', category: 'Operational', regulations: ['ISO 31000', 'ISO 22301'], terms: ['outage', 'availability', 'disruption', 'failure', 'breakdown', 'backlog', 'capacity', 'process failure'] },
+    { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'ISO 27001'], terms: ['ransom', 'malware', 'phish', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud', 'misconfig', 'vulnerability', 'privileged'] },
+    { key: 'third-party', title: 'Third-party dependency or supplier failure', category: 'Third-Party', regulations: ['ISO 27036', 'ISO 28000'], terms: ['vendor', 'supplier', 'third-party', 'third party', 'outsourc', 'dependency', 'subprocessor', 'partner'] },
+    { key: 'regulatory', title: 'Regulatory or licensing exposure', category: 'Regulatory', regulations: ['BIS Export Controls', 'OFAC Sanctions'], terms: ['regulator', 'regulatory', 'licence', 'license', 'supervisory', 'filing', 'notification', 'sanction', 'export control'] },
+    { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'financial reporting', 'misstatement'] },
+    { key: 'esg', title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure'] },
+    { key: 'compliance', title: 'Compliance control or policy breakdown', category: 'Compliance', regulations: ['ISO 37301', 'UAE PDPL'], terms: ['policy breach', 'control failure', 'non-compliance', 'compliance', 'obligation', 'conduct', 'ethics'] },
+    { key: 'supply-chain', title: 'Supply chain resilience disruption', category: 'Supply Chain', regulations: ['ISO 28000', 'ISO 22301'], terms: ['supply chain', 'logistics', 'inventory', 'fulfilment', 'shipment', 'single source', 'upstream'] },
+    { key: 'procurement', title: 'Procurement governance or sourcing risk', category: 'Procurement', regulations: ['ISO 20400', 'ISO 37301'], terms: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'vendor selection', 'purchasing', 'critical spend', 'single-source spend'] },
+    { key: 'business-continuity', title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management'] },
+    { key: 'hse', title: 'Health, safety, and environmental incident exposure', category: 'HSE', regulations: ['ISO 45001', 'ISO 14001'], terms: ['hse', 'health and safety', 'safety', 'injury', 'environmental', 'spill', 'incident', 'worker'] }
   ];
-  // Keep the fallback lens enterprise-wide so strategic or operational text is not silently forced into cyber.
+  const compatibilityBoosts = {
+    procurement: new Set(['procurement', 'supply-chain', 'third-party']),
+    'supply-chain': new Set(['supply-chain', 'procurement', 'third-party']),
+    compliance: new Set(['compliance', 'regulatory']),
+    regulatory: new Set(['regulatory', 'compliance']),
+    operational: new Set(['operational', 'business-continuity']),
+    'business-continuity': new Set(['business-continuity', 'operational']),
+    strategic: new Set(['strategic']),
+    financial: new Set(['financial']),
+    esg: new Set(['esg']),
+    hse: new Set(['hse']),
+    cyber: new Set(['cyber']),
+    'third-party': new Set(['third-party', 'procurement', 'supply-chain'])
+  };
+  // Keep the fallback lens enterprise-wide and hint-aware so Step 1 does not swing back to the old cyber-default shortlist.
   const found = patterns
-    .filter(({ terms }) => terms.some(term => source.includes(term)))
+    .map(({ key, title, category, regulations, terms }) => {
+      const hitCount = terms.filter(term => source.includes(term)).length;
+      const lensBoost = lensKey && key === lensKey ? 3 : (compatibilityBoosts[lensKey]?.has(key) ? 1 : 0);
+      return hitCount || lensBoost ? {
+        key,
+        title,
+        category,
+        regulations,
+        score: hitCount + lensBoost
+      } : null;
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.score - left.score)
     .map(({ title, category, regulations }) => ({
       title,
       category,
       regulations,
       description: 'Extracted from the provided narrative or risk register.'
     }));
-  return found.length ? found : [{ title: 'Material enterprise risk requiring further triage', category: 'General', regulations: ['ISO 31000'] }];
+  if (found.length) return found;
+  const hintedPattern = patterns.find(pattern => pattern.key === lensKey);
+  return hintedPattern
+    ? [{
+        title: hintedPattern.title,
+        category: hintedPattern.category,
+        regulations: hintedPattern.regulations,
+        description: 'Generated from the active assessment lens to provide a clearer shortlist.'
+      }]
+    : [{ title: 'Material enterprise risk requiring further triage', category: 'General', regulations: ['ISO 31000'] }];
 }
 
 function parseRegisterText(text) {
@@ -3787,7 +3865,7 @@ async function loadContextSupportSource(fileInputId, helpId) {
   return { text: parsed.text || '', name: file.name };
 }
 
-function composeGuidedNarrative(guidedInput = {}) {
+function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = '' } = {}) {
   const event = String(guidedInput.event || '').trim();
   const asset = String(guidedInput.asset || '').trim();
   const cause = String(guidedInput.cause || '').trim();
@@ -3796,24 +3874,38 @@ function composeGuidedNarrative(guidedInput = {}) {
   const urgencyPrefix = urgency ? `${urgency.charAt(0).toUpperCase() + urgency.slice(1)}-urgency` : 'Material';
   if (!event && !asset && !cause && !impact) return '';
 
+  const resolvedLensLabel = String(lensLabel || '').trim();
+  const resolvedLensKey = normaliseScenarioLensHint(lensKey || lensLabel);
+  const lensPrefix = resolvedLensLabel ? `${resolvedLensLabel} ` : '';
   let primaryClause = event;
   if (cause && event) {
     primaryClause = `${cause.toLowerCase()} could lead to ${event.charAt(0).toLowerCase() + event.slice(1)}`;
   } else if (cause) {
-    primaryClause = `${cause} could trigger a material risk event`;
+    primaryClause = `${cause} could trigger a material ${resolvedLensLabel ? resolvedLensLabel.toLowerCase() + ' ' : ''}scenario`;
   } else if (event) {
     primaryClause = `${event.charAt(0).toLowerCase() + event.slice(1)}`;
   }
 
   const parts = [];
   if (primaryClause) {
-    parts.push(`${urgencyPrefix} scenario: ${primaryClause.charAt(0).toUpperCase() + primaryClause.slice(1)}.`);
+    parts.push(`${urgencyPrefix} ${lensPrefix}scenario: ${primaryClause.charAt(0).toUpperCase() + primaryClause.slice(1)}.`);
   }
   if (asset) {
-    parts.push(`${asset} is the primary asset or service in scope.`);
+    const assetLead = resolvedLensKey === 'procurement'
+      ? 'The sourcing decision or dependency in scope is'
+      : resolvedLensKey === 'strategic'
+        ? 'The strategic objective or capability in scope is'
+        : 'The primary asset, service, or activity in scope is';
+    parts.push(`${assetLead} ${asset}.`);
   }
   if (impact) {
-    parts.push(`The scenario could result in ${impact.charAt(0).toLowerCase() + impact.slice(1)}.`);
+    const impactLead = resolvedLensKey === 'procurement' || resolvedLensKey === 'supply-chain'
+      ? 'If this develops, it could create'
+      : 'If the scenario develops, it could result in';
+    parts.push(`${impactLead} ${impact.charAt(0).toLowerCase() + impact.slice(1)}.`);
+  }
+  if (cause) {
+    parts.push(`The most likely driver is ${cause.charAt(0).toLowerCase() + cause.slice(1)}.`);
   }
   if (asset && /identity|directory|sso|email|azure ad|active directory/i.test(`${event} ${asset} ${cause}`.toLowerCase())) {
     parts.push('Likely knock-on effects include mailbox compromise, privileged misuse, downstream service disruption, and data exposure if the event is not contained quickly.');
