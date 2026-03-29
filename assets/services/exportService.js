@@ -150,6 +150,11 @@ const ExportService = (() => {
       : r.nearTolerance
         ? 'Near tolerance'
         : 'Within tolerance';
+    const safeMetrics = [
+      { label: 'Severe single-event view', value: fmt(r.lm?.p90 || 0), copy: 'P90 per-event management view.' },
+      { label: 'Expected annual exposure', value: fmt(r.ale?.mean || 0), copy: 'Most likely annual planning view.' },
+      { label: 'Severe annual exposure', value: fmt(r.ale?.p90 || 0), copy: 'High-stress annual planning view.' }
+    ];
     return {
       title: assessment.scenarioTitle || 'Risk assessment',
       businessContext: `${assessment.buName || '—'} · ${assessment.geography || '—'}`,
@@ -165,16 +170,12 @@ const ExportService = (() => {
       analystSummary,
       treatmentDecision,
       comparison,
-      metrics: [
-        { label: 'Severe single-event view', value: fmt(r.lm?.p90 || 0), copy: 'P90 per-event management view.' },
-        { label: 'Expected annual exposure', value: fmt(r.ale?.mean || 0), copy: 'Most likely annual planning view.' },
-        { label: 'Severe annual exposure', value: fmt(r.ale?.p90 || 0), copy: 'High-stress annual planning view.' }
-      ],
+      metrics: safeMetrics,
       appendix: includeAppendix ? {
         assumptions: Array.isArray(intelligence.assumptions) ? intelligence.assumptions.slice(0, 4) : [],
         citations: citations.slice(0, 6),
-        topGap: confidenceFrame.topGap,
-        evidenceSummary: confidenceFrame.evidenceSummary
+        topGap: confidenceFrame?.topGap || 'No major evidence gap recorded.',
+        evidenceSummary: confidenceFrame?.evidenceSummary || 'Evidence quality has not been summarised yet.'
       } : null
     };
   }
@@ -282,7 +283,7 @@ const ExportService = (() => {
       </div>
 
       <div class="metrics">
-        ${memo.metrics.map(item => `<div class="card"><div class="section-label">${item.label}</div><div class="metric-value">${item.value}</div><div class="metric-copy">${item.copy}</div></div>`).join('')}
+        ${(Array.isArray(memo.metrics) ? memo.metrics : []).map(item => `<div class="card"><div class="section-label">${item.label}</div><div class="metric-value">${item.value}</div><div class="metric-copy">${item.copy}</div></div>`).join('')}
       </div>
 
       <div class="mid-grid">
@@ -304,7 +305,7 @@ const ExportService = (() => {
           <div class="body-copy">${memo.confidenceFrame.summary}</div>
           <div class="decision-row">
             <div class="section-label">Biggest evidence caveat</div>
-            <div class="body-copy">${memo.confidenceFrame.topGap}</div>
+            <div class="body-copy">${memo.confidenceFrame?.topGap || 'No major evidence gap recorded.'}</div>
           </div>
           <div class="decision-row">
             <div class="section-label">What improves next</div>
@@ -329,7 +330,7 @@ const ExportService = (() => {
         </div>
         <div class="card">
           <div class="section-label">Main drivers of impact</div>
-          ${memo.impactMix.length
+          ${Array.isArray(memo.impactMix) && memo.impactMix.length
             ? memo.impactMix.map(item => `<div class="mix-row"><div class="mix-head"><span>${item.label}</span><strong>${fmt(item.value)}</strong></div><div class="mix-bar"><span style="width:${item.width}%"></span></div></div>`).join('')
             : `<div class="body-copy">No material loss-component mix is available for this scenario yet.</div>`}
         </div>
@@ -350,12 +351,12 @@ const ExportService = (() => {
         <div class="appendix-grid">
           <div class="card">
             <div class="section-label">Assumptions to challenge</div>
-            <div class="body-copy">${appendix.assumptions.length ? appendix.assumptions.map(item => `• ${item.text}`).join('<br>') : 'No structured assumptions were recorded for this assessment.'}</div>
+            <div class="body-copy">${Array.isArray(appendix.assumptions) && appendix.assumptions.length ? appendix.assumptions.map(item => `• ${item.text}`).join('<br>') : 'No structured assumptions were recorded for this assessment.'}</div>
           </div>
           <div class="card">
             <div class="section-label">Evidence and references</div>
-            <div class="body-copy">${appendix.evidenceSummary}<br><br><strong>Top caveat:</strong> ${appendix.topGap}</div>
-            ${appendix.citations.length ? `<div class="chip-row">${appendix.citations.map(item => `<span class="badge neutral">${item.title || item.sourceTitle || 'Reference'}</span>`).join('')}</div>` : ''}
+            <div class="body-copy">${appendix.evidenceSummary || 'Evidence quality has not been summarised yet.'}<br><br><strong>Top caveat:</strong> ${appendix.topGap || 'No major evidence gap recorded.'}</div>
+            ${Array.isArray(appendix.citations) && appendix.citations.length ? `<div class="chip-row">${appendix.citations.map(item => `<span class="badge neutral">${item.title || item.sourceTitle || 'Reference'}</span>`).join('')}</div>` : ''}
           </div>
         </div>
       </div>
@@ -367,6 +368,13 @@ const ExportService = (() => {
 </html>`;
     _openPrintableHtml(html, `${includeAppendix ? 'Risk_Decision_Memo_With_Appendix' : 'Risk_Decision_Memo'}_${assessment.id || Date.now()}.html`);
     return memo;
+  }
+
+  function exportBoardNote(assessment, currency = 'USD', fxRate = 3.6725) {
+    const memo = buildDecisionMemoModel(assessment, currency, fxRate, { includeAppendix: false });
+    const html = buildBoardNoteHtml(memo);
+    const filename = `board-note-${String(memo.title || 'risk').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}.html`;
+    _openPrintableHtml(html, filename);
   }
 
   // ─── JSON Export ─────────────────────────────────────────
@@ -939,5 +947,321 @@ const ExportService = (() => {
     return slideSpec;
   }
 
-  return { exportJSON, exportDataAsJson, importJsonFile, exportPDF, exportPPTXSpec, exportDecisionMemo, buildDecisionMemoModel };
+  function buildBoardNoteHtml(memo) {
+    const postureBadge = memo.postureTone === 'danger'
+      ? 'Above tolerance — escalate'
+      : memo.postureTone === 'warning'
+        ? 'Near tolerance — actively reduce'
+        : 'Within tolerance — monitor';
+    const decision = String(memo.executiveDecision?.decision || 'Review').trim();
+    const rationale = String(memo.executiveDecision?.rationale || '').trim();
+    const priority = String(memo.executiveDecision?.priority || '').trim();
+    const topGap = String(memo.confidenceFrame?.topGap || 'No major evidence gap recorded.').trim();
+    const nextStep = memo.nextStepPlan?.[0];
+    const treatmentLine = memo.treatmentDecision
+      ? String(memo.treatmentDecision.action || '').trim()
+      : '';
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Board Note — ${memo.title}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink: #1a1e1b;
+  --ink-mid: rgba(26,30,27,.62);
+  --ink-soft: rgba(26,30,27,.38);
+  --ink-rule: rgba(26,30,27,.1);
+  --surface: #f7f5f2;
+  --surface-card: rgba(255,255,255,.72);
+  --accent: #03d1a8;
+  --danger: #ac432e;
+  --warning: #b89a2a;
+}
+html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  line-height: 1.6;
+}
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 64px 48px;
+}
+/* Header */
+.doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--ink-rule);
+  margin-bottom: 48px;
+  gap: 24px;
+}
+.doc-header__left { flex: 1; }
+.doc-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 14px;
+}
+.doc-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--ink);
+  max-width: 16ch;
+  letter-spacing: -.02em;
+}
+.doc-meta {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--ink-mid);
+  font-weight: 300;
+}
+.doc-posture-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  margin-top: 8px;
+}
+.doc-posture-badge.success {
+  background: rgba(3,209,168,.1);
+  color: #0b7f68;
+  border-color: rgba(3,209,168,.28);
+}
+.doc-posture-badge.warning {
+  background: rgba(184,154,42,.1);
+  color: #7a6012;
+  border-color: rgba(184,154,42,.28);
+}
+.doc-posture-badge.danger {
+  background: rgba(172,67,46,.08);
+  color: var(--danger);
+  border-color: rgba(172,67,46,.22);
+}
+/* Decision block */
+.decision-block {
+  padding: 36px 40px;
+  border-radius: 20px;
+  border: 1px solid var(--ink-rule);
+  background: var(--surface-card);
+  margin-bottom: 40px;
+  position: relative;
+  overflow: hidden;
+}
+.decision-block::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--ink);
+  border-radius: 4px 0 0 4px;
+}
+.decision-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
+}
+.decision-headline {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+  margin-bottom: 16px;
+  letter-spacing: -.01em;
+  max-width: 22ch;
+}
+.decision-rationale {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--ink-mid);
+  max-width: 62ch;
+  font-weight: 300;
+  margin-bottom: 20px;
+}
+.decision-priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(26,30,27,.05);
+  border: 1px solid var(--ink-rule);
+  color: var(--ink);
+}
+/* Scenario */
+.scenario-block {
+  margin-bottom: 48px;
+}
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 14px;
+  display: block;
+}
+.scenario-text {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--ink-mid);
+  font-weight: 300;
+  max-width: 66ch;
+}
+/* Metrics */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 48px;
+}
+.metric-card {
+  background: var(--surface-card);
+  border: 1px solid var(--ink-rule);
+  border-radius: 16px;
+  padding: 22px 20px;
+}
+.metric-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+.metric-value {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -.02em;
+  margin-bottom: 6px;
+}
+.metric-copy {
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+  font-weight: 300;
+}
+/* Caveat blocks */
+.caveat-section { margin-bottom: 40px; }
+.caveat-card {
+  background: rgba(26,30,27,.03);
+  border: 1px solid var(--ink-rule);
+  border-radius: 14px;
+  padding: 20px 24px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink-mid);
+  font-weight: 300;
+}
+.caveat-card strong {
+  color: var(--ink);
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
+}
+/* Footer */
+.doc-footer {
+  font-size: 11px;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--ink-rule);
+  padding-top: 24px;
+  margin-top: 48px;
+  font-weight: 300;
+  letter-spacing: .02em;
+}
+@media print {
+  body { background: #fff; }
+  .page { padding: 32px 24px; }
+  .decision-block, .metric-card, .caveat-card {
+    break-inside: avoid;
+  }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="doc-header">
+    <div class="doc-header__left">
+      <div class="doc-eyebrow">Board note · Risk scenario · ${memo.completedLabel}</div>
+      <h1 class="doc-title">${memo.title}</h1>
+      <div class="doc-meta">${memo.businessContext}</div>
+    </div>
+    <span class="doc-posture-badge ${memo.postureTone}">${postureBadge}</span>
+  </div>
+
+  <div class="decision-block">
+    <div class="decision-label">Management action</div>
+    <div class="decision-headline">${decision}</div>
+    <p class="decision-rationale">${rationale}</p>
+    ${priority ? `<div class="decision-priority">→ ${priority}</div>` : ''}
+  </div>
+
+  <div class="scenario-block">
+    <span class="section-label">Scenario</span>
+    <p class="scenario-text">${memo.scenarioSummary}</p>
+  </div>
+
+  <div class="metrics-grid">
+    ${(Array.isArray(memo.metrics) ? memo.metrics : []).map(m => `
+      <div class="metric-card">
+        <div class="metric-label">${m.label}</div>
+        <div class="metric-value">${m.value}</div>
+        <div class="metric-copy">${m.copy}</div>
+      </div>`).join('')}
+  </div>
+
+  ${nextStep ? `
+  <div class="caveat-section">
+    <span class="section-label">Next steps required</span>
+    <div class="caveat-card">
+      <strong>${nextStep.title}</strong>${nextStep.copy}
+    </div>
+  </div>` : ''}
+
+  <div class="caveat-section">
+    <span class="section-label">Biggest caveat</span>
+    <div class="caveat-card">${topGap}</div>
+  </div>
+
+  ${treatmentLine ? `
+  <div class="caveat-section">
+    <span class="section-label">Treatment path</span>
+    <div class="caveat-card">${treatmentLine}</div>
+  </div>` : ''}
+
+  <div class="doc-footer">
+    Risk Intelligence Platform · ${memo.completedLabel} ·
+    Confidence: ${memo.confidenceFrame?.label || 'Moderate'} ·
+    For management discussion only. Validate assumptions before
+    formal commitment.
+  </div>
+</div>
+</body>
+</html>`;
+  }
+
+  return { exportJSON, exportDataAsJson, importJsonFile, exportPDF, exportPPTXSpec, exportDecisionMemo, exportBoardNote, buildDecisionMemoModel };
 })();

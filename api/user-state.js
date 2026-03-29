@@ -15,23 +15,41 @@ function getKvToken() {
   return process.env.BANANA_DOG || process.env.FOO_TOKEN_TEST || process.env.RC_USER_STORE_TOKEN || process.env.USER_STORE_KV_TOKEN || process.env.KV_REST_API_TOKEN || '';
 }
 
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseRequestBody(req) {
+  if (typeof req.body === 'string') {
+    try { return JSON.parse(req.body || '{}'); } catch { return null; }
+  }
+  return req.body ?? {};
+}
+
 async function runKvCommand(command) {
   const url = getKvUrl();
   const token = getKvToken();
   if (!url || !token) return null;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(command)
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `KV request failed with HTTP ${res.status}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(command),
+      signal: controller.signal
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `KV request failed with HTTP ${res.status}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json();
 }
 
 function buildStateKey(username = '') {
@@ -126,11 +144,7 @@ function canAccessUserState(session, username) {
 
 module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
-  const body = typeof req.body === 'string'
-    ? (() => {
-        try { return JSON.parse(req.body || '{}'); } catch { return {}; }
-      })()
-    : (req.body || {});
+  const body = parseRequestBody(req);
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,PATCH,OPTIONS');
@@ -145,6 +159,16 @@ module.exports = async function handler(req, res) {
   const origin = req.headers.origin;
   if (origin && origin !== allowedOrigin) {
     sendApiError(res, 403, 'FORBIDDEN', 'Request origin is not allowed.');
+    return;
+  }
+
+  if ((req.method === 'PUT' || req.method === 'PATCH') && !req.headers['content-type']?.includes('application/json')) {
+    sendApiError(res, 415, 'UNSUPPORTED_MEDIA_TYPE', 'Content-Type must be application/json');
+    return;
+  }
+
+  if ((req.method === 'PUT' || req.method === 'PATCH') && !isPlainObject(body)) {
+    sendApiError(res, 400, 'VALIDATION_ERROR', 'Invalid request body.');
     return;
   }
 
@@ -168,6 +192,15 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'PUT') {
+      const bodyStr = JSON.stringify(body || {});
+      if (bodyStr.length > 500000) {
+        sendApiError(res, 413, 'PAYLOAD_TOO_LARGE', 'Request body too large');
+        return;
+      }
+      if (!isPlainObject(body.state || {})) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'state payload is required.');
+        return;
+      }
       const writeResult = await writeUserState(username, body.state || {}, body.expectedMeta || body.state?._meta || {});
       if (writeResult.conflict) {
         sendConflictError(
@@ -195,6 +228,15 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
+      const bodyStr = JSON.stringify(body || {});
+      if (bodyStr.length > 500000) {
+        sendApiError(res, 413, 'PAYLOAD_TOO_LARGE', 'Request body too large');
+        return;
+      }
+      if (!isPlainObject(body.patch || {})) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'patch payload is required.');
+        return;
+      }
       const patch = body.patch && typeof body.patch === 'object' ? body.patch : {};
       const writeResult = await patchUserState(username, patch, body.expectedMeta || {});
       if (writeResult.conflict) {
@@ -224,6 +266,7 @@ module.exports = async function handler(req, res) {
 
     sendApiError(res, 405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
   } catch (error) {
+    console.error('User-state API request failed.', error);
     sendApiError(res, 500, 'USER_STATE_REQUEST_FAILED', 'The user-state request could not be completed.');
   }
 };

@@ -23,20 +23,64 @@ function extractLinks(html, baseUrl) {
   return Array.from(new Set(links));
 }
 
+const _rateLimitMap = new Map();
+
+function checkRateLimit(key, maxPerMinute = 20) {
+  const now = Date.now();
+  const windowMs = 60000;
+  const entry = _rateLimitMap.get(key) || { count: 0, reset: now + windowMs };
+  if (now > entry.reset) {
+    entry.count = 0;
+    entry.reset = now + windowMs;
+  }
+  entry.count += 1;
+  _rateLimitMap.set(key, entry);
+  return entry.count <= maxPerMinute
+    ? null
+    : Math.ceil((entry.reset - now) / 1000);
+}
+
+function getRateLimitKey(req) {
+  return String(req.headers.origin || req.socket?.remoteAddress || 'unknown');
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseRequestBody(req) {
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body || '{}');
+    } catch {
+      return null;
+    }
+  }
+  return req.body ?? {};
+}
+
+function isAdminRequest(req) {
+  const adminSecret = String(process.env.ADMIN_API_SECRET || '').trim();
+  return !!adminSecret && req.headers['x-admin-secret'] === adminSecret;
+}
+
 async function fetchText(url, timeoutMs = 7000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'Risk-Intelligence-Platform/1.0'
-    },
-    signal: controller.signal
-  });
-  clearTimeout(timeout);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Risk-Intelligence-Platform/1.0'
+      },
+      signal: controller.signal
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+    }
+    return res.text();
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.text();
 }
 
 function sameHost(url, host) {
@@ -388,25 +432,34 @@ Known news sources:
 ${newsItems.map(item => `${item.link}`).join('\n')}
 
 Repair the response into the required JSON schema. Preserve company-specific meaning. If a field is missing, infer cautiously from the malformed response and sources only.`;
-  const upstream = await fetch(compassApiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${compassApiKey}`
-    },
-    body: JSON.stringify({
-      model: compassModel,
-      max_completion_tokens: 1400,
-      temperature: 0,
-      messages: [
-        { role: 'system', content: repairPrompt },
-        { role: 'user', content: repairUser }
-      ]
-    })
-  });
-  if (!upstream.ok) return null;
-  const payload = await upstream.json();
-  return tryParseStructuredJson(payload.choices?.[0]?.message?.content || '');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const upstream = await fetch(compassApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${compassApiKey}`
+      },
+      body: JSON.stringify({
+        model: compassModel,
+        max_completion_tokens: 1400,
+        temperature: 0,
+        messages: [
+          { role: 'system', content: repairPrompt },
+          { role: 'user', content: repairUser }
+        ]
+      }),
+      signal: controller.signal
+    });
+    if (!upstream.ok) return null;
+    const payload = await upstream.json();
+    return tryParseStructuredJson(payload.choices?.[0]?.message?.content || '');
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function normaliseContextPayload(parsed, canonicalUrl, pages, newsItems) {
@@ -435,10 +488,11 @@ module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const compassApiUrl = process.env.COMPASS_API_URL || 'https://api.core42.ai/v1/chat/completions';
   const compassModel = process.env.COMPASS_MODEL || 'gpt-5.1';
+  const body = parseRequestBody(req);
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type');
+  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-admin-secret');
   res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') {
@@ -451,18 +505,42 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  if (!req.headers['content-type']?.includes('application/json')) {
+    res.status(415).json({ error: 'Content-Type must be application/json' });
+    return;
+  }
+
   if (!process.env.COMPASS_API_KEY) {
-    res.status(500).json({ error: 'Missing COMPASS_API_KEY secret in Vercel.' });
+    console.error('Company context route is missing COMPASS_API_KEY.');
+    res.status(500).json({ error: 'Internal server error' });
     return;
   }
 
   const origin = req.headers.origin;
-  if (origin && origin !== allowedOrigin) {
+  if (!origin || origin === 'null' || origin !== allowedOrigin) {
     res.status(403).json({ error: 'Origin not allowed' });
     return;
   }
 
-  const websiteUrl = String(req.body?.websiteUrl || '').trim();
+  const retryAfterSeconds = checkRateLimit(getRateLimitKey(req));
+  if (retryAfterSeconds) {
+    res.setHeader('Retry-After', String(retryAfterSeconds));
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
+  }
+
+  if (!isPlainObject(body)) {
+    res.status(400).json({ error: 'Invalid request body' });
+    return;
+  }
+
+  const bodyStr = JSON.stringify(body || {});
+  if (bodyStr.length > 500000) {
+    res.status(413).json({ error: 'Request body too large' });
+    return;
+  }
+
+  const websiteUrl = String(body.websiteUrl || '').trim().slice(0, 2048);
   if (!websiteUrl) {
     res.status(400).json({ error: 'websiteUrl is required.' });
     return;
@@ -547,6 +625,8 @@ Instructions:
 - avoid generic filler such as "cross-sector solutions" or "partner-led delivery model" unless those ideas are explicitly supported by the supplied sources
 - use British English`;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
     const upstream = await fetch(compassApiUrl, {
       method: 'POST',
       headers: {
@@ -561,18 +641,16 @@ Instructions:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ]
-      })
-    });
+      }),
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeout));
 
     if (!upstream.ok) {
       const text = await upstream.text();
-      const response = {
+      console.error('Company context AI request failed.', { status: upstream.status, bodyPreview: String(text || '').slice(0, 400) });
+      res.status(upstream.status).json({
         error: 'Company context builder could not analyse the website.'
-      };
-      if (isAdminRequest(req)) {
-        response.detail = text;
-      }
-      res.status(upstream.status).json(response);
+      });
       return;
     }
 
@@ -584,12 +662,13 @@ Instructions:
     }
     res.status(200).json(normaliseContextPayload(parsed, canonicalUrl, pages, newsItems));
   } catch (error) {
-    const response = {
-      error: 'Company context builder could not fetch or analyse the website.'
-    };
-    if (isAdminRequest(req)) {
-      response.detail = error instanceof Error ? error.message : String(error);
+    if (error?.name === 'AbortError') {
+      res.status(504).json({ error: 'Company context request timed out.' });
+      return;
     }
-    res.status(502).json(response);
+    console.error('Company context route failed.', error);
+    res.status(502).json({
+      error: 'Company context builder could not fetch or analyse the website.'
+    });
   }
 };

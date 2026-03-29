@@ -242,7 +242,7 @@ const LLMService = (() => {
             body: JSON.stringify({
               model: _compassModel,
               max_completion_tokens: maxCompletionTokens,
-              temperature: 0.3,
+              temperature: Number(options.temperature ?? 0.3),
               messages: [
                 { role: 'system', content: promptPayload.systemPrompt },
                 { role: 'user', content: promptPayload.userPrompt }
@@ -440,6 +440,9 @@ const LLMService = (() => {
     score += hasOrgContext ? 2 : 0;
     score += hasUserContext ? 1 : 0;
     score += hasUploadedText ? 2 : 0;
+    const hasFullDocContent = Array.isArray(options.citations) &&
+      options.citations.some(c => String(c?.contentFull || '').trim().length > 100);
+    score += hasFullDocContent ? 3 : 0;
     score += hasRegisterText ? 2 : 0;
     score += hasGeography ? 1 : 0;
     score += hasRegulations ? 1 : 0;
@@ -461,6 +464,7 @@ const LLMService = (() => {
     if (hasOrgContext) evidenceParts.push('organisation context');
     if (hasUserContext) evidenceParts.push('user-role context');
     if (hasUploadedText) evidenceParts.push('uploaded source material');
+    if (hasFullDocContent) evidenceParts.push('full document content from library');
     if (hasRegisterText) evidenceParts.push('risk register content');
     if (counts.official) evidenceParts.push(`${counts.official} official/company sources`);
     if (counts.regulatory) evidenceParts.push(`${counts.regulatory} regulatory or policy sources`);
@@ -532,13 +536,24 @@ const LLMService = (() => {
     const items = (Array.isArray(citations) ? citations : [])
       .slice()
       .sort((a, b) => Number(b?.score || 0) - Number(a?.score || 0))
-      .map((item) => {
+      .map((item, index) => {
         const kind = _classifyEvidenceSource(item);
         const title = String(item?.title || item?.note || 'Untitled source').trim();
-        const excerpt = _truncateText(item?.excerpt || item?.description || item?.note || '', 220);
+        const excerpt = _truncateText(
+          item?.excerpt || item?.description || item?.note || '', 220
+        );
         const url = String(item?.url || item?.link || '').trim();
         const reason = String(item?.relevanceReason || '').trim();
-        return `- ${labelMap[kind] || 'Source'}: ${title}${reason ? ` | Why used: ${reason}` : ''}${excerpt ? ` | ${excerpt}` : ''}${url ? ` | ${url}` : ''}`;
+        const fullText = index < 2
+          ? _truncateText(String(item?.contentFull || ''), 3000)
+          : '';
+        const base = `- ${labelMap[kind] || 'Source'}: ${title}`
+          + `${reason ? ` | Why used: ${reason}` : ''}`
+          + `${excerpt ? ` | Summary: ${excerpt}` : ''}`
+          + `${url ? ` | ${url}` : ''}`;
+        return fullText
+          ? `${base}\n  Full document content:\n  ${fullText.replace(/\n/g, '\n  ')}`
+          : base;
       })
       .filter(Boolean)
       .slice(0, limit);
@@ -546,7 +561,7 @@ const LLMService = (() => {
   }
 
 
-  function _buildContextPromptBlock(settings = {}, businessUnit = null) {
+  function _buildContextPromptBlock(settings = {}, businessUnit = null, priorPatterns = []) {
     const parts = [
       settings?.businessUnitContext ? `Live business-unit context:
 ${settings.businessUnitContext}` : '',
@@ -559,6 +574,12 @@ ${settings.personalContextSummary}` : '',
       businessUnit?.selectedDepartmentContext ? `Selected department context:
 ${businessUnit.selectedDepartmentContext}` : ''
     ].filter(Boolean);
+    if (Array.isArray(priorPatterns) && priorPatterns.length) {
+      const patternLines = priorPatterns.map(p =>
+        `- ${p.scenarioType || 'Prior scenario'} (${p.geography || 'unknown geography'}): posture was ${p.posture}, confidence was ${p.confidenceLabel}${p.topGap ? `, main evidence gap was: ${p.topGap}` : ''}${p.keyRecommendation ? `, top recommendation was: ${p.keyRecommendation}` : ''}.`
+      ).join('\n');
+      parts.push(`Prior scenario patterns for this business unit:\n${patternLines}`);
+    }
     return parts.length ? parts.join('\n\n') : '(no additional live BU/function/user context provided)';
   }
 
@@ -1105,9 +1126,17 @@ ${businessUnit.selectedDepartmentContext}` : ''
     // Try real API first
     if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
       try {
-        const systemPrompt = `You are a senior cyber risk analyst specialising in FAIR methodology. 
-Given a risk scenario narrative and business context, provide structured FAIR inputs and recommendations.
-Prefer GCC and UAE benchmark references where relevant. If those are unavailable for a specific assumption, use the best available global benchmark and explain the fallback logic. Keep the output aligned to FAIR reasoning and consistent with broadly recognised risk management expectations such as clear threat, vulnerability, and loss logic.
+        const systemPrompt = `You are a senior cyber risk analyst specialising in FAIR methodology and international risk and regulatory environments.
+
+Before producing your JSON output, reason through the following three questions:
+1. What is the most credible threat path for this scenario given the business context, the specific geography, and the applicable regulations provided? Be specific about actor, method, and likely first-order effect.
+2. What assumption in the FAIR inputs would most change the loss estimate if it were wrong? Name it explicitly.
+3. What is the single most important control or action that would most reduce expected loss for this scenario?
+
+Use that reasoning to shape scenarioTitle, structuredScenario, inputRationale, workflowGuidance, and recommendations. Do not include the reasoning questions themselves in the JSON output.
+
+The applicable regulations, geographic scope, and benchmark strategy will be provided in the user prompt. Use those as the primary reference — do not assume a default jurisdiction or benchmark source. Where the user prompt specifies a benchmark preference, follow that strategy explicitly and note any fallback in benchmarkBasis.
+
 Respond ONLY with valid JSON matching this exact schema:
 {
   "scenarioTitle": "string",
@@ -1135,7 +1164,9 @@ Respond ONLY with valid JSON matching this exact schema:
   "recommendations": [{ "title": "string", "why": "string", "impact": "string" }]
 }`;
         const evidenceMeta = _buildEvidenceMeta({ citations: retrievedDocs, businessUnit: buContext, geography: buContext?.geography, applicableRegulations: buContext?.regulatoryTags || [], userProfile: buContext?.userProfileSummary, organisationContext: buContext?.companyStructureContext });
-        const userPrompt = `BU: ${buContext?.name || 'Unknown'}
+        const userPrompt = `Risk narrative: ${narrative}
+Scenario taxonomy hint: ${classification.scenarioType} | ${classification.attackType} | ${classification.effect}
+BU: ${buContext?.name || 'Unknown'}
 Data types: ${(buContext?.dataTypes || []).join(', ')}
 Regulatory tags: ${(buContext?.regulatoryTags || []).join(', ')}
 Critical services: ${(buContext?.criticalServices || []).join(', ')}
@@ -1149,12 +1180,13 @@ ${buContext?.userProfileSummary || '(none)'}
 Organisation structure context:
 ${buContext?.companyStructureContext || '(none)'}
 Live scoped context:
-${_buildContextPromptBlock(buContext, buContext)}
-Scenario taxonomy hint:
-${classification.scenarioType} | ${classification.attackType} | ${classification.effect}
-
-Risk narrative: ${narrative}
-
+${_buildContextPromptBlock(
+  buContext,
+  buContext,
+  (typeof getRelevantScenarioPatterns === 'function'
+    ? getRelevantScenarioPatterns(buContext?.id || '')
+    : [])
+)}
 Relevant citations:
 ${_buildCitationPromptBlock(retrievedDocs)}
 
@@ -1164,7 +1196,7 @@ ${BenchmarkService.buildPromptBlock(benchmarkCandidates)}
 Evidence quality context:
 ${evidenceMeta.promptBlock}`;
 
-        const raw = await _callLLM(systemPrompt, userPrompt, { taskName: 'generateScenarioAndInputs' });
+        const raw = await _callLLM(systemPrompt, userPrompt, { taskName: 'generateScenarioAndInputs', maxPromptChars: 24000 });
         if (raw) {
           const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
           const fallback = _generateStub(narrative, buContext, retrievedDocs, benchmarkCandidates);
@@ -1247,7 +1279,20 @@ ${evidenceMeta.promptBlock}`;
     }
     if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
       try {
-        const systemPrompt = `You are a senior enterprise risk analyst. Given a risk statement, optional risk register text, business context, and regulations, expand the scenario realistically using likely attack paths, common knock-on effects, business consequences, and known industry patterns. Do not merely paraphrase the input. If the scenario concerns identity compromise, explain likely downstream effects such as email compromise, privileged misuse, tenant or admin abuse, fraud, service disruption, and data exposure where relevant. Return JSON only with this schema:
+        const systemPrompt = `You are a senior enterprise risk analyst with deep expertise in FAIR methodology and international regulatory environments including data protection law, cybersecurity frameworks, financial crime regulation, export controls, and sector-specific standards.
+
+Before producing your JSON output, reason through the following three questions in this order:
+1. What is the most credible threat path given the scenario, business context, and the specific geography and regulations provided? Name the most likely actor, method, and first-order effect.
+2. What is the weakest assumption in this scenario — the thing that, if wrong, would most change the loss estimate? Be specific.
+3. What is the single most important action the user should take next to make this scenario estimate-ready?
+
+Use that reasoning to shape all fields in your output, especially enhancedStatement, linkAnalysis, and workflowGuidance. Do not include the reasoning questions themselves in the JSON output.
+
+The applicable regulations and geographic scope will be provided in the user prompt. Use those as the primary reference for regulatory framing — do not assume a default jurisdiction.
+
+If the scenario concerns identity compromise (Azure AD, Entra, SSO, directory services), explain likely downstream effects: mailbox compromise, privileged misuse, tenant changes, service disruption, fraud, and data exposure where relevant.
+
+Return JSON only with this schema:
 {
   "enhancedStatement": "string",
   "summary": "string",
@@ -1260,7 +1305,16 @@ ${evidenceMeta.promptBlock}`;
   "regulations": ["string"]
 }`;
         const evidenceMeta = _buildEvidenceMeta({ citations: input.citations || [], businessUnit: input.businessUnit, geography: input.geography, applicableRegulations: input.applicableRegulations, uploadedText: input.registerText, registerText: input.registerText, userProfile: input.adminSettings?.userProfileSummary, organisationContext: input.adminSettings?.companyStructureContext, adminSettings: input.adminSettings });
-        const userPrompt = `Business unit: ${input.businessUnit?.name || 'Unknown'}
+        const userPrompt = `Instructions:
+- make the enhancedStatement read like a realistic scenario narrative, not a polished restatement
+- explain the most likely progression of the event and the common secondary effects
+- include business and operational consequences, not just the technical failure
+- reflect the stated urgency where provided
+- if the scenario involves identity, directory, SSO, or Azure AD/Entra compromise, include plausible knock-on effects such as mailbox compromise, privileged misuse, tenant changes, service disruption, fraud, and data exposure where relevant
+- produce concise but concrete candidate risks that a user can choose from
+- classify the scenario using credible cyber risk taxonomy; do not label identity-control compromise as cloud misconfiguration unless the core failure is genuinely cloud exposure
+
+Business unit: ${input.businessUnit?.name || 'Unknown'}
 Geography: ${input.geography || 'Unknown'}
 BU context summary: ${input.businessUnit?.contextSummary || input.businessUnit?.notes || '(none)'}
 BU-specific AI guidance: ${input.businessUnit?.aiGuidance || '(none)'}
@@ -1275,7 +1329,13 @@ ${input.adminSettings?.userProfileSummary || '(none)'}
 Organisation structure context:
 ${input.adminSettings?.companyStructureContext || '(none)'}
 Live scoped context:
-${_buildContextPromptBlock(input.adminSettings, input.businessUnit)}
+${_buildContextPromptBlock(
+  input.adminSettings,
+  input.businessUnit,
+  (typeof getRelevantScenarioPatterns === 'function'
+    ? getRelevantScenarioPatterns(input.businessUnit?.id || '')
+    : [])
+)}
 Register metadata: ${input.registerMeta ? JSON.stringify(input.registerMeta) : '(none)'}
 
 Risk statement:
@@ -1287,18 +1347,9 @@ ${input.registerText || '(none)'}
 Retrieved citations:
 ${_buildCitationPromptBlock(input.citations || [])}
 
-Instructions:
-- make the enhancedStatement read like a realistic scenario narrative, not a polished restatement
-- explain the most likely progression of the event and the common secondary effects
-- include business and operational consequences, not just the technical failure
-- reflect the stated urgency where provided
-- if the scenario involves identity, directory, SSO, or Azure AD/Entra compromise, include plausible knock-on effects such as mailbox compromise, privileged misuse, tenant changes, service disruption, fraud, and data exposure where relevant
-- produce concise but concrete candidate risks that a user can choose from
-- classify the scenario using credible cyber risk taxonomy; do not label identity-control compromise as cloud misconfiguration unless the core failure is genuinely cloud exposure
-
 Evidence quality context:
 ${evidenceMeta.promptBlock}`;
-        const raw = await _callLLM(systemPrompt, userPrompt, { taskName: 'enhanceRiskContext' });
+        const raw = await _callLLM(systemPrompt, userPrompt, { taskName: 'enhanceRiskContext', temperature: 0.6, maxPromptChars: 24000 });
         if (raw) {
           const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
           return _decorateAiResult(_withEvidenceMeta({

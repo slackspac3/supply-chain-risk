@@ -27,13 +27,19 @@ function resolveApiUrl(path) {
   }
 
   function getAdminApiSecret() {
-    return localStorage.getItem(ADMIN_SECRET_KEY) || '';
+    try {
+      return localStorage.getItem(ADMIN_SECRET_KEY) || '';
+    } catch {
+      return '';
+    }
   }
 
   function setAdminApiSecret(secret) {
     const value = String(secret || '').trim();
-    if (value) localStorage.setItem(ADMIN_SECRET_KEY, value);
-    else localStorage.removeItem(ADMIN_SECRET_KEY);
+    try {
+      if (value) localStorage.setItem(ADMIN_SECRET_KEY, value);
+      else localStorage.removeItem(ADMIN_SECRET_KEY);
+    } catch {}
     return value;
   }
 
@@ -62,7 +68,9 @@ function resolveApiUrl(path) {
 
   function saveCache(accounts) {
     accountsCache = Array.isArray(accounts) && accounts.length ? accounts.map(normaliseAccount) : [];
-    localStorage.setItem(ACCOUNTS_CACHE_KEY, JSON.stringify(accountsCache));
+    try {
+      localStorage.setItem(ACCOUNTS_CACHE_KEY, JSON.stringify(accountsCache));
+    } catch {}
   }
 
   function readCachedAccounts() {
@@ -138,9 +146,13 @@ function resolveApiUrl(path) {
   }
 
   function consumeSessionNotice() {
-    const value = sessionStorage.getItem(SESSION_NOTICE_KEY) || '';
-    if (value) sessionStorage.removeItem(SESSION_NOTICE_KEY);
-    return value;
+    try {
+      const value = sessionStorage.getItem(SESSION_NOTICE_KEY) || '';
+      if (value) sessionStorage.removeItem(SESSION_NOTICE_KEY);
+      return value;
+    } catch {
+      return '';
+    }
   }
 
   async function refreshManagedAccounts() {
@@ -206,13 +218,15 @@ function resolveApiUrl(path) {
   }
 
   function writeSession(account) {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({
-      authenticated: true,
-      ts: Date.now(),
-      user: sanitiseAccount(account),
-      apiSessionToken: account.apiSessionToken || '',
-      context: {}
-    }));
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+        authenticated: true,
+        ts: Date.now(),
+        user: sanitiseAccount(account),
+        apiSessionToken: account.apiSessionToken || '',
+        context: {}
+      }));
+    } catch {}
   }
 
   function readSession() {
@@ -261,8 +275,10 @@ function resolveApiUrl(path) {
   }
 
   function logout() {
-    sessionStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(ACCOUNTS_CACHE_KEY);
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(ACCOUNTS_CACHE_KEY);
+    } catch {}
     accountsCache = [];
 
   }
@@ -292,7 +308,9 @@ function resolveApiUrl(path) {
       ...context
     };
     session.ts = Date.now();
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    } catch {}
     return getCurrentUser();
   }
 
@@ -338,7 +356,9 @@ function resolveApiUrl(path) {
     const session = readSession();
     if (session?.user?.username === updated?.username) {
       session.user = sanitiseAccount(updated);
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      } catch {}
     }
     return updated ? sanitiseAccount(updated) : null;
   }

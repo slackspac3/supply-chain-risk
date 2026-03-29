@@ -1,3 +1,20 @@
+function renderStep2TopEvidenceNudge(draft) {
+  const missing = Array.isArray(draft.missingInformation)
+    ? draft.missingInformation.filter(Boolean)
+    : [];
+  const confidence = String(draft.confidenceLabel || '').toLowerCase();
+  if (!missing.length || /high/i.test(confidence)) return '';
+  const topGap = String(missing[0]).trim();
+  if (!topGap) return '';
+  const isLow = /low/i.test(confidence);
+  return `<div class="step2-evidence-nudge anim-fade-in${isLow ? ' step2-evidence-nudge--low' : ''}">
+    <span class="step2-evidence-nudge__icon">${isLow ? '△' : '○'}</span>
+    <span class="step2-evidence-nudge__text">
+      <strong>The main thing that would improve this estimate:</strong> ${escapeHtml(topGap)}
+    </span>
+  </div>`;
+}
+
 function renderWizard2() {
   const draft = AppState.draft;
   const selectedRisks = getSelectedRisks();
@@ -50,6 +67,27 @@ function renderWizard2() {
             headerExtras: UI.sectionStatusBadge('Required', 'gold'),
             body: `<div class="form-group"><textarea class="form-textarea" id="narrative" rows="5" placeholder="Describe the risk: What could happen? Who might cause it? What assets are at risk? What are the potential impacts?" style="min-height:160px">${draft.enhancedNarrative || draft.narrative || ''}</textarea></div>`
           })}
+          ${renderStep2TopEvidenceNudge(draft)}
+          ${UI.disclosureSection({
+            title: 'Use AI to structure the scenario',
+            badgeLabel: draft.llmAssisted ? 'Done' : 'Recommended',
+            badgeTone: draft.llmAssisted ? 'neutral' : 'gold',
+            open: !!(draft.enhancedNarrative || draft.narrative) && !draft.llmAssisted,
+            className: 'wizard-disclosure card card--primary anim-fade-in anim-delay-2',
+            body: `<div class="wizard-section-head">
+              <div class="wizard-section-copy">
+                <h3 class="wizard-section-title">${draft.llmAssisted ? 'AI has structured this scenario' : 'Let AI analyse and structure this scenario'}</h3>
+                <p class="wizard-section-description">${draft.llmAssisted ? 'The FAIR inputs are pre-loaded for Step 3. Run again if you have changed the narrative significantly.' : 'AI will read the narrative, identify the most credible threat path, surface assumptions, and pre-load defensible FAIR starting ranges for Step 3. Your narrative stays editable.'}</p>
+              </div>
+              ${UI.sectionStatusBadge('Assistive only', 'neutral')}
+            </div>
+            <button class="btn btn--primary" id="btn-llm-assist" style="width:100%;justify-content:center;padding:14px;margin-top:var(--sp-4)">
+              <span id="llm-btn-text">${draft.llmAssisted ? '🔄 Re-run AI analysis' : '🤖 Analyse scenario and pre-load FAIR inputs'}</span>
+            </button>
+            <p style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:8px">Retrieves relevant internal docs and uses AI to suggest structured narrative improvements and FAIR inputs with citations.</p>
+            <div class="form-help" id="wizard2-ai-status" style="text-align:center;margin-top:8px">${draft.llmAssisted ? 'AI has already analysed this scenario. Re-run if the narrative has changed significantly.' : 'AI reads the scenario, reasons about the threat path and assumptions, and pre-loads starting values for Step 3. Takes around 10–15 seconds.'}</div>`
+          })}
+          <div id="llm-output-area"></div>
           ${renderStep2WhyItMattersCard(draft, selectedRisks, scenarioGeographies)}
           ${renderStep2StructuredSummary(draft, selectedRisks, scenarioGeographies)}
           ${renderScenarioQualityCoach(scenarioQualityCoach, {
@@ -113,26 +151,6 @@ function renderWizard2() {
               </div>
             </div>`
           })}
-          ${UI.disclosureSection({
-            title: 'Use AI to structure the scenario',
-            badgeLabel: 'Optional',
-            badgeTone: 'neutral',
-            open: false,
-            className: 'wizard-disclosure card anim-fade-in anim-delay-2',
-            body: `<div class="wizard-section-head">
-              <div class="wizard-section-copy">
-                <h3 class="wizard-section-title">Use AI when you want better structure, not more text</h3>
-                <p class="wizard-section-description">AI should help tighten scope, surface assumptions, and prepare challengeable FAIR inputs for the next step. Your narrative stays editable.</p>
-              </div>
-              ${UI.sectionStatusBadge('Assistive only', 'neutral')}
-            </div>
-            <button class="btn btn--primary" id="btn-llm-assist" style="width:100%;justify-content:center;padding:14px;margin-top:var(--sp-4)">
-              <span id="llm-btn-text">🤖 Structure scenario and suggest FAIR inputs</span>
-            </button>
-            <p style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:8px">Retrieves relevant internal docs and uses AI to suggest structured narrative improvements and FAIR inputs with citations.</p>
-            <div class="form-help" id="wizard2-ai-status" style="text-align:center;margin-top:8px">Use AI only if you want a structured starting point. You can continue manually at any time.</div>`
-          })}
-          <div id="llm-output-area"></div>
         </div>
         <div class="wizard-footer">
           <button class="btn btn--ghost" id="btn-back-2">← Back</button>
@@ -252,7 +270,7 @@ function renderStep2QuantBridge(draft, selectedRisks, scenarioGeographies) {
     scenarioGeographies.length ? `Geography: ${scenarioGeographies.join(', ')}` : '',
     Array.isArray(draft.applicableRegulations) && draft.applicableRegulations.length ? `Regulations: ${draft.applicableRegulations.slice(0, 3).join(', ')}` : ''
   ].filter(Boolean);
-  return `<div class="card card--elevated anim-fade-in">
+  return `<div class="card card--background anim-fade-in">
     <div class="context-panel-title">What will carry into the estimate</div>
     <div class="context-grid" style="margin-top:var(--sp-4)">
       <div class="context-chip-panel">
@@ -275,7 +293,7 @@ function renderStep2QuantBridge(draft, selectedRisks, scenarioGeographies) {
 
 function renderStep2WhyItMattersCard(draft, selectedRisks, scenarioGeographies) {
   const warnings = getStep2NarrativeReadiness(draft, selectedRisks, scenarioGeographies);
-  return `<div class="card card--elevated anim-fade-in">
+  return `<div class="card card--background anim-fade-in">
     <div class="wizard-premium-head">
       <div>
         <div class="context-panel-title">Why this step improves the estimate</div>
@@ -314,7 +332,7 @@ function renderStep2StructuredSummary(draft, selectedRisks, scenarioGeographies)
     selectedRisks.length ? `In scope: ${selectedRisks.length} risk${selectedRisks.length === 1 ? '' : 's'}` : '',
     scenarioGeographies.length ? `Geography: ${scenarioGeographies.join(', ')}` : ''
   ].filter(Boolean);
-  return `<div class="card card--elevated anim-fade-in">
+  return `<div class="card card--background anim-fade-in">
     <div class="wizard-premium-head">
       <div>
         <div class="context-panel-title">Scenario structure at a glance</div>
@@ -432,6 +450,42 @@ function _buildAiFairInputPayload(result, benchmarkCandidates = [], citations = 
   return { fairParams, inputAssignments, keyOrigins };
 }
 
+function renderWizard2AnalystReasoning(draft, result) {
+  const tef = String(result?.inputRationale?.tef || draft?.inputRationale?.tef || '').trim();
+  const vulnerability = String(result?.inputRationale?.vulnerability || draft?.inputRationale?.vulnerability || '').trim();
+  const topGuidance = (result?.workflowGuidance?.[0] || draft?.workflowGuidance?.[0] || '').trim();
+  const confidence = String(result?.confidenceLabel || draft?.confidenceLabel || 'Moderate confidence').trim();
+  const evidenceQuality = String(result?.evidenceQuality || draft?.evidenceQuality || '').trim();
+
+  if (!tef && !vulnerability && !topGuidance) return '';
+
+  const confidenceTone = /high/i.test(confidence) ? 'gold' : /low/i.test(confidence) ? 'danger' : 'neutral';
+
+  return `<div class="card card--elevated mt-4 anim-fade-in">
+    <div class="wizard-premium-head" style="margin-bottom:var(--sp-4)">
+      <div>
+        <div class="context-panel-title">Analyst reasoning</div>
+        <p class="context-panel-copy" style="margin-top:var(--sp-2)">Why AI produced these starting values — challenge anything that does not match what you know.</p>
+      </div>
+      <span class="badge badge--${confidenceTone}">${escapeHtml(confidence)}${evidenceQuality ? ' · ' + escapeHtml(evidenceQuality) : ''}</span>
+    </div>
+    <div class="context-grid">
+      ${tef ? `<div class="context-chip-panel">
+        <div class="context-panel-title">Why this frequency</div>
+        <p class="context-panel-copy">${escapeHtml(tef)}</p>
+      </div>` : ''}
+      ${vulnerability ? `<div class="context-chip-panel">
+        <div class="context-panel-title">Why this control and threat balance</div>
+        <p class="context-panel-copy">${escapeHtml(vulnerability)}</p>
+      </div>` : ''}
+      ${topGuidance ? `<div class="context-chip-panel">
+        <div class="context-panel-title">Most important next step</div>
+        <p class="context-panel-copy">${escapeHtml(topGuidance)}</p>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderWizard2AiChangeSummary(result, previousNarrative) {
   const changed = [];
   if (result?.scenarioTitle) changed.push(`Gave the scenario a clearer working title: <strong>${escapeHtml(result.scenarioTitle)}</strong>.`);
@@ -511,15 +565,18 @@ async function runLLMAssist() {
       };
     }
     saveDraft();
-    output.innerHTML = `${renderWizard2AiChangeSummary(result, previousNarrative)}<div class="card card--glow mt-4 anim-fade-in">
+    output.innerHTML = `${renderWizard2AiChangeSummary(result, previousNarrative)}${renderWizard2AnalystReasoning(AppState.draft, result)}<div class="card card--glow mt-4 anim-fade-in">
+      <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-3);flex-wrap:wrap">
+        <span class="badge badge--${/high/i.test(result.confidenceLabel || '') ? 'gold' : /low/i.test(result.confidenceLabel || '') ? 'danger' : 'neutral'}" style="font-size:.8rem">${escapeHtml(result.confidenceLabel || 'Moderate confidence')}${result.evidenceQuality ? ' · ' + escapeHtml(result.evidenceQuality) : ''}</span>
+      </div>
       <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4)">
         <span style="font-size:24px">✅</span>
         <div>
-          <div style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:700;color:var(--text-primary)">${result.scenarioTitle}</div>
+          <div style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:700;color:var(--text-primary)">${escapeHtml(String(result.scenarioTitle || 'Scenario ready'))}</div>
           <div style="font-size:.75rem;color:var(--text-muted)">AI-structured · FAIR inputs pre-loaded to Step 3</div>
         </div>
       </div>
-      ${result.structuredScenario?`<div class="grid-2"><div><div class="form-label" style="font-size:.7rem">Threat Community</div><p style="font-size:.85rem;margin-top:4px">${result.structuredScenario.threatCommunity}</p></div><div><div class="form-label" style="font-size:.7rem">Attack Vector</div><p style="font-size:.85rem;margin-top:4px">${result.structuredScenario.attackType}</p></div></div>`:''}
+      ${result.structuredScenario?`<div class="grid-2"><div><div class="form-label" style="font-size:.7rem">Threat Community</div><p style="font-size:.85rem;margin-top:4px">${escapeHtml(String(result.structuredScenario.threatCommunity || 'Not specified'))}</p></div><div><div class="form-label" style="font-size:.7rem">Attack Vector</div><p style="font-size:.85rem;margin-top:4px">${escapeHtml(String(result.structuredScenario.attackType || 'Not specified'))}</p></div></div>`:''}
     </div>${renderScenarioAssistSummaryBlock({
       workflowGuidance: AppState.draft.workflowGuidance,
       confidenceLabel: AppState.draft.confidenceLabel,
@@ -541,7 +598,41 @@ async function runLLMAssist() {
     output.innerHTML = `<div class="banner banner--danger mt-4"><span class="banner-icon">⚠</span><span class="banner-text">LLM Assist is unavailable right now.</span></div><div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap"><button class="btn btn--secondary" id="btn-wizard2-ai-retry" type="button">Try again</button><button class="btn btn--ghost" id="btn-wizard2-continue-manual" type="button">Continue without AI</button></div>`;
     document.getElementById('btn-wizard2-ai-retry')?.addEventListener('click', runLLMAssist);
     document.getElementById('btn-wizard2-continue-manual')?.addEventListener('click', () => document.getElementById('btn-next-2')?.click());
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btnText.textContent = AppState.draft.llmAssisted
+      ? '🔄 Re-run AI analysis'
+      : '🤖 Analyse scenario and pre-load FAIR inputs';
   }
-  btn.disabled = false; btn.classList.remove('loading');
-  btnText.innerHTML = '🤖 LLM Assist — Draft Scenario &amp; Suggest FAIR Inputs';
 }
+
+/* Add to app.css — step2-evidence-nudge */
+/*
+.step2-evidence-nudge {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: rgba(33,40,34,.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  font-size: .84rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-top: var(--sp-2);
+}
+.step2-evidence-nudge--low {
+  background: rgba(242,251,90,.08);
+  border-color: rgba(146,156,42,.2);
+}
+.step2-evidence-nudge__icon {
+  flex-shrink: 0;
+  font-size: .9rem;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+.step2-evidence-nudge strong {
+  color: var(--text-primary);
+}
+*/

@@ -77,6 +77,9 @@ const RAGService = (() => {
     if (bu && bu.docIds && bu.docIds.includes(doc.id)) {
       reasons.push('Mapped to the selected business unit');
     }
+    if (Array.isArray(doc.buIds) && doc.buIds.includes(buId)) {
+      reasons.push('Mapped to the selected business unit');
+    }
     if ((doc.tags || []).includes('all-bu')) {
       reasons.push('Applies across the organisation');
     }
@@ -114,7 +117,7 @@ const RAGService = (() => {
     const q = query.toLowerCase();
     const words = q.split(/\W+/).filter(w => w.length > 3);
 
-    const text = `${doc.title} ${doc.contentExcerpt} ${doc.tags.join(' ')}`.toLowerCase();
+    const text = `${doc.title} ${doc.contentExcerpt || ''} ${doc.contentFull || ''} ${doc.tags.join(' ')}`.toLowerCase();
 
     words.forEach(w => {
       const hits = (text.match(new RegExp(w, 'g')) || []).length;
@@ -166,11 +169,14 @@ const RAGService = (() => {
     });
     const results = scored.filter(d => d._score > 0).slice(0, Math.max(topK, 6));
 
-    return results.slice(0, topK).map(d => ({
+    return results.slice(0, topK).map((d, index) => ({
       docId: d.id,
       title: d.title,
       url: d.url,
       excerpt: d.contentExcerpt,
+      contentFull: index < 2
+        ? (String(d.contentFull || '').trim() || '')
+        : '',
       tags: d.tags,
       score: d._score,
       lastUpdated: d.lastUpdated,
@@ -188,9 +194,33 @@ const RAGService = (() => {
     return _docs.filter(d => bu.docIds && bu.docIds.includes(d.id));
   }
 
+  function addDocument(doc) {
+    if (!doc || !doc.id) return;
+    const existing = _docs.findIndex(d => d.id === doc.id);
+    const normalised = {
+      id: String(doc.id || '').trim(),
+      title: String(doc.title || '').trim(),
+      url: String(doc.url || '').trim(),
+      contentExcerpt: String(doc.contentExcerpt || doc.excerpt || '').slice(0, 500).trim(),
+      contentFull: String(doc.contentFull || doc.content || doc.contentExcerpt || '').slice(0, 8000).trim(),
+      tags: Array.isArray(doc.tags) ? doc.tags.map(String).filter(Boolean) : [],
+      lastUpdated: doc.lastUpdated || new Date().toISOString(),
+      buIds: Array.isArray(doc.buIds) ? doc.buIds : []
+    };
+    if (existing >= 0) {
+      _docs[existing] = normalised;
+    } else {
+      _docs.push(normalised);
+    }
+  }
+
+  function bulkAddDocuments(docs = []) {
+    (Array.isArray(docs) ? docs : []).forEach(doc => addDocument(doc));
+  }
+
   function _simulateLatency(ms) {
     return new Promise(r => setTimeout(r, ms));
   }
 
-  return { init, retrieveRelevantDocs, getDocsForBU };
+  return { init, retrieveRelevantDocs, getDocsForBU, addDocument, bulkAddDocuments };
 })();

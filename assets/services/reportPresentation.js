@@ -361,6 +361,50 @@ const ReportPresentation = (() => {
     };
   }
 
+  function buildFastestReductionLever(recommendations, executiveDecision) {
+    const topRec = Array.isArray(recommendations) && recommendations.length
+      ? recommendations[0]
+      : null;
+    if (!topRec) {
+      return executiveDecision?.priority
+        ? `The most important next action is: ${executiveDecision.priority}`
+        : '';
+    }
+    const title = String(topRec.title || '').trim();
+    const why = String(topRec.why || topRec.impact || '').trim();
+    if (!title) return '';
+    return why
+      ? `The fastest credible reduction lever is ${title} — ${why.charAt(0).toLowerCase()}${why.slice(1).replace(/\.$/, '')}.`
+      : `The fastest credible reduction lever is ${title}.`;
+  }
+
+  function buildMetricAnchorSentence(metricLabel, value, benchmarkReferences, geography) {
+    const num = Number(value || 0);
+    if (!num) return '';
+    const geo = String(geography || '').toLowerCase();
+    const isGcc = /uae|gcc|gulf|saudi|qatar|bahrain|kuwait|oman/.test(geo);
+    const refs = Array.isArray(benchmarkReferences) ? benchmarkReferences : [];
+    const topRef = refs[0] || null;
+
+    if (num >= 10000000) {
+      return isGcc
+        ? 'This is within the range of material cyber losses reported by GCC financial institutions in recent regulatory disclosures.'
+        : 'This is within the range of material cyber losses reported in recent regulatory enforcement actions.';
+    }
+    if (num >= 2000000) {
+      return topRef
+        ? `This is consistent with the ${topRef.sourceTitle || topRef.title || 'benchmark reference'} range for comparable scenarios.`
+        : 'This is within the range that typically triggers board-level reporting and external incident response engagement.';
+    }
+    if (num >= 500000) {
+      return 'This is within the range that typically requires senior management escalation and external advisory support.';
+    }
+    if (num >= 100000) {
+      return 'This is within the range manageable through existing incident response retainer and internal resources.';
+    }
+    return 'This is within the range typically handled at team level without senior escalation.';
+  }
+
   const exported = {
     clampNumber,
     cleanExecutiveNarrativeText,
@@ -371,7 +415,9 @@ const ReportPresentation = (() => {
     buildExecutiveThresholdModel,
     buildExecutiveImpactMix,
     buildTreatmentDecisionSummary,
-    buildAnalystAdvisorySummary
+    buildAnalystAdvisorySummary,
+    buildFastestReductionLever,
+    buildMetricAnchorSentence
   };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = exported;

@@ -9,7 +9,7 @@
       userSettings: null,
       assessments: [],
       savedAssessments: null,
-      learningStore: { templates: {} },
+      learningStore: { templates: {}, scenarioPatterns: [] },
       draft: null,
       draftWorkspace: null,
       _meta: {

@@ -19,6 +19,21 @@ const DEFAULT_TYPICAL_DEPARTMENTS = [
 ];
 const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || '';
 
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseRequestBody(req) {
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body || '{}');
+    } catch {
+      return null;
+    }
+  }
+  return req.body ?? {};
+}
+
 function getKvUrl() {
   return process.env.APPLE_CAT || process.env.FOO_URL_TEST || process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
 }
@@ -31,19 +46,26 @@ async function runKvCommand(command) {
   const url = getKvUrl();
   const token = getKvToken();
   if (!url || !token) return null;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(command)
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `KV request failed with HTTP ${res.status}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(command),
+      signal: controller.signal
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `KV request failed with HTTP ${res.status}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json();
 }
 
 function hasWritableKv() {
@@ -268,15 +290,7 @@ function canBuAdminWriteSettings(currentSettings, proposedSettings, session) {
 
 module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
-  const body = typeof req.body === 'string'
-    ? (() => {
-        try {
-          return JSON.parse(req.body || '{}');
-        } catch {
-          return {};
-        }
-      })()
-    : (req.body || {});
+  const body = parseRequestBody(req);
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,OPTIONS');
@@ -291,6 +305,16 @@ module.exports = async function handler(req, res) {
   const origin = req.headers.origin;
   if (origin && origin !== allowedOrigin) {
     sendApiError(res, 403, 'FORBIDDEN', 'Request origin is not allowed.');
+    return;
+  }
+
+  if (req.method === 'PUT' && !req.headers['content-type']?.includes('application/json')) {
+    sendApiError(res, 415, 'UNSUPPORTED_MEDIA_TYPE', 'Content-Type must be application/json');
+    return;
+  }
+
+  if (req.method === 'PUT' && !isPlainObject(body)) {
+    sendApiError(res, 400, 'VALIDATION_ERROR', 'Invalid request body.');
     return;
   }
 
@@ -309,6 +333,15 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'PUT') {
+      const bodyStr = JSON.stringify(body || {});
+      if (bodyStr.length > 500000) {
+        sendApiError(res, 413, 'PAYLOAD_TOO_LARGE', 'Request body too large');
+        return;
+      }
+      if (!isPlainObject(body.settings || {})) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'settings payload is required.');
+        return;
+      }
       const session = isAdminSecretValid(req) ? { username: 'admin', role: 'admin' } : requireSession(req, res);
       if (!session) return;
       const currentSettings = await readSettings();
@@ -336,6 +369,7 @@ module.exports = async function handler(req, res) {
 
     sendApiError(res, 405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
   } catch (error) {
+    console.error('Settings API request failed.', error);
     sendApiError(res, 500, 'SETTINGS_REQUEST_FAILED', 'The settings request could not be completed.');
   }
 };

@@ -214,7 +214,7 @@ const AppState = {
   disclosureState: {},
   resultsBoardroomMode: false,
   adminSettingsCache: null,
-  userStateCache: { username: '', userSettings: null, assessments: null, learningStore: null, draft: null, _meta: { revision: 0, updatedAt: 0 } },
+  userStateCache: { username: '', userSettings: null, assessments: null, learningStore: { templates: {}, scenarioPatterns: [] }, draft: null, _meta: { revision: 0, updatedAt: 0 } },
   userStateSyncTimer: null,
   userStateSyncRevision: 0,
   userStateSyncPending: null,
@@ -233,6 +233,14 @@ const AppState = {
 function applyWorkspaceRuntimeState(nextState) {
   Object.assign(AppState, nextState || {});
   return AppState;
+}
+
+function cloneSerializableState(value, fallback = null) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return fallback;
+  }
 }
 
 
@@ -279,7 +287,9 @@ function buildExpectedMeta(meta = {}) {
 function applySharedSettingsLocally(settings = {}) {
   const normalised = normaliseAdminSettings(settings);
   updateAdminSettingsState(normalised);
-  localStorage.setItem(GLOBAL_ADMIN_STORAGE_KEY, JSON.stringify(normalised));
+  try {
+    localStorage.setItem(GLOBAL_ADMIN_STORAGE_KEY, JSON.stringify(normalised));
+  } catch {}
   return normalised;
 }
 
@@ -292,20 +302,22 @@ function applyUserStateSnapshotLocally(username, state = {}) {
     userSettings: normalizedWorkspace.userSettings || null,
     assessments: Array.isArray(normalizedWorkspace.assessments) ? normalizedWorkspace.assessments : [],
     savedAssessments: normalizedWorkspace.savedAssessments,
-    learningStore: normalizedWorkspace.learningStore && typeof normalizedWorkspace.learningStore === 'object' ? normalizedWorkspace.learningStore : { templates: {} },
+    learningStore: normalizedWorkspace.learningStore && typeof normalizedWorkspace.learningStore === 'object' ? normalizedWorkspace.learningStore : { templates: {}, scenarioPatterns: [] },
     draft: normalizedWorkspace.draft && typeof normalizedWorkspace.draft === 'object' ? normalizedWorkspace.draft : null,
     draftWorkspace: normalizedWorkspace.draftWorkspace,
     _meta: buildExpectedMeta(normalizedWorkspace._meta)
   };
   updateUserStateCache(nextCache);
   AppState.userSettingsSavedAt = Number(nextCache._meta?.updatedAt || AppState.userSettingsSavedAt || 0);
-  if (nextCache.userSettings) {
-    localStorage.setItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.userSettings));
-  } else {
-    localStorage.removeItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername));
-  }
-  localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.assessments));
-  localStorage.setItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.learningStore));
+  try {
+    if (nextCache.userSettings) {
+      localStorage.setItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.userSettings));
+    } else {
+      localStorage.removeItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername));
+    }
+    localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.assessments));
+    localStorage.setItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.learningStore));
+  } catch {}
   try {
     if (nextCache.draft) {
       sessionStorage.setItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.draft));
@@ -390,6 +402,63 @@ function persistDraftRecoverySnapshot(draft = AppState.draft, username = AuthSer
     }));
   } catch {}
 }
+
+function extractScenarioPattern(assessment) {
+  if (!assessment || !assessment.results) return null;
+  return {
+    id: String(assessment.id || '').trim(),
+    buId: String(assessment.buId || '').trim(),
+    scenarioType: String(assessment.structuredScenario?.attackType || assessment.scenarioTitle || '').trim(),
+    geography: String(assessment.geography || '').trim(),
+    posture: assessment.results.toleranceBreached
+      ? 'above-tolerance'
+      : assessment.results.nearTolerance
+        ? 'near-tolerance'
+        : 'within-tolerance',
+    confidenceLabel: String(assessment.confidenceLabel || 'Moderate confidence').trim(),
+    topGap: Array.isArray(assessment.missingInformation) && assessment.missingInformation.length
+      ? String(assessment.missingInformation[0]).trim()
+      : '',
+    keyRecommendation: Array.isArray(assessment.recommendations) && assessment.recommendations.length
+      ? String(assessment.recommendations[0]?.title || '').trim()
+      : '',
+    completedAt: Number(assessment.completedAt || Date.now())
+  };
+}
+
+function persistScenarioPattern(assessment) {
+  try {
+    const pattern = extractScenarioPattern(assessment);
+    if (!pattern || !pattern.buId) return;
+    const username = AuthService.getCurrentUser()?.username || '';
+    const key = buildUserStorageKey(LEARNING_STORAGE_PREFIX, username);
+    let store = { templates: {}, scenarioPatterns: [] };
+    try { store = JSON.parse(localStorage.getItem(key) || '{}') || { templates: {}, scenarioPatterns: [] }; } catch {}
+    if (!store.scenarioPatterns) store.scenarioPatterns = [];
+    store.scenarioPatterns = [
+      pattern,
+      ...(store.scenarioPatterns || []).filter(p => p.id !== pattern.id)
+    ].slice(0, 20);
+    localStorage.setItem(key, JSON.stringify(store));
+  } catch {}
+}
+
+function getRelevantScenarioPatterns(buId, limit = 3) {
+  try {
+    const username = AuthService.getCurrentUser()?.username || '';
+    const key = buildUserStorageKey(LEARNING_STORAGE_PREFIX, username);
+    const store = JSON.parse(localStorage.getItem(key) || '{}') || {};
+    const patterns = Array.isArray(store.scenarioPatterns) ? store.scenarioPatterns : [];
+    return patterns
+      .filter(p => !buId || p.buId === buId)
+      .sort((a, b) => b.completedAt - a.completedAt)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+// Scenario patterns are persisted from the shared assessment completion seam in assets/state/assessmentState.js.
 
 function readDraftRecoverySnapshot(username = AuthService.getCurrentUser()?.username || '') {
   const safeUsername = String(username || '').trim().toLowerCase();
@@ -1034,7 +1103,8 @@ async function handleUserStateConflict(error, retry) {
 function queueSharedUserStateSync(patch = {}, username = AuthService.getCurrentUser()?.username || '', options = {}) {
   const safeUsername = String(username || '').trim().toLowerCase();
   if (!safeUsername) return;
-  const safePatch = patch && typeof patch === 'object' ? { ...patch } : {};
+  // Queue a cloned patch so later draft/settings mutations cannot rewrite the pending sync payload in place.
+  const safePatch = patch && typeof patch === 'object' ? cloneSerializableState(patch, { ...(patch || {}) }) : {};
   applyWorkspaceRuntimeState(applyWorkspaceSyncQueuedTransition(AppState, safePatch));
   updateWorkspaceSyncState();
   if (AppState.userStateSyncTimer) clearTimeout(AppState.userStateSyncTimer);
@@ -1229,18 +1299,20 @@ function buildUserStorageKey(prefix, username = getCurrentUserOrThrow().username
 function clearUserPersistentState(username) {
   const safeUsername = String(username || '').trim().toLowerCase();
   if (!safeUsername) return;
-  localStorage.removeItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername));
-  localStorage.removeItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX, safeUsername));
-  localStorage.removeItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX, safeUsername));
-  localStorage.removeItem(buildUserStorageKey(DRAFT_RECOVERY_STORAGE_PREFIX, safeUsername));
-  sessionStorage.removeItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername));
-  sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX, safeUsername));
+  try {
+    localStorage.removeItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername));
+    localStorage.removeItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX, safeUsername));
+    localStorage.removeItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX, safeUsername));
+    localStorage.removeItem(buildUserStorageKey(DRAFT_RECOVERY_STORAGE_PREFIX, safeUsername));
+    sessionStorage.removeItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername));
+    sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX, safeUsername));
+  } catch {}
   const expectedMeta = buildExpectedMeta(AppState.userStateCache.username === safeUsername ? AppState.userStateCache._meta : {});
   if (AppState.userStateCache.username === safeUsername) {
     resetUserStateCache(safeUsername);
   }
   requestUserState('PUT', safeUsername, {
-    state: { userSettings: null, assessments: [], learningStore: { templates: {} }, draft: null },
+    state: { userSettings: null, assessments: [], learningStore: { templates: {}, scenarioPatterns: [] }, draft: null },
     expectedMeta
   }, { category: 'user_admin', eventType: 'user_state_reset', target: safeUsername }).catch(error => console.warn('clearUserPersistentState sync failed:', error.message));
 }
@@ -1514,8 +1586,10 @@ function getBUList() {
   return [...syncedCompanies, ...legacyEntries];
 }
 function saveBUList(list) {
-  const next = Array.isArray(list) ? list : [];
-  localStorage.setItem('rq_bu_override', JSON.stringify(next));
+  const next = Array.isArray(list) ? cloneSerializableState(list, list.slice()) : [];
+  try {
+    localStorage.setItem('rq_bu_override', JSON.stringify(next));
+  } catch {}
   const adminSettings = getAdminSettings();
   saveAdminSettings({ ...adminSettings, buOverrides: next, docOverrides: getDocList() });
   AppState.buList = getBUList();
@@ -1542,11 +1616,14 @@ function getDocList() {
   } catch { return AppState.docList; }
 }
 function saveDocList(list) {
-  localStorage.setItem('rq_doc_override', JSON.stringify(list));
+  const next = Array.isArray(list) ? cloneSerializableState(list, list.slice()) : [];
+  try {
+    localStorage.setItem('rq_doc_override', JSON.stringify(next));
+  } catch {}
   const adminSettings = getAdminSettings();
-  saveAdminSettings({ ...adminSettings, docOverrides: list, buOverrides: getStoredBUOverrides() });
-  AppState.docList = list;
-  RAGService.init(list, getBUList());
+  saveAdminSettings({ ...adminSettings, docOverrides: next, buOverrides: getStoredBUOverrides() });
+  AppState.docList = next;
+  RAGService.init(next, getBUList());
 }
 
 function getAdminSettings() {
@@ -1589,7 +1666,9 @@ function applyManagedAccountAssignmentToSettings(account, updates = {}, baseSett
 async function saveAdminSettings(settings, options = {}) {
   const merged = normaliseAdminSettings(settings);
   updateAdminSettingsState(merged);
-  localStorage.setItem(GLOBAL_ADMIN_STORAGE_KEY, JSON.stringify(merged));
+  try {
+    localStorage.setItem(GLOBAL_ADMIN_STORAGE_KEY, JSON.stringify(merged));
+  } catch {}
   if (AuthService.getAdminApiSecret() || AuthService.getApiSessionToken()) {
     try {
       const result = await syncSharedAdminSettings(merged, options.audit || null);
@@ -1738,7 +1817,9 @@ function saveUserSettings(settings) {
   const cache = ensureUserStateCache();
   cache.userSettings = stored;
   AppState.userSettingsSavedAt = Date.now();
-  localStorage.setItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX), JSON.stringify(stored));
+  try {
+    localStorage.setItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX), JSON.stringify(stored));
+  } catch {}
   queueSharedUserStateSync({ userSettings: stored });
   updateWorkspaceSyncState('settings');
 }
@@ -3083,12 +3164,16 @@ function getSessionLLMConfig() {
     const sessionConfig = JSON.parse(sessionStorage.getItem(storageKey) || 'null') || null;
     const config = localConfig || sessionConfig || {};
     if (sessionConfig && !localConfig) {
-      localStorage.setItem(storageKey, JSON.stringify(config));
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(config));
+      } catch {}
     }
     if (typeof config.apiUrl === 'string' && config.apiUrl.includes('api.core42.ai/v1/chat/completions')) {
       config.apiUrl = DEFAULT_COMPASS_PROXY_URL;
-      localStorage.setItem(storageKey, JSON.stringify(config));
-      sessionStorage.setItem(storageKey, JSON.stringify(config));
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(config));
+        sessionStorage.setItem(storageKey, JSON.stringify(config));
+      } catch {}
     }
     return config;
   } catch {
@@ -3098,8 +3183,10 @@ function getSessionLLMConfig() {
 
 function saveSessionLLMConfig(config) {
   const storageKey = buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX);
-  localStorage.setItem(storageKey, JSON.stringify(config));
-  sessionStorage.setItem(storageKey, JSON.stringify(config));
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(config));
+    sessionStorage.setItem(storageKey, JSON.stringify(config));
+  } catch {}
 }
 
 function fmtCurrency(usdValue, currency = AppState.currency, fxRate = AppState.fxRate) {
@@ -3224,11 +3311,31 @@ function applyPageNavigationEffects(root = document) {
   });
 }
 
+function updateWizardProgressBar(step) {
+  const bar = document.getElementById('app-bar');
+  if (!bar) return;
+  const currentStep = String(step || '');
+  const normalisedStep = currentStep.startsWith('/results/')
+    ? '/results'
+    : currentStep;
+  const progressMap = {
+    '/wizard/1': '25%',
+    '/wizard/2': '50%',
+    '/wizard/3': '75%',
+    '/wizard/review': '90%',
+    '/wizard/4': '90%',
+    '/results': '100%'
+  };
+  const progress = progressMap[normalisedStep] || '0%';
+  bar.style.setProperty('--wizard-progress', progress);
+}
+
 function setPage(html) {
   const root = document.getElementById('main-content');
   root.innerHTML = html;
   bindDisclosureState(root);
   applyPageNavigationEffects(root);
+  updateWizardProgressBar(window.location.hash.replace('#', ''));
 }
 
 async function loadJSON(path) {
@@ -3859,11 +3966,19 @@ function renderAppBar() {
       </div>
       <span class="bar-poc-tag">PoC</span>
     </div>`;
+  const pocTag = document.querySelector('.bar-poc-tag');
+  if (pocTag && (
+    (typeof DemoMode !== 'undefined' && DemoMode.isDemoRunning())
+    || window.__RISK_CALCULATOR_RELEASE__?.channel === 'production'
+  )) {
+    pocTag.classList.add('bar-poc-tag--hidden');
+  }
   document.getElementById('cur-usd').addEventListener('click', () => { AppState.currency='USD'; renderAppBar(); Router.resolve(); });
   document.getElementById('cur-aed').addEventListener('click', () => { AppState.currency='AED'; renderAppBar(); Router.resolve(); });
   document.getElementById('btn-sign-out')?.addEventListener('click', () => {
     performLogout();
   });
+  updateWizardProgressBar(window.location.hash.replace('#', ''));
 }
 
 // ─── LANDING ──────────────────────────────────────────────────
@@ -4058,7 +4173,8 @@ function renderLanding() {
 
   document.getElementById('btn-clear-all')?.addEventListener('click', async () => {
     if (await UI.confirm('Clear all saved assessments from this browser?')) {
-      localStorage.removeItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX));
+      // Clearing only local storage left the in-memory/user-sync view stale until a hard reload.
+      persistSavedAssessmentsCollection([]);
       Router.resolve();
     }
   });
@@ -6835,7 +6951,8 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
   document.getElementById('btn-reset-settings')?.addEventListener('click', async () => {
     if (await UI.confirm('Reset platform settings to defaults?')) {
       const resetSettings = JSON.parse(JSON.stringify(DEFAULT_ADMIN_SETTINGS));
-      saveAdminSettings(resetSettings);
+      const saved = await saveAdminSettings(resetSettings);
+      if (!saved) return;
       if (!AppState.draft.geography) AppState.draft.geography = resetSettings.geography;
       saveDraft();
       UI.toast('Settings reset.', 'success');
@@ -7001,16 +7118,17 @@ function renderAdminBU() {
       openEntityContextLayerEditor({
         entity,
         settings,
-        onSave: (nextLayer, modal) => {
+        onSave: async (nextLayer, modal) => {
           const nextSettings = getAdminSettings();
           const layers = Array.isArray(nextSettings.entityContextLayers) ? [...nextSettings.entityContextLayers] : [];
           const index = layers.findIndex(item => item.entityId === nextLayer.entityId);
           if (index > -1) layers[index] = nextLayer;
           else layers.push(nextLayer);
-          saveAdminSettings({
+          const saved = await saveAdminSettings({
             ...nextSettings,
             entityContextLayers: layers
           });
+          if (!saved) return;
           modal.close();
           UI.toast(`Saved context for ${entity.name}.`, 'success');
           renderAdminBU();
@@ -7028,14 +7146,15 @@ function renderAdminBU() {
           type: 'Department / function',
           parentId: company.id
         },
-        onSave: (node, modal) => {
+        onSave: async (node, modal) => {
           const nextSettings = getAdminSettings();
           const nextStructure = Array.isArray(nextSettings.companyStructure) ? [...nextSettings.companyStructure] : [];
           nextStructure.push(node);
-          saveAdminSettings({
+          const saved = await saveAdminSettings({
             ...nextSettings,
             companyStructure: nextStructure
           });
+          if (!saved) return;
           modal.close();
           UI.toast(`${node.name} added beneath ${company.name}.`, 'success');
           renderAdminBU();
@@ -7050,15 +7169,16 @@ function renderAdminBU() {
       openOrgEntityEditor({
         structure: companyStructure,
         existingNode: department,
-        onSave: (node, modal) => {
+        onSave: async (node, modal) => {
           const nextSettings = getAdminSettings();
           const nextStructure = Array.isArray(nextSettings.companyStructure) ? [...nextSettings.companyStructure] : [];
           const index = nextStructure.findIndex(item => item.id === node.id);
           if (index > -1) nextStructure[index] = node;
-          saveAdminSettings({
+          const saved = await saveAdminSettings({
             ...nextSettings,
             companyStructure: nextStructure
           });
+          if (!saved) return;
           modal.close();
           UI.toast(`${node.name} updated.`, 'success');
           renderAdminBU();
@@ -7073,16 +7193,17 @@ function renderAdminBU() {
       openEntityContextLayerEditor({
         entity: department,
         settings,
-        onSave: (nextLayer, modal) => {
+        onSave: async (nextLayer, modal) => {
           const nextSettings = getAdminSettings();
           const layers = Array.isArray(nextSettings.entityContextLayers) ? [...nextSettings.entityContextLayers] : [];
           const index = layers.findIndex(item => item.entityId === nextLayer.entityId);
           if (index > -1) layers[index] = nextLayer;
           else layers.push(nextLayer);
-          saveAdminSettings({
+          const saved = await saveAdminSettings({
             ...nextSettings,
             entityContextLayers: layers
           });
+          if (!saved) return;
           modal.close();
           UI.toast(`Saved context for ${department.name}.`, 'success');
           renderAdminBU();

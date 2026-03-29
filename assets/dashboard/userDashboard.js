@@ -1,3 +1,18 @@
+function buildWatchlistDeltaLine(item) {
+  const parts = [];
+  const prevPosture = String(item.previousPosture || '').trim();
+  const currentPosture = String(item.badgeLabel || item.urgencyLabel || '').trim();
+  if (prevPosture && currentPosture && prevPosture !== currentPosture) {
+    parts.push(`Posture shifted from ${prevPosture} to ${currentPosture}.`);
+  }
+  const reviewAge = String(item.reviewAgeLabel || '').trim();
+  if (reviewAge) parts.push(`Last reviewed: ${reviewAge}.`);
+  const confChange = String(item.confidenceChange || '').trim();
+  if (confChange) parts.push(confChange);
+  if (!parts.length) return '';
+  return parts.slice(0, 2).join(' ');
+}
+
 function renderUserDashboard() {
   if (!requireAuth()) return;
   if (AuthService.isAdminAuthenticated()) {
@@ -158,9 +173,11 @@ function renderUserDashboard() {
   const renderWorkspaceToolsMenu = ({ includeResumeDraft = false, includeSettings = true, useSupportIds = false } = {}) => renderDashboardActionMenu({
     items: [
       includeResumeDraft ? '<button class="btn btn--secondary btn--sm" id="btn-dashboard-continue-draft">Resume Draft</button>' : '',
+      `<button class="btn btn--ghost btn--sm" id="btn-dashboard-run-demo">Live Demo</button>`,
       includeSettings ? `<button class="btn btn--secondary btn--sm" id="btn-dashboard-open-settings">${primarySettingsLabel}</button>` : '',
       `<button class="btn btn--secondary btn--sm" id="${useSupportIds ? 'btn-dashboard-export-assessments-support' : 'btn-dashboard-export-assessments'}">Export Assessments</button>`,
-      `<button class="btn btn--secondary btn--sm" id="${useSupportIds ? 'btn-dashboard-import-assessments-support' : 'btn-dashboard-import-assessments'}">Import Assessments</button>`
+      `<button class="btn btn--secondary btn--sm" id="${useSupportIds ? 'btn-dashboard-import-assessments-support' : 'btn-dashboard-import-assessments'}">Import Assessments</button>`,
+      `<button class="btn btn--secondary btn--sm" id="${useSupportIds ? 'btn-dashboard-new-assessment-support' : 'btn-dashboard-new-assessment-oversight'}">Start New Assessment</button>`
     ],
     summaryLabel: useSupportIds ? 'Workspace tools' : 'Workspace tools',
     summaryClassName: useSupportIds ? 'btn btn--ghost btn--sm' : 'btn btn--ghost',
@@ -172,17 +189,30 @@ function renderUserDashboard() {
   const importAssessmentsCollection = () => {
     ExportService.importJsonFile({
       onData: parsed => {
-        if (!Array.isArray(parsed)) {
+        const importedItems = Array.isArray(parsed)
+          ? parsed
+          : parsed && typeof parsed === 'object' && parsed.id
+            ? [parsed]
+            : parsed && typeof parsed === 'object' && typeof parsed.itemsById === 'object'
+              ? Object.values(parsed.itemsById)
+              : [];
+        if (!importedItems.length) {
           UI.toast('That file does not contain an assessment list.', 'warning');
           return;
         }
         const existing = getAssessments();
-        const merged = [...parsed, ...existing]
+        const mergedById = new Map();
+        [...existing, ...importedItems]
           .filter(item => item && typeof item === 'object' && item.id)
-          .reduce((acc, item) => {
-            if (!acc.find(existingItem => existingItem.id === item.id)) acc.push(item);
-            return acc;
-          }, []);
+          .forEach(item => {
+            const key = String(item.id || '').trim();
+            const previous = mergedById.get(key);
+            const previousTs = Number(previous?.lifecycleUpdatedAt || previous?.completedAt || previous?.createdAt || 0);
+            const nextTs = Number(item?.lifecycleUpdatedAt || item?.completedAt || item?.createdAt || 0);
+            // Import/export round-trips should keep the freshest copy when the same assessment exists in both sources.
+            if (!previous || nextTs >= previousTs) mergedById.set(key, item);
+          });
+        const merged = Array.from(mergedById.values());
         persistSavedAssessmentsCollection(merged);
         renderUserDashboard();
         UI.toast('Assessments imported.', 'success');
@@ -198,23 +228,35 @@ function renderUserDashboard() {
     if (recommendedTemplate) loadTemplate(recommendedTemplate);
   };
   const launchSampleStart = () => launchPilotSampleAssessment();
+  const escapeDashboardText = value => escapeHtml(String(value || ''));
+  // TODO: extend buildAssessmentWatchlist to derive and attach confidenceTrajectory by comparing the current assessment confidenceLabel to the previous saved result for the same scenario.
   const renderWatchlistRows = items => items.map(item => UI.dashboardAssessmentRow({
     assessmentId: item.id,
-    title: item.title,
+    title: escapeDashboardText(item.title || 'Untitled assessment'),
     detail: `
       <div class="dashboard-watchlist-meta">
-        <span>${item.businessContext}</span>
-        <span>${item.reviewAgeLabel || 'Reviewed recently'}</span>
-        <span class="badge ${item.urgencyBadgeClass || 'badge--neutral'}">${item.urgencyLabel || 'Check basis'}</span>
+        <span>${escapeDashboardText(item.businessContext || 'Business context not set')}</span>
+        <span>${escapeDashboardText(item.reviewAgeLabel || 'Reviewed recently')}</span>
+        ${item.confidenceTrajectory
+          ? `<span class="badge badge--neutral">${
+              item.confidenceTrajectory === 'up' ? '↑ confidence improving'
+              : item.confidenceTrajectory === 'down' ? '↓ confidence degraded'
+              : '→ confidence stable'
+            }</span>`
+          : ''}
+        <span class="badge ${escapeDashboardText(item.urgencyBadgeClass || 'badge--neutral')}">${escapeDashboardText(item.urgencyLabel || 'Check basis')}</span>
       </div>
-      <div class="dashboard-watchlist-why"><strong>Why now:</strong> ${item.detail}</div>
-      <div class="dashboard-watchlist-next"><strong>Next:</strong> ${item.nextAction || 'Open the result and confirm whether the underlying assumptions still hold.'}</div>
+      <div class="dashboard-watchlist-why"><strong>Why now:</strong> ${escapeDashboardText(item.detail || '')}</div>
+      ${buildWatchlistDeltaLine(item)
+        ? `<div class="dashboard-watchlist-delta">${escapeDashboardText(buildWatchlistDeltaLine(item))}</div>`
+        : ''}
+      <div class="dashboard-watchlist-next"><strong>Next:</strong> ${escapeDashboardText(item.nextAction || 'Open the result and confirm whether the underlying assumptions still hold.')}</div>
     `,
     badgeClass: item.badgeClass,
     badgeLabel: item.badgeLabel,
     className: 'dashboard-assessment-row--compact dashboard-watchlist-row',
     actions: `
-      <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.id}">${item.actionLabel || (item.urgencyLabel === 'Act now' ? 'Review now' : 'Open Result')}</button>
+      <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${escapeDashboardText(item.id || '')}">${escapeDashboardText(item.actionLabel || (item.urgencyLabel === 'Act now' ? 'Review now' : 'Open Result'))}</button>
       ${renderAssessmentRowMenu({ assessmentId: item.id })}
     `
   })).join('');
@@ -228,7 +270,7 @@ function renderUserDashboard() {
         <span class="badge badge--neutral">${watchlistItems.length}</span>
       </div>
       ${watchlistSummary.length ? `<div class="dashboard-watchlist-summary" aria-label="Watchlist summary">
-        ${watchlistSummary.map(item => `<span class="dashboard-watchlist-summary__item">${item.label}</span>`).join('')}
+        ${watchlistSummary.map(item => `<span class="dashboard-watchlist-summary__item">${escapeDashboardText(item.label)}</span>`).join('')}
       </div>` : ''}
       <div class="dashboard-watchlist-list">
         ${renderWatchlistRows(visibleWatchlistItems)}
@@ -387,12 +429,12 @@ function renderUserDashboard() {
     const lifecycle = getAssessmentLifecyclePresentation(assessment);
     return UI.dashboardAssessmentRow({
       assessmentId: assessment.id,
-      title: assessment.scenarioTitle || 'Untitled assessment',
-      detail: `${assessment.buName || profile.businessUnit || user?.businessUnit || 'Business unit not set'} · ${new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}`,
+      title: escapeDashboardText(assessment.scenarioTitle || 'Untitled assessment'),
+      detail: `${escapeDashboardText(assessment.buName || profile.businessUnit || user?.businessUnit || 'Business unit not set')} · ${escapeDashboardText(new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }))}`,
       badgeClass: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED ? 'badge--gold' : assessment.results?.toleranceBreached ? 'badge--danger' : assessment.results?.nearTolerance ? 'badge--warning' : lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? 'badge--gold' : 'badge--success',
       badgeLabel: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED || lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? lifecycle.label : assessment.results?.toleranceBreached ? 'Above tolerance' : assessment.results?.nearTolerance ? 'Close to tolerance' : lifecycle.label,
       actions: `
-        <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${assessment.id}">Open</button>
+        <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${escapeDashboardText(assessment.id || '')}">Open</button>
         ${renderAssessmentRowMenu({ assessmentId: assessment.id })}
       `
     });
@@ -522,7 +564,7 @@ function renderUserDashboard() {
           <div class="dashboard-hero-grid ${isOversightUser ? 'dashboard-hero-grid--single' : 'dashboard-hero-grid--balanced'}">
             <div class="dashboard-hero-main">
               <div class="landing-badge">${roleFrontDoor.badge}</div>
-              <h2 style="margin-top:var(--sp-4)">Welcome back, ${user?.displayName || 'there'}.</h2>
+              <h2 style="margin-top:var(--sp-4)">Welcome back, ${escapeDashboardText(user?.displayName || 'there')}.</h2>
               <p class="dashboard-hero-copy">${roleFrontDoor.heroCopy}</p>
               ${isOversightUser ? `<div class="dashboard-signal-strip dashboard-signal-strip--oversight">
                 ${oversightHealthItems.map(item => `
@@ -563,12 +605,12 @@ function renderUserDashboard() {
             className: 'dashboard-section-card--spotlight',
             body: openAssessmentRows.length ? openAssessmentRows.map(item => UI.dashboardAssessmentRow({
               assessmentId: item.action,
-              title: item.title,
-              detail: item.detail,
+              title: escapeDashboardText(item.title || 'Untitled assessment'),
+              detail: escapeDashboardText(item.detail || ''),
               badgeClass: /above tolerance/i.test(item.status) ? 'badge--danger' : /review/i.test(item.status) ? 'badge--warning' : 'badge--gold',
-              badgeLabel: item.status,
+              badgeLabel: escapeDashboardText(item.status || 'Open'),
               actions: `
-                <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${item.action}">${item.actionLabel}</button>
+                <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${escapeDashboardText(item.action || '')}">${escapeDashboardText(item.actionLabel || 'Open')}</button>
                 ${item.action === 'draft'
                   ? renderDraftRowMenu()
                   : renderAssessmentRowMenu({ assessmentId: item.action })}
@@ -609,8 +651,8 @@ function renderUserDashboard() {
               <div class="dashboard-disclosure-body">
                 <div class="card card--elevated dashboard-context-card dashboard-context-card--nested">
                   <div class="results-section-heading">${isOversightUser ? 'Managed context' : 'Current profile'}</div>
-                  <div class="context-panel-copy" style="margin-top:10px">${workspaceSummary}</div>
-                  <div class="form-help" style="margin-top:12px">${guidanceSummary}</div>
+                  <div class="context-panel-copy" style="margin-top:10px">${escapeDashboardText(workspaceSummary)}</div>
+                  <div class="form-help" style="margin-top:12px">${escapeDashboardText(guidanceSummary)}</div>
                   <div class="form-help" style="margin-top:8px">${profile.workingContext ? 'Working context is saved and will be reused in assisted steps.' : 'Add working context in Personal Settings to improve assisted suggestions.'}</div>
                   <div class="flex items-center gap-3 mt-5" style="flex-wrap:wrap">
                     <button class="btn btn--secondary" id="btn-dashboard-settings-secondary">${isOversightUser ? oversightContextActionLabel : 'Open Settings'}</button>
@@ -683,12 +725,12 @@ function renderUserDashboard() {
               <summary>Archived items <span class="badge badge--neutral">${archivedAssessments.length}</span></summary>
               <div class="dashboard-disclosure-copy">Stored out of the way, but still available if you need them again.</div>
               <div class="dashboard-disclosure-body">${archivedAssessments.length ? archivedAssessments.map(assessment => UI.dashboardAssessmentRow({
-                title: assessment.scenarioTitle || 'Untitled scenario',
-                detail: `Archived ${new Date(assessment.archivedAt || assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}${hasResults(assessment) ? ' · Completed assessment' : ' · Draft snapshot'}`,
+                title: escapeDashboardText(assessment.scenarioTitle || 'Untitled scenario'),
+                detail: `Archived ${escapeDashboardText(new Date(assessment.archivedAt || assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }))}${hasResults(assessment) ? ' · Completed assessment' : ' · Draft snapshot'}`,
                 badgeClass: 'badge--neutral',
                 badgeLabel: 'Archived',
                 actions: `
-                  <button type="button" class="btn btn--ghost btn--sm dashboard-restore-assessment" data-assessment-id="${assessment.id}">${hasResults(assessment) ? 'Restore to Dashboard' : 'Resume as Draft'}</button>
+                  <button type="button" class="btn btn--ghost btn--sm dashboard-restore-assessment" data-assessment-id="${escapeDashboardText(assessment.id || '')}">${hasResults(assessment) ? 'Restore to Dashboard' : 'Resume as Draft'}</button>
                   ${renderAssessmentRowMenu({ assessmentId: assessment.id, includeDuplicate: false, includeArchive: false, includeDelete: true, includeOpen: hasResults(assessment) })}
                 `
               })).join('') : renderDashboardEmptyState({
@@ -748,6 +790,34 @@ function renderUserDashboard() {
   document.getElementById('btn-dashboard-open-settings')?.addEventListener('click', () => Router.navigate('/settings'));
   document.getElementById('btn-dashboard-settings-secondary')?.addEventListener('click', () => Router.navigate('/settings'));
   document.getElementById('btn-dashboard-continue-draft')?.addEventListener('click', () => openDraftWorkspaceRoute());
+  const _handleNewAssessmentOversight = () => {
+    if (hasDraft) {
+      UI.confirm(
+        'You have a draft in progress. Starting a new assessment ' +
+        'will clear the current draft. Continue?'
+      ).then(confirmed => {
+        if (confirmed) launchGuidedAssessmentStart();
+      });
+    } else {
+      launchGuidedAssessmentStart();
+    }
+  };
+  document.getElementById('btn-dashboard-new-assessment-oversight')
+    ?.addEventListener('click', _handleNewAssessmentOversight);
+  document.getElementById('btn-dashboard-new-assessment-support')
+    ?.addEventListener('click', _handleNewAssessmentOversight);
+  document.getElementById('btn-dashboard-run-demo')?.addEventListener('click', () => {
+    if (typeof DemoMode === 'undefined') {
+      UI.toast('Demo mode is not loaded.', 'warning');
+      return;
+    }
+    if (DemoMode.isDemoRunning()) {
+      UI.toast('Demo is already running.', 'warning');
+      return;
+    }
+    UI.toast('Starting live demo — this will take about 20 seconds.', 'info', 4000);
+    DemoMode.runDemo();
+  });
   document.getElementById('btn-dashboard-export-assessments')?.addEventListener('click', () => {
     exportAssessmentsCollection();
   });
@@ -871,3 +941,15 @@ function openDraftWorkspaceRoute() {
   }
   Router.resolve?.();
 }
+
+/* Add to app.css — dashboard-watchlist-delta */
+/*
+.dashboard-watchlist-delta {
+  font-size: .78rem;
+  color: var(--text-muted);
+  margin-top: var(--sp-1);
+  margin-bottom: var(--sp-1);
+  line-height: 1.5;
+  font-style: italic;
+}
+*/

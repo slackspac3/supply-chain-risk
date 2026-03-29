@@ -30,9 +30,9 @@ function renderSettingsSummaryChips(items = [], emptyLabel = 'Not set', maxVisib
 
 function renderSettingsSnapshotCard({ label, value, foot = '', accent = false }) {
   return `<div class="settings-snapshot-card${accent ? ' settings-snapshot-card--accent' : ''}">
-    <div class="settings-snapshot-card__label">${label}</div>
-    <div class="settings-snapshot-card__value">${value}</div>
-    ${foot ? `<div class="settings-snapshot-card__foot">${foot}</div>` : ''}
+    <div class="settings-snapshot-card__label">${escapeHtml(String(label || ''))}</div>
+    <div class="settings-snapshot-card__value">${escapeHtml(String(value || ''))}</div>
+    ${foot ? `<div class="settings-snapshot-card__foot">${escapeHtml(String(foot))}</div>` : ''}
   </div>`;
 }
 
@@ -77,11 +77,11 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       <div class="grid-2">
         <div class="form-group">
           <label class="form-label" for="user-full-name">Name</label>
-          <input class="form-input" id="user-full-name" value="${profile.fullName || AppState.currentUser?.displayName || ''}">
+          <input class="form-input" id="user-full-name" value="${escapeHtml(String(profile.fullName || AppState.currentUser?.displayName || ''))}">
         </div>
         <div class="form-group">
           <label class="form-label" for="user-job-title">Role</label>
-          <input class="form-input" id="user-job-title" value="${profile.jobTitle || ''}" placeholder="e.g. Risk Manager">
+          <input class="form-input" id="user-job-title" value="${escapeHtml(String(profile.jobTitle || ''))}" placeholder="e.g. Risk Manager">
         </div>
       </div>
       <div class="grid-2 mt-4">
@@ -89,7 +89,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
           <label class="form-label" for="user-business-unit">Business unit or entity</label>
           <select class="form-select" id="user-business-unit" disabled>
             <option value="">Choose your business unit</option>
-            ${companyOptions.map(entity => `<option value="${entity.id}" ${entity.id === selectedBusinessId ? 'selected' : ''}>${entity.name}</option>`).join('')}
+            ${companyOptions.map(entity => `<option value="${escapeHtml(String(entity.id || ''))}" ${entity.id === selectedBusinessId ? 'selected' : ''}>${escapeHtml(String(entity.name || 'Unnamed entity'))}</option>`).join('')}
           </select>
         </div>
         <div class="form-group">
@@ -119,11 +119,11 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     body: `
       <div class="form-group">
         <label class="form-label" for="user-working-context">Working context</label>
-        <textarea class="form-textarea" id="user-working-context" rows="4" placeholder="e.g. I support technology and cyber risk decisions across shared platforms, work closely with control owners, and often need outputs that balance resilience, compliance, and executive reporting.">${profile.workingContext || ''}</textarea>
+        <textarea class="form-textarea" id="user-working-context" rows="4" placeholder="e.g. I support technology and cyber risk decisions across shared platforms, work closely with control owners, and often need outputs that balance resilience, compliance, and executive reporting.">${escapeHtml(String(profile.workingContext || ''))}</textarea>
       </div>
       <div class="form-group mt-4">
         <label class="form-label" for="user-preferred-outputs">Preferred output style</label>
-        <textarea class="form-textarea" id="user-preferred-outputs" rows="4" placeholder="e.g. Keep answers concise, highlight key risk drivers, call out business impact and dependencies, and end with practical actions I can take with stakeholders.">${profile.preferredOutputs || ''}</textarea>
+        <textarea class="form-textarea" id="user-preferred-outputs" rows="4" placeholder="e.g. Keep answers concise, highlight key risk drivers, call out business impact and dependencies, and end with practical actions I can take with stakeholders.">${escapeHtml(String(profile.preferredOutputs || ''))}</textarea>
       </div>
       <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
         <button class="btn btn--secondary" id="btn-user-role-ai">AI Assist Role Context</button>
@@ -290,13 +290,13 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
           <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
               <div>
-                <div class="context-panel-title">${department.name}</div>
-                <div class="form-help">${department.ownerUsername ? `Owner: ${department.ownerUsername}` : 'Owner not assigned yet'}</div>
-                <div class="form-help">${getEntityLayerById(globalSettings, department.id)?.contextSummary || department.profile || 'No saved function context yet'}</div>
+                <div class="context-panel-title">${escapeHtml(String(department.name || 'Unnamed department'))}</div>
+                <div class="form-help">${department.ownerUsername ? `Owner: ${escapeHtml(String(department.ownerUsername))}` : 'Owner not assigned yet'}</div>
+                <div class="form-help">${escapeHtml(String(getEntityLayerById(globalSettings, department.id)?.contextSummary || department.profile || 'No saved function context yet'))}</div>
               </div>
               <div class="flex items-center gap-3" style="flex-wrap:wrap">
-                <button class="btn btn--ghost btn--sm btn-user-edit-department" data-department-id="${department.id}" type="button">Edit Department</button>
-                <button class="btn btn--secondary btn--sm btn-user-edit-department-context" data-department-id="${department.id}" type="button">Manage Context</button>
+                <button class="btn btn--ghost btn--sm btn-user-edit-department" data-department-id="${escapeHtml(String(department.id || ''))}" type="button">Edit Department</button>
+                <button class="btn btn--secondary btn--sm btn-user-edit-department-context" data-department-id="${escapeHtml(String(department.id || ''))}" type="button">Manage Context</button>
               </div>
             </div>
           </div>`).join('') : '<div class="form-help">No functions have been added under this business unit yet.</div>'}
@@ -318,15 +318,15 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
               <h2>Personal Settings</h2>
               <p style="margin-top:6px;color:var(--text-muted)">${departmentOwner || businessOwner
                 ? `Keep your personal workspace clear, then maintain the ${departmentOwner ? 'function' : 'business-unit'} context you own without mixing it with optional personal overlays.`
-                : `These settings apply only to ${AppState.currentUser?.displayName || 'your account'}. Keep your profile clear, your working view current, and deeper context hidden until you need it.`}</p>
+                : `These settings apply only to ${escapeHtml(String(AppState.currentUser?.displayName || 'your account'))}. Keep your profile clear, your working view current, and deeper context hidden until you need it.`}</p>
             </div>
           </div>
 
           <section class="settings-profile-snapshot">
             <div class="settings-profile-snapshot__intro">
               <div class="results-section-heading">Personal profile snapshot</div>
-              <h3 class="settings-profile-snapshot__title">${profile.jobTitle || 'Personalize this workspace for how you work.'}</h3>
-              <p class="settings-profile-snapshot__copy">${capability.experience.settingsLead}</p>
+              <h3 class="settings-profile-snapshot__title">${escapeHtml(String(profile.jobTitle || 'Personalize this workspace for how you work.'))}</h3>
+              <p class="settings-profile-snapshot__copy">${escapeHtml(String(capability.experience.settingsLead || ''))}</p>
               <div class="settings-profile-snapshot__chips">
                 ${renderSettingsSummaryChips(focusAreas, 'No focus areas yet')}
               </div>
@@ -352,11 +352,11 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
           <div class="settings-support-strip">
             <div class="settings-support-strip__item">
               <span class="settings-support-strip__label">Role alignment</span>
-              <strong>${profile.jobTitle || 'Role still needs setup'}</strong>
+              <strong>${escapeHtml(String(profile.jobTitle || 'Role still needs setup'))}</strong>
             </div>
             <div class="settings-support-strip__item">
               <span class="settings-support-strip__label">Working view</span>
-              <strong>${profile.businessUnit || 'Shared view'}${profile.department ? ` · ${profile.department}` : ''}</strong>
+              <strong>${escapeHtml(String(profile.businessUnit || 'Shared view'))}${profile.department ? ` · ${escapeHtml(String(profile.department))}` : ''}</strong>
             </div>
             <div class="settings-support-strip__item">
               <span class="settings-support-strip__label">Output style</span>
@@ -373,11 +373,11 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
           <div class="settings-support-strip">
             <div class="settings-support-strip__item">
               <span class="settings-support-strip__label">Owned context</span>
-              <strong>${departmentOwner ? (selectedDepartment?.name || profile.department || 'Department owner') : (selectedBusinessEntity?.name || profile.businessUnit || 'Business unit owner')}</strong>
+              <strong>${escapeHtml(String(departmentOwner ? (selectedDepartment?.name || profile.department || 'Department owner') : (selectedBusinessEntity?.name || profile.businessUnit || 'Business unit owner')))}</strong>
             </div>
             <div class="settings-support-strip__item">
               <span class="settings-support-strip__label">Managed scope</span>
-              <strong>${capability.roleSummary}</strong>
+              <strong>${escapeHtml(String(capability.roleSummary || ''))}</strong>
             </div>
             <div class="settings-support-strip__item">
               <span class="settings-support-strip__label">Operational priority</span>
@@ -480,21 +480,34 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
   }
 
   function applyUserCompanyContextResult(result) {
+    if (!profileEl) {
+      // Async company-context responses can land after the route changes; ignore stale writes instead of throwing.
+      return;
+    }
     const sections = buildCompanyContextSections(result);
     const profileText = serialiseCompanyContextSections(sections);
+    const companySummaryEl = document.getElementById('user-company-section-summary');
+    const businessModelEl = document.getElementById('user-company-section-business-model');
+    const operatingModelEl = document.getElementById('user-company-section-operating-model');
+    const commitmentsEl = document.getElementById('user-company-section-commitments');
+    const risksEl = document.getElementById('user-company-section-risks');
+    const obligationsEl = document.getElementById('user-company-section-obligations');
+    const sourcesEl = document.getElementById('user-company-section-sources');
     profileEl.value = profileText;
-    document.getElementById('user-company-section-summary').value = sections.companySummary || '';
-    document.getElementById('user-company-section-business-model').value = sections.businessModel || '';
-    document.getElementById('user-company-section-operating-model').value = sections.operatingModel || '';
-    document.getElementById('user-company-section-commitments').value = sections.publicCommitments || '';
-    document.getElementById('user-company-section-risks').value = sections.keyRiskSignals || '';
-    document.getElementById('user-company-section-obligations').value = sections.obligations || '';
-    document.getElementById('user-company-section-sources').value = sections.sources || '';
-    if (!document.getElementById('user-context-summary').value.trim() && result.companySummary) {
-      document.getElementById('user-context-summary').value = result.companySummary;
+    if (companySummaryEl) companySummaryEl.value = sections.companySummary || '';
+    if (businessModelEl) businessModelEl.value = sections.businessModel || '';
+    if (operatingModelEl) operatingModelEl.value = sections.operatingModel || '';
+    if (commitmentsEl) commitmentsEl.value = sections.publicCommitments || '';
+    if (risksEl) risksEl.value = sections.keyRiskSignals || '';
+    if (obligationsEl) obligationsEl.value = sections.obligations || '';
+    if (sourcesEl) sourcesEl.value = sections.sources || '';
+    const contextSummaryEl = document.getElementById('user-context-summary');
+    if (contextSummaryEl && !contextSummaryEl.value.trim() && result.companySummary) {
+      contextSummaryEl.value = result.companySummary;
     }
     if (result.aiGuidance) {
-      document.getElementById('user-ai-instructions').value = result.aiGuidance;
+      const aiInstructionsEl = document.getElementById('user-ai-instructions');
+      if (aiInstructionsEl) aiInstructionsEl.value = result.aiGuidance;
     }
     const userGeoPrimaryEl = document.getElementById('user-geo-primary');
     if (result.suggestedGeography && userGeoPrimaryEl && !userGeoPrimaryEl.value.trim()) {
@@ -709,14 +722,15 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
         type: 'Department / function',
         parentId: selectedBusinessEntity.id
       },
-      onSave: (node, modal) => {
+      onSave: async (node, modal) => {
         const nextSettings = getAdminSettings();
         const nextStructure = Array.isArray(nextSettings.companyStructure) ? [...nextSettings.companyStructure] : [];
         nextStructure.push(node);
-        saveAdminSettings({
+        const saved = await saveAdminSettings({
           ...nextSettings,
           companyStructure: nextStructure
         });
+        if (!saved) return;
         modal.close();
         UI.toast(`${node.name} added beneath ${selectedBusinessEntity.name}.`, 'success');
         renderUserPreferences(getUserSettings());
@@ -731,15 +745,16 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       openOrgEntityEditor({
         structure: companyStructure,
         existingNode: department,
-        onSave: (node, modal) => {
+        onSave: async (node, modal) => {
           const nextSettings = getAdminSettings();
           const nextStructure = Array.isArray(nextSettings.companyStructure) ? [...nextSettings.companyStructure] : [];
           const index = nextStructure.findIndex(item => item.id === node.id);
           if (index > -1) nextStructure[index] = node;
-          saveAdminSettings({
+          const saved = await saveAdminSettings({
             ...nextSettings,
             companyStructure: nextStructure
           });
+          if (!saved) return;
           modal.close();
           UI.toast(`${node.name} updated.`, 'success');
           renderUserPreferences(getUserSettings());
@@ -755,16 +770,17 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       openEntityContextLayerEditor({
         entity: department,
         settings: globalSettings,
-        onSave: (nextLayer, modal) => {
+        onSave: async (nextLayer, modal) => {
           const nextSettings = getAdminSettings();
           const layers = Array.isArray(nextSettings.entityContextLayers) ? [...nextSettings.entityContextLayers] : [];
           const index = layers.findIndex(item => item.entityId === nextLayer.entityId);
           if (index > -1) layers[index] = nextLayer;
           else layers.push(nextLayer);
-          saveAdminSettings({
+          const saved = await saveAdminSettings({
             ...nextSettings,
             entityContextLayers: layers
           });
+          if (!saved) return;
           modal.close();
           UI.toast(`Saved context for ${department.name}.`, 'success');
           renderUserPreferences(getUserSettings());
@@ -777,16 +793,17 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     if (!selectedDepartment) return;
     openEntityContextLayerEditor({
       entity: selectedDepartment,
-      onSave: (nextLayer, modal) => {
+      onSave: async (nextLayer, modal) => {
         const nextSettings = getAdminSettings();
         const layers = Array.isArray(nextSettings.entityContextLayers) ? [...nextSettings.entityContextLayers] : [];
         const index = layers.findIndex(item => item.entityId === nextLayer.entityId);
         if (index > -1) layers[index] = nextLayer;
         else layers.push(nextLayer);
-        saveAdminSettings({
+        const saved = await saveAdminSettings({
           ...nextSettings,
           entityContextLayers: layers
         });
+        if (!saved) return;
         modal.close();
         UI.toast(`Saved context for ${selectedDepartment.name}.`, 'success');
         renderUserPreferences(getUserSettings());
@@ -942,7 +959,9 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
 
   document.getElementById('btn-reset-user-settings').addEventListener('click', async () => {
     if (await UI.confirm('Reset your personal settings to the global admin defaults?')) {
-      localStorage.removeItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX));
+      try {
+        localStorage.removeItem(buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX));
+      } catch {}
       UI.toast('Your personal settings were reset.', 'success');
       rememberSettingsScroll('user-settings');
       renderUserOnboarding(getUserSettings(), 0);

@@ -141,6 +141,42 @@ function recommendEstimatePreset(draft) {
   return '';
 }
 
+function buildStep3FocusHint(draft) {
+  const presetKey = recommendEstimatePreset(draft);
+  const hints = {
+    ransomware: {
+      primary: 'Business interruption',
+      secondary: 'Event frequency',
+      why: 'For ransomware scenarios, recovery time and service downtime dominate the loss estimate. Set these two rows first, then work outward.'
+    },
+    dataBreach: {
+      primary: 'Regulatory and legal cost',
+      secondary: 'Data remediation',
+      why: 'For data exposure scenarios, notification obligations and remediation effort drive the result most. Set these two rows first.'
+    },
+    phishing: {
+      primary: 'Event frequency',
+      secondary: 'Third-party liability',
+      why: 'Phishing and BEC scenarios happen more often than other types. Frequency and downstream fraud exposure matter most here.'
+    }
+  };
+  if (!presetKey || !hints[presetKey]) return null;
+  return hints[presetKey];
+}
+
+function renderStep3FocusNudge(draft) {
+  const hint = buildStep3FocusHint(draft);
+  if (!hint) return '';
+  return `<div class="card card--elevated anim-fade-in step3-focus-nudge">
+    <div class="context-panel-title">Where to focus first</div>
+    <p class="context-panel-copy" style="margin-top:var(--sp-2)">${escapeHtml(hint.why)}</p>
+    <div class="citation-chips" style="margin-top:var(--sp-3)">
+      <span class="badge badge--gold">Start here: ${escapeHtml(hint.primary)}</span>
+      <span class="badge badge--neutral">Then: ${escapeHtml(hint.secondary)}</span>
+    </div>
+  </div>`;
+}
+
 function renderEstimateActionCard(draft, recommendedKey) {
   const recommendation = recommendedKey
     ? `Use <strong>${getEstimatePresetLibrary()[recommendedKey].label}</strong> only if it matches the scenario pattern. Otherwise keep the AI starting values and adjust only where you have evidence.`
@@ -209,7 +245,7 @@ function renderEstimateModeNote(isAdv) {
 function renderEstimateQuickStartBlock(draft, recommendedPresetKey) {
   const nextAction = renderEstimateActionCard(draft, recommendedPresetKey);
   const directStart = `<div class="card card--elevated anim-fade-in"><div class="wizard-premium-head"><div><div class="context-panel-title">Basic estimation path</div><p class="context-panel-copy" style="margin-top:var(--sp-2)">Most users only need the three sections below: frequency, exposure, and cost.</p></div><span class="badge badge--gold">Default path</span></div><div class="context-panel-foot" style="margin-top:12px">If the AI values look broadly right, change only the numbers you want to challenge. Good enough to continue means you can explain the expected case in plain English.</div></div>`;
-  return `${nextAction}${directStart}`;
+  return `${renderStep3FocusNudge(draft)}${nextAction}${directStart}`;
 }
 
 function humanizeEstimateValidationMessage(message) {

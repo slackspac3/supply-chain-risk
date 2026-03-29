@@ -60,7 +60,20 @@
   });
 
   function cloneAssessment(value) {
-    return value && typeof value === 'object' ? JSON.parse(JSON.stringify(value)) : {};
+    if (!value || typeof value !== 'object') return {};
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      // Lifecycle transitions should still proceed if one field is not perfectly serializable.
+      return { ...value };
+    }
+  }
+
+  function buildAssessmentId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return `a_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
   function hasResults(assessment) {
@@ -118,6 +131,15 @@
 
   function normaliseAssessmentRecord(assessment) {
     const next = cloneAssessment(assessment);
+    // Saved assessments need stable minimum fields so partial drafts cannot silently corrupt the durable list.
+    next.id = String(next.id || '').trim() || buildAssessmentId();
+    next.createdAt = Number(next.createdAt || Date.now());
+    if (!String(next.scenarioTitle || '').trim()) {
+      next.scenarioTitle = String(next.narrative || 'Untitled assessment').trim() || 'Untitled assessment';
+    }
+    if (!String(next.buId || '').trim() && !String(next.buName || '').trim()) {
+      next.buName = 'Business unit not set';
+    }
     const lifecycleStatus = deriveAssessmentLifecycleStatus(next);
     const lifecycleFlags = normaliseLifecycleFlags(next);
     const lifecycleMeta = next.lifecycleMeta && typeof next.lifecycleMeta === 'object' ? { ...next.lifecycleMeta } : {};

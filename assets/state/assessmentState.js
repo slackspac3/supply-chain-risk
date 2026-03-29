@@ -2,6 +2,14 @@
 
 // Shared assessment, draft, and learning-state helpers extracted from app.js.
 
+function cloneDraftStateSnapshot(value, fallback = null) {
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return fallback;
+  }
+}
+
 function getAssessments() {
   const cache = ensureUserStateCache();
   if (cache.savedAssessments && typeof cache.savedAssessments === 'object') {
@@ -29,7 +37,10 @@ function persistSavedAssessmentsCollection(list) {
   const normalizedList = Array.isArray(list) ? list.map(item => normaliseAssessmentRecord(item)) : [];
   cache.assessments = normalizedList;
   cache.savedAssessments = buildSavedAssessmentsSection(normalizedList);
-  localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX), JSON.stringify(normalizedList));
+  try {
+    // Storage can be unavailable in hardened/private contexts; keep the in-memory cache authoritative.
+    localStorage.setItem(buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX), JSON.stringify(normalizedList));
+  } catch {}
   queueSharedUserStateSync({ savedAssessments: cache.savedAssessments });
   return normalizedList;
 }
@@ -83,8 +94,15 @@ function archiveCurrentDraft() {
   ensureDraftShape();
   const draftTitle = String(AppState.draft?.scenarioTitle || AppState.draft?.narrative || '').trim();
   if (!draftTitle) return null;
+  let archivedDraft = null;
+  try {
+    archivedDraft = JSON.parse(JSON.stringify(AppState.draft));
+  } catch {
+    // Fallback keeps archive available if one transient field cannot be serialized.
+    archivedDraft = { ...AppState.draft };
+  }
   const archived = prepareAssessmentForSave({
-    ...JSON.parse(JSON.stringify(AppState.draft)),
+    ...archivedDraft,
     id: AppState.draft.id || ('a_' + Date.now()),
     scenarioTitle: draftTitle,
     completedAt: null,
@@ -105,7 +123,13 @@ function deleteCurrentDraft() {
 function restoreArchivedDraftToWorkspace(id) {
   const archived = getAssessmentById(id);
   if (!archived || hasResults(archived)) return null;
-  const restored = JSON.parse(JSON.stringify(archived));
+  let restored = null;
+  try {
+    restored = JSON.parse(JSON.stringify(archived));
+  } catch {
+    // Fallback to a shallow copy if stored draft metadata is malformed but still recoverable.
+    restored = { ...archived };
+  }
   delete restored.archivedAt;
   delete restored.lifecycleMeta;
   delete restored.lifecycleUpdatedAt;
@@ -124,7 +148,13 @@ function getAssessmentById(id) {
 function duplicateAssessmentToDraft(id) {
   const source = getAssessmentById(id);
   if (!source) return null;
-  const duplicate = JSON.parse(JSON.stringify(source));
+  let duplicate = null;
+  try {
+    duplicate = JSON.parse(JSON.stringify(source));
+  } catch {
+    // Fallback keeps duplication available even if one saved field cannot be serialized cleanly.
+    duplicate = { ...source };
+  }
   delete duplicate.results;
   delete duplicate.completedAt;
   delete duplicate.archivedAt;
@@ -147,17 +177,21 @@ function getLearningStore() {
   const cache = ensureUserStateCache();
   if (cache.learningStore && typeof cache.learningStore === 'object') return cache.learningStore;
   try {
-    cache.learningStore = JSON.parse(localStorage.getItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX)) || '{"templates":{}}');
+    cache.learningStore = JSON.parse(localStorage.getItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX)) || '{"templates":{},"scenarioPatterns":[]}');
   } catch {
-    cache.learningStore = { templates: {} };
+    cache.learningStore = { templates: {}, scenarioPatterns: [] };
   }
   return cache.learningStore;
 }
 
 function saveLearningStore(store) {
   const cache = ensureUserStateCache();
-  cache.learningStore = store && typeof store === 'object' ? store : { templates: {} };
-  localStorage.setItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX), JSON.stringify(cache.learningStore));
+  cache.learningStore = store && typeof store === 'object'
+    ? cloneDraftStateSnapshot(store, { templates: {}, scenarioPatterns: [] })
+    : { templates: {}, scenarioPatterns: [] };
+  try {
+    localStorage.setItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX), JSON.stringify(cache.learningStore));
+  } catch {}
   queueSharedUserStateSync({ learningStore: cache.learningStore });
 }
 
@@ -177,6 +211,8 @@ function recordTemplateLoad(templateId) {
 }
 
 function recordLearningFromAssessment(draft) {
+  // Completed assessments should always feed the lightweight scenario-pattern store, even when no template was used.
+  if (typeof persistScenarioPattern === 'function') persistScenarioPattern(draft);
   if (!draft?.templateId || !draft?.fairParams) return;
   const store = getLearningStore();
   const profile = store.templates[draft.templateId] || { loads: 0, completed: 0, avgParams: {}, lastUsed: null };
@@ -217,7 +253,8 @@ function saveDraft() {
   try { sessionStorage.setItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX), JSON.stringify(AppState.draft)); } catch {}
   if (typeof persistDraftRecoverySnapshot === 'function') persistDraftRecoverySnapshot(AppState.draft);
   const cache = ensureUserStateCache();
-  cache.draft = { ...AppState.draft };
+  // Keep the cache snapshot detached from the live draft so later nested edits do not mutate the “saved” copy in memory.
+  cache.draft = cloneDraftStateSnapshot(AppState.draft, { ...(AppState.draft || {}) });
   dispatchDraftAction('MARK_DRAFT_SAVED', { at: Date.now() });
   cache.draftWorkspace = buildDraftWorkspaceSection(cache.draft, {
     lastSavedAt: Number(AppState.draftLastSavedAt || 0),

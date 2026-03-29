@@ -16,6 +16,20 @@ function renderExecutiveThresholdTracks(model) {
         ${item.secondaryBenchmark ? `<span>Warning: <strong>${fmtCurrency(item.secondaryBenchmark)}</strong></span>` : ''}
       </div>
       <div class="results-comparison-foot" style="margin-top:var(--sp-3)">${item.summary}</div>
+      ${(() => {
+        const anchor = typeof ReportPresentation !== 'undefined' &&
+          ReportPresentation.buildMetricAnchorSentence
+            ? ReportPresentation.buildMetricAnchorSentence(
+                item.title,
+                item.current,
+                AppState.simulation?.assessment?.benchmarkReferences || [],
+                AppState.draft?.geography || ''
+              )
+            : '';
+        return anchor
+          ? `<div class="results-metric-anchor">${escapeHtml(anchor)}</div>`
+          : '';
+      })()}
     </div>`;
   return UI.resultsVisualCard({
     title: 'Against governance limits',
@@ -55,6 +69,30 @@ function renderExecutiveSignalCard(results) {
   });
 }
 
+function renderHeroMetric(results, confidenceFrame, geography) {
+  const p90 = Number(results?.lm?.p90 || results?.eventLoss?.p90 || 0);
+  if (!p90) return '';
+  const fmt = fmtCurrency;
+  const tone = results?.toleranceBreached
+    ? 'danger'
+    : results?.nearTolerance
+      ? 'warning'
+      : 'success';
+  const postureLine = results?.toleranceBreached
+    ? 'This result is above the governance tolerance threshold and requires management action.'
+    : results?.nearTolerance
+      ? 'This result is approaching the governance tolerance threshold.'
+      : 'This result is currently within the governance tolerance threshold.';
+  const geoNote = geography
+    ? ` Assessed in the context of ${geography}.`
+    : '';
+  return `<div class="results-hero-metric anim-slide-up">
+    <div class="metric-display__label">Severe single-event view (P90)</div>
+    <div class="metric-display metric-display--${tone}">${fmt(p90)}</div>
+    <p class="metric-display__context">${postureLine}${geoNote}</p>
+  </div>`;
+}
+
 function renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView) {
   const nextStep = executiveAction || executiveDecision?.priority || 'Confirm the next management step for this scenario.';
   return `<div class="results-executive-brief">
@@ -73,21 +111,119 @@ function renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, e
       value: 'Act now',
       copy: nextStep
     })}
+    ${(() => {
+      const lever = typeof ReportPresentation !== 'undefined' &&
+        ReportPresentation.buildFastestReductionLever
+          ? ReportPresentation.buildFastestReductionLever(
+              AppState.simulation?.assessment?.recommendations,
+              executiveDecision
+            )
+          : '';
+      return lever
+        ? `<div class="results-lever-sentence">
+            <span class="results-lever-sentence__icon">→</span>
+            <span class="results-lever-sentence__text">
+              ${escapeHtml(lever)}
+            </span>
+           </div>`
+        : '';
+    })()}
   </div>`;
 }
 
+/* Add to app.css — results-decision-sentence */
+/*
+.results-decision-sentence {
+  padding: var(--sp-6) 0 var(--sp-4);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--sp-5);
+}
+.results-decision-sentence__label {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--sp-2);
+}
+.results-decision-sentence__headline {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.15;
+  margin: 0 0 var(--sp-3);
+  max-width: 28ch;
+}
+.results-decision-sentence__rationale {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin: 0 0 var(--sp-3);
+  max-width: 60ch;
+}
+.results-decision-sentence__priority {
+  display: inline-block;
+  font-size: .82rem;
+  font-weight: 600;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.results-decision-sentence__priority--success {
+  background: rgba(3,209,168,.1);
+  color: var(--color-success);
+  border-color: rgba(3,209,168,.25);
+}
+.results-decision-sentence__priority--warning {
+  background: rgba(242,251,90,.15);
+  color: var(--color-warning-text, #626f11);
+  border-color: rgba(146,156,42,.25);
+}
+.results-decision-sentence__priority--danger {
+  background: rgba(172,67,46,.08);
+  color: var(--color-danger);
+  border-color: rgba(172,67,46,.2);
+}
+*/
+
+function renderDecisionSentence(executiveDecision, statusTitle, results) {
+  if (!executiveDecision) return '';
+  const decision = String(executiveDecision.decision || '').trim();
+  const rationale = String(executiveDecision.rationale || '').trim();
+  const priority = String(executiveDecision.priority || '').trim();
+  if (!decision && !rationale) return '';
+  const tone = results?.toleranceBreached
+    ? 'danger'
+    : results?.nearTolerance
+      ? 'warning'
+      : 'success';
+  return `<div class="results-decision-sentence anim-fade-in">
+    <div class="results-decision-sentence__label">Management action</div>
+    <h2 class="results-decision-sentence__headline">${escapeHtml(decision || statusTitle)}</h2>
+    <p class="results-decision-sentence__rationale">${escapeHtml(rationale)}</p>
+    ${priority ? `<div class="results-decision-sentence__priority results-decision-sentence__priority--${tone}">${escapeHtml(priority)}</div>` : ''}
+  </div>`;
+}
 
 function renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, confidence, rolePresentation) {
   const confidenceValue = confidence?.label || 'Moderate confidence';
   const confidenceCopy = confidence?.summary || 'Use this result as a management starting point, then challenge the biggest assumptions.';
-  return `<div class="results-decision-rail">
-    <div class="results-decision-hero-card">
+  return `${renderDecisionSentence(executiveDecision, statusTitle, null)}
+<div class="results-decision-rail">
+    <div class="results-decision-hero-card card--primary">
       <div class="results-driver-label">Current position</div>
       <div class="results-decision-hero-card__value">${escapeHtml(String(statusTitle || 'Review'))}</div>
       <div class="results-brief-copy">${escapeHtml(String(statusDetail || 'Use this result as the current management position until the key assumptions are challenged.'))}</div>
     </div>
     <div class="results-decision-rail__support">
-      ${UI.resultsBriefCard({ label: 'Confidence', value: confidenceValue, copy: confidenceCopy })}
+      ${UI.resultsBriefCard({
+        label: 'Confidence',
+        value: confidenceValue,
+        copy: confidence?.implication
+          ? confidence.implication
+          : confidenceCopy
+      })}
       ${UI.resultsBriefCard({ label: 'Role lens', value: rolePresentation.executiveNoteTitle, copy: rolePresentation.executiveNote })}
     </div>
   </div>`;
@@ -171,7 +307,7 @@ function renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextSt
   return UI.resultsSectionBlock({
     title: 'Boardroom readout',
     body: `
-    <div class="results-summary-grid results-summary-grid--primary">
+    <div class="results-summary-grid results-summary-grid--primary results-summary-grid--bg">
       ${UI.resultsSummaryCard({
         label: 'Decision now',
         body: `<p class="results-summary-copy"><strong>${escapeHtml(String(executiveDecision?.priority || executiveDecision?.decision || 'Review the current management position'))}</strong></p>`,
@@ -192,16 +328,33 @@ function renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextSt
   });
 }
 
-function renderResultsConfidenceNeedsBlock(confidenceFrame, evidenceQuality, missingInformation = [], citations = []) {
+function deriveConfidenceTrajectory(currentAssessment, comparisonBaseline) {
+  if (!comparisonBaseline) return null;
+  const scoreMap = { 'High confidence': 3, 'Moderate confidence': 2, 'Low confidence': 1 };
+  const current = scoreMap[String(currentAssessment?.confidenceLabel || 'Moderate confidence')] || 2;
+  const prior = scoreMap[String(comparisonBaseline?.confidenceLabel || 'Moderate confidence')] || 2;
+  if (current > prior) return { direction: 'up', label: 'Stronger evidence base than last assessment' };
+  if (current < prior) return { direction: 'down', label: 'Weaker evidence base than last assessment' };
+  return { direction: 'flat', label: 'Evidence base is similar to last assessment' };
+}
+
+function renderResultsConfidenceNeedsBlock(confidenceFrame, evidenceQuality, missingInformation = [], citations = [], comparisonBaseline = null) {
   const topGap = confidenceFrame?.topGap || missingInformation[0] || 'No major evidence gap has been recorded yet.';
+  const trajectory = deriveConfidenceTrajectory(
+    { confidenceLabel: confidenceFrame?.label },
+    comparisonBaseline
+  );
   return UI.resultsSectionBlock({
     title: 'Confidence and evidence',
     body: `
-    <div class="results-summary-grid results-summary-grid--primary">
+    <div class="results-summary-grid results-summary-grid--primary results-summary-grid--bg">
       ${UI.resultsSummaryCard({
         label: 'Confidence for decisions',
-        body: `<p class="results-summary-copy"><strong>${confidenceFrame?.label || 'Moderate confidence'}</strong></p>`,
-        foot: confidenceFrame?.summary || 'Use this as a working decision view, then challenge the largest assumptions.'
+        body: `${confidenceFrame?.implication
+          ? `<p class="results-confidence-implication">${escapeHtml(confidenceFrame.implication)}</p>`
+          : ''}
+<p class="results-summary-copy"><strong>${confidenceFrame?.label || 'Moderate confidence'}</strong></p>`,
+        foot: `${confidenceFrame?.summary || 'Use this as a working decision view, then challenge the largest assumptions.'} ${trajectory ? `${trajectory.direction === 'up' ? '↑' : trajectory.direction === 'down' ? '↓' : '→'} ${trajectory.label}` : ''}`.trim()
       })}
       ${UI.resultsSummaryCard({
         label: 'Evidence base',
@@ -245,6 +398,75 @@ function buildTreatmentDecisionAssist(comparison, treatmentDecision) {
   };
 }
 
+/* Add to app.css — results-sponsorship-verdict */
+/*
+.results-sponsorship-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: 14px 14px 0 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 0;
+}
+.results-sponsorship-verdict--success {
+  background: rgba(3,209,168,.08);
+  border-color: rgba(3,209,168,.2);
+}
+.results-sponsorship-verdict--warning {
+  background: rgba(242,251,90,.1);
+  border-color: rgba(146,156,42,.2);
+}
+.results-sponsorship-verdict--danger {
+  background: rgba(172,67,46,.07);
+  border-color: rgba(172,67,46,.18);
+}
+.results-sponsorship-verdict__icon {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.results-sponsorship-verdict__line {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+.results-sponsorship-verdict__caveat {
+  font-size: .82rem;
+  color: var(--text-secondary);
+  margin-top: var(--sp-2);
+  line-height: 1.6;
+}
+*/
+
+function renderSponsorshipVerdict(comparison, assist) {
+  if (!comparison || !assist) return '';
+  const improving = comparison.severeEvent?.direction === 'down'
+    && (comparison.annualExposure?.direction === 'down' || comparison.severeAnnual?.direction === 'down');
+  const worsening = comparison.severeEvent?.direction === 'up'
+    || comparison.annualExposure?.direction === 'up';
+  const tone = improving ? 'success' : worsening ? 'danger' : 'warning';
+  const icon = improving ? '✓' : worsening ? '✗' : '~';
+  const verdictLine = improving
+    ? `Sponsor candidate — the treatment path is materially improving the management position.`
+    : worsening
+      ? `Not ready to sponsor — the treatment assumptions are currently worsening the baseline.`
+      : `Incomplete delta — the treatment path is not yet creating a clear management difference.`;
+  const keyAssumption = String(comparison.caveat || assist.validateNext || '').trim();
+  return `<div class="results-sponsorship-verdict results-sponsorship-verdict--${tone}">
+    <div class="results-sponsorship-verdict__icon">${icon}</div>
+    <div class="results-sponsorship-verdict__body">
+      <div class="results-sponsorship-verdict__line">${escapeHtml(verdictLine)}</div>
+      ${keyAssumption
+        ? `<div class="results-sponsorship-verdict__caveat">Key assumption to validate: ${escapeHtml(keyAssumption)}</div>`
+        : ''}
+    </div>
+  </div>`;
+}
+
 function renderResultsComparisonHighlight(comparison) {
   if (!comparison) return '';
   const treatmentDecision = ReportPresentation.buildTreatmentDecisionSummary(comparison);
@@ -263,6 +485,7 @@ function renderResultsComparisonHighlight(comparison) {
     <div class="results-section-heading">Treatment comparison</div>
     <div class="results-comparison-foot">Use this to see whether the proposed change materially improves the current position and why.</div>
     <div class="results-comparison-card results-comparison-card--spotlight">
+      ${renderSponsorshipVerdict(comparison, assist)}
       <div class="results-comparison-spotlight">
         <div>
           <div class="results-driver-label">Decision signal versus the baseline</div>
@@ -1307,8 +1530,8 @@ function renderWizard4() {
       </div>
     </main>`);
 
-  document.getElementById('btn-back-4').addEventListener('click', () => Router.navigate('/wizard/3'));
-  document.getElementById('btn-run-sim').addEventListener('click', runSimulation);
+  document.getElementById('btn-back-4')?.addEventListener('click', () => Router.navigate('/wizard/3'));
+  document.getElementById('btn-run-sim')?.addEventListener('click', runSimulation);
   document.getElementById('btn-cancel-sim')?.addEventListener('click', () => {
     const token = AppState.simulationRunToken;
     if (!token || token.aborted) return;
@@ -1327,8 +1550,15 @@ async function runSimulation() {
   const validation = validateFairParams(runPayload);
   if (!validation.valid) return;
   const runtimeWarnings = Array.isArray(validation.warnings) ? validation.warnings : [];
-  document.getElementById('run-area').classList.add('hidden');
-  document.getElementById('sim-progress').classList.remove('hidden');
+  const runAreaEl = document.getElementById('run-area');
+  const simProgressEl = document.getElementById('sim-progress');
+  if (!runAreaEl || !simProgressEl) {
+    // Review/run can be re-rendered while a deferred action is still in flight; fail closed instead of crashing.
+    UI.toast('The simulation workspace is no longer available. Re-open Review & Run and try again.', 'warning');
+    return;
+  }
+  runAreaEl.classList.add('hidden');
+  simProgressEl.classList.remove('hidden');
   await new Promise(r => setTimeout(r, 80));
   await new Promise(requestAnimationFrame);
   try {
@@ -1428,8 +1658,8 @@ async function runSimulation() {
     Router.navigate('/results/' + savedAssessment.id);
   } catch(e) {
     AppState.simulationRunToken = null;
-    document.getElementById('sim-progress').classList.add('hidden');
-    document.getElementById('run-area').classList.remove('hidden');
+    document.getElementById('sim-progress')?.classList.add('hidden');
+    document.getElementById('run-area')?.classList.remove('hidden');
     if (e?.code === 'SIMULATION_CANCELLED') {
       failSimulationState(e);
       UI.toast('The simulation was cancelled. Your inputs and draft were kept.', 'warning');
@@ -1570,6 +1800,12 @@ function renderResults(id, isShared) {
     }
   }[roleMode];
   const rawResults = assessment.results || {};
+  // Reopened/imported results should become the canonical runtime source so all result helpers read the same assessment.
+  AppState.simulation = {
+    ...(AppState.simulation || {}),
+    assessment,
+    results: rawResults
+  };
   const r = {
     ...rawResults,
     lm: rawResults.lm || rawResults.eventLoss || { mean: 0, p50: 0, p90: 0, p95: 0, min: 0, max: 0 },
@@ -1673,7 +1909,7 @@ function renderResults(id, isShared) {
     missingInformation
   });
   const recommendationCards = renderResultsActionBlock(recommendations, executiveAction, missingInformation, nextStepPlan);
-  const confidenceNeedsBlock = renderResultsConfidenceNeedsBlock(confidenceFrame, assessment.evidenceQuality, missingInformation, citations);
+  const confidenceNeedsBlock = renderResultsConfidenceNeedsBlock(confidenceFrame, assessment.evidenceQuality, missingInformation, citations, baselineAssessment);
   const comparisonHighlight = renderResultsComparisonHighlight(comparison);
   const explanationPanel = renderResultsExplanationPanel(assessmentIntelligence, comparison, runMetadata);
   const analystSummary = ReportPresentation.buildAnalystAdvisorySummary({
@@ -1738,6 +1974,11 @@ function renderResults(id, isShared) {
       ${executiveHero}
       <div class="results-executive-band">
         ${boardroomMode ? renderBoardroomModeIntro(comparison) : ''}
+        ${renderHeroMetric(
+          r,
+          confidenceFrame,
+          AppState.draft?.geography || assessment?.geography || ''
+        )}
         ${renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, assessmentIntelligence.confidence, rolePresentation)}
         ${boardroomMode ? renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView) : ''}
         ${executiveMetrics}
@@ -1969,6 +2210,25 @@ function renderResults(id, isShared) {
       </div>
     </main>`);
 
+  // Apply tolerance-state class to results page root
+  (function applyResultsToleranceClass() {
+    const pageRoot = document.querySelector('.page');
+    if (!pageRoot) return;
+    pageRoot.classList.remove(
+      'results-page--above-tolerance',
+      'results-page--near-tolerance',
+      'results-page--within-tolerance'
+    );
+    const activeResults = assessment.results || AppState.simulation?.results || {};
+    if (activeResults.toleranceBreached) {
+      pageRoot.classList.add('results-page--above-tolerance');
+    } else if (activeResults.nearTolerance) {
+      pageRoot.classList.add('results-page--near-tolerance');
+    } else {
+      pageRoot.classList.add('results-page--within-tolerance');
+    }
+  })();
+
   function drawTechnicalCharts() {
     requestAnimationFrame(() => {
       const hc = document.getElementById('chart-hist');
@@ -2077,7 +2337,7 @@ function renderResults(id, isShared) {
     AppState.resultsComparisonId = event.target.value || '';
     renderResults(id, isShared || assessment._shared);
   });
-  document.getElementById('btn-export-pdf').addEventListener('click', event => {
+  document.getElementById('btn-export-pdf')?.addEventListener('click', event => {
     const button = event.currentTarget;
     const original = button.textContent;
     button.disabled = true;
@@ -2105,11 +2365,11 @@ function renderResults(id, isShared) {
     button.disabled = true;
     button.textContent = 'Preparing…';
     try {
-      ExportService.exportDecisionMemo(assessment, AppState.currency, AppState.fxRate, { includeAppendix: false });
-      UI.toast('Decision memo prepared for print or PDF save.', 'success');
+      ExportService.exportBoardNote(assessment, AppState.currency, AppState.fxRate);
+      UI.toast('Board note prepared for print or PDF save.', 'success');
     } catch (error) {
-      console.error('Decision memo export failed:', error);
-      UI.toast('The decision memo could not be prepared. Try again.', 'danger');
+      console.error('Board note export failed:', error);
+      UI.toast('The board note could not be prepared. Try again.', 'danger');
     } finally {
       window.setTimeout(() => {
         button.disabled = false;
@@ -2181,7 +2441,7 @@ function renderResults(id, isShared) {
       }, 600);
     }
   });
-  document.getElementById('btn-create-treatment-case').addEventListener('click', event => {
+  document.getElementById('btn-create-treatment-case')?.addEventListener('click', event => {
     const button = event.currentTarget;
     const original = button.textContent;
     button.disabled = true;
@@ -2203,7 +2463,7 @@ function renderResults(id, isShared) {
     UI.toast('Assessment duplicated into a new draft.', 'success');
     Router.navigate('/wizard/1');
   });
-  document.getElementById('btn-new-assess').addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
+  document.getElementById('btn-new-assess')?.addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
   document.getElementById('btn-new-assess-top')?.addEventListener('click', () => { resetDraft(); Router.navigate('/wizard/1'); });
   } catch (error) {
     console.error('renderResults failed:', error);
@@ -2228,13 +2488,19 @@ function renderResults(id, isShared) {
 const ADMIN_SECTION_STORAGE_KEY = 'rq_admin_active_section';
 
 function getPreferredAdminSection() {
-  const value = String(localStorage.getItem(ADMIN_SECTION_STORAGE_KEY) || '').trim();
-  return ['org', 'company', 'defaults', 'access', 'users', 'audit'].includes(value) ? value : 'org';
+  try {
+    const value = String(localStorage.getItem(ADMIN_SECTION_STORAGE_KEY) || '').trim();
+    return ['org', 'company', 'defaults', 'access', 'users', 'audit'].includes(value) ? value : 'org';
+  } catch {
+    return 'org';
+  }
 }
 
 function setPreferredAdminSection(section) {
   const value = ['org', 'company', 'defaults', 'access', 'users', 'audit'].includes(section) ? section : 'org';
-  localStorage.setItem(ADMIN_SECTION_STORAGE_KEY, value);
+  try {
+    localStorage.setItem(ADMIN_SECTION_STORAGE_KEY, value);
+  } catch {}
   return value;
 }
 

@@ -72,7 +72,7 @@ function renderStep1FeaturedExampleCard(example) {
 function renderStep1GuidedBuilderCard(draft, recommendation) {
   const draftPreview = composeGuidedNarrative(draft.guidedInput);
   const optionalContextDisclosureKey = getDisclosureStateKey('/wizard/1', 'add more context only if you need it');
-  return `<div class="card card--elevated wizard-primary-card anim-fade-in anim-delay-1">
+  return `<div class="card card--primary wizard-primary-card anim-fade-in anim-delay-1">
     <div class="wizard-premium-head" style="margin-bottom:var(--sp-5)">
       <div>
         <h3>Guided scenario builder</h3>
@@ -134,7 +134,7 @@ function renderStep1GuidedBuilderCard(draft, recommendation) {
     </div>
     ${draftPreview ? `<div class="card mt-4 wizard-draft-preview" style="padding:var(--sp-4);background:var(--bg-elevated)">
       <div class="context-panel-title">Draft preview</div>
-      <p class="context-panel-copy" id="guided-preview">${draftPreview}</p>
+      <p class="context-panel-copy" id="guided-preview">${escapeHtml(String(draftPreview))}</p>
     </div>` : '<div class="form-help wizard-preview-placeholder" id="guided-preview">Answer the prompts and build the draft. The platform will create a clean starting statement for you.</div>'}
   </div>`;
 }
@@ -789,6 +789,16 @@ function renderWizard1() {
       seedRisksFromScenarioDraft(narrative, { force: true });
       selected = getSelectedRisks();
     }
+    if (!narrative && selected.length) {
+      const selectedTitles = selected.slice(0, 3).map(item => item.title).filter(Boolean);
+      const buLabel = buList.find(b => b.id === buId)?.name || AppState.draft.buName || 'the selected business unit';
+      const geographyLabel = formatScenarioGeographies(wizardGeographyInput.getTags(), settings.geography);
+      // Selected-risk-only starts left Step 2 with a blank narrative, so seed a minimal editable scenario before continuing.
+      narrative = `Assess the potential impact of ${selectedTitles.join(', ') || 'the selected risks'} affecting ${buLabel}${geographyLabel ? ` in ${geographyLabel}` : ''}.`;
+      AppState.draft.narrative = narrative;
+      AppState.draft.sourceNarrative = narrative;
+      document.getElementById('intake-risk-statement').value = narrative;
+    }
     if (!String(AppState.draft.narrative || narrative || '').trim() && !selected.length) { UI.toast('Please complete the guided questions, enter a risk statement, or select at least one risk.', 'warning'); return; }
     AppState.draft.geographies = normaliseScenarioGeographies(wizardGeographyInput.getTags(), settings.geography);
     AppState.draft.geography = formatScenarioGeographies(AppState.draft.geographies, settings.geography);
@@ -908,7 +918,8 @@ function explainRiskFit(match, selected) {
 function renderRiskSelectionSection(title, subtitle, risks, selectedIds, regulations, sectionClass = '') {
   if (!risks.length) return '';
   const sourceLabel = risk => risk.source === 'manual' ? 'Manual' : risk.source === 'dry-run' ? 'Example' : risk.source === 'register' || risk.source === 'ai+register' ? 'Upload' : 'AI generated';
-  return `<div class="${sectionClass}" style="display:flex;flex-direction:column;gap:var(--sp-4)"><div><div class="context-panel-title">${title}</div><div class="context-panel-copy" style="margin-top:6px">${subtitle}</div></div><div class="risk-selection-grid">${risks.map(({ risk, match }) => `<div class="risk-pick-card"><div class="risk-pick-head" style="align-items:flex-start"><label style="display:flex;gap:12px;align-items:flex-start;flex:1;cursor:pointer"><input type="checkbox" class="risk-select-checkbox" data-risk-id="${risk.id}" ${selectedIds.has(risk.id) ? 'checked' : ''} style="margin-top:4px"><div><div class="risk-pick-title">${risk.title}</div><div class="risk-pick-badges"><span class="risk-pick-badge">${risk.category}</span><span class="risk-pick-badge risk-pick-badge--source">${sourceLabel(risk)}</span></div></div></label><button class="btn btn--ghost btn--sm btn-remove-risk" data-risk-id="${risk.id}" type="button">Remove</button></div>${risk.description ? `<p class="risk-pick-desc">${risk.description}</p>` : ''}<div class="form-help" style="margin-bottom:10px">${explainRiskFit(match, selectedIds.has(risk.id))}</div><div class="citation-chips">${(risk.regulations || []).length ? risk.regulations.slice(0, 4).map(tag => `<span class="badge badge--neutral">${tag}</span>`).join('') : regulations.slice(0, 2).map(tag => `<span class="badge badge--neutral">${tag}</span>`).join('')}</div></div>`).join('')}</div></div>`;
+  // Risk titles, descriptions, and regulation labels can come from uploaded files or AI suggestions, so escape before rendering.
+  return `<div class="${escapeHtml(String(sectionClass))}" style="display:flex;flex-direction:column;gap:var(--sp-4)"><div><div class="context-panel-title">${escapeHtml(String(title))}</div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(subtitle))}</div></div><div class="risk-selection-grid">${risks.map(({ risk, match }) => `<div class="risk-pick-card"><div class="risk-pick-head" style="align-items:flex-start"><label style="display:flex;gap:12px;align-items:flex-start;flex:1;cursor:pointer"><input type="checkbox" class="risk-select-checkbox" data-risk-id="${escapeHtml(String(risk.id || ''))}" ${selectedIds.has(risk.id) ? 'checked' : ''} style="margin-top:4px"><div><div class="risk-pick-title">${escapeHtml(String(risk.title || 'Untitled risk'))}</div><div class="risk-pick-badges"><span class="risk-pick-badge">${escapeHtml(String(risk.category || 'Uncategorized'))}</span><span class="risk-pick-badge risk-pick-badge--source">${escapeHtml(String(sourceLabel(risk)))}</span></div></div></label><button class="btn btn--ghost btn--sm btn-remove-risk" data-risk-id="${escapeHtml(String(risk.id || ''))}" type="button">Remove</button></div>${risk.description ? `<p class="risk-pick-desc">${escapeHtml(String(risk.description))}</p>` : ''}<div class="form-help" style="margin-bottom:10px">${escapeHtml(String(explainRiskFit(match, selectedIds.has(risk.id))))}</div><div class="citation-chips">${(risk.regulations || []).length ? risk.regulations.slice(0, 4).map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('') : regulations.slice(0, 2).map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('')}</div></div>`).join('')}</div></div>`;
 }
 
 function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
@@ -936,7 +947,7 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
       ? 'Good scope so far. Keep only the risks that clearly belong in one coherent assessment.'
       : 'Choose the risks that share the same event, scope, or business impact.';
   const additionalRisksDisclosureKey = getDisclosureStateKey('/wizard/1', 'show additional possible risks');
-  return `${linkedRecommendations.length ? `<div class="card mb-4" style="background:var(--bg-elevated)"><div class="context-panel-title">Suggested linked-risk groupings</div><div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">${linkedRecommendations.map(group => `<div><div style="font-size:.78rem;font-weight:600;color:var(--text-primary)">${group.label}</div><div class="context-panel-copy" style="margin-top:4px">${group.risks.join(', ')}</div></div>`).join('')}</div><div class="context-panel-foot">${AppState.draft.linkAnalysis || 'Treat these as linked where one control or event could trigger the others in the same scenario.'}</div></div>` : ''}
+  return `${linkedRecommendations.length ? `<div class="card mb-4" style="background:var(--bg-elevated)"><div class="context-panel-title">Suggested linked-risk groupings</div><div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">${linkedRecommendations.map(group => `<div><div style="font-size:.78rem;font-weight:600;color:var(--text-primary)">${escapeHtml(String(group.label || 'Linked risks'))}</div><div class="context-panel-copy" style="margin-top:4px">${escapeHtml(String((Array.isArray(group.risks) ? group.risks : []).join(', ')))}</div></div>`).join('')}</div><div class="context-panel-foot">${escapeHtml(String(AppState.draft.linkAnalysis || 'Treat these as linked where one control or event could trigger the others in the same scenario.'))}</div></div>` : ''}
   <div class="flex items-center gap-3 mb-4" style="flex-wrap:wrap">
     <button class="btn btn--ghost btn--sm" id="btn-select-all-risks" type="button">Select All</button>
     <button class="btn btn--ghost btn--sm" id="btn-clear-all-risks" type="button">Clear All</button>

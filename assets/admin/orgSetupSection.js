@@ -52,9 +52,9 @@ const AdminOrgSetupSection = (() => {
     return treeSection;
   }
 
-  function _persistAdminTreeState() {
+  async function _persistAdminTreeState() {
     const { companyStructure, entityContextLayers } = latestContext;
-    saveAdminSettings({
+    return saveAdminSettings({
       ...getAdminSettings(),
       companyStructure,
       entityContextLayers
@@ -71,17 +71,18 @@ const AdminOrgSetupSection = (() => {
     const idToNode = new Map(companyStructure.map(node => [node.id, node]));
     layerSummaryEl.innerHTML = entityContextLayers.map(layer => {
       const node = idToNode.get(layer.entityId);
+      // Entity context can come from admin-managed free text, so escape it before injecting into the summary panel.
       return `
         <div class="card" style="padding:var(--sp-4);margin-top:12px">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span class="badge badge--gold">${node?.type || 'Saved layer'}</span>
-            <strong style="color:var(--text-primary)">${node?.name || layer.entityName}</strong>
-            ${layer.geography ? `<span class="form-help" style="margin-top:0">${layer.geography}</span>` : ''}
-            <button class="btn btn--ghost btn--sm admin-layer-edit" data-layer-id="${layer.entityId}" type="button">Edit</button>
-            <button class="btn btn--ghost btn--sm admin-layer-delete" data-layer-id="${layer.entityId}" type="button">Remove</button>
+            <span class="badge badge--gold">${escapeHtml(String(node?.type || 'Saved layer'))}</span>
+            <strong style="color:var(--text-primary)">${escapeHtml(String(node?.name || layer.entityName || 'Saved layer'))}</strong>
+            ${layer.geography ? `<span class="form-help" style="margin-top:0">${escapeHtml(String(layer.geography))}</span>` : ''}
+            <button class="btn btn--ghost btn--sm admin-layer-edit" data-layer-id="${escapeHtml(String(layer.entityId || ''))}" type="button">Edit</button>
+            <button class="btn btn--ghost btn--sm admin-layer-delete" data-layer-id="${escapeHtml(String(layer.entityId || ''))}" type="button">Remove</button>
           </div>
-          ${layer.contextSummary ? `<div class="form-help" style="margin-top:8px">${layer.contextSummary}</div>` : ''}
-          ${layer.applicableRegulations?.length ? `<div class="citation-chips" style="margin-top:8px">${layer.applicableRegulations.map(tag => `<span class="badge badge--neutral">${tag}</span>`).join('')}</div>` : ''}
+          ${layer.contextSummary ? `<div class="form-help" style="margin-top:8px">${escapeHtml(String(layer.contextSummary))}</div>` : ''}
+          ${layer.applicableRegulations?.length ? `<div class="citation-chips" style="margin-top:8px">${layer.applicableRegulations.map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('')}</div>` : ''}
         </div>`;
     }).join('');
     _bindLayerActionHandlers();
@@ -96,11 +97,18 @@ const AdminOrgSetupSection = (() => {
         openEntityContextLayerEditor({
           entity: target,
           settings: getAdminSettings(),
-          onSave: (nextLayer, modal) => {
+          onSave: async (nextLayer, modal) => {
             const existingIndex = entityContextLayers.findIndex(item => item.entityId === nextLayer.entityId);
+            const previousLayer = existingIndex > -1 ? { ...entityContextLayers[existingIndex] } : null;
             if (existingIndex > -1) entityContextLayers[existingIndex] = nextLayer;
             else entityContextLayers.push(nextLayer);
-            _persistAdminTreeState();
+            // The editor mutates the local tree immediately, so wait for shared persistence before claiming success.
+            const saved = await _persistAdminTreeState();
+            if (!saved) {
+              if (existingIndex > -1) entityContextLayers[existingIndex] = previousLayer;
+              else entityContextLayers.pop();
+              return;
+            }
             modal.close();
             _renderEntityLayerSummary();
             UI.toast(`Saved context for ${target.name}.`, 'success');
@@ -114,8 +122,13 @@ const AdminOrgSetupSection = (() => {
         const index = entityContextLayers.findIndex(item => item.entityId === entityId);
         if (index < 0) return;
         if (!await UI.confirm('Remove this business or department context layer?')) return;
+        const removed = entityContextLayers[index];
         entityContextLayers.splice(index, 1);
-        _persistAdminTreeState();
+        const saved = await _persistAdminTreeState();
+        if (!saved) {
+          entityContextLayers.splice(index, 0, removed);
+          return;
+        }
         _renderEntityLayerSummary();
         UI.toast('Context layer removed.', 'success');
       });
@@ -129,14 +142,21 @@ const AdminOrgSetupSection = (() => {
     _bindStructureActionHandlers();
   }
 
-  function _upsertCompanyStructureNode(node) {
+  async function _upsertCompanyStructureNode(node) {
     const { companyStructure } = latestContext;
     const index = companyStructure.findIndex(item => item.id === node.id);
+    const previousNode = index > -1 ? { ...companyStructure[index] } : null;
     if (index > -1) companyStructure[index] = node;
     else companyStructure.push(node);
-    _persistAdminTreeState();
+    const saved = await _persistAdminTreeState();
+    if (!saved) {
+      if (index > -1) companyStructure[index] = previousNode;
+      else companyStructure.pop();
+      return false;
+    }
     _refreshStructureSummary();
     _renderEntityLayerSummary();
+    return true;
   }
 
   function openEntityEditor(existingNode = null, seed = {}) {
@@ -146,11 +166,12 @@ const AdminOrgSetupSection = (() => {
       structure: companyStructure,
       existingNode,
       seed,
-      onSave: (node, modal) => {
+      onSave: async (node, modal) => {
         if (node.contextSections) {
           node.profile = serialiseCompanyContextSections(node.contextSections);
         }
-        _upsertCompanyStructureNode(node);
+        const saved = await _upsertCompanyStructureNode(node);
+        if (!saved) return;
         if (node.profile && profileEl) profileEl.value = node.profile;
         if (node.websiteUrl && websiteEl) websiteEl.value = node.websiteUrl;
         modal.close();
@@ -175,11 +196,18 @@ const AdminOrgSetupSection = (() => {
         openEntityContextLayerEditor({
           entity: target,
           settings: getAdminSettings(),
-          onSave: (nextLayer, modal) => {
+          onSave: async (nextLayer, modal) => {
             const existingIndex = entityContextLayers.findIndex(item => item.entityId === nextLayer.entityId);
+            const previousLayer = existingIndex > -1 ? { ...entityContextLayers[existingIndex] } : null;
             if (existingIndex > -1) entityContextLayers[existingIndex] = nextLayer;
             else entityContextLayers.push(nextLayer);
-            _persistAdminTreeState();
+            // The editor mutates the local tree immediately, so wait for shared persistence before claiming success.
+            const saved = await _persistAdminTreeState();
+            if (!saved) {
+              if (existingIndex > -1) entityContextLayers[existingIndex] = previousLayer;
+              else entityContextLayers.pop();
+              return;
+            }
             modal.close();
             _renderEntityLayerSummary();
             UI.toast(`Saved context for ${target.name}.`, 'success');
@@ -204,6 +232,8 @@ const AdminOrgSetupSection = (() => {
         const target = companyStructure.find(node => node.id === targetId);
         if (!target) return;
         if (!await UI.confirm(`Remove ${target.name} and anything nested beneath it from the organisation tree?`)) return;
+        const previousStructure = companyStructure.map(node => ({ ...node }));
+        const previousLayers = entityContextLayers.map(layer => ({ ...layer }));
         const removeIds = new Set([targetId]);
         let changed = true;
         while (changed) {
@@ -221,7 +251,12 @@ const AdminOrgSetupSection = (() => {
         for (let i = entityContextLayers.length - 1; i >= 0; i -= 1) {
           if (removeIds.has(entityContextLayers[i].entityId)) entityContextLayers.splice(i, 1);
         }
-        _persistAdminTreeState();
+        const saved = await _persistAdminTreeState();
+        if (!saved) {
+          companyStructure.splice(0, companyStructure.length, ...previousStructure);
+          entityContextLayers.splice(0, entityContextLayers.length, ...previousLayers);
+          return;
+        }
         _refreshStructureSummary();
         _renderEntityLayerSummary();
         UI.toast(`${target.name} removed from the organisation tree.`, 'success');

@@ -30,6 +30,21 @@ const LOGIN_BACKOFF_STEPS_MS = [
   60 * 60 * 1000
 ];
 
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseRequestBody(req) {
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body || '{}');
+    } catch {
+      return null;
+    }
+  }
+  return req.body ?? {};
+}
+
 function getKvUrl() {
   return process.env.APPLE_CAT || process.env.FOO_URL_TEST || process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
 }
@@ -188,15 +203,7 @@ async function deleteUserState(username) {
 
 module.exports = async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
-  const body = typeof req.body === 'string'
-    ? (() => {
-        try {
-          return JSON.parse(req.body || '{}');
-        } catch {
-          return {};
-        }
-      })()
-    : (req.body || {});
+  const body = parseRequestBody(req);
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
@@ -211,6 +218,16 @@ module.exports = async function handler(req, res) {
   const origin = req.headers.origin;
   if (origin && origin !== allowedOrigin) {
     sendApiError(res, 403, 'FORBIDDEN', 'Request origin is not allowed.');
+    return;
+  }
+
+  if ((req.method === 'POST' || req.method === 'PATCH') && !req.headers['content-type']?.includes('application/json')) {
+    sendApiError(res, 415, 'UNSUPPORTED_MEDIA_TYPE', 'Content-Type must be application/json');
+    return;
+  }
+
+  if ((req.method === 'POST' || req.method === 'PATCH') && !isPlainObject(body)) {
+    sendApiError(res, 400, 'VALIDATION_ERROR', 'Invalid request body.');
     return;
   }
 
@@ -289,6 +306,10 @@ module.exports = async function handler(req, res) {
       }
 
       const accounts = await readAccounts();
+      if (!isPlainObject(body.account || {})) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Account payload is required.');
+        return;
+      }
       const account = normaliseAccount(body.account || {});
       if (!account.username || !account.password) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Username and password are required.');
@@ -316,7 +337,7 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'PATCH') {
       const username = String(body.username || '').trim().toLowerCase();
-      const updates = body.updates || {};
+      const updates = isPlainObject(body.updates || {}) ? body.updates : {};
       const accounts = await readAccounts();
       const index = accounts.findIndex(account => account.username === username);
       if (index < 0) {
@@ -394,6 +415,7 @@ module.exports = async function handler(req, res) {
 
     sendApiError(res, 405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
   } catch (error) {
+    console.error('User API request failed.', error);
     sendApiError(res, 500, 'USER_STORE_REQUEST_FAILED', 'The user request could not be completed.');
   }
 };

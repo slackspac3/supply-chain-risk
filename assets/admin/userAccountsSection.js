@@ -211,7 +211,16 @@ ${changeSummary.changed.join(' ')}`);
     }
     try {
       await AuthService.adminUpdateManagedAccount(username, nextAssignment);
-      saveAdminSettings(nextSettings);
+      const saved = await saveAdminSettings(nextSettings);
+      if (!saved) {
+        AppState.adminNewUserStatus = 'Access changed on the account service, but shared platform settings could not be saved. Reload the latest settings and try again.';
+        const resultEl = document.getElementById('admin-new-user-result');
+        if (resultEl) resultEl.textContent = AppState.adminNewUserStatus;
+        UI.toast('Shared access settings were not saved.', 'warning');
+        button.disabled = false;
+        button.textContent = 'Apply Access';
+        return false;
+      }
     } catch (error) {
       AppState.adminNewUserStatus = 'User access could not be updated. Check the assigned role and scope, then try again.';
       const resultEl = document.getElementById('admin-new-user-result');
@@ -330,7 +339,11 @@ ${changeSummary.changed.join(' ')}`);
             companyStructure: (Array.isArray(currentSettings.companyStructure) ? currentSettings.companyStructure : []).map(node => node.ownerUsername === username ? { ...node, ownerUsername: '' } : node)
           };
           await AuthService.deleteManagedAccount(username);
-          saveAdminSettings(clearedSettings);
+          const saved = await saveAdminSettings(clearedSettings);
+          if (!saved) {
+            UI.toast('The account was removed, but shared ownership settings could not be saved.', 'warning');
+            return;
+          }
           clearUserPersistentState(username);
           UI.toast(`${displayName} deleted.`, 'success');
           rerenderCurrentAdminSection();
@@ -426,7 +439,15 @@ Function: ${departmentLabel}`);
       try {
         const account = await AuthService.createManagedAccount({ displayName, role, businessUnitEntityId, departmentEntityId: role === 'bu_admin' ? '' : departmentEntityId });
         const nextSettings = applyManagedAccountAssignmentToSettings(account, { role: account.role, businessUnitEntityId: account.businessUnitEntityId, departmentEntityId: account.role === 'bu_admin' ? '' : account.departmentEntityId }, getAdminSettings());
-        saveAdminSettings(nextSettings);
+        const saved = await saveAdminSettings(nextSettings);
+        if (!saved) {
+          AppState.adminNewUserStatus = 'The account was created, but shared ownership settings could not be saved. Reload the latest settings and reapply the assignment.';
+          resultEl.textContent = AppState.adminNewUserStatus;
+          UI.toast('Shared access settings were not saved.', 'warning');
+          button.disabled = false;
+          button.textContent = 'Add User';
+          return;
+        }
         AppState.adminVisiblePasswords[account.username] = account.password || '';
         AppState.adminNewUserStatus = `Created ${account.displayName}: username ${account.username} / password ${account.password}`;
         UI.toast(`Created ${account.username}.`, 'success');
