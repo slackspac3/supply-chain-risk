@@ -3415,7 +3415,8 @@ function applyPageNavigationEffects(root = document) {
   if (typeof window === 'undefined') return;
   const routeMeta = getRouteMeta();
   const currentHash = String(routeMeta.currentHash || '').trim() || '/';
-  const routeChanged = routeMeta.routeChanged || AppState.lastRenderedRouteHash !== currentHash;
+  // Same-route rerenders reuse the last router meta object, so rely on the last rendered hash here instead of replaying an old navigation state.
+  const routeChanged = AppState.lastRenderedRouteHash !== currentHash;
   AppState.lastRenderedRouteHash = currentHash;
   if (!routeChanged) return;
 
