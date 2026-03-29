@@ -1213,11 +1213,21 @@ const USER_SETTINGS_OVERRIDE_FIELDS = [
 ];
 
 const USER_FOCUS_OPTIONS = [
+  'Strategic risk',
+  'Operational risk',
   'Cyber risk',
   'Technology resilience',
+  'Financial risk',
+  'Procurement and sourcing',
+  'Supply chain resilience',
+  'Business continuity',
+  'Regulatory compliance',
+  'Compliance assurance',
+  'Governance and controls',
+  'ESG and sustainability',
+  'Health, safety, and environment',
   'Operational continuity',
   'Third-party risk',
-  'Regulatory compliance',
   'Audit readiness',
   'Data protection',
   'Executive reporting'

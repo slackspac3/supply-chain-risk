@@ -109,7 +109,7 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
           </div>
           <div class="form-group mt-4">
             <label class="form-label" for="onboard-working-context">Anything important about your working context?</label>
-            <textarea class="form-textarea" id="onboard-working-context" rows="4" placeholder="e.g. I support technology and cyber risk decisions across shared platforms, work closely with control owners, and often need outputs that balance resilience, compliance, and executive reporting.">${draftSettings.userProfile.workingContext || ''}</textarea>
+            <textarea class="form-textarea" id="onboard-working-context" rows="4" placeholder="e.g. I support finance, compliance, or procurement decisions across regulated operations, work closely with control owners, and often need outputs that balance resilience, governance, financial exposure, and executive reporting.">${draftSettings.userProfile.workingContext || ''}</textarea>
           </div>
           ${UI.aiAssistCard({
             notesId: 'onboard-answer-notes',

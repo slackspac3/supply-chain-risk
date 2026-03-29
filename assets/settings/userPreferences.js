@@ -119,7 +119,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     body: `
       <div class="form-group">
         <label class="form-label" for="user-working-context">Working context</label>
-        <textarea class="form-textarea" id="user-working-context" rows="4" placeholder="e.g. I support technology and cyber risk decisions across shared platforms, work closely with control owners, and often need outputs that balance resilience, compliance, and executive reporting.">${escapeHtml(String(profile.workingContext || ''))}</textarea>
+        <textarea class="form-textarea" id="user-working-context" rows="4" placeholder="e.g. I support procurement and supplier decisions across regulated operations, work closely with control owners, and need outputs that balance resilience, compliance, financial exposure, and executive reporting.">${escapeHtml(String(profile.workingContext || ''))}</textarea>
       </div>
       <div class="form-group mt-4">
         <label class="form-label" for="user-preferred-outputs">Preferred output style</label>
