@@ -1,174 +1,155 @@
 # Risk Intelligence Platform
 
-Risk Intelligence Platform is a premium internal risk decision-support product. It is not just a calculator, not just an AI drafting tool, and not a generic dashboard app.
-
-The product combines:
-- role-based dashboards
-- personal settings and role/context shaping
-- AI-assisted scenario drafting and refinement
-- plain-language estimation plus advanced simulation mode
-- FAIR-style logic
-- Monte Carlo simulation
-- executive and technical results
-- treatment comparison
-- decision memo / board note export
-- confidence, evidence, provenance, assumptions, and citation logic
-- document-grounded retrieval and citations
-- admin governance, defaults, org setup, user access, and document library
+Risk Intelligence Platform is an internal enterprise risk decision-support product. It combines guided scenario building, AI-assisted structuring, FAIR-style quant logic, Monte Carlo simulation, evidence-grounded retrieval, and executive-grade reporting in one role-aware workflow.
 
 This repository contains:
 - the GitHub Pages frontend SPA
-- the Vercel-hosted serverless API routes used by the shared demo/pilot environment
+- the Vercel-hosted serverless API routes used by the shared pilot environment
 
-## Product Thesis
+## What The Product Does
 
-The platform helps users move from a vague risk concern to a structured, challengeable, quantified management view.
+The platform helps a user move from a vague issue to a structured, challengeable, quantified management view.
 
-It is designed to make complex risk estimation feel easier than the underlying complexity suggests by using:
-- strong workflow staging
-- progressive disclosure
-- summary-first review surfaces
-- assistant-style guidance instead of generic AI chat
-- role-aware dashboards instead of generic dashboard chrome
+Core capabilities:
+- role-based dashboards for standard users, function admins, BU admins, and global admins
+- AI-assisted risk and context builder
+- scenario refinement and structured scenario shaping
+- plain-language estimation and advanced tuning
+- FAIR-style Monte Carlo simulation
+- executive, technical, and appendix result views
+- treatment comparison and better-outcome analysis
+- direct PDF export plus printable decision memo / board note outputs
+- evidence, provenance, assumptions, confidence, and citation surfacing
+- document-grounded retrieval across standards, frameworks, and regulations
+- review submission and management sign-off workflow
+- admin governance for organisation setup, defaults, users, audit, and document library
 
 ## Current Workflow
 
 1. Dashboard
 2. Start or resume an assessment
-3. `AI-Assisted Risk & Context Builder`
-4. `Refine the Scenario`
-5. `Estimate the Scenario`
-6. `Review & Run` Monte Carlo simulation
-7. Results review
-   - `Executive Summary`
-   - `Technical Detail`
-   - `Appendix & Evidence`
-8. Export, compare a better outcome, or revisit later
+3. Step 1: AI-assisted risk and context builder
+4. Step 2: scenario refinement and narrative shaping
+5. Step 3: estimation and advanced tuning
+6. Review & Run
+7. Results
+   - Executive Summary
+   - Technical Detail
+   - Appendix & Evidence
+8. Compare a better outcome, export, submit for review, or revisit later
 
-## Current Product Areas
+## Enterprise Risk Coverage
 
-### Dashboard And Work Queues
-- standard-user dashboard with live work, revisit/watchlist, and workspace tools
-- role-specific oversight dashboards for function admins and BU admins
-- reassessment/watchlist lane driven by tolerance, confidence, evidence age, annual review, and treatment-validation signals
-- clearer separation between:
-  - work starts
-  - attention queues
-  - workspace utilities
+The product now supports a broader enterprise risk lens, not only cyber. Current first-class or actively modeled domains include:
 
-### Wizard Flow
-- `Step 1` AI-assisted risk/context builder
-- `Step 2` scenario refinement and structured narrative shaping
-- `Step 3` plain-language estimation plus advanced tuning
-- `Review & Run` pre-simulation review gate
+- strategic
+- operational
+- cyber
+- third-party
+- regulatory
+- financial
+- ESG
+- compliance
+- supply chain
+- procurement
+- business continuity
+- HSE
+- AI / model risk
+- data governance / privacy
+- fraud / integrity
+- legal / contract
+- geopolitical / market access
+- physical security
+- OT / industrial resilience
+- people / workforce / human rights
+- investment / JV
+- project / programme / transformation delivery
 
-Recent workflow support layers include:
-- Scenario Quality Coach
-- Evidence Gap Action Plan
-- plain-English Step 3 modeling guidance for non-technical users
+## Review And Approval Flow
 
-### Results
-- executive results surface for management interpretation
-- technical detail surface for challenge and inspection
-- appendix/evidence layer for methodology, citations, and reproducibility
-- treatment comparison
-- Evidence-Backed Parameter Challenge
-- boardroom-style executive review mode
-- decision memo / board note export
+Completed assessments that breach tolerance, approach tolerance, or trigger annual review can now move into a lightweight management-review workflow.
 
-### Settings And Context
-- personal profile snapshot
-- `About me`
-- `Context you own operationally`
-- `How the assistant should work for me`
-- autosave-first persistence model with explicit sync states
+Current behavior:
+- the results hero can prompt the user to submit the assessment for review
+- submitted items are stored in the shared review queue API
+- admins and BU admins can view the review queue from Platform Home
+- reviewers can approve, request changes, or escalate
+- results surfaces now reflect:
+  - pending
+  - approved
+  - changes requested
+  - escalated
 
-### Admin And Governance
-- organisation structure
-- scoped defaults
-- user access management
-- audit log
-- company context management
-- document library for retrieval/citations
+Pilot note:
+- the queue is backed by shared KV
+- notifications are currently local/browser-scoped for the pilot
 
-## Roles
+## AI And Grounding Model
 
-### Standard User
-- start, refine, estimate, run, compare, export, and revisit assessments
+The product is assistant-driven, not chat-first. AI is used to:
+- improve and structure scenario drafts
+- refine narratives
+- generate challenge prompts
+- suggest likely risk groupings
+- build evidence-backed interpretation
 
-### Function Admin
-- review function-level work needing attention
-- maintain owned function/department context
-- start new assessments when appropriate
-- keep function framing/defaults aligned
+Current AI behavior:
+- wizard steps can carry short-term LLM context memory across the draft flow
+- bounded AI rewriting is used where draft quality matters
+- explicit fallback and unavailable states are surfaced instead of silently masquerading as live AI
+- retrieval uses a stronger local hybrid scorer with lens-aware and concept-aware matching
+- supporting documents and standards are cited into the workflow and results
 
-### BU Admin
-- oversee broader business-unit assessment activity
-- manage BU-owned context and review priorities
-- coordinate reassessment and context quality
+The product is grounded by a growing enterprise corpus that includes ISO, NIST, COSO, IFRS/ESRS, OECD, UNGP, sector guidance, and UAE/GCC-relevant references.
 
-### Global Admin
-- manage organisation structure, ownership, defaults, governance inputs, user access, and shared document sources
+## Results And Exports
 
-## Key Product Behaviors
+Results are intentionally split by audience:
 
-### AI Is Assistive, Not Authoritative
-The product uses AI to help draft, refine, structure, challenge, and explain. It does not hide the user’s inputs or present AI suggestions as automatically correct.
+- Executive Summary
+  - management interpretation
+  - tolerance posture
+  - immediate action framing
+  - benchmark/value context
+- Technical Detail
+  - FAIR inputs
+  - histogram
+  - loss exceedance curve
+  - challenge and validation layer
+- Appendix & Evidence
+  - provenance
+  - assumptions
+  - citations
+  - challenge review
 
-### Trust And Evidence Are First-Class
-The app already tracks and surfaces:
-- confidence posture
-- evidence quality
-- missing information
-- primary grounding
-- supporting references
-- inferred assumptions
-- citations
-- provenance / input basis
+Export options currently include:
+- JSON export
+- printable HTML/PDF-style report flow
+- direct jsPDF download
+- decision memo
+- board note
+- PPTX spec export stub
 
-Those signals are reused across the wizard, review surfaces, and results.
+## Product Quality Highlights
 
-### Results Are Deliberately Split
-- `Executive Summary` is management-grade interpretation
-- `Technical Detail` is challenge-oriented inspection
-- `Appendix & Evidence` is methodology, audit, and reproducibility support
-
-### Treatment Comparison Is A Core Decision Surface
-The product is designed not only to estimate current-state risk, but to compare a better-outcome treatment path and explain whether the improvement is credible enough to sponsor.
-
-## Recent Productization Work
-
-The current pilot branch includes several focused product-quality passes:
-- role-specific dashboard hierarchy improvements
-- calmer function-admin oversight workspace
-- layered personal settings workspace
-- dark-canvas continuity fixes
-- results continuity, focus, and keyboard polish
-- compact watchlist / reassessment lane
-- FAQ/help page structured by product flow
-- Evidence Gap Action Plan
-- Scenario Quality Coach
-- Evidence-Backed Parameter Challenge
-- Decision Memo / Board Note Generator
-- Boardroom Review Mode
-
-Recent commit highlights:
-- `637235d` Add executive boardroom review mode
-- `5ebe5bf` Strengthen treatment comparison spotlight
-- `11eabad` Polish results tab continuity and focus behavior
-- `bdc85c7` Clarify Personal Settings autosave model
-- `105f549` Extend dashboard watchlist review cues
-- `43d28ff` Add scenario quality coaching
-- `7e0b934` Add printable decision memo export
-- `6120a93` Add evidence gap action plan
-- `03a173d` Add product-flow help and FAQ page
+Current productization work now includes:
+- premium UI polish across dashboard, wizard, results, settings, admin, and document library
+- stronger AI quality and coherence signaling
+- role-aware examples and focus areas
+- broader enterprise taxonomy and standards coverage
+- review queue and management decision workflow
+- direct PDF download
+- worker-based Monte Carlo execution so simulation no longer blocks the UI thread
+- streaming AI narrative refinement in Step 2
+- portfolio heat map on the dashboard
 
 ## Architecture
 
 ### Frontend
+
 Static single-page application served by GitHub Pages.
 
-Core entry points:
+Key entry points:
 - [index.html](./index.html)
 - [assets/app.js](./assets/app.js)
 - [assets/app.css](./assets/app.css)
@@ -181,12 +162,22 @@ Main frontend areas:
 - settings: [assets/settings/](./assets/settings)
 - admin: [assets/admin/](./assets/admin)
 - services: [assets/services/](./assets/services)
-- state helpers: [assets/state/](./assets/state)
+- state: [assets/state/](./assets/state)
 - engine: [assets/engine/](./assets/engine)
 - UI helpers: [assets/ui/](./assets/ui)
 
+Important runtime seams:
+- results rendering and interactions: [assets/results/resultsRoute.js](./assets/results/resultsRoute.js)
+- dashboard rendering: [assets/dashboard/userDashboard.js](./assets/dashboard/userDashboard.js)
+- wizard steps: [assets/wizard/step1.js](./assets/wizard/step1.js), [assets/wizard/step2.js](./assets/wizard/step2.js), [assets/wizard/step3.js](./assets/wizard/step3.js)
+- LLM integration: [assets/services/llmService.js](./assets/services/llmService.js)
+- export generation: [assets/services/exportService.js](./assets/services/exportService.js)
+- quant engine: [assets/engine/riskEngine.js](./assets/engine/riskEngine.js)
+- worker simulation path: [assets/engine/riskEngineWorker.js](./assets/engine/riskEngineWorker.js)
+
 ### Backend
-Serverless API routes hosted separately on Vercel.
+
+Serverless API routes hosted on Vercel.
 
 Primary routes:
 - [api/compass.js](./api/compass.js)
@@ -194,48 +185,25 @@ Primary routes:
 - [api/users.js](./api/users.js)
 - [api/settings.js](./api/settings.js)
 - [api/user-state.js](./api/user-state.js)
+- [api/review-queue.js](./api/review-queue.js)
 - [api/audit-log.js](./api/audit-log.js)
 
 ### Persistence Model
+
 Current persistence spans:
-- user settings
+- saved assessments
+- draft state and draft recovery
+- personal user state
 - shared admin settings
 - organisation structure and scoped defaults
-- saved assessments
-- user draft state and recovery state
-- learning/templates
+- learning patterns / templates
+- review queue items
 - audit events
-
-### Main Runtime Seams
-When extending the product, prefer these seams before inventing new ones:
-- results rendering and interactions: [assets/results/resultsRoute.js](./assets/results/resultsRoute.js)
-- app state, shared builders, and helpers: [assets/app.js](./assets/app.js)
-- AI/service integration: [assets/services/llmService.js](./assets/services/llmService.js)
-- export/report generation: [assets/services/exportService.js](./assets/services/exportService.js)
-- report language builders: [assets/services/reportPresentation.js](./assets/services/reportPresentation.js)
-- quant engine: [assets/engine/riskEngine.js](./assets/engine/riskEngine.js)
-- dashboard IA and actions: [assets/dashboard/userDashboard.js](./assets/dashboard/userDashboard.js)
-- step modules: [assets/wizard/step1.js](./assets/wizard/step1.js), [assets/wizard/step2.js](./assets/wizard/step2.js), [assets/wizard/step3.js](./assets/wizard/step3.js)
-
-## Notable Shared Builders And Patterns
-
-The product now has several shared builders intended to reduce drift:
-- trust/readiness builders in [assets/app.js](./assets/app.js)
-- results presentation block helpers in [assets/ui/components.js](./assets/ui/components.js)
-- report framing builders in [assets/services/reportPresentation.js](./assets/services/reportPresentation.js)
-
-Examples:
-- evidence/trust summary
-- review readiness
-- quant readiness
-- result trust basis
-- evidence gap planning
-- scenario quality coach
-- parameter challenge entries
+- local pilot notifications
 
 ## Local Development
 
-Preferred local Node version:
+Preferred Node version:
 
 ```bash
 nvm use
@@ -246,7 +214,7 @@ Pinned in:
 - [.node-version](./.node-version)
 - [package.json](./package.json)
 
-Run a simple local static server from the repo root:
+Run a local static server from the repo root:
 
 ```bash
 python3 -m http.server 8080
@@ -261,15 +229,15 @@ Do not use `file://`.
 
 Do not commit real secrets, credentials, or tokens.
 
-Use:
+Reference shape:
 - [.env.example](./.env.example)
 
-That file shows the expected configuration shape for:
+That file covers the expected configuration for:
 - frontend origin
 - Compass API access
 - session signing
-- shared user store connection
-- bootstrap admin account seeding
+- shared KV/user store access
+- bootstrap admin/account seeding
 
 ## Deployment
 
@@ -279,20 +247,20 @@ That file shows the expected configuration shape for:
 
 ### Backend
 - deploy `api/` routes to Vercel
-- configure shared storage and env vars there
+- configure KV and secrets there
 - use [ROLLBACK_PLAYBOOK.md](./ROLLBACK_PLAYBOOK.md) for rollback steps
 
 ## Pilot Seed Data
 
-Sample seed/reference data:
+Sample pilot seed/reference data:
 - [data/pilot-seed/bootstrap-accounts.sample.json](./data/pilot-seed/bootstrap-accounts.sample.json)
 - [data/pilot-seed/demo-assessments.sample.json](./data/pilot-seed/demo-assessments.sample.json)
 - [data/pilot-seed/demo-user-state.sample.json](./data/pilot-seed/demo-user-state.sample.json)
 
 Suggested usage:
-- copy bootstrap accounts JSON into `BOOTSTRAP_ACCOUNTS_JSON` for non-production pilot seeding
-- import sample assessments through dashboard import
-- use the sample user-state file as a reference shape, not a production migration artifact
+- copy bootstrap accounts JSON into `BOOTSTRAP_ACCOUNTS_JSON` for pilot seeding
+- import sample assessments through the dashboard when needed
+- treat the sample user-state file as a reference shape, not a migration script
 
 ## QA
 
@@ -300,24 +268,16 @@ Core checks:
 
 ```bash
 npm run check:syntax
+npm run test:unit
 npm run check:smoke
-```
-
-Browser smoke suite:
-
-```bash
 npm run test:e2e:smoke
 ```
 
-Current smoke coverage includes:
-- login and auth redirects
-- dashboard render
-- admin shell render
-- wizard step 1 sample flow
-- draft recovery
-- archive/duplicate dashboard flows
-- help page render
-- admin user-access update flow
+Full pilot release gate:
+
+```bash
+npm run release:pilot
+```
 
 Release checklist:
 - [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)
@@ -327,22 +287,25 @@ Rollback playbook:
 
 ## Security Notes
 
-This remains a pilot/PoC codebase and should not be treated as production-grade security architecture.
+This is still a pilot codebase, not a finished production security architecture, but the repo now includes stronger hardening than earlier iterations.
 
 Current hardening includes:
-- role-based access anchored to managed ownership and assignment state
-- backend checks for shared admin settings writes
-- backend checks for user-state isolation
-- logout clearing user-scoped local state
-- generic login failure handling
+- hashed password storage and legacy upgrade path
+- session-token-based API authorization
+- role-based API protection
+- improved SSRF guardrails around company-context fetching
+- central route guards
+- unit, syntax, smoke, and E2E release gating
+
+Still treat the system as pilot-grade and continue hardening before any production use.
 
 ## Change Guidance
 
 When modifying the product:
-- preserve one dominant task per screen or band
-- prefer progressive disclosure over permanent support clutter
-- preserve role-specific dashboard semantics
 - preserve the executive vs technical results split
-- avoid adding heavy top-level navigation or analytics sprawl
-- reuse existing seams before inventing new subsystems
-- run syntax, smoke, and relevant e2e checks before pushing
+- preserve role-specific dashboard semantics
+- preserve progressive disclosure rather than adding persistent clutter
+- prefer existing seams over inventing new subsystems
+- keep visible trust, evidence, and workflow state coherent
+- keep premium polish calm, not flashy
+- run syntax, unit, smoke, and relevant E2E checks before pushing
