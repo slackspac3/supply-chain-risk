@@ -1443,6 +1443,7 @@ function renderWizard3() {
     });
   });
   document.getElementById('btn-treatment-ai-assist')?.addEventListener('click', async () => {
+    clearStep3AiUnavailableBanner();
     const requestEl = document.getElementById('treatment-improvement-request');
     const statusEl = document.getElementById('treatment-improvement-status');
     const request = requestEl?.value.trim() || '';
@@ -1490,10 +1491,18 @@ function renderWizard3() {
       AppState.draft.learningNote = result.changesSummary || result.summary || '';
       saveDraft();
       renderWizard3();
+      if (result.aiUnavailable) {
+        renderStep3AiUnavailableBanner(() => document.getElementById('btn-treatment-ai-assist')?.click());
+      }
       UI.toast(result.usedFallback ? 'A fallback suggested better-outcome draft was loaded. Review the numbers before rerunning.' : 'A suggested better-outcome draft was loaded. Review the numbers before rerunning.', result.usedFallback ? 'warning' : 'success', 5000);
     } catch (error) {
-      if (statusEl) statusEl.textContent = 'AI could not update the values just now. Keep the current values or try again in a moment.';
-      UI.toast('AI could not update the values. Try again in a moment.', 'danger');
+      if (error?.code === 'LLM_UNAVAILABLE') {
+        if (statusEl) statusEl.textContent = 'AI assistance is temporarily unavailable. Keep the current values or try again.';
+        renderStep3AiUnavailableBanner(() => document.getElementById('btn-treatment-ai-assist')?.click());
+      } else {
+        if (statusEl) statusEl.textContent = 'AI could not update the values just now. Keep the current values or try again in a moment.';
+        UI.toast('AI could not update the values. Try again in a moment.', 'danger');
+      }
       if (btn) { btn.disabled = false; btn.textContent = 'AI Assist This Better Outcome'; }
     }
   });
@@ -1527,6 +1536,22 @@ function lossRow(prefix, label, min, likely, max, tooltip) {
     <div style="font-size:.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:6px">${label}<span data-tooltip="${tooltip}" style="cursor:help;color:var(--color-accent-300);font-size:.72rem">ⓘ</span></div>
     ${tripleInput(prefix, label, min, likely, max, { minLabel: 'Low cost', likelyLabel: 'Expected cost', maxLabel: 'Severe cost', money: true, inputType: 'text' })}
   </div>`;
+}
+
+function clearStep3AiUnavailableBanner() {
+  document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
+}
+
+function renderStep3AiUnavailableBanner(retryHandler) {
+  clearStep3AiUnavailableBanner();
+  const statusEl = document.getElementById('treatment-improvement-status');
+  const container = statusEl?.closest('.card') || statusEl?.parentElement;
+  if (!container) return;
+  container.insertAdjacentHTML('beforeend', `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`);
+  container.querySelector('#btn-retry-ai')?.addEventListener('click', event => {
+    event.preventDefault();
+    retryHandler();
+  });
 }
 
 function collectFairParams() {

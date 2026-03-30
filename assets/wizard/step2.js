@@ -584,7 +584,23 @@ function renderWizard2AiChangeSummary(result, previousNarrative) {
   return `<div class="card card--elevated mt-4 anim-fade-in"><div class="context-panel-title">What AI changed</div><ol style="margin:12px 0 0 18px;display:flex;flex-direction:column;gap:8px">${summaryItems.map(item => `<li style="color:var(--text-secondary)">${item}</li>`).join('')}</ol>${wordingNote}</div>`;
 }
 
+function clearWizard2AiUnavailableBanner() {
+  document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
+}
+
+function renderWizard2AiUnavailableBanner(retryHandler) {
+  clearWizard2AiUnavailableBanner();
+  const output = document.getElementById('llm-output-area');
+  if (!output) return;
+  output.innerHTML = `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`;
+  output.querySelector('#btn-retry-ai')?.addEventListener('click', event => {
+    event.preventDefault();
+    retryHandler();
+  });
+}
+
 async function runLLMAssist() {
+  clearWizard2AiUnavailableBanner();
   let narrative = document.getElementById('narrative').value.trim();
   if (!narrative) { UI.toast('Please enter a narrative first.', 'warning'); return; }
   const assistSeed = getScenarioAssistSeedNarrative(narrative);
@@ -704,14 +720,26 @@ async function runLLMAssist() {
     if (status) status.textContent = result.usedFallback
       ? 'A fallback suggested draft is ready. Review the changes, assumptions, and source basis before continuing.'
       : 'A suggested draft is ready. Review the changes, assumptions, and source basis before continuing.';
+    if (result.aiUnavailable) {
+      output.insertAdjacentHTML('afterbegin', `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`);
+      output.querySelector('#btn-retry-ai')?.addEventListener('click', event => {
+        event.preventDefault();
+        runLLMAssist();
+      });
+    }
     attachCitationHandlers();
     document.getElementById('btn-wizard2-ai-retry')?.addEventListener('click', runLLMAssist);
     document.getElementById('btn-wizard2-ai-continue')?.addEventListener('click', () => document.getElementById('btn-next-2')?.click());
   } catch(e) {
-    if (status) status.textContent = 'AI is unavailable right now. You can continue manually with your own wording.';
-    output.innerHTML = `<div class="banner banner--danger mt-4"><span class="banner-icon">⚠</span><span class="banner-text">LLM Assist is unavailable right now.</span></div><div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap"><button class="btn btn--secondary" id="btn-wizard2-ai-retry" type="button">Try again</button><button class="btn btn--ghost" id="btn-wizard2-continue-manual" type="button">Continue without AI</button></div>`;
-    document.getElementById('btn-wizard2-ai-retry')?.addEventListener('click', runLLMAssist);
-    document.getElementById('btn-wizard2-continue-manual')?.addEventListener('click', () => document.getElementById('btn-next-2')?.click());
+    if (e?.code === 'LLM_UNAVAILABLE') {
+      if (status) status.textContent = 'AI is temporarily unavailable. You can continue manually with your own wording.';
+      renderWizard2AiUnavailableBanner(runLLMAssist);
+    } else {
+      if (status) status.textContent = 'AI is unavailable right now. You can continue manually with your own wording.';
+      output.innerHTML = `<div class="banner banner--danger mt-4"><span class="banner-icon">⚠</span><span class="banner-text">LLM Assist is unavailable right now.</span></div><div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap"><button class="btn btn--secondary" id="btn-wizard2-ai-retry" type="button">Try again</button><button class="btn btn--ghost" id="btn-wizard2-continue-manual" type="button">Continue without AI</button></div>`;
+      document.getElementById('btn-wizard2-ai-retry')?.addEventListener('click', runLLMAssist);
+      document.getElementById('btn-wizard2-continue-manual')?.addEventListener('click', () => document.getElementById('btn-next-2')?.click());
+    }
   } finally {
     btn.disabled = false;
     btn.classList.remove('loading');

@@ -9,7 +9,34 @@
     return 'Built directly from the guided inputs while AI guidance was unavailable.';
   }
 
+  function _buildAiUnavailableBannerHtml() {
+    return `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`;
+  }
+
+  function _clearStep1AiUnavailableBanners() {
+    document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
+  }
+
+  function _renderStep1AiUnavailableBanner(target, retryHandler) {
+    const targetEl = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!targetEl) return;
+    _clearStep1AiUnavailableBanners();
+    let bannerEl = null;
+    if (targetEl.id === 'guided-preview') {
+      targetEl.insertAdjacentHTML('afterend', _buildAiUnavailableBannerHtml());
+      bannerEl = targetEl.parentElement?.querySelector('.ai-unavailable-banner') || targetEl.nextElementSibling;
+    } else {
+      targetEl.innerHTML = _buildAiUnavailableBannerHtml();
+      bannerEl = targetEl.querySelector('.ai-unavailable-banner');
+    }
+    bannerEl?.querySelector('#btn-retry-ai')?.addEventListener('click', event => {
+      event.preventDefault();
+      retryHandler();
+    });
+  }
+
   async function buildGuidedScenarioDraft() {
+    _clearStep1AiUnavailableBanners();
     const settings = getEffectiveSettings();
     const localDraft = composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft);
     if (!localDraft) {
@@ -71,6 +98,9 @@
       document.getElementById('intake-risk-statement').value = finalDraft;
       saveDraft();
       renderWizard1();
+      if (result.aiUnavailable) {
+        _renderStep1AiUnavailableBanner('guided-preview', buildGuidedScenarioDraft);
+      }
       const selectedCount = getSelectedRisks().length;
       const toastTone = guidedDraftSource === 'ai' && !result.usedFallback ? 'success' : 'warning';
       const toastCopy = selectedCount
@@ -90,6 +120,9 @@
       const seededCount = seedRisksFromScenarioDraft(localDraft, { force: true, replaceGenerated: true });
       saveDraft();
       renderWizard1();
+      if (error?.code === 'LLM_UNAVAILABLE') {
+        _renderStep1AiUnavailableBanner('guided-preview', buildGuidedScenarioDraft);
+      }
       UI.toast(
         seededCount
           ? `Scenario draft built from guided context and shortlist refreshed with ${seededCount} aligned risk${seededCount === 1 ? '' : 's'}.`
@@ -103,6 +136,7 @@
   }
 
   async function runIntakeAssist() {
+    _clearStep1AiUnavailableBanners();
     const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
     const assistSeed = draftScenarioState.getIntakeAssistSeedNarrative(narrative || AppState.draft.registerFindings);
     const output = document.getElementById('intake-output');
@@ -143,14 +177,22 @@
       });
       saveDraft();
       renderWizard1();
+      if (result.aiUnavailable) {
+        _renderStep1AiUnavailableBanner('intake-output', runIntakeAssist);
+      }
       UI.toast(result.usedFallback ? 'Suggested draft loaded with fallback guidance. Review before continuing.' : 'Suggested draft intake completed.', result.usedFallback ? 'warning' : 'success', 5000);
     } catch (error) {
       console.error('runIntakeAssist failed:', error);
+      if (error?.code === 'LLM_UNAVAILABLE') {
+        _renderStep1AiUnavailableBanner(output, runIntakeAssist);
+        return;
+      }
       if (output) output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI intake is unavailable right now. The current draft stays intact.</span></div>`;
     }
   }
 
   async function enhanceNarrativeWithAI() {
+    _clearStep1AiUnavailableBanners();
     const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
     const assistSeed = draftScenarioState.getIntakeAssistSeedNarrative(narrative);
     const output = document.getElementById('intake-output');
@@ -193,8 +235,15 @@
       });
       saveDraft();
       renderWizard1();
+      if (result.aiUnavailable) {
+        _renderStep1AiUnavailableBanner('intake-output', enhanceNarrativeWithAI);
+      }
       UI.toast(result.usedFallback ? 'Suggested draft enhancement loaded with fallback guidance. Review before continuing.' : 'Suggested draft enhancement loaded.', result.usedFallback ? 'warning' : 'success', 5000);
     } catch (error) {
+      if (error?.code === 'LLM_UNAVAILABLE') {
+        _renderStep1AiUnavailableBanner(output, enhanceNarrativeWithAI);
+        return;
+      }
       if (output) output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI enhancement is unavailable right now. Try again in a moment.</span></div>`;
     } finally {
       resetButton();
@@ -202,6 +251,7 @@
   }
 
   async function analyseUploadedRegister() {
+    _clearStep1AiUnavailableBanners();
     if (!AppState.draft.registerFindings) {
       UI.toast('Upload a risk register first.', 'warning');
       return;
@@ -232,9 +282,16 @@
       draftScenarioState.applyRegisterAnalysisResultToDraft(result, { parsedFallback });
       saveDraft();
       renderWizard1();
+      if (result.aiUnavailable) {
+        _renderStep1AiUnavailableBanner('intake-output', analyseUploadedRegister);
+      }
       UI.toast(result.usedFallback ? getRegisterFallbackToastCopy(result) : 'Suggested draft register analysis loaded.', result.usedFallback ? 'warning' : 'success', 7000);
     } catch (error) {
       console.error('analyseUploadedRegister failed:', error);
+      if (error?.code === 'LLM_UNAVAILABLE') {
+        _renderStep1AiUnavailableBanner('intake-output', analyseUploadedRegister);
+        return;
+      }
       UI.toast('Register analysis is unavailable right now. Try again in a moment.', 'danger');
     } finally {
       resetButton();

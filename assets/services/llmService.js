@@ -2422,11 +2422,12 @@ ${businessUnit.selectedDepartmentContext}` : ''
    * [LLM-INTEGRATION] Replace stub body with real API call + JSON parsing
    */
   async function generateScenarioAndInputs(narrative, buContext, retrievedDocs, benchmarkCandidates = []) {
+    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
     const classification = _classifyScenario(narrative, {
       businessUnit: buContext,
       scenarioLensHint: buContext?.scenarioLensHint
     });
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
+    if (aiUnavailable) {
       await new Promise(r => setTimeout(r, 2200 + Math.random() * 800));
     }
 
@@ -2576,15 +2577,22 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
       } catch (e) {
         await _auditAiFallback('generateScenarioAndInputs', e);
         console.warn('LLM API call failed, falling back to stub:', e.message);
+        const normalisedError = _normaliseLLMError(e);
+        throw Object.assign(new Error(normalisedError?.message || e?.message || 'AI request failed'), {
+          code: 'LLM_UNAVAILABLE',
+          retriable: true,
+          originalError: e
+        });
       }
     }
 
     // Fall back to stub
     const fallbackMeta = _buildEvidenceMeta({ citations: retrievedDocs, businessUnit: buContext, geography: buContext?.geography, applicableRegulations: buContext?.regulatoryTags || [], userProfile: buContext?.userProfileSummary, organisationContext: buContext?.companyStructureContext });
-    return _decorateAiResult(_withEvidenceMeta(_generateStub(narrative, buContext, retrievedDocs, benchmarkCandidates), fallbackMeta), fallbackMeta, {
+    const fallbackResult = _decorateAiResult(_withEvidenceMeta(_generateStub(narrative, buContext, retrievedDocs, benchmarkCandidates), fallbackMeta), fallbackMeta, {
       contentFields: ['scenarioTitle', 'benchmarkBasis'],
       fallbackUsed: true
     });
+    return aiUnavailable ? { ...fallbackResult, aiUnavailable: true } : fallbackResult;
   }
 
   async function streamNarrativeRefinement(input = {}, onChunk = null, options = {}) {
@@ -2594,6 +2602,15 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
     const benchmarkCandidates = Array.isArray(input.benchmarkCandidates) ? input.benchmarkCandidates : [];
     if (!narrative) {
       return generateScenarioAndInputs(narrative, buContext, retrievedDocs, benchmarkCandidates);
+    }
+    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
+      const offlineResult = await generateScenarioAndInputs(narrative, buContext, retrievedDocs, benchmarkCandidates);
+      return {
+        ...offlineResult,
+        draftNarrative: narrative,
+        enhancedStatement: offlineResult.enhancedStatement || narrative,
+        aiUnavailable: true
+      };
     }
 
     const classification = _classifyScenario(narrative, {
@@ -2665,13 +2682,14 @@ Return only the refined scenario narrative text.`;
   }
 
   async function enhanceRiskContext(input) {
+    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
     const classification = _classifyScenario(input.riskStatement || input.registerText || '', {
       guidedInput: input.guidedInput,
       businessUnit: input.businessUnit,
       scenarioLensHint: input.scenarioLensHint
     });
     const fallbackScenarioExpansion = _buildScenarioExpansion({ ...input, classification });
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
+    if (aiUnavailable) {
       await new Promise(r => setTimeout(r, 1400 + Math.random() * 600));
     }
     if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
@@ -2807,6 +2825,12 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
       } catch (e) {
         await _auditAiFallback('enhanceRiskContext', e);
         console.warn('enhanceRiskContext fallback:', e.message);
+        const normalisedError = _normaliseLLMError(e);
+        throw Object.assign(new Error(normalisedError?.message || e?.message || 'AI request failed'), {
+          code: 'LLM_UNAVAILABLE',
+          retriable: true,
+          originalError: e
+        });
       }
     }
     const fallbackMeta = _buildEvidenceMeta({ citations: input.citations || [], businessUnit: input.businessUnit, geography: input.geography, applicableRegulations: input.applicableRegulations, uploadedText: input.registerText, registerText: input.registerText, userProfile: input.adminSettings?.userProfileSummary, organisationContext: input.adminSettings?.companyStructureContext, adminSettings: input.adminSettings });
@@ -2816,13 +2840,15 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
       seedNarrative: input.riskStatement || input.registerText || '',
       fallbackScenarioExpansion
     });
-    return _decorateAiResult(_withEvidenceMeta(fallbackResult, fallbackMeta), fallbackMeta, {
+    const decoratedFallback = _decorateAiResult(_withEvidenceMeta(fallbackResult, fallbackMeta), fallbackMeta, {
       contentFields: ['enhancedStatement', 'summary', 'linkAnalysis', 'benchmarkBasis'],
       fallbackUsed: true
     });
+    return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
   }
 
   async function analyseRiskRegister(input) {
+    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
     await new Promise(r => setTimeout(r, 1000 + Math.random() * 500));
     const lines = String(input.registerText || '')
       .split(/\r?\n|;/)
@@ -2922,7 +2948,12 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
       } catch (e) {
         await _auditAiFallback('analyseRiskRegister', e);
         console.warn('analyseRiskRegister fallback:', e.message);
-        fallbackReason = _classifyAiFallbackReason(e);
+        const normalisedError = _normaliseLLMError(e);
+        throw Object.assign(new Error(normalisedError?.message || e?.message || 'AI request failed'), {
+          code: 'LLM_UNAVAILABLE',
+          retriable: true,
+          originalError: e
+        });
       }
     }
     const stub = _generateRiskBuilderStub({ ...input, riskStatement: lines.slice(0, 4).join('. ') });
@@ -2942,7 +2973,7 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
         'Ask AI assist to translate the selected scope into FAIR inputs with GCC-first benchmark logic.'
       ];
     }
-    return _decorateAiResult(_withEvidenceMeta({
+    const decoratedFallback = _decorateAiResult(_withEvidenceMeta({
       ...stub,
       fallbackReasonCode: fallbackReason?.code || 'local_register_fallback',
       fallbackReasonTitle: fallbackReason?.title || 'Fallback register analysis loaded',
@@ -2952,6 +2983,7 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
       contentFields: ['summary', 'linkAnalysis', 'benchmarkBasis'],
       fallbackUsed: true
     });
+    return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
   }
 
   async function buildCompanyContext(websiteUrl) {
@@ -2974,7 +3006,7 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
         fallbackUsed: true
       });
       await _auditAiEvent('ai_fallback_used', 'success', { taskName: 'buildCompanyContext', reason: 'proxy_unavailable' });
-      return fallback;
+      return { ...fallback, aiUnavailable: true };
     }
     try {
       const headers = {
@@ -3003,21 +3035,11 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
       });
     } catch (error) {
       await _auditAiFallback('buildCompanyContext', error, { websiteUrl: _sanitizeAiText(websiteUrl, { maxChars: 120 }) });
-      return _decorateAiResult({
-        companySummary: `Suggested draft: We could not complete a live company-context build for ${_sanitizeAiText(websiteUrl, { maxChars: 120 })}. Keep the current text and refine it manually or retry with a shorter source set.`,
-        businessProfile: 'Suggested draft: Capture the main business model, operating footprint, and critical services from the website and uploaded material.',
-        operatingModel: 'Suggested draft: Add the operating model, delivery dependencies, and major control boundaries here.',
-        publicCommitments: [],
-        riskSignals: [],
-        likelyObligations: [],
-        regulatorySignals: [],
-        aiGuidance: 'Suggested draft: Keep outputs grounded in public sources and your uploaded material.',
-        suggestedGeography: '',
-        sources: [],
-        responseMessage: 'Suggested draft: The live AI build failed, so no existing user progress was removed.'
-      }, { summary: 'Evidence used: limited website input only.' }, {
-        contentFields: ['companySummary', 'businessProfile', 'operatingModel', 'aiGuidance', 'responseMessage'],
-        fallbackUsed: true
+      const normalisedError = _normaliseLLMError(error);
+      throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
+        code: 'LLM_UNAVAILABLE',
+        retriable: true,
+        originalError: error
       });
     }
   }
@@ -3057,7 +3079,10 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
     const stub = _buildEntityContextStub(input);
     const isDepartment = String(input.entity?.type || '').toLowerCase() === 'department / function';
     if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
-      return stub;
+      return {
+        ...stub,
+        aiUnavailable: true
+      };
     }
     try {
       const systemPrompt = `You are a senior enterprise risk and operating-context analyst. Return JSON only with this schema:
@@ -3120,8 +3145,12 @@ ${evidenceMeta.promptBlock}`;
     } catch (error) {
       await _auditAiFallback('buildEntityContext', error, { entityName: String(input.entity?.name || '').trim() });
       console.warn('buildEntityContext fallback:', error.message);
-      const fallbackMeta = _buildEvidenceMeta({ uploadedText: input.uploadedText || '', businessUnit: input.parentEntity, geography: input.adminSettings?.geography || input.parentLayer?.geography, applicableRegulations: input.parentLayer?.applicableRegulations || input.adminSettings?.applicableRegulations, organisationContext: input.parentLayer?.contextSummary || input.parentEntity?.profile, adminSettings: input.adminSettings });
-      return _decorateAiResult(_withEvidenceMeta(stub, fallbackMeta), fallbackMeta, { contentFields: ['contextSummary', 'riskAppetiteStatement', 'aiInstructions', 'benchmarkStrategy'], fallbackUsed: true, uploadedDocumentName: input.uploadedDocumentName });
+      const normalisedError = _normaliseLLMError(error);
+      throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
+        code: 'LLM_UNAVAILABLE',
+        retriable: true,
+        originalError: error
+      });
     }
   }
 
@@ -3152,6 +3181,7 @@ ${evidenceMeta.promptBlock}`;
     if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
       return {
         ...currentContext,
+        aiUnavailable: true,
         responseMessage: fallbackMessage,
         confidenceLabel: 'Local fallback',
         evidenceQuality: 'No live model',
@@ -3229,19 +3259,12 @@ ${evidenceMeta.promptBlock}`;
     } catch (error) {
       await _auditAiFallback('refineEntityContext', error, { entityName: String(input.entity?.name || '').trim() });
       console.warn('refineEntityContext fallback:', error.message);
-      const fallbackMeta = _buildEvidenceMeta({
-        citations: [],
-        businessUnit: input.parentEntity,
-        geography: currentContext.geography || input.adminSettings?.geography || input.parentLayer?.geography,
-        applicableRegulations: currentContext.applicableRegulations.length ? currentContext.applicableRegulations : (input.parentLayer?.applicableRegulations || input.adminSettings?.applicableRegulations),
-        organisationContext: currentContext.contextSummary || input.parentLayer?.contextSummary || input.parentEntity?.profile,
-        adminSettings: input.adminSettings,
-        uploadedText: input.uploadedText
+      const normalisedError = _normaliseLLMError(error);
+      throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
+        code: 'LLM_UNAVAILABLE',
+        retriable: true,
+        originalError: error
       });
-      return _decorateAiResult(_withEvidenceMeta({
-        ...currentContext,
-        responseMessage: fallbackMessage
-      }, fallbackMeta), fallbackMeta, { contentFields: ['contextSummary', 'riskAppetiteStatement', 'aiInstructions', 'benchmarkStrategy', 'responseMessage'], fallbackUsed: true, uploadedDocumentName: input.uploadedDocumentName });
     }
   }
 
@@ -3259,6 +3282,7 @@ ${evidenceMeta.promptBlock}`;
     if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
       return {
         ...currentSections,
+        aiUnavailable: true,
         responseMessage: fallbackMessage,
         confidenceLabel: 'Local fallback',
         evidenceQuality: 'No live model',
@@ -3353,27 +3377,18 @@ ${evidenceMeta.promptBlock}`;
     } catch (error) {
       await _auditAiFallback('refineCompanyContext', error, { websiteUrl: _sanitizeAiText(input.websiteUrl || '', { maxChars: 120 }) });
       console.warn('refineCompanyContext fallback:', error.message);
-      const fallbackMeta = _buildEvidenceMeta({
-        citations: [],
-        geography: input.currentGeography,
-        applicableRegulations: input.currentRegulations,
-        organisationContext: currentSections,
-        adminSettings: { aiInstructions: input.currentAiGuidance || '' },
-        uploadedText: input.uploadedText
+      const normalisedError = _normaliseLLMError(error);
+      throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
+        code: 'LLM_UNAVAILABLE',
+        retriable: true,
+        originalError: error
       });
-      return _decorateAiResult(_withEvidenceMeta({
-        ...currentSections,
-        aiGuidance: String(input.currentAiGuidance || '').trim(),
-        suggestedGeography: String(input.currentGeography || '').trim(),
-        regulatorySignals: Array.isArray(input.currentRegulations) ? input.currentRegulations : [],
-        responseMessage: fallbackMessage
-      }, fallbackMeta), fallbackMeta, { contentFields: ['companySummary', 'businessModel', 'operatingModel', 'publicCommitments', 'keyRiskSignals', 'obligations', 'sources', 'aiGuidance', 'responseMessage'], fallbackUsed: true, uploadedDocumentName: input.uploadedDocumentName });
     }
   }
 
   async function buildUserPreferenceAssist(input = {}) {
     const stub = _buildUserPreferenceAssistStub(input);
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return _decorateAiResult(stub, _buildEvidenceMeta({ uploadedText: input.uploadedText, userProfile: input.userProfile, geography: input.organisationContext?.geography || input.currentSettings?.primaryGeography, applicableRegulations: input.currentSettings?.applicableRegulations, organisationContext: input.organisationContext, adminSettings: input.currentSettings, citations: [] }), { contentFields: ['workingContext', 'preferredOutputs', 'aiInstructions', 'adminContextSummary'], fallbackUsed: true });
+    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return _decorateAiResult({ ...stub, aiUnavailable: true }, _buildEvidenceMeta({ uploadedText: input.uploadedText, userProfile: input.userProfile, geography: input.organisationContext?.geography || input.currentSettings?.primaryGeography, applicableRegulations: input.currentSettings?.applicableRegulations, organisationContext: input.organisationContext, adminSettings: input.currentSettings, citations: [] }), { contentFields: ['workingContext', 'preferredOutputs', 'aiInstructions', 'adminContextSummary'], fallbackUsed: true });
     try {
       const systemPrompt = `You are a senior enterprise risk assistant helping personalise a user's working context. Return JSON only with this schema:
 {
@@ -3421,8 +3436,12 @@ ${evidenceMeta.promptBlock}`;
     } catch (error) {
       await _auditAiFallback('buildUserPreferenceAssist', error);
       console.warn('buildUserPreferenceAssist fallback:', error.message);
-      const fallbackMeta = _buildEvidenceMeta({ uploadedText: input.uploadedText, userProfile: input.userProfile, geography: input.organisationContext?.geography || input.currentSettings?.primaryGeography, applicableRegulations: input.currentSettings?.applicableRegulations, organisationContext: input.organisationContext, adminSettings: input.currentSettings, citations: [] });
-      return _decorateAiResult(_withEvidenceMeta(stub, fallbackMeta), fallbackMeta, { contentFields: ['workingContext', 'preferredOutputs', 'aiInstructions', 'adminContextSummary'], fallbackUsed: true });
+      const normalisedError = _normaliseLLMError(error);
+      throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
+        code: 'LLM_UNAVAILABLE',
+        retriable: true,
+        originalError: error
+      });
     }
   }
 
@@ -3507,6 +3526,7 @@ ${evidenceMeta.promptBlock}`;
   }
 
   async function suggestTreatmentImprovement(input = {}) {
+    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
     const stub = _buildTreatmentImprovementStub(input);
     await new Promise(r => setTimeout(r, 900 + Math.random() * 400));
     if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
@@ -3593,13 +3613,20 @@ ${evidenceMeta.promptBlock}`;
       } catch (error) {
         await _auditAiFallback('suggestTreatmentImprovement', error);
         console.warn('suggestTreatmentImprovement fallback:', error.message);
+        const normalisedError = _normaliseLLMError(error);
+        throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
+          code: 'LLM_UNAVAILABLE',
+          retriable: true,
+          originalError: error
+        });
       }
     }
     const fallbackMeta = _buildEvidenceMeta({ citations: input.citations || [], businessUnit: input.businessUnit, geography: input.baselineAssessment?.geography || input.businessUnit?.geography, applicableRegulations: input.baselineAssessment?.applicableRegulations, organisationContext: input.baselineAssessment?.narrative, uploadedText: input.improvementRequest, adminSettings: input.adminSettings, userProfile: input.adminSettings?.userProfileSummary });
-    return _decorateAiResult(_withEvidenceMeta(stub, fallbackMeta), fallbackMeta, {
+    const decoratedFallback = _decorateAiResult(_withEvidenceMeta(stub, fallbackMeta), fallbackMeta, {
       contentFields: ['summary', 'changesSummary', 'benchmarkBasis'],
       fallbackUsed: true
     });
+    return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
   }
 
   function _buildAssessmentChallengeStub(input = {}) {
@@ -3637,6 +3664,7 @@ ${evidenceMeta.promptBlock}`;
   }
 
   async function challengeAssessment(input = {}) {
+    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
     const stub = _buildAssessmentChallengeStub(input);
     await new Promise(r => setTimeout(r, 700 + Math.random() * 300));
     const evidenceMeta = _buildEvidenceMeta({
@@ -3706,12 +3734,19 @@ ${evidenceMeta.promptBlock}`;
       } catch (error) {
         await _auditAiFallback('challengeAssessment', error);
         console.warn('challengeAssessment fallback:', error.message);
+        const normalisedError = _normaliseLLMError(error);
+        throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
+          code: 'LLM_UNAVAILABLE',
+          retriable: true,
+          originalError: error
+        });
       }
     }
-    return _decorateAiResult(_withEvidenceMeta(stub, evidenceMeta), evidenceMeta, {
+    const decoratedFallback = _decorateAiResult(_withEvidenceMeta(stub, evidenceMeta), evidenceMeta, {
       contentFields: ['summary', 'challengeLevel'],
       fallbackUsed: true
     });
+    return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
   }
 
 
