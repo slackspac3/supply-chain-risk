@@ -12,15 +12,44 @@
 
   <!-- Favicon (inline SVG) -->
   <link rel="icon" type="image/svg+xml" href="assets/brand/g42-catalyst-symbol-logo-full-color-rgb.svg?v=20260329v1">
+  <style>
+    @keyframes skeletonPulse {
+      0%,100% { opacity:1; }
+      50% { opacity:0.4; }
+    }
+  </style>
 </head>
 <body>
 
 <div id="app">
   <!-- App Bar (rendered by JS) -->
-  <div id="app-bar" role="banner"></div>
+  <div id="app-bar" role="banner">
+    <div id="boot-skeleton-nav" aria-hidden="true" style="
+      height:56px;background:#1a1a2e;display:flex;align-items:center;
+      padding:0 24px;gap:16px;">
+      <div style="width:32px;height:32px;border-radius:6px;
+        background:#ffffff18;"></div>
+      <div style="width:120px;height:16px;border-radius:4px;
+        background:#ffffff18;animation:skeletonPulse 1.5s ease-in-out infinite;">
+      </div>
+    </div>
+  </div>
 
   <!-- Main Content (pages rendered by router) -->
-  <div id="main-content" role="main" aria-live="polite"></div>
+  <div id="main-content" role="main" aria-live="polite">
+    <div id="boot-skeleton-content" aria-hidden="true" style="
+      padding:32px 24px;max-width:900px;margin:0 auto;
+      display:flex;flex-direction:column;gap:16px;">
+      <div style="height:120px;border-radius:8px;background:#e8e8e8;
+        animation:skeletonPulse 1.5s ease-in-out infinite;"></div>
+      <div style="height:80px;border-radius:8px;background:#e8e8e8;
+        animation:skeletonPulse 1.5s ease-in-out infinite;animation-delay:0.15s;">
+      </div>
+      <div style="height:80px;border-radius:8px;background:#e8e8e8;
+        animation:skeletonPulse 1.5s ease-in-out infinite;animation-delay:0.3s;">
+      </div>
+    </div>
+  </div>
 
   <!-- Toast Container -->
   <div id="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>

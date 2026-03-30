@@ -50,6 +50,8 @@
       if (typeof bindDisclosureState === 'function') bindDisclosureState(root);
       if (typeof applyPageNavigationEffects === 'function') applyPageNavigationEffects(root);
       pageShell.updateWizardProgressBar(window.location.hash.replace('#', ''));
+      document.getElementById('boot-skeleton-nav')?.remove();
+      document.getElementById('boot-skeleton-content')?.remove();
     }
   };
 
