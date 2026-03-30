@@ -2,6 +2,7 @@
   'use strict';
 
   let notifOutsideClickHandler = null;
+  let notifViewportHandler = null;
 
   function escapeNavText(value) {
     const text = String(value || '');
@@ -47,6 +48,22 @@
       document.removeEventListener('click', notifOutsideClickHandler, true);
       notifOutsideClickHandler = null;
     }
+    if (notifViewportHandler) {
+      window.removeEventListener('resize', notifViewportHandler);
+      notifViewportHandler = null;
+    }
+  }
+
+  function positionNotifDrawer(drawer, bell) {
+    if (!drawer || !bell) return;
+    const rect = bell.getBoundingClientRect();
+    const drawerWidth = Math.min(window.innerWidth - 32, drawer.offsetWidth || 320);
+    const preferredLeft = rect.left;
+    const left = Math.max(16, Math.min(preferredLeft, window.innerWidth - drawerWidth - 16));
+    const top = Math.max(56, rect.bottom + 10);
+    drawer.style.left = `${left}px`;
+    drawer.style.top = `${top}px`;
+    drawer.style.right = 'auto';
   }
 
   function navigateToNotifLink(linkHash) {
@@ -62,8 +79,7 @@
   function renderNotifDrawer() {
     closeNotifDrawer();
     const bell = document.getElementById('btn-notif-bell');
-    const bar = document.getElementById('app-bar');
-    if (!bell || !bar || typeof NotificationService === 'undefined') return;
+    if (!bell || typeof NotificationService === 'undefined') return;
     const notifications = NotificationService.getAll();
     const drawer = document.createElement('div');
     drawer.id = 'notif-drawer';
@@ -81,7 +97,8 @@
         </div>
       `).join('') : `<div class="notif-item"><div class="notif-title">No notifications yet</div><div class="notif-body">New review, change, approval, or escalation updates will appear here.</div></div>`}
     `;
-    bar.appendChild(drawer);
+    document.body.appendChild(drawer);
+    positionNotifDrawer(drawer, bell);
     drawer.querySelector('#btn-notif-mark-all')?.addEventListener('click', event => {
       event.preventDefault();
       event.stopPropagation();
@@ -107,7 +124,14 @@
       if (nextDrawer.contains(event.target) || nextBell?.contains(event.target)) return;
       closeNotifDrawer();
     };
+    notifViewportHandler = () => {
+      const nextDrawer = document.getElementById('notif-drawer');
+      const nextBell = document.getElementById('btn-notif-bell');
+      if (!nextDrawer || !nextBell) return;
+      positionNotifDrawer(nextDrawer, nextBell);
+    };
     document.addEventListener('click', notifOutsideClickHandler, true);
+    window.addEventListener('resize', notifViewportHandler);
   }
 
   function toggleNotifDrawer() {
