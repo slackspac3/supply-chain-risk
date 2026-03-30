@@ -1455,6 +1455,138 @@ ${businessUnit.selectedDepartmentContext}` : ''
     return _cleanUserFacingText(merged, { maxSentences: 6 });
   }
 
+  function _extractGuidedDraftAnchors(input = {}, seedNarrative = '') {
+    const text = [
+      input.guidedInput?.event,
+      input.guidedInput?.impact,
+      input.guidedInput?.cause,
+      input.guidedInput?.asset,
+      seedNarrative
+    ].filter(Boolean).join(' ');
+    const stopWords = new Set([
+      'about', 'after', 'along', 'because', 'could', 'create', 'critical', 'current', 'event',
+      'from', 'have', 'into', 'issue', 'likely', 'main', 'material', 'might', 'more', 'most',
+      'risk', 'scenario', 'scope', 'should', 'their', 'there', 'these', 'this', 'what', 'which',
+      'with', 'would'
+    ]);
+    return Array.from(new Set(
+      String(text || '')
+        .toLowerCase()
+        .match(/[a-z0-9]+/g) || []
+    )).filter(token => token.length > 4 && !stopWords.has(token));
+  }
+
+  function _isCompatibleScenarioLens(expected = '', actual = '') {
+    const expectedKey = _normaliseScenarioHintKey(expected);
+    const actualKey = _normaliseScenarioHintKey(actual);
+    if (!expectedKey || expectedKey === 'general' || !actualKey) return true;
+    if (expectedKey === actualKey) return true;
+    const compatibility = {
+      procurement: ['supply-chain', 'third-party', 'compliance', 'esg'],
+      'supply-chain': ['procurement', 'third-party', 'business-continuity', 'operational'],
+      'third-party': ['procurement', 'supply-chain', 'business-continuity', 'operational'],
+      compliance: ['regulatory', 'procurement', 'financial', 'esg'],
+      regulatory: ['compliance', 'financial'],
+      financial: ['compliance', 'regulatory'],
+      esg: ['procurement', 'compliance', 'hse', 'strategic', 'supply-chain'],
+      hse: ['operational', 'business-continuity', 'esg'],
+      operational: ['business-continuity', 'supply-chain', 'hse'],
+      'business-continuity': ['operational', 'supply-chain', 'hse'],
+      strategic: ['operational', 'financial', 'esg'],
+      cyber: ['identity', 'ransomware', 'cloud', 'data-breach', 'phishing', 'insider']
+    };
+    return (compatibility[expectedKey] || []).includes(actualKey);
+  }
+
+  function _evaluateGuidedDraftCandidate(candidate = '', {
+    seedNarrative = '',
+    guidedInput = {},
+    scenarioLensHint = '',
+    businessUnit = null
+  } = {}) {
+    const cleanedCandidate = _cleanUserFacingText(_stripScenarioLeadIns(candidate || ''), { maxSentences: 6 });
+    if (!cleanedCandidate) {
+      return { accepted: false, reason: 'empty', narrative: '' };
+    }
+    if (_looksGenericRiskContextCopy(cleanedCandidate)) {
+      return { accepted: false, reason: 'generic', narrative: cleanedCandidate };
+    }
+    const anchors = _extractGuidedDraftAnchors({ guidedInput }, seedNarrative);
+    const overlap = anchors.filter(token => cleanedCandidate.toLowerCase().includes(token));
+    const minOverlap = anchors.length >= 5 ? 2 : anchors.length ? 1 : 0;
+    if (overlap.length < minOverlap) {
+      return { accepted: false, reason: 'low-overlap', narrative: cleanedCandidate };
+    }
+    const expectedLens = _normaliseScenarioHintKey(scenarioLensHint)
+      || _classifyScenario(seedNarrative, { guidedInput, businessUnit, scenarioLensHint }).key;
+    const actualLens = _classifyScenario(cleanedCandidate, { guidedInput, businessUnit, scenarioLensHint: expectedLens }).key;
+    if (!_isCompatibleScenarioLens(expectedLens, actualLens)) {
+      return { accepted: false, reason: 'lens-drift', narrative: cleanedCandidate };
+    }
+    return { accepted: true, reason: 'accepted', narrative: cleanedCandidate };
+  }
+
+  function _selectGuidedDraftNarrative({
+    aiNarrative = '',
+    fallbackNarrative = '',
+    seedNarrative = '',
+    guidedInput = {},
+    scenarioLensHint = '',
+    businessUnit = null
+  } = {}) {
+    const aiCandidate = _evaluateGuidedDraftCandidate(aiNarrative, { seedNarrative, guidedInput, scenarioLensHint, businessUnit });
+    if (aiCandidate.accepted) return { narrative: aiCandidate.narrative, source: 'ai', reason: aiCandidate.reason };
+
+    const fallbackCandidate = _evaluateGuidedDraftCandidate(fallbackNarrative, { seedNarrative, guidedInput, scenarioLensHint, businessUnit });
+    if (fallbackCandidate.accepted) {
+      // If the AI rewrite drifted away from the user’s scenario, prefer the bounded local expansion instead of showing a smarter-sounding but less faithful draft.
+      return { narrative: fallbackCandidate.narrative, source: 'fallback', reason: aiCandidate.reason || fallbackCandidate.reason };
+    }
+
+    return {
+      narrative: _cleanUserFacingText(seedNarrative, { maxSentences: 5 }),
+      source: 'local',
+      reason: aiCandidate.reason || fallbackCandidate.reason || 'seed'
+    };
+  }
+
+  async function buildGuidedScenarioDraft(input = {}) {
+    const seedNarrative = _cleanUserFacingText(_cleanScenarioSeed(input.riskStatement || ''), { maxSentences: 5 });
+    const classification = _classifyScenario(seedNarrative, {
+      guidedInput: input.guidedInput,
+      businessUnit: input.businessUnit,
+      scenarioLensHint: input.scenarioLensHint
+    });
+    const fallbackScenarioExpansion = _buildScenarioExpansion({
+      ...input,
+      riskStatement: seedNarrative,
+      classification
+    });
+    const result = await enhanceRiskContext({
+      ...input,
+      riskStatement: seedNarrative,
+      scenarioLensHint: _normaliseScenarioHintKey(input.scenarioLensHint) || classification.key
+    });
+    const selectedDraft = _selectGuidedDraftNarrative({
+      aiNarrative: _buildEnhancedNarrative({
+        ...input,
+        riskStatement: seedNarrative
+      }, result.enhancedStatement || ''),
+      fallbackNarrative: fallbackScenarioExpansion.scenarioExpansion,
+      seedNarrative,
+      guidedInput: input.guidedInput,
+      scenarioLensHint: input.scenarioLensHint || classification.key,
+      businessUnit: input.businessUnit
+    });
+    return {
+      ...result,
+      seedNarrative,
+      draftNarrative: selectedDraft.narrative,
+      draftNarrativeSource: selectedDraft.source,
+      draftNarrativeReason: selectedDraft.reason
+    };
+  }
+
   function _buildScenarioExpansion(input = {}) {
     const statement = _stripScenarioLeadIns(_cleanScenarioSeed(input.riskStatement));
     const businessUnit = String(input.businessUnit?.name || 'the business unit').trim();
@@ -2923,6 +3055,7 @@ ${evidenceMeta.promptBlock}`;
   }
 
   return {
+    buildGuidedScenarioDraft,
     generateScenarioAndInputs,
     enhanceRiskContext,
     analyseRiskRegister,

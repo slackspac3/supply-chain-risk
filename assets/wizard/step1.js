@@ -264,7 +264,9 @@ function renderStep1FeaturedExampleCard(example, recommendedExamples = [], learn
 }
 
 function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'your role', promptSuggestions = []) {
-  const draftPreview = composeStep1GuidedNarrative(draft.guidedInput, getEffectiveSettings(), draft);
+  const draftPreview = String(draft.guidedDraftPreview || '').trim() || composeStep1GuidedNarrative(draft.guidedInput, getEffectiveSettings(), draft);
+  const draftPreviewStatus = String(draft.guidedDraftStatus || '').trim();
+  const draftPreviewSource = String(draft.guidedDraftSource || '').trim();
   const optionalContextDisclosureKey = getDisclosureStateKey('/wizard/1', 'add more context only if you need it');
   const promptCards = promptSuggestions.length
     ? promptSuggestions
@@ -334,6 +336,7 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
     </div>
     ${draftPreview ? `<div class="card mt-4 wizard-draft-preview" style="padding:var(--sp-4);background:var(--bg-elevated)">
       <div class="context-panel-title">Draft preview</div>
+      ${draftPreviewStatus ? `<div class="form-help" style="margin-top:4px">${draftPreviewSource === 'ai' ? 'AI-built draft' : draftPreviewSource === 'fallback' ? 'Context-kept draft' : 'Local draft'} · ${escapeHtml(draftPreviewStatus)}</div>` : ''}
       <p class="context-panel-copy" id="guided-preview">${escapeHtml(String(draftPreview))}</p>
     </div>` : '<div class="form-help wizard-preview-placeholder" id="guided-preview">Answer the prompts and build the draft. The platform will create a clean starting statement for you.</div>'}
   </div>`;
@@ -1344,16 +1347,27 @@ function updateStep1ApplicableRegulations(buList = getBUList(), scenarioGeograph
 function persistAndRenderStep1({
   buList = getBUList(),
   scenarioGeographies = getScenarioGeographies(),
-  refreshRegulations = false
+  refreshRegulations = false,
+  preserveScroll = false
 } = {}) {
+  const scrollY = preserveScroll ? (window.scrollY || window.pageYOffset || 0) : 0;
   if (refreshRegulations) updateStep1ApplicableRegulations(buList, scenarioGeographies);
   saveDraft();
   renderWizard1();
+  if (preserveScroll) {
+    // Step 1 shortlist actions rerender the whole page shell; restoring the previous scroll keeps the user anchored in the risk review area.
+    window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' }));
+  }
 }
 
 function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false } = {}) {
   const nextSeed = normaliseScenarioSeedText(nextNarrative);
-  if (!nextSeed) return;
+  if (!nextSeed) {
+    AppState.draft.guidedDraftPreview = '';
+    AppState.draft.guidedDraftSource = '';
+    AppState.draft.guidedDraftStatus = '';
+    return;
+  }
   const currentSeeds = [
     AppState.draft.sourceNarrative,
     AppState.draft.narrative,
@@ -1361,13 +1375,17 @@ function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false
   ].map(normaliseScenarioSeedText).filter(Boolean);
   if (currentSeeds.some(seed => seed === nextSeed)) return;
   // Once the underlying scenario changes, stale AI summaries and generated cards become misleading against the visible draft.
+  AppState.draft.guidedDraftPreview = '';
+  AppState.draft.guidedDraftSource = '';
+  AppState.draft.guidedDraftStatus = '';
   clearScenarioAssistArtifacts({ clearGeneratedRisks });
 }
 
 function updateStep1GuidedPreview() {
   const preview = document.getElementById('guided-preview');
   if (!preview) return;
-  preview.textContent = composeStep1GuidedNarrative(AppState.draft.guidedInput)
+  preview.textContent = String(AppState.draft.guidedDraftPreview || '').trim()
+    || composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft)
     || 'Complete the guided questions and click “Build Scenario Draft”.';
 }
 
@@ -1427,21 +1445,7 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
 }
 
 function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
-  document.getElementById('btn-build-guided-narrative').addEventListener('click', () => {
-    const composed = composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft);
-    if (!composed) {
-      UI.toast('Answer at least one guided question first.', 'warning');
-      return;
-    }
-    clearStep1StaleAssistState(composed, { clearGeneratedRisks: true });
-    AppState.draft.narrative = composed;
-    AppState.draft.sourceNarrative = composed;
-    AppState.draft.scenarioLens = getStep1PreferredScenarioLens(settings, AppState.draft);
-    document.getElementById('intake-risk-statement').value = composed;
-    const seededCount = seedRisksFromScenarioDraft(composed, { force: true, replaceGenerated: true });
-    persistAndRenderStep1();
-    UI.toast(seededCount ? `Scenario draft created and shortlist refreshed with ${seededCount} aligned risk${seededCount === 1 ? '' : 's'}.` : 'Scenario draft created from guided answers.', 'success');
-  });
+  document.getElementById('btn-build-guided-narrative').addEventListener('click', () => Step1Assist.buildGuidedScenarioDraft());
 
   document.querySelectorAll('.guided-prompt-chip').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1843,25 +1847,25 @@ function bindRiskCardActions({ buList = getBUList() } = {}) {
       else selectedIds.delete(box.dataset.riskId);
       AppState.draft.selectedRiskIds = Array.from(selectedIds);
       syncRiskSelection();
-      persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
+      persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
     });
   });
   document.getElementById('btn-select-all-risks')?.addEventListener('click', () => {
     AppState.draft.selectedRiskIds = getRiskCandidates().map(risk => risk.id);
     syncRiskSelection();
-    persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
+    persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
   });
   document.getElementById('btn-clear-all-risks')?.addEventListener('click', () => {
     AppState.draft.selectedRiskIds = [];
     syncRiskSelection();
-    persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
+    persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
   });
   document.querySelectorAll('.btn-remove-risk').forEach(btn => {
     btn.addEventListener('click', () => {
       AppState.draft.riskCandidates = getRiskCandidates().filter(r => r.id !== btn.dataset.riskId);
       AppState.draft.selectedRiskIds = (AppState.draft.selectedRiskIds || []).filter(id => id !== btn.dataset.riskId);
       syncRiskSelection();
-      persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
+      persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
     });
   });
 }

@@ -3,6 +3,97 @@
 
   const draftScenarioState = global.DraftScenarioState;
 
+  function _buildGuidedDraftStatusCopy(source = '') {
+    if (source === 'ai') return 'Built with AI using the current function context, geography, regulations, and retrieved references.';
+    if (source === 'fallback') return 'Built from the original scenario and current context because the AI rewrite did not stay close enough to the event you described.';
+    return 'Built directly from the guided inputs while AI guidance was unavailable.';
+  }
+
+  async function buildGuidedScenarioDraft() {
+    const settings = getEffectiveSettings();
+    const localDraft = composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft);
+    if (!localDraft) {
+      UI.toast('Answer at least one guided question first.', 'warning');
+      return;
+    }
+
+    const button = document.getElementById('btn-build-guided-narrative');
+    const resetButton = _setStep1ButtonBusy(button, 'Building…');
+    const preview = document.getElementById('guided-preview');
+    const bu = getBUList().find(b => b.id === (document.getElementById('wizard-bu')?.value || AppState.draft.buId));
+    const preferredLens = getStep1PreferredScenarioLens(settings, AppState.draft);
+
+    if (preview) {
+      preview.textContent = 'Building a scenario draft from the current event, impact, and context…';
+    }
+
+    try {
+      const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+      const citations = await RAGService.retrieveRelevantDocs(bu?.id, localDraft, 5);
+      const result = await LLMService.buildGuidedScenarioDraft({
+        riskStatement: localDraft,
+        guidedInput: { ...AppState.draft.guidedInput },
+        scenarioLensHint: preferredLens,
+        businessUnit: aiContext.businessUnit || bu,
+        geography: formatScenarioGeographies(getScenarioGeographies()),
+        applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
+        citations,
+        adminSettings: aiContext.adminSettings
+      });
+      const finalDraft = String(result.draftNarrative || result.enhancedStatement || localDraft).trim() || localDraft;
+      const guidedDraftSource = String(result.draftNarrativeSource || (result.usedFallback ? 'fallback' : 'ai')).trim() || 'local';
+      clearStep1StaleAssistState(finalDraft, { clearGeneratedRisks: true });
+      const appliedResult = {
+        ...result,
+        summary: result.summary || `Suggested draft: ${_buildGuidedDraftStatusCopy(guidedDraftSource)}`,
+        linkAnalysis: result.linkAnalysis || 'The shortlist was refreshed around the same event path, impact, and current scenario lens.'
+      };
+      draftScenarioState.applyScenarioAssistResultToDraft(appliedResult, {
+        narrative: localDraft,
+        assistSeed: localDraft,
+        bu,
+        citations,
+        nextNarrative: finalDraft
+      });
+      AppState.draft.guidedDraftPreview = finalDraft;
+      AppState.draft.guidedDraftSource = guidedDraftSource;
+      AppState.draft.guidedDraftStatus = _buildGuidedDraftStatusCopy(guidedDraftSource);
+      AppState.draft.narrative = finalDraft;
+      AppState.draft.sourceNarrative = localDraft;
+      AppState.draft.enhancedNarrative = finalDraft;
+      document.getElementById('intake-risk-statement').value = finalDraft;
+      saveDraft();
+      renderWizard1();
+      const selectedCount = getSelectedRisks().length;
+      const toastTone = guidedDraftSource === 'ai' && !result.usedFallback ? 'success' : 'warning';
+      const toastCopy = selectedCount
+        ? `Scenario draft built and shortlist refreshed with ${selectedCount} aligned risk${selectedCount === 1 ? '' : 's'}.`
+        : 'Scenario draft built from the guided answers.';
+      UI.toast(toastCopy, toastTone, 5000);
+    } catch (error) {
+      clearStep1StaleAssistState(localDraft, { clearGeneratedRisks: true });
+      AppState.draft.guidedDraftPreview = localDraft;
+      AppState.draft.guidedDraftSource = 'local';
+      AppState.draft.guidedDraftStatus = _buildGuidedDraftStatusCopy('local');
+      AppState.draft.narrative = localDraft;
+      AppState.draft.sourceNarrative = localDraft;
+      AppState.draft.enhancedNarrative = localDraft;
+      document.getElementById('intake-risk-statement').value = localDraft;
+      const seededCount = seedRisksFromScenarioDraft(localDraft, { force: true, replaceGenerated: true });
+      saveDraft();
+      renderWizard1();
+      UI.toast(
+        seededCount
+          ? `Scenario draft built from guided context and shortlist refreshed with ${seededCount} aligned risk${seededCount === 1 ? '' : 's'}.`
+          : 'Scenario draft built from guided context while AI was unavailable.',
+        'warning',
+        5000
+      );
+    } finally {
+      resetButton();
+    }
+  }
+
   async function runIntakeAssist() {
     const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
     const assistSeed = draftScenarioState.getIntakeAssistSeedNarrative(narrative || AppState.draft.registerFindings);
@@ -127,6 +218,7 @@
   }
 
   global.Step1Assist = {
+    buildGuidedScenarioDraft,
     runIntakeAssist,
     enhanceNarrativeWithAI,
     analyseUploadedRegister
