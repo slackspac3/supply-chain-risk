@@ -571,5 +571,4 @@ const RiskEngine = (() => {
   };
 })();
 
-if (typeof globalThis !== 'undefined') globalThis.RiskEngine = RiskEngine;
 if (typeof module !== 'undefined') module.exports = RiskEngine;
