@@ -70,6 +70,250 @@ const STEP1_FUNCTION_TO_SCENARIO_LENS = {
   general: { key: 'general', label: 'General enterprise risk', functionKey: 'general', estimatePresetKey: 'general' }
 };
 
+const STEP1_LENS_REGULATION_SUGGESTIONS = {
+  cyber: ['UAE PDPL', 'UAE Cybersecurity Council Guidance', 'NIST SP 800-53', 'NIST RMF', 'ISO 27001'],
+  'data-governance': ['UAE PDPL', 'ISO 27701', 'ISO 27018'],
+  regulatory: ['BIS Export Controls', 'OFAC Sanctions'],
+  financial: ['UAE AML/CFT', 'COSO Internal Control Framework'],
+  'fraud-integrity': ['ISO 37001', 'UAE AML/CFT'],
+  esg: ['IFRS S1', 'IFRS S2', 'GRI Universal Standards'],
+  procurement: ['ISO 20400', 'ISO 37301'],
+  'supply-chain': ['ISO 28000', 'ISO 27036'],
+  'business-continuity': ['ISO 22301', 'ISO 22313', 'NFPA 1600'],
+  'physical-security': ['UAE Fire and Life Safety Code', 'ISO 22301'],
+  'ot-resilience': ['IEC 62443', 'ISO 22301'],
+  'ai-model-risk': ['ISO/IEC 42001', 'NIST AI RMF', 'EU AI Act'],
+  'people-workforce': ['UN Guiding Principles', 'SA8000', 'ILO-OSH 2001'],
+  'investment-jv': ['COSO ERM', 'ISO 31000'],
+  'transformation-delivery': ['ISO 31010', 'COSO ERM'],
+  hse: ['ISO 45001', 'ISO 14001', 'Abu Dhabi EHSMS'],
+  operational: ['ISO 31000', 'ISO 22301'],
+  strategic: ['ISO 31000', 'COSO ERM'],
+  compliance: ['ISO 37301', 'UAE PDPL'],
+  'legal-contract': ['ISO 37301'],
+  geopolitical: ['OFAC Sanctions', 'BIS Export Controls']
+};
+
+const STEP1_REGULATION_CATEGORY_RULES = [
+  {
+    label: 'Trade, Sanctions, and Market Access',
+    test: (tag) => /bis|ofac|sanction|export control|entity list|market[- ]access/i.test(tag)
+  },
+  {
+    label: 'Privacy, Cyber, and Data Controls',
+    test: (tag) => /pdpl|gdpr|cyber|nist|iso ?27|pci|data protection|privacy|iec 62443/i.test(tag)
+  },
+  {
+    label: 'Business Continuity, Resilience, and Supply Chain',
+    test: (tag) => /2230|nfpa 1600|28000|27036|continuity|resilience|recovery|crisis/i.test(tag)
+  },
+  {
+    label: 'Sustainability and ESG',
+    test: (tag) => /ifrs s|gri|csrd|esrs|sasb|tnfd|sustainable finance|esg|tcfd|ghg|cdp|14064|csddd/i.test(tag)
+  },
+  {
+    label: 'HSE and Site Operations',
+    test: (tag) => /45001|14001|45003|ehsms|fire and life safety|ilo-osh|psm|api rp|ccps|sa8000|safety|environment/i.test(tag)
+  },
+  {
+    label: 'Financial Integrity and Conduct',
+    test: (tag) => /aml|37001|anti-brib|internal control|bcbs|basel/i.test(tag)
+  },
+  {
+    label: 'AI and Model Governance',
+    test: (tag) => /42001|23894|ai act|ai rmf|sr 11-7|model risk/i.test(tag)
+  },
+  {
+    label: 'Enterprise Governance and Risk',
+    test: (tag) => /31000|31010|coso|37301/i.test(tag)
+  }
+];
+
+function uniqueStep1Regulations(list = []) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : [])
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function buildStep1AutoSuggestedRegulations({
+  draft = AppState.draft || {},
+  bu = null,
+  selectedRisks = getSelectedRisks(),
+  riskCandidates = getRiskCandidates(),
+  scenarioGeographies = getScenarioGeographies()
+} = {}) {
+  const lensKey = String(draft?.scenarioLens?.key || getStep1PreferredScenarioLens(getEffectiveSettings(), draft)?.key || '').trim();
+  const riskSource = Array.isArray(selectedRisks) && selectedRisks.length ? selectedRisks : (Array.isArray(riskCandidates) ? riskCandidates : []);
+  return uniqueStep1Regulations([
+    ...(bu?.regulatoryTags || []),
+    ...deriveGeographyRegulations(scenarioGeographies),
+    ...(STEP1_LENS_REGULATION_SUGGESTIONS[lensKey] || []),
+    ...riskSource.flatMap((risk) => Array.isArray(risk?.regulations) ? risk.regulations : [])
+  ]);
+}
+
+function ensureStep1RegulationSelectionState(draft = AppState.draft || {}, autoSuggested = []) {
+  if (!draft.regulationSelectionState || typeof draft.regulationSelectionState !== 'object') {
+    draft.regulationSelectionState = {};
+  }
+  const state = draft.regulationSelectionState;
+  if (!state.initialised) {
+    const currentSelected = uniqueStep1Regulations(draft.applicableRegulations || []);
+    const autoSet = new Set(autoSuggested.map((tag) => tag.toLowerCase()));
+    const currentSet = new Set(currentSelected.map((tag) => tag.toLowerCase()));
+    state.manualSelected = currentSelected.filter((tag) => !autoSet.has(tag.toLowerCase()));
+    state.manualDeselected = autoSuggested.filter((tag) => !currentSet.has(tag.toLowerCase()));
+    state.initialised = true;
+    return state;
+  }
+  state.manualSelected = uniqueStep1Regulations(state.manualSelected || []);
+  state.manualDeselected = uniqueStep1Regulations(state.manualDeselected || [])
+    .filter((tag) => !(state.manualSelected || []).some((selected) => selected.toLowerCase() === tag.toLowerCase()));
+  return state;
+}
+
+function buildStep1ApplicableRegulationModel({
+  draft = AppState.draft || {},
+  bu = null,
+  selectedRisks = getSelectedRisks(),
+  riskCandidates = getRiskCandidates(),
+  scenarioGeographies = getScenarioGeographies(),
+  settings = getEffectiveSettings()
+} = {}) {
+  const autoSuggested = buildStep1AutoSuggestedRegulations({ draft, bu, selectedRisks, riskCandidates, scenarioGeographies });
+  const state = ensureStep1RegulationSelectionState(draft, autoSuggested);
+  const manualSelected = uniqueStep1Regulations(state.manualSelected || []);
+  const manualDeselected = uniqueStep1Regulations(state.manualDeselected || []);
+  const manualDeselectedSet = new Set(manualDeselected.map((tag) => tag.toLowerCase()));
+  const selected = uniqueStep1Regulations([
+    ...autoSuggested.filter((tag) => !manualDeselectedSet.has(tag.toLowerCase())),
+    ...manualSelected
+  ]);
+  const available = uniqueStep1Regulations([
+    ...selected,
+    ...autoSuggested,
+    ...(settings?.applicableRegulations || []),
+    ...(bu?.regulatoryTags || [])
+  ]);
+  const grouped = STEP1_REGULATION_CATEGORY_RULES
+    .map((rule) => ({
+      label: rule.label,
+      tags: available.filter((tag) => rule.test(tag))
+    }))
+    .filter((group) => group.tags.length);
+  const groupedKeys = new Set(grouped.flatMap((group) => group.tags.map((tag) => tag.toLowerCase())));
+  const uncategorised = available.filter((tag) => !groupedKeys.has(tag.toLowerCase()));
+  if (uncategorised.length) {
+    grouped.push({
+      label: 'Other Relevant References',
+      tags: uncategorised
+    });
+  }
+  return {
+    autoSuggested,
+    selected,
+    groups: grouped
+  };
+}
+
+function updateStep1ApplicableRegulations(buList = getBUList(), scenarioGeographies = getScenarioGeographies()) {
+  const model = buildStep1ApplicableRegulationModel({
+    draft: AppState.draft,
+    bu: (Array.isArray(buList) ? buList : []).find((item) => item.id === AppState.draft.buId) || null,
+    selectedRisks: getSelectedRisks(),
+    riskCandidates: getRiskCandidates(),
+    scenarioGeographies,
+    settings: getEffectiveSettings()
+  });
+  AppState.draft.applicableRegulations = model.selected;
+  return model;
+}
+
+function resetStep1RegulationSelectionState({ resetSpotlight = true } = {}) {
+  delete AppState.draft.regulationSelectionState;
+  AppState.draft.applicableRegulations = [];
+  if (resetSpotlight) AppState.draft.step1RegulationSpotlighted = false;
+}
+
+function renderStep1ApplicableRegulationSelector(regulationModel) {
+  const model = regulationModel && typeof regulationModel === 'object'
+    ? regulationModel
+    : buildStep1ApplicableRegulationModel();
+  const selectedSet = new Set((model.selected || []).map((tag) => String(tag || '').toLowerCase()));
+  const autoSet = new Set((model.autoSuggested || []).map((tag) => String(tag || '').toLowerCase()));
+  return `<div class="step1-regulation-panel">
+    <div class="step1-regulation-panel__status">
+      <span class="badge badge--primary">${model.autoSuggested?.length ? 'Auto-selected from current scenario' : 'Select what applies'}</span>
+      <span class="badge badge--neutral">${model.selected?.length || 0} selected</span>
+    </div>
+    <p class="context-panel-copy" style="margin-top:var(--sp-3)">The regulations most relevant to the current draft are already selected. Click any item to keep, remove, or add it before continuing.</p>
+    <div class="step1-regulation-groups">
+      ${(model.groups || []).map((group) => `<div class="step1-regulation-group">
+        <div class="step1-regulation-group__title">
+          <span>${escapeHtml(group.label)}</span>
+          <span class="badge badge--neutral">${group.tags.length}</span>
+        </div>
+        <div class="citation-chips">
+          ${group.tags.map((tag) => {
+            const lowered = String(tag || '').toLowerCase();
+            const isSelected = selectedSet.has(lowered);
+            const isSuggested = autoSet.has(lowered);
+            return `<button type="button" class="chip step1-regulation-chip ${isSelected ? 'step1-regulation-chip--selected' : ''} ${isSuggested ? 'step1-regulation-chip--suggested' : ''}" data-regulation-tag="${escapeHtml(tag)}" aria-pressed="${isSelected ? 'true' : 'false'}">${escapeHtml(tag)}</button>`;
+          }).join('')}
+        </div>
+      </div>`).join('')}
+    </div>
+    <div class="context-panel-foot">This selection is carried forward into AI assistance, evidence retrieval, and the later review steps.</div>
+  </div>`;
+}
+
+function toggleStep1ApplicableRegulation(regulationTag, { buList = getBUList(), scenarioGeographies = getScenarioGeographies() } = {}) {
+  const tag = String(regulationTag || '').trim();
+  if (!tag) return;
+  const bu = (Array.isArray(buList) ? buList : []).find((item) => item.id === AppState.draft.buId) || null;
+  const model = buildStep1ApplicableRegulationModel({
+    draft: AppState.draft,
+    bu,
+    selectedRisks: getSelectedRisks(),
+    riskCandidates: getRiskCandidates(),
+    scenarioGeographies,
+    settings: getEffectiveSettings()
+  });
+  const state = ensureStep1RegulationSelectionState(AppState.draft, model.autoSuggested);
+  const lowered = tag.toLowerCase();
+  const autoSet = new Set((model.autoSuggested || []).map((item) => String(item || '').toLowerCase()));
+  const selectedSet = new Set((model.selected || []).map((item) => String(item || '').toLowerCase()));
+  const isAuto = autoSet.has(lowered);
+  const isSelected = selectedSet.has(lowered);
+
+  if (isSelected) {
+    if (isAuto) {
+      state.manualDeselected = uniqueStep1Regulations([...(state.manualDeselected || []), tag]);
+    } else {
+      state.manualSelected = uniqueStep1Regulations((state.manualSelected || []).filter((item) => String(item || '').toLowerCase() !== lowered));
+    }
+  } else if (isAuto) {
+    state.manualDeselected = uniqueStep1Regulations((state.manualDeselected || []).filter((item) => String(item || '').toLowerCase() !== lowered));
+  } else {
+    state.manualSelected = uniqueStep1Regulations([...(state.manualSelected || []), tag]);
+  }
+
+  AppState.draft.regulationSelectionState = {
+    ...state,
+    initialised: true
+  };
+  updateStep1ApplicableRegulations(buList, scenarioGeographies);
+  markDraftDirty();
+  persistAndRenderStep1({ buList, scenarioGeographies, preserveScroll: true });
+}
+
 function createStep1DryRunScenario(input = {}) {
   return {
     id: String(input.id || '').trim(),
@@ -521,7 +765,7 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
   </div>`;
 }
 
-function renderStep1SupportBand({ draft, hasScenarioDraft, hasImportedSource, featuredDryRun, recommendedDryRuns, learnedDryRuns, availableDryRuns, functionLabel, activeDryRun, buList, scenarioGeographies, regs, settings }) {
+function renderStep1SupportBand({ draft, hasScenarioDraft, hasImportedSource, featuredDryRun, recommendedDryRuns, learnedDryRuns, availableDryRuns, functionLabel, activeDryRun, buList, scenarioGeographies, regs, settings, riskCandidates, regulationModel }) {
   return `<section class="wizard-support-band anim-fade-in">
     <div class="results-section-heading">Support and alternate starts</div>
     <div class="form-help" style="margin-top:8px">Use these only when you need existing context, a faster starting point, or a different source for the shortlist.</div>
@@ -532,8 +776,9 @@ function renderStep1SupportBand({ draft, hasScenarioDraft, hasImportedSource, fe
         title: 'Assessment framing and defaults',
         badgeLabel: 'Adjust only if needed',
         badgeTone: 'neutral',
-        open: false,
+        open: hasScenarioDraft || (Array.isArray(riskCandidates) && riskCandidates.length > 0),
         className: 'wizard-disclosure wizard-disclosure--support',
+        stateKey: getDisclosureStateKey('/wizard/1', 'assessment framing and defaults'),
         body: `
         <div class="grid-2">
           <div class="form-group">
@@ -560,9 +805,7 @@ function renderStep1SupportBand({ draft, hasScenarioDraft, hasImportedSource, fe
           </div>
           <div class="context-chip-panel">
             <div class="context-panel-title">Applicable Regulations</div>
-            <div class="citation-chips">
-              ${regs.map(tag => `<span class="badge badge--gold">${tag}</span>`).join('')}
-            </div>
+            ${renderStep1ApplicableRegulationSelector(regulationModel)}
           </div>
         </div>
       `
@@ -714,11 +957,7 @@ function ensureStep1ContextPrefills(draft, settings, buList) {
     changed = true;
   }
   if (!Array.isArray(draft.applicableRegulations) || !draft.applicableRegulations.length || changed) {
-    draft.applicableRegulations = deriveApplicableRegulations(
-      buList.find(b => b.id === draft.buId),
-      getSelectedRisks(),
-      getScenarioGeographies()
-    );
+    updateStep1ApplicableRegulations(buList, getScenarioGeographies());
     changed = true;
   }
   return changed;
@@ -813,8 +1052,8 @@ function clearGhostDraftSuggestion() {
     impact: '',
     urgency: 'medium'
   };
-  const bu = getBUList().find(item => item.id === draft.buId);
-  draft.applicableRegulations = deriveApplicableRegulations(bu, [], getScenarioGeographies());
+  resetStep1RegulationSelectionState();
+  updateStep1ApplicableRegulations(getBUList(), getScenarioGeographies());
 }
 
 const STEP1_DRY_RUN_SCENARIOS = [
@@ -1688,6 +1927,7 @@ function resetStep1DryRunContent() {
   AppState.draft.riskCandidates = [];
   AppState.draft.selectedRiskIds = [];
   AppState.draft.selectedRisks = [];
+  resetStep1RegulationSelectionState();
   clearLoadedDryRunFlag();
   saveDraft();
   renderWizard1();
@@ -1753,11 +1993,8 @@ function applyDryRunScenario(example) {
         ...(STEP1_FUNCTION_TO_SCENARIO_LENS[example.functionKey] || STEP1_FUNCTION_TO_SCENARIO_LENS.general)
       };
   AppState.draft.loadedDryRunId = example.id;
-  AppState.draft.applicableRegulations = deriveApplicableRegulations(
-    getBUList().find(b => b.id === AppState.draft.buId),
-    getSelectedRisks(),
-    AppState.draft.geographies
-  );
+  resetStep1RegulationSelectionState();
+  updateStep1ApplicableRegulations(getBUList(), AppState.draft.geographies);
   saveDraft();
   renderWizard1();
   UI.toast(`Loaded dry-run example: ${example.title}.`, 'success');
@@ -1784,14 +2021,6 @@ function seedRisksFromScenarioDraft(narrative, { force = false, replaceGenerated
   return extractedRisks.length;
 }
 
-function updateStep1ApplicableRegulations(buList = getBUList(), scenarioGeographies = getScenarioGeographies()) {
-  AppState.draft.applicableRegulations = deriveApplicableRegulations(
-    (Array.isArray(buList) ? buList : []).find(b => b.id === AppState.draft.buId),
-    getSelectedRisks(),
-    scenarioGeographies
-  );
-}
-
 function persistAndRenderStep1({
   buList = getBUList(),
   scenarioGeographies = getScenarioGeographies(),
@@ -1814,6 +2043,7 @@ function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false
     AppState.draft.guidedDraftPreview = '';
     AppState.draft.guidedDraftSource = '';
     AppState.draft.guidedDraftStatus = '';
+    resetStep1RegulationSelectionState();
     return;
   }
   const currentSeeds = [
@@ -1826,6 +2056,7 @@ function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false
   AppState.draft.guidedDraftPreview = '';
   AppState.draft.guidedDraftSource = '';
   AppState.draft.guidedDraftStatus = '';
+  resetStep1RegulationSelectionState();
   clearScenarioAssistArtifacts({ clearGeneratedRisks });
 }
 
@@ -1961,6 +2192,14 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
   });
 
   document.getElementById('btn-register-analyse').addEventListener('click', analyseUploadedRegister);
+  document.querySelectorAll('[data-regulation-tag]').forEach((button) => {
+    button.addEventListener('click', () => {
+      toggleStep1ApplicableRegulation(button.dataset.regulationTag, {
+        buList,
+        scenarioGeographies: getScenarioGeographies()
+      });
+    });
+  });
 }
 
 function bindStep1NavigationActions({ buList, settings, wizardGeographyInput }) {
@@ -2005,7 +2244,7 @@ function bindStep1NavigationActions({ buList, settings, wizardGeographyInput }) 
     AppState.draft.narrative = AppState.draft.narrative.trim();
     AppState.draft.sourceNarrative = normaliseScenarioSeedText(AppState.draft.sourceNarrative || AppState.draft.narrative);
     AppState.draft.enhancedNarrative = AppState.draft.enhancedNarrative || AppState.draft.narrative;
-    AppState.draft.applicableRegulations = deriveApplicableRegulations(buList.find(b => b.id === buId), selected, AppState.draft.geographies);
+    updateStep1ApplicableRegulations(buList, AppState.draft.geographies);
     if (!AppState.draft.scenarioTitle) {
       AppState.draft.scenarioTitle = selected.length === 1 ? selected[0].title : `${selected.length || 1}-risk scenario for ${AppState.draft.buName}`;
     }
@@ -2023,7 +2262,16 @@ function renderWizard1() {
   const selectedRisks = syncRiskSelection(!Array.isArray(draft.selectedRiskIds));
   const riskCandidates = getRiskCandidates();
   const scenarioGeographies = getScenarioGeographies();
-  const regs = deriveApplicableRegulations(buList.find(b => b.id === draft.buId), selectedRisks, scenarioGeographies);
+  const regulationDisclosureKey = getDisclosureStateKey('/wizard/1', 'assessment framing and defaults');
+  const regulationModel = buildStep1ApplicableRegulationModel({
+    draft,
+    bu: buList.find((item) => item.id === draft.buId) || null,
+    selectedRisks,
+    riskCandidates,
+    scenarioGeographies,
+    settings
+  });
+  const regs = regulationModel.selected;
   const recommendation = getStep1RecommendedAction(draft, selectedRisks);
   const exampleModel = getStep1ExampleExperienceModel(settings, draft);
   const activeDryRun = getLoadedDryRunScenario(draft);
@@ -2039,6 +2287,10 @@ function renderWizard1() {
     || null;
   const hasScenarioDraft = !!String(draft.narrative || draft.sourceNarrative || '').trim();
   const hasImportedSource = !!String(draft.uploadedRegisterName || '').trim() || (riskCandidates || []).some(risk => risk.source === 'register' || risk.source === 'ai+register');
+  if ((hasScenarioDraft || riskCandidates.length) && !draft.step1RegulationSpotlighted) {
+    AppState.disclosureState[regulationDisclosureKey] = true;
+    draft.step1RegulationSpotlighted = true;
+  }
   const stepReady = !!(hasScenarioDraft || selectedRisks.length);
   const readinessModel = buildAssessmentReadinessModel({
     draft,
@@ -2084,7 +2336,9 @@ function renderWizard1() {
             buList,
             scenarioGeographies,
             regs,
-            settings
+            settings,
+            riskCandidates,
+            regulationModel
           })}
           ${renderStep1ScopeBand({ draft, selectedRisks, riskCandidates, regs })}
         </div>

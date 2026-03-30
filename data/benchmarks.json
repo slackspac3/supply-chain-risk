@@ -1898,6 +1898,240 @@
     }
   },
   {
+    "id": "bm-businesscontinuity-bia-global-2026",
+    "title": "Business impact analysis and recovery-priority profile",
+    "scenarioType": "business-continuity",
+    "geographies": ["Global", "United Arab Emirates", "GCC"],
+    "industries": ["cross-sector", "technology", "financial services", "healthcare", "manufacturing"],
+    "scope": "global",
+    "sourceType": "official",
+    "sourceTitle": "ISO 22317 and NIST SP 800-34 continuity planning guidance",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for weak business impact analysis, unclear recovery priorities, and poor restoration sequencing. Emphasis is on dependency blindness, slow recovery decisions, and avoidable duration loss.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.2, "likely": 1, "max": 4.2 },
+      "controlStrength": { "min": 0.32, "likely": 0.5, "max": 0.72 },
+      "threatCapability": { "min": 0.24, "likely": 0.42, "max": 0.64 },
+      "lossComponents": {
+        "incidentResponse": { "min": 60000, "likely": 200000, "max": 620000 },
+        "businessInterruption": { "min": 350000, "likely": 1300000, "max": 4700000 },
+        "dataBreachRemediation": { "min": 0, "likely": 5000, "max": 30000 },
+        "regulatoryLegal": { "min": 15000, "likely": 70000, "max": 300000 },
+        "thirdPartyLiability": { "min": 10000, "likely": 45000, "max": 220000 },
+        "reputationContract": { "min": 120000, "likely": 380000, "max": 1400000 }
+      }
+    }
+  },
+  {
+    "id": "bm-businesscontinuity-crisis-global-2026",
+    "title": "Crisis leadership, communications, and command profile",
+    "scenarioType": "business-continuity",
+    "geographies": ["Global", "United Arab Emirates", "GCC"],
+    "industries": ["cross-sector", "technology", "financial services", "healthcare", "public sector"],
+    "scope": "global",
+    "sourceType": "official",
+    "sourceTitle": "ISO 22361, ISO 22320, and NFPA 1600 crisis-management guidance",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for poor crisis command, weak communications, and delayed escalation under pressure. Emphasis is on management confusion, stakeholder trust loss, and prolonged disruption because decision rights fail.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.2, "likely": 0.9, "max": 3.8 },
+      "controlStrength": { "min": 0.3, "likely": 0.48, "max": 0.7 },
+      "threatCapability": { "min": 0.22, "likely": 0.4, "max": 0.62 },
+      "lossComponents": {
+        "incidentResponse": { "min": 70000, "likely": 230000, "max": 700000 },
+        "businessInterruption": { "min": 220000, "likely": 850000, "max": 3200000 },
+        "dataBreachRemediation": { "min": 0, "likely": 5000, "max": 25000 },
+        "regulatoryLegal": { "min": 20000, "likely": 90000, "max": 360000 },
+        "thirdPartyLiability": { "min": 10000, "likely": 50000, "max": 260000 },
+        "reputationContract": { "min": 180000, "likely": 520000, "max": 1800000 }
+      }
+    }
+  },
+  {
+    "id": "bm-businesscontinuity-dependency-global-2026",
+    "title": "Critical dependency and service-restoration profile",
+    "scenarioType": "business-continuity",
+    "geographies": ["Global", "United Arab Emirates", "GCC"],
+    "industries": ["technology", "financial services", "cross-sector", "manufacturing"],
+    "scope": "industry",
+    "sourceType": "official",
+    "sourceTitle": "Basel operational resilience, ISO 22301, and service-dependency guidance",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for hidden service dependencies, fragile recovery paths, and restoration failures across critical suppliers or services. Emphasis is on outage amplification once an important dependency fails.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.18, "likely": 0.8, "max": 3.2 },
+      "controlStrength": { "min": 0.34, "likely": 0.5, "max": 0.72 },
+      "threatCapability": { "min": 0.28, "likely": 0.46, "max": 0.68 },
+      "lossComponents": {
+        "incidentResponse": { "min": 50000, "likely": 180000, "max": 560000 },
+        "businessInterruption": { "min": 320000, "likely": 1200000, "max": 4500000 },
+        "dataBreachRemediation": { "min": 0, "likely": 10000, "max": 60000 },
+        "regulatoryLegal": { "min": 20000, "likely": 85000, "max": 340000 },
+        "thirdPartyLiability": { "min": 20000, "likely": 90000, "max": 420000 },
+        "reputationContract": { "min": 140000, "likely": 460000, "max": 1700000 }
+      }
+    }
+  },
+  {
+    "id": "bm-esg-climate-disclosure-global-2026",
+    "title": "Climate disclosure and emissions-control profile",
+    "scenarioType": "esg",
+    "geographies": ["Global", "United Arab Emirates", "GCC", "European Union"],
+    "industries": ["cross-sector", "technology", "financial services", "manufacturing"],
+    "scope": "global",
+    "sourceType": "official",
+    "sourceTitle": "IFRS S2, TCFD, GHG Protocol, and ISO 14064-1 climate disclosure guidance",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for weak climate disclosures, emissions-data quality problems, and transition-claim challenge. Emphasis is on restatement effort, assurance gaps, financing pressure, and stakeholder scrutiny.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.12, "likely": 0.55, "max": 2.2 },
+      "controlStrength": { "min": 0.34, "likely": 0.52, "max": 0.74 },
+      "threatCapability": { "min": 0.2, "likely": 0.36, "max": 0.56 },
+      "lossComponents": {
+        "incidentResponse": { "min": 45000, "likely": 130000, "max": 420000 },
+        "businessInterruption": { "min": 50000, "likely": 220000, "max": 900000 },
+        "dataBreachRemediation": { "min": 0, "likely": 0, "max": 15000 },
+        "regulatoryLegal": { "min": 70000, "likely": 280000, "max": 1300000 },
+        "thirdPartyLiability": { "min": 0, "likely": 20000, "max": 120000 },
+        "reputationContract": { "min": 220000, "likely": 700000, "max": 2600000 }
+      }
+    }
+  },
+  {
+    "id": "bm-esg-supplychain-rights-global-2026",
+    "title": "Supply-chain human rights and remediation profile",
+    "scenarioType": "esg",
+    "geographies": ["Global", "United Arab Emirates", "GCC", "European Union"],
+    "industries": ["cross-sector", "manufacturing", "technology", "consumer"],
+    "scope": "global",
+    "sourceType": "official",
+    "sourceTitle": "OECD RBC, UNGP, CSDDD readiness, and SA8000 labour-assurance guidance",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for supplier labour or rights failures that drive remediation, customer pressure, and disclosure challenge. Emphasis is on due-diligence weakness, corrective action cost, and trust damage across the value chain.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.15, "likely": 0.7, "max": 3 },
+      "controlStrength": { "min": 0.34, "likely": 0.5, "max": 0.72 },
+      "threatCapability": { "min": 0.24, "likely": 0.4, "max": 0.62 },
+      "lossComponents": {
+        "incidentResponse": { "min": 40000, "likely": 120000, "max": 360000 },
+        "businessInterruption": { "min": 70000, "likely": 260000, "max": 1100000 },
+        "dataBreachRemediation": { "min": 0, "likely": 0, "max": 15000 },
+        "regulatoryLegal": { "min": 50000, "likely": 220000, "max": 1000000 },
+        "thirdPartyLiability": { "min": 30000, "likely": 100000, "max": 450000 },
+        "reputationContract": { "min": 220000, "likely": 760000, "max": 2900000 }
+      }
+    }
+  },
+  {
+    "id": "bm-esg-greenwashing-global-2026",
+    "title": "Sustainability claims and greenwashing challenge profile",
+    "scenarioType": "esg",
+    "geographies": ["Global", "United Arab Emirates", "GCC", "European Union"],
+    "industries": ["cross-sector", "financial services", "technology", "consumer"],
+    "scope": "global",
+    "sourceType": "official",
+    "sourceTitle": "CSRD/ESRS, ADX ESG guidance, and sustainability-claims governance references",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for overstated sustainability claims, weak evidence trails, and investor or regulator challenge. Emphasis is on narrative overreach, retraction cost, and credibility loss once claims cannot be evidenced.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.12, "likely": 0.5, "max": 2.2 },
+      "controlStrength": { "min": 0.36, "likely": 0.54, "max": 0.76 },
+      "threatCapability": { "min": 0.22, "likely": 0.38, "max": 0.58 },
+      "lossComponents": {
+        "incidentResponse": { "min": 35000, "likely": 110000, "max": 320000 },
+        "businessInterruption": { "min": 40000, "likely": 180000, "max": 720000 },
+        "dataBreachRemediation": { "min": 0, "likely": 0, "max": 15000 },
+        "regulatoryLegal": { "min": 60000, "likely": 240000, "max": 1100000 },
+        "thirdPartyLiability": { "min": 0, "likely": 15000, "max": 100000 },
+        "reputationContract": { "min": 240000, "likely": 820000, "max": 3200000 }
+      }
+    }
+  },
+  {
+    "id": "bm-hse-process-safety-global-2026",
+    "title": "Process safety and loss-of-containment profile",
+    "scenarioType": "hse",
+    "geographies": ["Global", "United Arab Emirates", "GCC"],
+    "industries": ["manufacturing", "energy", "chemicals", "cross-sector"],
+    "scope": "industry",
+    "sourceType": "official",
+    "sourceTitle": "OSHA PSM, API RP 754, and CCPS process-safety guidance",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for hazardous-process control failure, loss of containment, and emergency shutdown. Emphasis is on major-hazard control weakness, plant disruption, remediation, and regulatory scrutiny.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.06, "likely": 0.3, "max": 1.2 },
+      "controlStrength": { "min": 0.4, "likely": 0.58, "max": 0.78 },
+      "threatCapability": { "min": 0.28, "likely": 0.46, "max": 0.68 },
+      "lossComponents": {
+        "incidentResponse": { "min": 120000, "likely": 420000, "max": 1400000 },
+        "businessInterruption": { "min": 400000, "likely": 1500000, "max": 6000000 },
+        "dataBreachRemediation": { "min": 0, "likely": 0, "max": 15000 },
+        "regulatoryLegal": { "min": 180000, "likely": 650000, "max": 2800000 },
+        "thirdPartyLiability": { "min": 40000, "likely": 180000, "max": 800000 },
+        "reputationContract": { "min": 160000, "likely": 520000, "max": 1900000 }
+      }
+    }
+  },
+  {
+    "id": "bm-hse-contractor-global-2026",
+    "title": "Contractor safety and permit-control profile",
+    "scenarioType": "hse",
+    "geographies": ["Global", "United Arab Emirates", "GCC"],
+    "industries": ["construction", "manufacturing", "facilities", "cross-sector"],
+    "scope": "industry",
+    "sourceType": "official",
+    "sourceTitle": "ISO 45001, ILO-OSH, and contractor-control guidance",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for contractor injury, weak permit-to-work discipline, and supervision gaps. Emphasis is on site disruption, investigation effort, and accountable-control weakness rather than isolated unsafe acts.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.12, "likely": 0.55, "max": 2.2 },
+      "controlStrength": { "min": 0.38, "likely": 0.56, "max": 0.76 },
+      "threatCapability": { "min": 0.24, "likely": 0.4, "max": 0.62 },
+      "lossComponents": {
+        "incidentResponse": { "min": 70000, "likely": 240000, "max": 760000 },
+        "businessInterruption": { "min": 180000, "likely": 620000, "max": 2400000 },
+        "dataBreachRemediation": { "min": 0, "likely": 0, "max": 15000 },
+        "regulatoryLegal": { "min": 120000, "likely": 420000, "max": 1800000 },
+        "thirdPartyLiability": { "min": 30000, "likely": 120000, "max": 560000 },
+        "reputationContract": { "min": 100000, "likely": 340000, "max": 1300000 }
+      }
+    }
+  },
+  {
+    "id": "bm-hse-environmental-release-global-2026",
+    "title": "Environmental release and remediation profile",
+    "scenarioType": "hse",
+    "geographies": ["Global", "United Arab Emirates", "GCC"],
+    "industries": ["manufacturing", "energy", "cross-sector", "logistics"],
+    "scope": "industry",
+    "sourceType": "official",
+    "sourceTitle": "ISO 14001, Abu Dhabi EHSMS, and environmental-control guidance",
+    "sourceUrl": "",
+    "lastUpdated": "2026-03-30",
+    "summary": "Directional starting profile for spills, releases, and environmental-control failure. Emphasis is on clean-up cost, regulatory action, operating interruption, and long-tail stakeholder challenge.",
+    "suggestedInputs": {
+      "TEF": { "min": 0.08, "likely": 0.35, "max": 1.4 },
+      "controlStrength": { "min": 0.38, "likely": 0.56, "max": 0.76 },
+      "threatCapability": { "min": 0.24, "likely": 0.4, "max": 0.62 },
+      "lossComponents": {
+        "incidentResponse": { "min": 90000, "likely": 300000, "max": 980000 },
+        "businessInterruption": { "min": 220000, "likely": 780000, "max": 3000000 },
+        "dataBreachRemediation": { "min": 0, "likely": 0, "max": 15000 },
+        "regulatoryLegal": { "min": 140000, "likely": 520000, "max": 2200000 },
+        "thirdPartyLiability": { "min": 50000, "likely": 180000, "max": 760000 },
+        "reputationContract": { "min": 120000, "likely": 420000, "max": 1600000 }
+      }
+    }
+  },
+  {
     "id": "bm-ai-model-risk-global-2026",
     "title": "AI governance and model-risk profile",
     "scenarioType": "ai-model-risk",

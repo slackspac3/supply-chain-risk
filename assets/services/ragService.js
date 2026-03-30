@@ -77,21 +77,21 @@ const RAGService = (() => {
     },
     {
       key: 'business-continuity-crisis',
-      patterns: ['business continuity', 'continuity', 'crisis management', 'recovery', 'downtime', 'outage', 'incident communications', 'emergency response'],
+      patterns: ['business continuity', 'continuity', 'crisis management', 'recovery', 'downtime', 'outage', 'incident communications', 'emergency response', 'business impact analysis', 'bia', 'rto', 'rpo', 'incident management', 'service restoration', 'service resumption', 'tabletop exercise'],
       docTags: ['business-continuity', 'resilience', 'crisis-management', 'operational'],
-      docIds: ['doc-bcp-10', 'doc-iso22301-20', 'doc-iso22313-21', 'doc-nfpa1600-32', 'doc-iso22361-51']
+      docIds: ['doc-bcp-10', 'doc-iso22301-20', 'doc-iso22313-21', 'doc-nfpa1600-32', 'doc-iso22361-51', 'doc-nist-80034-75', 'doc-iso22317-76', 'doc-iso22320-77']
     },
     {
       key: 'hse-incident',
-      patterns: ['health and safety', 'worker safety', 'contractor safety', 'injury', 'fatality', 'near miss', 'spill', 'environmental release', 'hazard', 'site shutdown'],
+      patterns: ['health and safety', 'worker safety', 'contractor safety', 'injury', 'fatality', 'near miss', 'spill', 'environmental release', 'hazard', 'site shutdown', 'process safety', 'loss of containment', 'permit to work', 'management of change', 'psychological safety', 'fatigue', 'contractor management'],
       docTags: ['hse', 'environment', 'health-safety', 'operations', 'business-continuity'],
-      docIds: ['doc-iso45001-30', 'doc-iso14001-31', 'doc-abu-dhabi-ehsms-44', 'doc-uae-fire-life-45', 'doc-ilo-osh-54']
+      docIds: ['doc-iso45001-30', 'doc-iso14001-31', 'doc-abu-dhabi-ehsms-44', 'doc-uae-fire-life-45', 'doc-ilo-osh-54', 'doc-iso45003-78', 'doc-api-rp754-79', 'doc-ccps-rbps-80']
     },
     {
       key: 'sustainability-disclosure',
-      patterns: ['esg', 'sustainability', 'climate', 'emissions', 'scope 1', 'scope 2', 'scope 3', 'greenwashing', 'transition plan', 'nature-related'],
+      patterns: ['esg', 'sustainability', 'climate', 'emissions', 'scope 1', 'scope 2', 'scope 3', 'greenwashing', 'transition plan', 'nature-related', 'tcfd', 'ghg protocol', 'cdp', 'double materiality', 'sustainability claim', 'water disclosure'],
       docTags: ['esg', 'sustainability', 'reporting', 'environment', 'strategic'],
-      docIds: ['doc-ifrs-s1s2-27', 'doc-gri-28', 'doc-csrd-esrs-36', 'doc-sasb-55', 'doc-tnfd-56']
+      docIds: ['doc-ifrs-s1s2-27', 'doc-gri-28', 'doc-csrd-esrs-36', 'doc-sasb-55', 'doc-tnfd-56', 'doc-tcfd-72', 'doc-ghg-protocol-73', 'doc-cdp-74', 'doc-iso14064-59', 'doc-uae-sf-42', 'doc-adx-esg-43', 'doc-csddd-58']
     },
     {
       key: 'financial-control',
@@ -206,9 +206,9 @@ const RAGService = (() => {
     },
     {
       key: 'business-continuity',
-      patterns: ['business continuity', 'continuity', 'resilience', 'disruption', 'downtime', 'outage', 'disaster recovery', 'recovery', 'crisis management'],
+      patterns: ['business continuity', 'continuity', 'resilience', 'disruption', 'downtime', 'outage', 'disaster recovery', 'recovery', 'crisis management', 'business impact analysis', 'bia', 'rto', 'rpo', 'incident management', 'service restoration', 'resumption', 'tabletop'],
       docTags: ['business-continuity', 'resilience', 'bcp', 'dr', 'crisis-management'],
-      docIds: ['doc-iso22301-20', 'doc-iso22313-21', 'doc-bcp-10', 'doc-nfpa1600-32', 'doc-iso22361-51']
+      docIds: ['doc-iso22301-20', 'doc-iso22313-21', 'doc-bcp-10', 'doc-nfpa1600-32', 'doc-iso22361-51', 'doc-nist-80034-75', 'doc-iso22317-76', 'doc-iso22320-77']
     },
     {
       key: 'supply-chain',
@@ -230,15 +230,15 @@ const RAGService = (() => {
     },
     {
       key: 'esg',
-      patterns: ['esg', 'sustainability', 'climate', 'emissions', 'greenwashing', 'transition', 'disclosure', 'nature-related'],
+      patterns: ['esg', 'sustainability', 'climate', 'emissions', 'greenwashing', 'transition', 'disclosure', 'nature-related', 'tcfd', 'ghg protocol', 'cdp', 'double materiality', 'scope 1', 'scope 2', 'scope 3', 'sustainability claim', 'climate target'],
       docTags: ['esg', 'sustainability', 'reporting', 'environment'],
-      docIds: ['doc-ifrs-s1s2-27', 'doc-gri-28', 'doc-csrd-esrs-36', 'doc-sasb-55', 'doc-tnfd-56']
+      docIds: ['doc-ifrs-s1s2-27', 'doc-gri-28', 'doc-csrd-esrs-36', 'doc-sasb-55', 'doc-tnfd-56', 'doc-tcfd-72', 'doc-ghg-protocol-73', 'doc-cdp-74', 'doc-iso14064-59', 'doc-uae-sf-42', 'doc-adx-esg-43', 'doc-csddd-58']
     },
     {
       key: 'hse',
-      patterns: ['hse', 'health and safety', 'worker safety', 'contractor safety', 'injury', 'spill', 'hazard', 'environmental'],
+      patterns: ['hse', 'health and safety', 'worker safety', 'contractor safety', 'injury', 'spill', 'hazard', 'environmental', 'process safety', 'loss of containment', 'permit to work', 'management of change', 'psychological safety', 'fatigue', 'major hazard'],
       docTags: ['hse', 'environment', 'health-safety', 'operations'],
-      docIds: ['doc-iso45001-30', 'doc-iso14001-31', 'doc-abu-dhabi-ehsms-44', 'doc-uae-fire-life-45', 'doc-ilo-osh-54']
+      docIds: ['doc-iso45001-30', 'doc-iso14001-31', 'doc-abu-dhabi-ehsms-44', 'doc-uae-fire-life-45', 'doc-ilo-osh-54', 'doc-iso45003-78', 'doc-api-rp754-79', 'doc-ccps-rbps-80']
     },
     {
       key: 'physical-security',
@@ -409,10 +409,10 @@ const RAGService = (() => {
       ['data-governance', ['data-governance', 'data governance', 'privacy', 'data quality', 'lineage', 'retention', 'consent']],
       ['third-party', ['third-party', 'third party', 'vendor', 'supplier', 'outsourcing']],
       ['supply-chain', ['supply-chain', 'supply chain', 'logistics', 'inventory', 'sub-tier', 'single source', 'upstream']],
-      ['business-continuity', ['business-continuity', 'business continuity', 'continuity', 'recovery', 'disaster recovery', 'crisis management', 'rto', 'rpo']],
+      ['business-continuity', ['business-continuity', 'business continuity', 'continuity', 'recovery', 'disaster recovery', 'crisis management', 'rto', 'rpo', 'business impact analysis', 'bia', 'incident management', 'service restoration', 'resumption']],
       ['fraud-integrity', ['fraud-integrity', 'fraud', 'integrity', 'financial crime', 'kickback', 'bribery', 'corruption']],
-      ['esg', ['esg', 'sustainability', 'climate', 'emissions', 'greenwashing', 'human rights']],
-      ['hse', ['hse', 'health and safety', 'worker safety', 'injury', 'environmental', 'spill', 'hazard']],
+      ['esg', ['esg', 'sustainability', 'climate', 'emissions', 'greenwashing', 'human rights', 'tcfd', 'ghg protocol', 'cdp', 'double materiality', 'scope 3']],
+      ['hse', ['hse', 'health and safety', 'worker safety', 'injury', 'environmental', 'spill', 'hazard', 'process safety', 'loss of containment', 'permit to work', 'management of change', 'psychological safety']],
       ['cyber', ['cyber', 'identity', 'phishing', 'ransomware', 'cloud', 'breach', 'ics', 'ot security']],
       ['operational', ['operational', 'process failure', 'breakdown', 'service failure', 'backlog', 'quality failure']],
       ['strategic', ['strategic', 'strategy', 'market', 'transformation', 'portfolio', 'investment']],
@@ -559,7 +559,7 @@ const RAGService = (() => {
   function _classifyDocSource(doc) {
     const tags = Array.isArray(doc.tags) ? doc.tags.map(tag => String(tag || '').toLowerCase()) : [];
     const text = `${doc.title || ''} ${doc.url || ''} ${tags.join(' ')}`.toLowerCase();
-    if (tags.includes('regulatory') || /pdpl|gdpr|regulat|authority|ministry|policy|law|nist|iso|iec|oecd|ilo|ungp|united nations|ifrs|gri|tnfd|sasb|basel|bcbs/.test(text)) return 'Standards / regulatory';
+    if (tags.includes('regulatory') || /pdpl|gdpr|regulat|authority|ministry|policy|law|nist|iso|iec|oecd|ilo|ungp|united nations|ifrs|gri|tnfd|sasb|basel|bcbs|tcfd|ghg protocol|cdp|ccps|api rp/.test(text)) return 'Standards / regulatory';
     if (tags.includes('all-bu') || tags.includes('internal') || /playbook|policy|framework|baseline|mapping|program|standard/.test(text)) return 'Internal reference';
     if (/news|reuters|bloomberg|forbes|cnbc|zawya|gulf|khaleej|arabianbusiness/.test(text)) return 'External source';
     return 'Reference source';
@@ -596,7 +596,7 @@ const RAGService = (() => {
     if (tags.includes('all-bu')) {
       reasons.push('Applies across the organisation');
     }
-    if (tags.includes('nist') || tags.includes('iso') || tags.includes('oecd') || tags.includes('iec')) {
+    if (tags.includes('nist') || tags.includes('iso') || tags.includes('oecd') || tags.includes('iec') || /tcfd|ghg protocol|cdp|ccps|api rp/.test(`${indexedDoc.doc.title || ''} ${indexedDoc.doc.url || ''}`.toLowerCase())) {
       reasons.push('Recognised control or governance reference');
     }
     if (!reasons.length && tags.length) {
@@ -682,7 +682,7 @@ const RAGService = (() => {
     });
 
     if (indexedDoc.tags.includes('all-bu')) score += 0.75;
-    if (indexedDoc.tags.includes('nist') || indexedDoc.tags.includes('iso') || indexedDoc.tags.includes('oecd') || indexedDoc.tags.includes('iec')) score += 0.6;
+    if (indexedDoc.tags.includes('nist') || indexedDoc.tags.includes('iso') || indexedDoc.tags.includes('oecd') || indexedDoc.tags.includes('iec') || /tcfd|ghg protocol|cdp|ccps|api rp/.test((indexedDoc.doc.title || '').toLowerCase())) score += 0.6;
 
     const daysSince = (Date.now() - new Date(indexedDoc.doc.lastUpdated).getTime()) / 86400000;
     score += Math.max(0, 1 - daysSince / 365);

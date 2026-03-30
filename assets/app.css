@@ -7070,6 +7070,63 @@ canvas { display: block; width: 100%; }
   border-color: rgba(59, 130, 246, 0.22);
 }
 
+.step1-regulation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.step1-regulation-panel__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.step1-regulation-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.step1-regulation-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step1-regulation-group__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.step1-regulation-chip {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.step1-regulation-chip--selected {
+  background: rgba(242, 251, 90, 0.1);
+  border-color: rgba(242, 251, 90, 0.3);
+  color: var(--color-accent-200);
+  box-shadow: 0 0 0 1px rgba(242, 251, 90, 0.12);
+}
+
+.step1-regulation-chip--selected:hover {
+  background: rgba(242, 251, 90, 0.14);
+  border-color: rgba(242, 251, 90, 0.36);
+}
+
+.step1-regulation-chip--suggested:not(.step1-regulation-chip--selected) {
+  border-style: dashed;
+}
+
 @media (max-width: 900px) {
   .fair-assumption-panel__grid,
   .assumption-explainer-panel__grid,

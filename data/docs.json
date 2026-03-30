@@ -1107,5 +1107,145 @@
     ],
     "contentExcerpt": "This internal governance standard is relevant where major programmes depend on milestone discipline, dependency management, executive decision rights, scope control, and benefits tracking. It helps transformation scenarios stay grounded in delivery governance rather than generic change-language alone.",
     "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-tcfd-72",
+    "title": "TCFD Climate Governance and Scenario Disclosure Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "strategic",
+      "esg",
+      "sustainability",
+      "climate",
+      "reporting",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "The Task Force on Climate-related Financial Disclosures (TCFD) recommendations remain useful where climate governance, scenario analysis, transition planning, metrics, and board oversight shape disclosure credibility or financing pressure. They help ESG scenarios distinguish weak climate governance from generic reputation issues.",
+    "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-ghg-protocol-73",
+    "title": "GHG Protocol Corporate Accounting and Reporting Standard",
+    "url": "#/admin/docs",
+    "tags": [
+      "esg",
+      "environment",
+      "reporting",
+      "climate",
+      "compliance",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "The GHG Protocol Corporate Standard is relevant where Scope 1, Scope 2, or Scope 3 emissions boundaries, calculation methods, data quality, and reporting controls affect management confidence. It helps climate and ESG scenarios stay grounded in defensible emissions accounting rather than loose sustainability claims.",
+    "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-cdp-74",
+    "title": "CDP Climate, Water, and Supply Chain Disclosure Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "esg",
+      "sustainability",
+      "reporting",
+      "supply-chain",
+      "environment",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "CDP disclosure expectations are relevant where climate, water, or supplier-environment data quality influences investor scrutiny, customer requests, assurance readiness, or value-chain credibility. They help ESG retrieval capture practical disclosure and evidence demands beyond broad sustainability narratives.",
+    "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-nist-80034-75",
+    "title": "NIST SP 800-34 Contingency Planning Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "operational",
+      "business-continuity",
+      "resilience",
+      "crisis-management",
+      "us",
+      "all-bu"
+    ],
+    "contentExcerpt": "NIST SP 800-34 is relevant where contingency planning, recovery prioritisation, alternate processing, backup discipline, and plan maintenance determine whether disruption can be absorbed. It strengthens continuity scenarios that need more explicit recovery-planning and service-restoration grounding.",
+    "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-iso22317-76",
+    "title": "ISO 22317 Business Impact Analysis Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "operational",
+      "business-continuity",
+      "resilience",
+      "risk-management",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "ISO 22317 is relevant where teams need structured business impact analysis, dependency mapping, recovery priorities, and service-criticality logic. It helps continuity scenarios move from generic outage language to explicit impact tolerance and recovery sequencing reasoning.",
+    "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-iso22320-77",
+    "title": "ISO 22320 Incident Management and Command Structure Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "operational",
+      "business-continuity",
+      "crisis-management",
+      "resilience",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "ISO 22320 is relevant where incident command, situational awareness, information flows, and coordination determine whether an organisation can manage disruption coherently. It strengthens continuity and crisis scenarios that turn on command structure rather than static plan existence.",
+    "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-iso45003-78",
+    "title": "ISO 45003 Psychological Health and Safety at Work Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "hse",
+      "people-workforce",
+      "health-safety",
+      "operations",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "ISO 45003 is relevant where workload, fatigue, psychosocial stressors, contractor pressure, or unsafe culture could degrade safe delivery or increase harm. It broadens HSE retrieval beyond physical injury and helps workforce-resilience scenarios connect to operational risk.",
+    "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-api-rp754-79",
+    "title": "API RP 754 Process Safety Performance Indicators Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "hse",
+      "operational",
+      "health-safety",
+      "business-continuity",
+      "operations",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "API RP 754 is relevant where process safety events, loss of containment, barrier weakness, and indicator quality determine whether hazardous operations remain under control. It helps HSE scenarios stay grounded in process-safety performance, not only personal safety metrics.",
+    "lastUpdated": "2026-03-30"
+  },
+  {
+    "id": "doc-ccps-rbps-80",
+    "title": "CCPS Risk Based Process Safety Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "hse",
+      "operational",
+      "health-safety",
+      "business-continuity",
+      "governance",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "CCPS Risk Based Process Safety is relevant where hazardous-material operations depend on asset integrity, management of change, permit discipline, emergency preparedness, and leadership accountability. It strengthens HSE retrieval for major-hazard scenarios where continuity and safety can fail together.",
+    "lastUpdated": "2026-03-30"
   }
 ]
