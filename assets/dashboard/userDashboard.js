@@ -503,6 +503,68 @@ function renderUserDashboard() {
       `
     });
   }).join('');
+  const portfolioChartWidth = 472;
+  const portfolioChartHeight = 264;
+  const portfolioChartLeft = 76;
+  const portfolioChartTop = 30;
+  const portfolioChartRight = portfolioChartLeft + portfolioChartWidth;
+  const portfolioChartBottom = portfolioChartTop + portfolioChartHeight;
+  const portfolioLogMin = Math.log10(1000);
+  const portfolioLogMax = Math.log10(100000000);
+  const portfolioHeatmapPoints = completedAssessments
+    .map(assessment => {
+      const aleMean = Number(assessment?.results?.ale?.mean);
+      const exceedProb = Number(assessment?.results?.toleranceDetail?.aleExceedProb);
+      if (!(aleMean > 0) || !Number.isFinite(exceedProb)) return null;
+      const safeAleMean = Math.min(Math.max(aleMean, 1000), 100000000);
+      const safeExceedProb = Math.min(Math.max(exceedProb, 0), 1);
+      const x = portfolioChartLeft + ((Math.log10(safeAleMean) - portfolioLogMin) / (portfolioLogMax - portfolioLogMin)) * portfolioChartWidth;
+      const y = portfolioChartTop + (1 - safeExceedProb) * portfolioChartHeight;
+      const fill = assessment?.results?.toleranceBreached
+        ? '#ef4444'
+        : assessment?.results?.nearTolerance
+          ? '#f59e0b'
+          : '#22c55e';
+      const title = `${assessment?.scenarioTitle || assessment?.title || 'Untitled'} · ALE ${fmtCurrency(aleMean)} · ${(safeExceedProb * 100).toFixed(1)}% chance > tolerance`;
+      return {
+        id: String(assessment?.id || '').trim(),
+        x,
+        y,
+        fill,
+        title
+      };
+    })
+    .filter(item => item && item.id);
+  const portfolioGridVerticals = Array.from({ length: 4 }, (_, index) => portfolioChartLeft + (((index + 1) / 5) * portfolioChartWidth));
+  const portfolioGridHorizontals = Array.from({ length: 4 }, (_, index) => portfolioChartTop + (((index + 1) / 5) * portfolioChartHeight));
+  const portfolioDefaultView = portfolioHeatmapPoints.length ? 'heatmap' : 'list';
+  const portfolioHeatmapMarkup = `
+    <div class="portfolio-view-shell">
+      <div class="portfolio-toggle">
+        <button class="portfolio-toggle-btn ${portfolioDefaultView === 'heatmap' ? 'active' : ''}" id="btn-view-heatmap" type="button">Heat Map</button>
+        <button class="portfolio-toggle-btn ${portfolioDefaultView === 'list' ? 'active' : ''}" id="btn-view-list" type="button">List</button>
+      </div>
+      <svg id="portfolio-heatmap" viewBox="0 0 600 380" width="100%" aria-label="Portfolio heat map" style="${portfolioDefaultView === 'heatmap' ? '' : 'display:none'}">
+        <rect x="${portfolioChartLeft}" y="${portfolioChartTop}" width="${portfolioChartWidth}" height="${portfolioChartHeight}" rx="16" fill="rgba(255,255,255,0.02)" stroke="rgba(229,231,235,0.14)" />
+        ${portfolioGridVerticals.map(x => `<line x1="${x.toFixed(2)}" y1="${portfolioChartTop}" x2="${x.toFixed(2)}" y2="${portfolioChartBottom}" stroke="#e5e7eb" stroke-width="0.5" />`).join('')}
+        ${portfolioGridHorizontals.map(y => `<line x1="${portfolioChartLeft}" y1="${y.toFixed(2)}" x2="${portfolioChartRight}" y2="${y.toFixed(2)}" stroke="#e5e7eb" stroke-width="0.5" />`).join('')}
+        <line x1="${portfolioChartLeft}" y1="${portfolioChartBottom}" x2="${portfolioChartRight}" y2="${portfolioChartBottom}" stroke="#cbd5e1" stroke-width="1" />
+        <line x1="${portfolioChartLeft}" y1="${portfolioChartTop}" x2="${portfolioChartLeft}" y2="${portfolioChartBottom}" stroke="#cbd5e1" stroke-width="1" />
+        <text x="${((portfolioChartLeft + portfolioChartRight) / 2).toFixed(2)}" y="356" text-anchor="middle" font-size="10" fill="#6b7280">Expected Annual Loss</text>
+        <text x="24" y="${((portfolioChartTop + portfolioChartBottom) / 2).toFixed(2)}" text-anchor="middle" font-size="10" fill="#6b7280" transform="rotate(-90 24 ${((portfolioChartTop + portfolioChartBottom) / 2).toFixed(2)})">Probability &gt; Tolerance</text>
+        <text x="${portfolioChartLeft}" y="338" font-size="10" fill="#6b7280">$1K</text>
+        <text x="${(portfolioChartRight - 34).toFixed(2)}" y="338" font-size="10" fill="#6b7280">$100M</text>
+        <text x="38" y="${(portfolioChartTop + 4).toFixed(2)}" font-size="10" fill="#6b7280">100%</text>
+        <text x="48" y="${(portfolioChartBottom + 4).toFixed(2)}" font-size="10" fill="#6b7280">0%</text>
+        ${portfolioHeatmapPoints.map(point => `
+          <circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="8" fill="${point.fill}" data-id="${escapeDashboardText(point.id)}" style="cursor:pointer">
+            <title>${escapeDashboardText(point.title)}</title>
+          </circle>
+        `).join('')}
+      </svg>
+      <div id="portfolio-list-view" style="${portfolioDefaultView === 'list' ? '' : 'display:none'}">${compactRecentRows}</div>
+    </div>
+  `;
   const attentionCards = [
     {
       label: isOversightUser ? 'Needs attention' : 'Ready for review',
@@ -582,6 +644,22 @@ function renderUserDashboard() {
       ${secondaryId ? `<button type="button" class="btn btn--ghost btn--sm" id="${secondaryId}">${secondaryLabel}</button>` : ''}
     </div>
   </div>`;
+  const portfolioRecentBody = compactRecentAssessments.length
+    ? `
+      <section class="dashboard-portfolio-band" style="margin-bottom:var(--sp-5)">
+        <div class="results-section-heading">Portfolio View</div>
+        <div class="form-help" style="margin-top:8px;margin-bottom:var(--sp-4)">See saved completed work as a portfolio first, then fall back to the list when you need row-level detail.</div>
+        ${portfolioHeatmapMarkup}
+      </section>
+    `
+    : renderDashboardEmptyState({
+        title: 'No completed assessments yet.',
+        body: 'Use a template if you want a structured starting point, or run the sample path once to see the full pilot workflow.',
+        primaryId: 'btn-empty-recent-template',
+        primaryLabel: 'Start from Template',
+        secondaryId: 'btn-empty-recent-sample',
+        secondaryLabel: 'Try Sample Assessment'
+      });
   const standardStartModule = !isOversightUser ? `
     <div class="dashboard-start-module">
       <div class="dashboard-start-head">
@@ -715,14 +793,7 @@ function renderUserDashboard() {
             description: roleFrontDoor.recentDescription,
             badge: compactRecentAssessments.length,
             className: 'dashboard-section-card--recent',
-            body: compactRecentRows || renderDashboardEmptyState({
-              title: 'No completed assessments yet.',
-              body: 'Use a template if you want a structured starting point, or run the sample path once to see the full pilot workflow.',
-              primaryId: 'btn-empty-recent-template',
-              primaryLabel: 'Start from Template',
-              secondaryId: 'btn-empty-recent-sample',
-              secondaryLabel: 'Try Sample Assessment'
-            })
+            body: portfolioRecentBody
           })}
         </section>
 
@@ -954,6 +1025,24 @@ function renderUserDashboard() {
   document.getElementById('btn-dashboard-import-assessments-support')?.addEventListener('click', () => {
     importAssessmentsCollection();
   });
+  const portfolioHeatmap = document.getElementById('portfolio-heatmap');
+  const portfolioListView = document.getElementById('portfolio-list-view');
+  const portfolioHeatmapButton = document.getElementById('btn-view-heatmap');
+  const portfolioListButton = document.getElementById('btn-view-list');
+  const setPortfolioView = mode => {
+    if (!portfolioHeatmap || !portfolioListView || !portfolioHeatmapButton || !portfolioListButton) return;
+    const showHeatmap = mode !== 'list';
+    portfolioHeatmap.style.display = showHeatmap ? 'block' : 'none';
+    portfolioListView.style.display = showHeatmap ? 'none' : 'block';
+    portfolioHeatmapButton.classList.toggle('active', showHeatmap);
+    portfolioListButton.classList.toggle('active', !showHeatmap);
+  };
+  portfolioHeatmapButton?.addEventListener('click', () => setPortfolioView('heatmap'));
+  portfolioListButton?.addEventListener('click', () => setPortfolioView('list'));
+  setPortfolioView(portfolioDefaultView);
+  document.querySelectorAll('#portfolio-heatmap [data-id]').forEach(el =>
+    el.addEventListener('click', () => Router.navigate('/results/' + el.dataset.id))
+  );
   document.querySelector('main.page')?.addEventListener('click', async event => {
     const target = event.target.closest('button');
     if (!target) return;
