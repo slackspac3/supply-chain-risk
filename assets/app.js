@@ -6212,7 +6212,7 @@ function renderAdminHome() {
     valueSummary
   }));
   // Admins should land on a real home view, not be thrown directly into a settings subsection or wizard step.
-  window.AdminHomeSection.bind({ preferredAdminRoute });
+  window.AdminHomeSection.bind({ preferredAdminRoute, managedAccounts });
 }
 
 function renderUserSettings() {

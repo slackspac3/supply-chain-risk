@@ -1,6 +1,15 @@
 (function(global) {
   'use strict';
 
+  function escapeAdminHomeText(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   const AdminHomeSection = {
     render({
       settings,
@@ -16,6 +25,17 @@
       valueSummary
     }) {
       return adminLayout('home', `
+        <style>
+          .review-queue-item {
+            padding:var(--sp-4); border-bottom:1px solid var(--border);
+            display:flex; flex-direction:column; gap:6px;
+          }
+          .review-queue-item:last-child { border-bottom:none; }
+          .review-queue-item__meta { display:flex; align-items:center; gap:8px; font-size:14px; }
+          .review-queue-item__detail { font-size:12px; color:var(--text-secondary); }
+          .review-queue-item__status { font-size:12px; color:var(--text-secondary); }
+          .review-queue-item__actions { display:flex; gap:8px; margin-top:4px; }
+        </style>
         <div class="settings-shell">
           <div class="settings-shell__header">
             <div class="flex items-center justify-between" style="gap:var(--sp-4);flex-wrap:wrap">
@@ -126,14 +146,22 @@
               body: `
                 <div class="form-help">Structure: ${companyEntities.length} business entity${companyEntities.length === 1 ? '' : 'ies'} and ${departmentEntities.length} department${departmentEntities.length === 1 ? '' : 's'}.</div>
                 <div class="form-help">Documents: ${docCount} library item${docCount === 1 ? '' : 's'} currently available for AI grounding.</div>
-                <div class="form-help">Review queue: ${reviewQueue.length ? `${reviewQueue.length} completed assessment${reviewQueue.length === 1 ? '' : 's'} need management attention.` : 'No completed scenario currently needs escalation.'}</div>
               `
+            })}
+          </div>
+          <div style="margin-top:var(--sp-6)">
+            ${UI.dashboardSectionCard({
+              title: 'Review queue',
+              description: 'Assessments submitted for management sign-off.',
+              body: `<div id="admin-review-queue-list">
+                <div class="form-help">Loading review queue…</div>
+              </div>`
             })}
           </div>
         </div>`);
     },
 
-    bind({ preferredAdminRoute }) {
+    bind({ preferredAdminRoute, managedAccounts }) {
       document.getElementById('btn-admin-home-start-assessment')?.addEventListener('click', () => {
         resetDraft();
         openDraftWorkspaceRoute();
@@ -162,6 +190,208 @@
           Router.navigate(route);
         });
       });
+
+      async function loadReviewQueue() {
+        const listEl = document.getElementById('admin-review-queue-list');
+        if (!listEl) return;
+        try {
+          const sessionToken = typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
+            ? AuthService.getApiSessionToken()
+            : '';
+          const currentUsername = AuthService.getCurrentUser()?.username || '';
+          const res = await fetch('/api/review-queue', {
+            headers: { 'x-session-token': sessionToken }
+          });
+          if (!res.ok) throw new Error('Failed to load queue');
+          const { items } = await res.json();
+          if (!items || !items.length) {
+            listEl.innerHTML = '<div class="form-help">No assessments are currently waiting for review.</div>';
+            return;
+          }
+          listEl.innerHTML = items.map(item => `
+            <div class="review-queue-item" data-queue-id="${escapeAdminHomeText(item.id)}"
+                 data-assessment-id="${escapeAdminHomeText(item.assessmentId)}">
+              <div class="review-queue-item__meta">
+                <strong>${escapeAdminHomeText(item.scenarioTitle || 'Untitled assessment')}</strong>
+                <span class="badge ${item.toleranceBreached ? 'badge--danger' : item.nearTolerance ? 'badge--warning' : 'badge--neutral'}">
+                  ${item.toleranceBreached ? 'Above tolerance' : item.nearTolerance ? 'Near tolerance' : 'Annual review'}
+                </span>
+              </div>
+              <div class="review-queue-item__detail">
+                Submitted by <strong>${escapeAdminHomeText(item.submittedBy)}</strong> ·
+                ${escapeAdminHomeText(item.buName || 'Business unit not set')} ·
+                ${new Date(item.submittedAt).toLocaleDateString('en-GB')}
+              </div>
+              <div class="review-queue-item__status ${item.reviewStatus !== 'pending' ? 'visible' : 'hidden'}">
+                Status: <strong>${escapeAdminHomeText(item.reviewStatus)}</strong>
+                ${item.reviewNote ? `· ${escapeAdminHomeText(item.reviewNote)}` : ''}
+              </div>
+              <div class="review-queue-item__actions">
+                <button class="btn btn--ghost btn--sm" data-queue-action="view"
+                  data-assessment-id="${escapeAdminHomeText(item.assessmentId)}">View Result</button>
+                ${item.reviewStatus === 'pending' ? `
+                  <button class="btn btn--sm btn--success" data-queue-action="approve"
+                    data-queue-id="${escapeAdminHomeText(item.id)}">Approve</button>
+                  <button class="btn btn--sm btn--warning" data-queue-action="changes"
+                    data-queue-id="${escapeAdminHomeText(item.id)}">Request Changes</button>
+                  <button class="btn btn--sm btn--secondary" data-queue-action="escalate"
+                    data-queue-id="${escapeAdminHomeText(item.id)}">Escalate</button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('');
+
+          listEl.querySelectorAll('[data-queue-action="view"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              Router.navigate('/results/' + btn.dataset.assessmentId);
+            });
+          });
+
+          async function patchQueueItem(id, patch) {
+            const nextSessionToken = typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
+              ? AuthService.getApiSessionToken()
+              : '';
+            const response = await fetch('/api/review-queue', {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-session-token': nextSessionToken
+              },
+              body: JSON.stringify({ id, reviewedBy: currentUsername, ...patch })
+            });
+            if (!response.ok) throw new Error('Action failed');
+            return response.json();
+          }
+
+          listEl.querySelectorAll('[data-queue-action="approve"]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              btn.disabled = true;
+              try {
+                await patchQueueItem(btn.dataset.queueId, { reviewStatus: 'approved' });
+                UI.toast('Assessment approved.', 'success');
+                loadReviewQueue();
+              } catch {
+                UI.toast('Could not approve. Try again in a moment.', 'danger');
+                btn.disabled = false;
+              }
+            });
+          });
+
+          listEl.querySelectorAll('[data-queue-action="changes"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const modal = UI.modal({
+                title: 'Request changes',
+                body: `
+                  <label for="changes-reason" class="form-label">
+                    Reason <span style="color:var(--danger)">*</span>
+                  </label>
+                  <textarea id="changes-reason" class="form-textarea" rows="4"
+                    placeholder="Describe what needs to change before this can be approved…"
+                    style="width:100%;margin-bottom:var(--sp-4)"></textarea>
+                  <div class="flex gap-3">
+                    <button type="button" class="btn btn--primary" id="btn-confirm-changes">
+                      Send Request
+                    </button>
+                    <button type="button" class="btn btn--ghost" id="btn-cancel-changes">Cancel</button>
+                  </div>
+                `
+              });
+              document.getElementById('btn-cancel-changes')?.addEventListener('click', () => modal.close());
+              document.getElementById('btn-confirm-changes')?.addEventListener('click', async () => {
+                const reason = (document.getElementById('changes-reason')?.value || '').trim();
+                if (!reason) {
+                  UI.toast('Please enter a reason before sending.', 'warning');
+                  return;
+                }
+                const confirmBtn = document.getElementById('btn-confirm-changes');
+                if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Sending…'; }
+                try {
+                  await patchQueueItem(btn.dataset.queueId, {
+                    reviewStatus: 'changes_requested',
+                    reviewNote: reason
+                  });
+                  modal.close();
+                  UI.toast('Changes requested.', 'success');
+                  loadReviewQueue();
+                } catch {
+                  UI.toast('Could not send request. Try again.', 'danger');
+                  if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Send Request'; }
+                }
+              });
+            });
+          });
+
+          listEl.querySelectorAll('[data-queue-action="escalate"]').forEach(btn => {
+            const currentUser = typeof AuthService !== 'undefined' && typeof AuthService.getCurrentUser === 'function'
+              ? AuthService.getCurrentUser()
+              : null;
+            const resolvedManagedAccounts = Array.isArray(managedAccounts) && managedAccounts.length
+              ? managedAccounts
+              : (typeof getManagedAccountsForAdmin === 'function'
+                ? getManagedAccountsForAdmin(getAdminSettings())
+                  : (typeof AuthService !== 'undefined' && typeof AuthService.getManagedAccounts === 'function'
+                    ? AuthService.getManagedAccounts()
+                    : []));
+            const targets = (resolvedManagedAccounts || []).filter(u =>
+              u.role === 'admin' || u.role === 'bu_admin'
+            );
+            if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'bu_admin') && !targets.some(u => u.username === currentUser.username)) {
+              targets.unshift({
+                username: currentUser.username,
+                displayName: currentUser.displayName || currentUser.username,
+                role: currentUser.role
+              });
+            }
+            const options = targets.length
+              ? targets.map(u => `<option value="${escapeAdminHomeText(u.username)}">${escapeAdminHomeText(u.displayName || u.username)} (${escapeAdminHomeText(u.role)})</option>`).join('')
+              : '<option disabled>No escalation targets configured</option>';
+            btn.addEventListener('click', () => {
+              const modal = UI.modal({
+                title: 'Escalate assessment',
+                body: `
+                  <label for="escalate-target" class="form-label">Escalate to</label>
+                  <select id="escalate-target" class="form-select"
+                    style="width:100%;margin-bottom:var(--sp-4)">
+                    ${options}
+                  </select>
+                  <div class="flex gap-3">
+                    <button type="button" class="btn btn--primary" id="btn-confirm-escalate">
+                      Escalate
+                    </button>
+                    <button type="button" class="btn btn--ghost" id="btn-cancel-escalate">Cancel</button>
+                  </div>
+                `
+              });
+              document.getElementById('btn-cancel-escalate')?.addEventListener('click', () => modal.close());
+              document.getElementById('btn-confirm-escalate')?.addEventListener('click', async () => {
+                const target = document.getElementById('escalate-target')?.value || '';
+                if (!target) {
+                  UI.toast('Select a target first.', 'warning');
+                  return;
+                }
+                const confirmBtn = document.getElementById('btn-confirm-escalate');
+                if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Escalating…'; }
+                try {
+                  await patchQueueItem(btn.dataset.queueId, {
+                    reviewStatus: 'escalated',
+                    escalatedTo: target
+                  });
+                  modal.close();
+                  UI.toast('Assessment escalated.', 'success');
+                  loadReviewQueue();
+                } catch {
+                  UI.toast('Could not escalate. Try again.', 'danger');
+                  if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Escalate'; }
+                }
+              });
+            });
+          });
+        } catch {
+          listEl.innerHTML = '<div class="form-help">Could not load the review queue right now.</div>';
+        }
+      }
+
+      loadReviewQueue();
     }
   };
 

@@ -60,7 +60,12 @@ function saveAssessment(a, options = {}) {
   const list = getAssessments().slice();
   const idx = list.findIndex(x => x.id === a.id);
   const current = idx > -1 ? list[idx] : null;
-  const nextAssessment = prepareAssessmentForSave(a, {
+  const submittingUser = (typeof AuthService !== 'undefined' && AuthService.getCurrentUser()?.username) || '';
+  const assessmentWithOwner = {
+    ...a,
+    submittedBy: String(a.submittedBy || submittingUser || '').trim().toLowerCase()
+  };
+  const nextAssessment = prepareAssessmentForSave(assessmentWithOwner, {
     existingAssessment: current,
     targetStatus: options.targetStatus || '',
     at: options.at

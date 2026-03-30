@@ -2064,6 +2064,103 @@ function withResultsActionBusy(button, busyLabel, resetDelayMs, callback) {
   }
 }
 
+function renderResultsReviewSubmitBanner(assessment, r) {
+  if (!assessment?.id || !assessment?.results) return '';
+  const needsReview = !!(r?.toleranceBreached || r?.nearTolerance || r?.annualReviewTriggered);
+  if (!needsReview) return '';
+  const reviewStatus = String(assessment.reviewSubmission?.reviewStatus || '').trim().toLowerCase();
+  if (reviewStatus === 'pending') {
+    return `<div class="review-submit-banner review-submit-banner--submitted" id="review-submit-banner" role="status">
+      <strong>Submitted for review</strong>
+      <span>Awaiting management sign-off.</span>
+    </div>`;
+  }
+  if (reviewStatus === 'approved') {
+    const reviewedBy = escapeHtml(String(assessment.reviewSubmission?.reviewedBy || ''));
+    const reviewedAt = Number(assessment.reviewSubmission?.reviewedAt || 0);
+    const reviewedLabel = reviewedAt ? new Date(reviewedAt).toLocaleDateString('en-GB') : '';
+    return `<div class="review-submit-banner review-submit-banner--approved" id="review-submit-banner" role="status">
+      <strong>Approved</strong>
+      <span>Reviewed by ${reviewedBy}${reviewedLabel ? ` on ${reviewedLabel}` : ''}.</span>
+    </div>`;
+  }
+  if (reviewStatus === 'changes_requested') {
+    return `<div class="review-submit-banner review-submit-banner--changes" id="review-submit-banner" role="alert">
+      <div class="review-submit-banner__body">
+        <strong>Changes requested</strong>
+        <span>${escapeHtml(assessment.reviewSubmission?.reviewNote || 'Your reviewer has asked for changes before approving this assessment.')}</span>
+      </div>
+      <button type="button" class="btn btn--warning btn--sm" id="btn-revise-assessment">
+        Revise Assessment
+      </button>
+    </div>`;
+  }
+  if (reviewStatus === 'escalated') {
+    return `<div class="review-submit-banner review-submit-banner--escalated" id="review-submit-banner" role="status">
+      <strong>Escalated</strong>
+      <span>This assessment has been escalated to ${escapeHtml(assessment.reviewSubmission?.escalatedTo || 'senior management')} for review.</span>
+    </div>`;
+  }
+  const triggerLabel = r?.toleranceBreached
+    ? 'exceeds your risk tolerance'
+    : r?.nearTolerance
+      ? 'is approaching your risk tolerance'
+      : 'triggered the annual review threshold';
+  return `<div class="review-submit-banner" id="review-submit-banner" role="alert">
+    <div class="review-submit-banner__body">
+      <strong>This result ${triggerLabel}.</strong>
+      <span>Submit it to your reviewer for management sign-off.</span>
+    </div>
+    <button type="button" class="btn btn--primary btn--sm" id="btn-submit-review">
+      Submit for Review
+    </button>
+  </div>`;
+}
+
+function bindReviewBannerActions(assessment) {
+  document.getElementById('btn-revise-assessment')?.addEventListener('click', () => {
+    if (typeof openDraftFromAssessment === 'function') {
+      openDraftFromAssessment(assessment);
+    } else {
+      Router.navigate('/wizard/1');
+    }
+  });
+}
+
+async function refreshReviewStatus(assessment, r) {
+  if (!assessment?.id || !assessment?.reviewSubmission) return;
+  try {
+    const sessionToken = typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
+      ? AuthService.getApiSessionToken()
+      : '';
+    const response = await fetch('/api/review-queue', {
+      headers: { 'x-session-token': sessionToken }
+    });
+    if (!response.ok) return;
+    const { items } = await response.json();
+    const matched = Array.isArray(items) ? items.find(item => String(item?.assessmentId || '') === String(assessment.id || '')) : null;
+    if (!matched) return;
+    const localStatus = String(assessment.reviewSubmission?.reviewStatus || '').trim().toLowerCase();
+    const remoteStatus = String(matched.reviewStatus || '').trim().toLowerCase();
+    if (!remoteStatus || remoteStatus === localStatus) return;
+    const next = updateAssessmentRecord(assessment.id, rec => ({
+      ...rec,
+      reviewSubmission: {
+        ...(rec.reviewSubmission || {}),
+        reviewStatus: remoteStatus,
+        reviewNote: matched.reviewNote || '',
+        reviewedBy: matched.reviewedBy || '',
+        reviewedAt: Number(matched.reviewedAt || 0),
+        escalatedTo: matched.escalatedTo || ''
+      }
+    }));
+    const banner = document.getElementById('review-submit-banner');
+    if (!banner || !next) return;
+    banner.outerHTML = renderResultsReviewSubmitBanner(next, r);
+    bindReviewBannerActions(next);
+  } catch {}
+}
+
 function bindResultsTabBar({ activeTab, activateResultsTab }) {
   document.querySelectorAll('[data-results-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2150,6 +2247,52 @@ function bindResultsInteractions({
   bindResultsTabBar({ activeTab, activateResultsTab });
   if (activeTab === 'appendix' || activeTab === 'executive') drawResultsTechnicalCharts(r);
   else attachCitationHandlers();
+  bindReviewBannerActions(assessment);
+  refreshReviewStatus(assessment, r);
+
+  document.getElementById('btn-submit-review')?.addEventListener('click', async function() {
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    try {
+      const sessionToken = typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
+        ? AuthService.getApiSessionToken()
+        : (JSON.parse(sessionStorage.getItem('rq_auth_session') || '{}')?.token || '');
+      const res = await fetch('/api/review-queue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session-token': sessionToken
+        },
+        body: JSON.stringify({ assessment })
+      });
+      if (res.status === 409) {
+        UI.toast('This assessment is already in the review queue.', 'warning');
+        btn.disabled = false;
+        btn.textContent = 'Submit for Review';
+        return;
+      }
+      if (!res.ok) throw new Error('Submit failed');
+      updateAssessmentRecord(assessment.id, rec => ({
+        ...rec,
+        reviewSubmission: {
+          reviewStatus: 'pending',
+          submittedAt: Date.now(),
+          submittedByUsername: AuthService.getCurrentUser()?.username || ''
+        }
+      }));
+      UI.toast('Assessment submitted for review.', 'success');
+      const banner = document.getElementById('review-submit-banner');
+      if (banner) {
+        banner.className = 'review-submit-banner review-submit-banner--submitted';
+        banner.innerHTML = '<strong>Submitted for review</strong><span>Awaiting management sign-off.</span>';
+      }
+    } catch {
+      UI.toast('Could not submit for review. Try again in a moment.', 'danger');
+      btn.disabled = false;
+      btn.textContent = 'Submit for Review';
+    }
+  });
 
   document.getElementById('btn-share-results')?.addEventListener('click', event => {
     withResultsActionBusy(event.currentTarget, 'Copying…', 600, () => {
@@ -2381,6 +2524,7 @@ function renderResults(id, isShared) {
       </div>
     </div>
   </div>`;
+  const reviewSubmitBanner = renderResultsReviewSubmitBanner(assessment, r);
 
   const executiveMetrics = `<div class="results-exec-metrics">
     <div class="results-impact-card results-impact-card--headline">
@@ -2406,6 +2550,7 @@ function renderResults(id, isShared) {
   const executiveTab = `
     <section class="results-executive-view ${boardroomMode ? 'results-executive-view--boardroom' : ''} ${activeTab === 'executive' ? '' : 'hidden'}" id="results-tab-executive" role="tabpanel" aria-labelledby="results-tab-btn-executive" tabindex="-1" data-results-panel="executive" data-page-focus>
       ${executiveHero}
+      ${reviewSubmitBanner}
       <div class="results-executive-band">
         ${boardroomMode ? renderBoardroomModeIntro(comparison) : ''}
         ${renderHeroMetric(
@@ -2483,6 +2628,19 @@ function renderResults(id, isShared) {
   });
 
   setPage(`
+    <style>
+      .review-submit-banner {
+        display:flex; align-items:center; justify-content:space-between;
+        gap:var(--sp-4); padding:var(--sp-4) var(--sp-5);
+        background:#fef3c7; border:1px solid #d97706; border-radius:var(--radius-lg);
+        margin:var(--sp-4) 0; flex-wrap:wrap;
+      }
+      .review-submit-banner__body { display:flex; flex-direction:column; gap:4px; font-size:14px; }
+      .review-submit-banner--submitted { background:#eff6ff; border-color:#3b82f6; }
+      .review-submit-banner--approved { background:#f0fdf4; border-color:#22c55e; }
+      .review-submit-banner--changes { background:#fef3c7; border-color:#d97706; }
+      .review-submit-banner--escalated { background:#f5f3ff; border-color:#7c3aed; color:#4c1d95; }
+    </style>
     <main class="page">
       <div class="container container--wide" style="padding:var(--sp-8) var(--sp-6)">
         ${sharedBanner}
