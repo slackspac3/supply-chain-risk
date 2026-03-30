@@ -351,6 +351,15 @@ function buildStep1AiQualityModel(draft = {}) {
   const evidenceQuality = String(draft.evidenceQuality || '').trim() || 'Evidence quality not yet stated';
   const alignmentChecks = Array.isArray(draft.aiAlignment?.checks) ? draft.aiAlignment.checks.filter(Boolean) : [];
   const needsReview = alignmentChecks.some(check => check?.status !== 'ok');
+  const secondaryLensLabels = (Array.isArray(draft.scenarioLens?.secondaryKeys) ? draft.scenarioLens.secondaryKeys : [])
+    .map(key => {
+      const alias = typeof STEP1_FUNCTION_TO_SCENARIO_LENS === 'object'
+        ? Object.values(STEP1_FUNCTION_TO_SCENARIO_LENS).find(item => item?.key === key)
+        : null;
+      return alias?.label || String(key || '').replace(/[-_]+/g, ' ');
+    })
+    .filter(Boolean)
+    .slice(0, 2);
   const analystReshaped = source === 'analyst-reshaped'
     || (source !== 'local' && isStep1AiDraftMateriallyReshaped(draft));
 
@@ -387,7 +396,7 @@ function buildStep1AiQualityModel(draft = {}) {
       { label: 'Draft source', value: source === 'ai' ? 'Live AI rewrite' : source === 'fallback' ? 'Fallback guidance' : source === 'analyst-reshaped' ? 'Analyst reshaped' : 'Local composition' },
       { label: 'Evidence', value: `${evidenceCount} support item${evidenceCount === 1 ? '' : 's'}` },
       { label: 'Confidence', value: confidence },
-      { label: 'Lens fit', value: draft.aiAlignment?.label || (needsReview ? 'Review suggested' : 'Working alignment') }
+      { label: 'Lens fit', value: `${draft.aiAlignment?.label || (needsReview ? 'Review suggested' : 'Working alignment')}${secondaryLensLabels.length ? ` · also ${secondaryLensLabels.join(' / ')}` : ''}` }
     ]
   };
 }
@@ -410,6 +419,10 @@ function renderStep1AiQualityStrip(draft = {}) {
 function renderStep1AiIntakeSummary(draft = {}) {
   if (!String(draft.intakeSummary || '').trim()) return '';
   const model = buildStep1AiQualityModel(draft);
+  const secondaryLenses = (Array.isArray(draft.scenarioLens?.secondaryKeys) ? draft.scenarioLens.secondaryKeys : [])
+    .map(key => String(key || '').replace(/[-_]+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 2);
   return `<div class="premium-guidance-strip premium-guidance-strip--${escapeHtml(String(model.tone === 'quiet' ? 'support' : model.tone || 'support'))} wizard-intake-summary">
     <div class="premium-guidance-strip__main">
       <div class="premium-guidance-strip__label">AI intake summary</div>
@@ -419,6 +432,7 @@ function renderStep1AiIntakeSummary(draft = {}) {
     <div class="premium-guidance-strip__meta">
       <span class="badge badge--neutral">${escapeHtml(String(model.title || 'Working guidance'))}</span>
       ${draft.scenarioLens?.label ? `<span class="badge badge--gold">${escapeHtml(String(draft.scenarioLens.label))}</span>` : ''}
+      ${secondaryLenses.map(label => `<span class="badge badge--neutral">Also ${escapeHtml(label)}</span>`).join('')}
       ${draft.evidenceQuality ? `<span class="badge badge--neutral">${escapeHtml(String(draft.evidenceQuality))}</span>` : ''}
     </div>
   </div>`;

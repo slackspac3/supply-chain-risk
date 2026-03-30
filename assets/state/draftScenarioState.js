@@ -190,7 +190,11 @@
 
   function riskMatchesLens(risk, lens) {
     const lensKey = normaliseLensKey(lens);
-    if (!lensKey || lensKey === 'general') return true;
+    const secondaryKeys = Array.isArray(lens?.secondaryKeys)
+      ? lens.secondaryKeys.map(item => normaliseLensKey(item)).filter(Boolean)
+      : [];
+    const activeLensKeys = [lensKey, ...secondaryKeys].filter((value, index, list) => value && list.indexOf(value) === index);
+    if (!activeLensKeys.length || (activeLensKeys.length === 1 && activeLensKeys[0] === 'general')) return true;
     const category = String(risk?.category || '').trim().toLowerCase();
     const title = String(risk?.title || '').trim().toLowerCase();
     const compatibility = {
@@ -217,7 +221,7 @@
       hse: ['hse'],
       cyber: ['cyber', 'identity', 'data protection', 'operational resilience', 'financial crime']
     };
-    return (compatibility[lensKey] || [lensKey]).some(term => category.includes(term) || title.includes(term));
+    return activeLensKeys.some((key) => (compatibility[key] || [key]).some(term => category.includes(term) || title.includes(term)));
   }
 
   function getAlignedRiskSeed(aiRisks, narrative, lens) {

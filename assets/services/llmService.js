@@ -1212,6 +1212,23 @@ ${businessUnit.selectedDepartmentContext}` : ''
     }, safeMessage);
   }
 
+  function _collectScenarioSecondaryKeys({
+    primaryKey = 'general',
+    hintKey = '',
+    activeKeys = [],
+    hintedEnterpriseMatch = {}
+  } = {}) {
+    const secondary = [];
+    const pushKey = (value) => {
+      const key = _normaliseScenarioHintKey(value);
+      if (!key || key === primaryKey || key === 'general' || secondary.includes(key)) return;
+      secondary.push(key);
+    };
+    (Array.isArray(activeKeys) ? activeKeys : []).forEach(pushKey);
+    if (hintKey && hintedEnterpriseMatch[hintKey]) pushKey(hintKey);
+    return secondary.slice(0, 3);
+  }
+
   function _classifyScenario(narrative = '', options = {}) {
     const guidedText = [
       options.guidedInput?.event,
@@ -1278,40 +1295,45 @@ ${businessUnit.selectedDepartmentContext}` : ''
       hse: isHse,
       'third-party': isThirdParty || isSupplyChain || isProcurement
     };
-
-    if (hintKey && hintedEnterpriseMatch[hintKey]) {
-      return _scenarioClassificationByKey(hintKey);
-    }
-
-    if (isRansomware) return _scenarioClassificationByKey('ransomware');
-    if (isIdentity) return _scenarioClassificationByKey('identity');
-    if (isDataBreach) return _scenarioClassificationByKey('data-breach');
-    if (isCloud) return _scenarioClassificationByKey('cloud');
-    if (isPhishing) return _scenarioClassificationByKey('phishing');
-    if (isInsider) return _scenarioClassificationByKey('insider');
-    if (isAiModel) return _scenarioClassificationByKey('ai-model-risk');
-    if (isDataGovernance) return _scenarioClassificationByKey('data-governance');
-    if (isFraudIntegrity) return _scenarioClassificationByKey('fraud-integrity');
-    if (isLegalContract) return _scenarioClassificationByKey('legal-contract');
-    if (isGeopolitical) return _scenarioClassificationByKey('geopolitical');
-    if (isPhysicalSecurity) return _scenarioClassificationByKey('physical-security');
-    if (isOtResilience) return _scenarioClassificationByKey('ot-resilience');
-    if (isPeopleWorkforce) return _scenarioClassificationByKey('people-workforce');
-    if (isInvestmentJv) return _scenarioClassificationByKey('investment-jv');
-    if (isTransformationDelivery) return _scenarioClassificationByKey('transformation-delivery');
-    if (isStrategic) return _scenarioClassificationByKey('strategic');
-    if (isOperational) return _scenarioClassificationByKey('operational');
-    if (isRegulatory) return _scenarioClassificationByKey('regulatory');
-    if (isFinancial) return _scenarioClassificationByKey('financial');
-    if (isEsg) return _scenarioClassificationByKey('esg');
-    if (isCompliance) return _scenarioClassificationByKey('compliance');
-    if (isProcurement) return _scenarioClassificationByKey('procurement');
-    if (isSupplyChain) return _scenarioClassificationByKey('supply-chain');
-    if (isContinuity) return _scenarioClassificationByKey('business-continuity');
-    if (isHse) return _scenarioClassificationByKey('hse');
-    if (isThirdParty) return _scenarioClassificationByKey('third-party');
-    if (hintKey) return _scenarioClassificationByKey(hintKey);
-    return _scenarioClassificationByKey('general');
+    const orderedSignals = [
+      ['ransomware', isRansomware],
+      ['identity', isIdentity],
+      ['data-breach', isDataBreach],
+      ['cloud', isCloud],
+      ['phishing', isPhishing],
+      ['insider', isInsider],
+      ['ai-model-risk', isAiModel],
+      ['data-governance', isDataGovernance],
+      ['fraud-integrity', isFraudIntegrity],
+      ['legal-contract', isLegalContract],
+      ['geopolitical', isGeopolitical],
+      ['physical-security', isPhysicalSecurity],
+      ['ot-resilience', isOtResilience],
+      ['people-workforce', isPeopleWorkforce],
+      ['investment-jv', isInvestmentJv],
+      ['transformation-delivery', isTransformationDelivery],
+      ['strategic', isStrategic],
+      ['operational', isOperational],
+      ['regulatory', isRegulatory],
+      ['financial', isFinancial],
+      ['esg', isEsg],
+      ['compliance', isCompliance],
+      ['procurement', isProcurement],
+      ['supply-chain', isSupplyChain],
+      ['business-continuity', isContinuity],
+      ['hse', isHse],
+      ['third-party', isThirdParty]
+    ];
+    const explicitPrimary = orderedSignals.find(([, active]) => !!active)?.[0] || '';
+    const primaryKey = explicitPrimary || (hintKey && hintedEnterpriseMatch[hintKey] ? hintKey : '') || 'general';
+    const activeKeys = orderedSignals.filter(([, active]) => !!active).map(([key]) => key);
+    const secondaryKeys = _collectScenarioSecondaryKeys({
+      primaryKey,
+      hintKey,
+      activeKeys,
+      hintedEnterpriseMatch
+    });
+    return _scenarioClassificationByKey(primaryKey, { secondaryKeys });
   }
 
   function _buildScenarioLens(classification = {}) {
@@ -1351,7 +1373,12 @@ ${businessUnit.selectedDepartmentContext}` : ''
       key,
       label: profile.label,
       functionKey: profile.functionKey,
-      estimatePresetKey: profile.estimatePresetKey
+      estimatePresetKey: profile.estimatePresetKey,
+      secondaryKeys: Array.isArray(classification?.secondaryKeys)
+        ? classification.secondaryKeys
+            .map(item => _normaliseScenarioHintKey(item))
+            .filter((item, index, list) => item && item !== key && list.indexOf(item) === index)
+        : []
     };
   }
 
@@ -1364,7 +1391,11 @@ ${businessUnit.selectedDepartmentContext}` : ''
       key: String(merged.key || fallback.key || 'general').trim() || 'general',
       label: _cleanUserFacingText(merged.label || fallback.label || 'General enterprise risk', { maxSentences: 1, stripTrailingPeriod: true }) || 'General enterprise risk',
       functionKey: String(merged.functionKey || fallback.functionKey || 'general').trim() || 'general',
-      estimatePresetKey: String(merged.estimatePresetKey || fallback.estimatePresetKey || 'general').trim() || 'general'
+      estimatePresetKey: String(merged.estimatePresetKey || fallback.estimatePresetKey || 'general').trim() || 'general',
+      secondaryKeys: Array.from(new Set([
+        ...(Array.isArray(fallback.secondaryKeys) ? fallback.secondaryKeys : []),
+        ...(Array.isArray(merged.secondaryKeys) ? merged.secondaryKeys : [])
+      ].map(item => _normaliseScenarioHintKey(item)).filter(item => item && item !== (String(merged.key || fallback.key || 'general').trim() || 'general'))))
     };
   }
 
@@ -1925,19 +1956,25 @@ ${businessUnit.selectedDepartmentContext}` : ''
       : (fallbackScenarioExpansion?.riskTitles || []));
     const alignedRiskCount = risks.filter(risk => {
       const riskLens = _inferLensFromRiskCard(risk);
-      return !riskLens || _isCompatibleScenarioLens(resolvedLens.key, riskLens);
+      return !riskLens
+        || _isCompatibleScenarioLens(resolvedLens.key, riskLens)
+        || (Array.isArray(resolvedLens.secondaryKeys) && resolvedLens.secondaryKeys.some(key => key === riskLens || _isCompatibleScenarioLens(key, riskLens)));
     }).length;
     const benchmarkRefs = Array.isArray(result?.benchmarkReferences) ? result.benchmarkReferences : [];
     const benchmarkSignalCount = [
       String(result?.benchmarkBasis || '').trim() ? 1 : 0,
       benchmarkRefs.length ? 1 : 0
     ].reduce((sum, value) => sum + value, 0);
+    const secondaryLabels = (Array.isArray(resolvedLens.secondaryKeys) ? resolvedLens.secondaryKeys : [])
+      .map(key => _buildScenarioLens({ key }).label)
+      .filter(Boolean)
+      .slice(0, 2);
     const checks = [
       {
         label: 'Primary lens',
         status: _isCompatibleScenarioLens(expectedLens, resolvedLens.key) && _isCompatibleScenarioLens(expectedLens, actualNarrativeLens) ? 'ok' : 'warning',
         detail: _isCompatibleScenarioLens(expectedLens, resolvedLens.key) && _isCompatibleScenarioLens(expectedLens, actualNarrativeLens)
-          ? `${resolvedLens.label} stayed consistent with the intended scenario domain.`
+          ? `${resolvedLens.label} stayed consistent with the intended scenario domain.${secondaryLabels.length ? ` Secondary facets: ${secondaryLabels.join(' and ')}.` : ''}`
           : `AI drifted toward ${_buildScenarioLens({ key: actualNarrativeLens }).label.toLowerCase()} language and was corrected back toward the ${_buildScenarioLens({ key: expectedLens }).label.toLowerCase()} lens.`
       },
       {
@@ -1958,7 +1995,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
         label: 'Shortlist fit',
         status: risks.length && alignedRiskCount >= Math.max(1, Math.ceil(risks.length / 2)) ? 'ok' : 'warning',
         detail: risks.length
-          ? `${alignedRiskCount} of ${risks.length} suggested risks align with the current scenario lens.`
+          ? `${alignedRiskCount} of ${risks.length} suggested risks align with the current scenario lens${secondaryLabels.length ? ' or its secondary facets' : ''}.`
           : 'No candidate risks were returned, so the shortlist falls back to lens-aware local seeds.'
       },
       {
@@ -2330,7 +2367,7 @@ The applicable regulations, geographic scope, and benchmark strategy will be pro
 Respond ONLY with valid JSON matching this exact schema:
 {
   "scenarioTitle": "string",
-  "scenarioLens": { "key": "string", "label": "string", "functionKey": "string", "estimatePresetKey": "string" },
+  "scenarioLens": { "key": "string", "label": "string", "functionKey": "string", "estimatePresetKey": "string", "secondaryKeys": ["string"] },
   "structuredScenario": { "assetService": "string", "primaryDriver": "string", "eventPath": "string", "effect": "string" },
   "workflowGuidance": ["string"],
   "benchmarkBasis": "string",
@@ -2358,6 +2395,7 @@ Respond ONLY with valid JSON matching this exact schema:
         const userPrompt = `Risk narrative: ${narrative}
 Scenario taxonomy hint: ${classification.scenarioType} | ${classification.eventPath} | ${classification.effect}
 Primary lens hint: ${_normaliseScenarioHintKey(buContext?.scenarioLensHint) || classification.key}
+If the scenario clearly spans another domain as a secondary aspect, include up to 2 secondary lens keys. Do not let a profile hint override an explicit primary event signal.
 BU: ${buContext?.name || 'Unknown'}
 Data types: ${(buContext?.dataTypes || []).join(', ')}
 Regulatory tags: ${(buContext?.regulatoryTags || []).join(', ')}
@@ -2500,7 +2538,7 @@ Return JSON only with this schema:
   "enhancedStatement": "string",
   "summary": "string",
   "linkAnalysis": "string",
-  "scenarioLens": { "key": "string", "label": "string", "functionKey": "string", "estimatePresetKey": "string" },
+  "scenarioLens": { "key": "string", "label": "string", "functionKey": "string", "estimatePresetKey": "string", "secondaryKeys": ["string"] },
   "workflowGuidance": ["string"],
   "benchmarkBasis": "string",
   "risks": [
@@ -2523,6 +2561,7 @@ Return JSON only with this schema:
 Business unit: ${input.businessUnit?.name || 'Unknown'}
 Geography: ${input.geography || 'Unknown'}
 Primary lens hint: ${_normaliseScenarioHintKey(input.scenarioLensHint) || classification.key}
+If the scenario clearly spans another domain as a secondary aspect, include up to 2 secondary lens keys. Do not let a profile hint override an explicit primary event signal.
 BU context summary: ${input.businessUnit?.contextSummary || input.businessUnit?.notes || '(none)'}
 BU-specific AI guidance: ${input.businessUnit?.aiGuidance || '(none)'}
 Applicable regulations: ${(input.applicableRegulations || []).join(', ')}
