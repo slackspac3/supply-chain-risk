@@ -3867,6 +3867,45 @@ ${evidenceMeta.promptBlock}`;
     return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
   }
 
+  async function generateReviewerDecisionBrief(input = {}) {
+    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return null;
+    const assessmentData = String(input?.assessmentData || '').trim().slice(0, 2400);
+    if (!assessmentData) return null;
+    const preferredSection = String(input?.preferredSection || '').trim().toLowerCase();
+    const preferredPrompt = preferredSection
+      ? `The reviewer usually spends the most time on the ${preferredSection.replace(/-/g, ' ')} section, so make that section especially concrete and decision-useful.`
+      : '';
+    const systemPrompt = `You are a risk reviewer at a large technology company. You have 30 seconds to decide whether to approve, challenge, or escalate this assessment. Generate a structured brief with exactly three sections:
+WHAT MATTERS: [1 sentence - the headline risk and magnitude]
+WHAT'S UNCERTAIN: [1 sentence - the weakest assumption]
+WHAT TO DO: [1 sentence - approve / challenge parameter X / escalate]
+
+Return JSON only with this schema:
+{
+  "whatMatters": "string",
+  "whatsUncertain": "string",
+  "whatToDo": "string"
+}`;
+    const userPrompt = `${preferredPrompt ? `${preferredPrompt}\n\n` : ''}Assessment data:\n${assessmentData}`;
+    try {
+      const raw = await _callLLM(systemPrompt, userPrompt, {
+        taskName: 'generateReviewerDecisionBrief',
+        maxCompletionTokens: 220,
+        timeoutMs: 12000
+      });
+      if (!raw) return null;
+      const parsed = JSON.parse(String(raw).replace(/```json\n?|```/g, '').trim() || 'null');
+      if (!parsed || typeof parsed !== 'object') return null;
+      return {
+        whatMatters: _cleanUserFacingText(parsed.whatMatters || '', { maxSentences: 1 }),
+        whatsUncertain: _cleanUserFacingText(parsed.whatsUncertain || '', { maxSentences: 1 }),
+        whatToDo: _cleanUserFacingText(parsed.whatToDo || '', { maxSentences: 1 })
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async function mediateAssessmentDispute(input = {}) {
     if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return null;
     const reviewerView = String(input?.reviewerView || '').trim();
@@ -4150,6 +4189,7 @@ Keep the numbers realistic, internally ordered, and anchored to the user's own h
     buildUserPreferenceAssist,
     suggestTreatmentImprovement,
     challengeAssessment,
+    generateReviewerDecisionBrief,
     mediateAssessmentDispute,
     coachRiskShortlist,
     suggestSmartParamPrefill,

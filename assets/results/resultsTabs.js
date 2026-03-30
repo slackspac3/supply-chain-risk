@@ -29,7 +29,9 @@
           <div class="results-section-heading">Review-ready metrics and sensitivities</div>
           <div class="results-detail-disclosure-copy">Start here when you want to challenge the size of the result, the dominant sensitivities, and whether the ranges are credible enough for management use.</div>
           <div class="results-disclosure-stack">
-            ${renderTechnicalChallengePanel(assessment, technicalInputs, assessmentIntelligence, confidenceFrame, comparison)}
+            <div id="results-technical-challenge-panel">
+              ${renderTechnicalChallengePanel(assessment, technicalInputs, assessmentIntelligence, confidenceFrame, comparison)}
+            </div>
             <div class="grid-3 mb-6 anim-fade-in results-metric-band">
               <div class="metric-card"><div class="metric-label">Typical conditional event loss</div><div class="metric-value">${fmtCurrency(r.eventLoss.p50)}</div><div class="metric-sub">Midpoint successful-event view</div></div>
               <div class="metric-card"><div class="metric-label">Severe conditional event loss</div><div class="metric-value ${r.toleranceBreached ? 'danger' : ''}">${fmtCurrency(r.eventLoss.p90)}</div><div class="metric-sub">Used for tolerance check</div></div>

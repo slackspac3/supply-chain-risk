@@ -591,5 +591,5 @@ const UI = (() => {
     return `${_getCurrencyPrefix(currency)}${displayValue.toLocaleString(currency === 'AED' ? 'en-AE' : 'en-US')}`;
   }
 
-  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, wizardAssistSkeleton, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, resultsSectionBlock, resultsSummaryCard, resultsDetailDisclosure, wizardInputSection, sectionStatusBadge, disclosureSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC };
+  return { toast, modal, citationModal, renderStepper, skeletonBlock, skeletonCard, wizardAssistSkeleton, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, resultsSectionBlock, resultsSummaryCard, resultsDetailDisclosure, wizardInputSection, sectionStatusBadge, disclosureSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC, sectionEyebrow };
 })();

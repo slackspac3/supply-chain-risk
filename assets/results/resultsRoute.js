@@ -2200,6 +2200,180 @@ function renderAssessmentChallengeResult(result = {}) {
   </div>`;
 }
 
+const REVIEWER_BRIEF_FOCUS_KEY = 'rip_reviewer_focus';
+
+function isReviewerBriefRole(user = AuthService.getCurrentUser()) {
+  const role = String(user?.role || '').trim().toLowerCase();
+  return role === 'bu_admin' || role === 'function_admin';
+}
+
+function getReviewerBriefScenarioType(assessment = {}) {
+  return String(
+    assessment?.scenarioLens?.key
+      || assessment?.scenarioType
+      || assessment?.structuredScenario?.primaryDriver
+      || 'general'
+  ).trim().toLowerCase() || 'general';
+}
+
+function readReviewerFocusStore() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REVIEWER_BRIEF_FOCUS_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeReviewerFocusStore(store) {
+  try {
+    localStorage.setItem(REVIEWER_BRIEF_FOCUS_KEY, JSON.stringify(store && typeof store === 'object' ? store : {}));
+  } catch {}
+}
+
+function recordReviewerBriefFocusDuration(scenarioType, sectionKey, durationMs) {
+  const duration = Number(durationMs || 0);
+  if (!scenarioType || !sectionKey || duration <= 0) return;
+  const store = readReviewerFocusStore();
+  const scenarioStore = store[scenarioType] && typeof store[scenarioType] === 'object' ? store[scenarioType] : {};
+  const entry = scenarioStore[sectionKey] && typeof scenarioStore[sectionKey] === 'object' ? scenarioStore[sectionKey] : { totalMs: 0, views: 0 };
+  scenarioStore[sectionKey] = {
+    totalMs: Number(entry.totalMs || 0) + duration,
+    views: Number(entry.views || 0) + 1
+  };
+  store[scenarioType] = scenarioStore;
+  writeReviewerFocusStore(store);
+}
+
+function getReviewerPreferredSection(scenarioType) {
+  const scenarioStore = readReviewerFocusStore()?.[scenarioType];
+  if (!scenarioStore || typeof scenarioStore !== 'object') return '';
+  return Object.entries(scenarioStore)
+    .sort((left, right) => Number(right?.[1]?.totalMs || 0) - Number(left?.[1]?.totalMs || 0))[0]?.[0] || '';
+}
+
+function inferReviewerBriefChallengeTarget(text = '') {
+  const value = String(text || '').toLowerCase();
+  if (/frequency|tef|cadence|often/.test(value)) return 'event-frequency';
+  if (/control|vulnerab|exposure|threat capability|event success/.test(value)) return 'event-success';
+  if (/business interruption|downtime|continuity|outage|service disruption/.test(value)) return 'business-interruption';
+  if (/regulat|legal|privacy|contract|compliance/.test(value)) return 'regulatory-legal';
+  if (/treatment|comparison|delta|improvement/.test(value)) return 'treatment-delta';
+  return 'event-success';
+}
+
+function orderReviewerBriefSections(preferredSection, sections = []) {
+  if (!preferredSection) return sections;
+  const next = Array.isArray(sections) ? sections.slice() : [];
+  const index = next.findIndex(section => section?.key === preferredSection);
+  if (index <= 0) return next;
+  const [match] = next.splice(index, 1);
+  next.unshift(match);
+  return next;
+}
+
+function renderReviewerBriefResultRows(result = {}, assessment) {
+  const preferredSection = getReviewerPreferredSection(getReviewerBriefScenarioType(assessment));
+  const sections = orderReviewerBriefSections(preferredSection, [
+    { key: 'what-matters', label: 'What matters', text: String(result?.whatMatters || '').trim(), tone: 'results-driver-label' },
+    {
+      key: 'whats-uncertain',
+      label: 'What\'s uncertain',
+      text: String(result?.whatsUncertain || '').trim(),
+      challengeTarget: inferReviewerBriefChallengeTarget(result?.whatsUncertain)
+    },
+    { key: 'what-to-do', label: 'What to do', text: String(result?.whatToDo || '').trim() }
+  ]).filter(section => section.text);
+  return `<div class="reviewer-brief-grid">
+    ${sections.map(section => `<article class="reviewer-brief-row" data-reviewer-brief-row="${escapeHtml(section.key)}">
+      <div class="reviewer-brief-row__head">
+        ${typeof UI.sectionEyebrow === 'function' ? UI.sectionEyebrow(section.label) : `<span class="ui-eyebrow"><span class="ui-eyebrow-mark" aria-hidden="true">◦</span><span>${escapeHtml(section.label)}</span></span>`}
+        ${section.challengeTarget ? `<button type="button" class="btn btn--ghost btn--sm" data-reviewer-brief-challenge="${escapeHtml(section.challengeTarget)}">Challenge</button>` : ''}
+      </div>
+      <div class="reviewer-brief-row__text">${escapeHtml(section.text)}</div>
+    </article>`).join('')}
+  </div>`;
+}
+
+function renderReviewerBriefPanel(assessment, rolePresentation) {
+  if (!isReviewerBriefRole()) return '';
+  const hasBrief = assessment?.reviewerBrief && typeof assessment.reviewerBrief === 'object';
+  return `<details class="wizard-disclosure card anim-fade-in reviewer-brief-panel" id="reviewer-brief-panel">
+    <summary>
+      30-Second Decision Brief
+      <span class="badge badge--neutral">${escapeHtml(String(rolePresentation?.executiveNoteTitle || 'Reviewer'))}</span>
+    </summary>
+    <div id="reviewer-brief-body" style="padding:var(--sp-4)">
+      ${hasBrief ? `
+        <div class="form-help" style="margin-bottom:var(--sp-3)">Generated for quick review. Open Technical Detail only if you want to challenge a specific assumption.</div>
+        ${renderReviewerBriefResultRows(assessment.reviewerBrief, assessment)}
+      ` : `
+        <button class="btn btn--secondary btn--sm" id="btn-generate-reviewer-brief" type="button">Generate Brief</button>
+        <p class="form-help" style="margin-top:8px">Generate a 30-second reviewer brief from the executive summary, the current quantified result, and the main confidence posture.</p>
+      `}
+    </div>
+  </details>`;
+}
+
+function annotateTechnicalChallengeTargets() {
+  const cards = Array.from(document.querySelectorAll('#results-technical-challenge-panel .results-parameter-challenge-card'));
+  cards.forEach(card => {
+    const title = String(card.querySelector('.results-driver-label')?.textContent || '').trim().toLowerCase();
+    let target = 'event-success';
+    if (/event frequency/.test(title)) target = 'event-frequency';
+    else if (/event success/.test(title)) target = 'event-success';
+    else if (/business interruption/.test(title)) target = 'business-interruption';
+    else if (/regulatory and legal/.test(title)) target = 'regulatory-legal';
+    else if (/treatment delta/.test(title)) target = 'treatment-delta';
+    card.dataset.reviewerBriefTarget = target;
+  });
+}
+
+function focusTechnicalChallengeTarget(target) {
+  if (!target) return;
+  const safeTarget = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(String(target))
+    : String(target).replace(/"/g, '\\"');
+  const card = document.querySelector(`#results-technical-challenge-panel .results-parameter-challenge-card[data-reviewer-brief-target="${safeTarget}"]`);
+  const host = card || document.getElementById('results-technical-challenge-panel');
+  if (!host) return;
+  if (card instanceof HTMLDetailsElement) card.open = true;
+  host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  AppState.resultsReviewerBriefTarget = '';
+}
+
+function bindReviewerBriefFocusTracking(assessment) {
+  const rows = Array.from(document.querySelectorAll('[data-reviewer-brief-row]'));
+  if (!rows.length) return;
+  const scenarioType = getReviewerBriefScenarioType(assessment);
+  const visibleSince = new Map();
+  const flush = key => {
+    const startedAt = visibleSince.get(key);
+    if (!startedAt) return;
+    visibleSince.delete(key);
+    recordReviewerBriefFocusDuration(scenarioType, key, Date.now() - startedAt);
+  };
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      const key = String(entry.target?.dataset?.reviewerBriefRow || '').trim();
+      if (!key) return;
+      if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
+        if (!visibleSince.has(key)) visibleSince.set(key, Date.now());
+      } else {
+        flush(key);
+      }
+    });
+  }, { threshold: [0.6] });
+  rows.forEach(row => observer.observe(row));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) Array.from(visibleSince.keys()).forEach(flush);
+  }, { once: true });
+  window.addEventListener('hashchange', () => {
+    Array.from(visibleSince.keys()).forEach(flush);
+    observer.disconnect();
+  }, { once: true });
+}
+
 function openAssessmentForRevision(assessment, {
   targetStep = '/wizard/3',
   applyDraftChanges = null
@@ -2522,7 +2696,14 @@ function bindResultsInteractions({
   activeTab,
   r,
   assessmentIntelligence,
-  missingInformation
+  missingInformation,
+  rolePresentation,
+  executiveHeadline,
+  statusTitle,
+  statusDetail,
+  executiveDecision,
+  executiveAction,
+  confidenceFrame
 }) {
   const activateResultsTab = (tabName, { focusTarget = 'tab' } = {}) => {
     const nextTab = String(tabName || '').trim();
@@ -2543,9 +2724,14 @@ function bindResultsInteractions({
   };
 
   bindResultsTabBar({ activeTab, activateResultsTab });
+  annotateTechnicalChallengeTargets();
+  if (activeTab === 'technical' && AppState.resultsReviewerBriefTarget) {
+    window.requestAnimationFrame(() => focusTechnicalChallengeTarget(AppState.resultsReviewerBriefTarget));
+  }
   if (activeTab === 'appendix' || activeTab === 'executive') drawResultsTechnicalCharts(r);
   else attachCitationHandlers();
   bindReviewBannerActions(assessment);
+  bindReviewerBriefFocusTracking(assessment);
   refreshReviewStatus(assessment, r);
   OrgIntelligenceService?.refresh?.().then?.(() => {
     const host = document.getElementById('decision-dna-host');
@@ -2572,6 +2758,71 @@ function bindResultsInteractions({
       host.style.display = 'block';
       host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
+  });
+  document.querySelectorAll('[data-reviewer-brief-challenge]').forEach(button => {
+    button.addEventListener('click', () => {
+      AppState.resultsReviewerBriefTarget = String(button.dataset.reviewerBriefChallenge || '').trim();
+      activateResultsTab('technical', { focusTarget: 'panel' });
+    });
+  });
+  document.getElementById('btn-generate-reviewer-brief')?.addEventListener('click', async function() {
+    const button = this;
+    const body = document.getElementById('reviewer-brief-body');
+    const scenarioType = getReviewerBriefScenarioType(assessment);
+    const preferredSection = getReviewerPreferredSection(scenarioType);
+    const assessmentData = ReportPresentation.buildReviewerBriefSource({
+      assessment,
+      results: r,
+      executiveHeadline,
+      statusTitle,
+      statusDetail,
+      executiveDecision,
+      executiveAction,
+      confidenceFrame,
+      assessmentIntelligence
+    });
+    button.disabled = true;
+    button.textContent = 'Generating…';
+    try {
+      const result = await LLMService.generateReviewerDecisionBrief({
+        assessmentData,
+        preferredSection
+      });
+      if (!result) throw new Error('No reviewer brief generated');
+      const nextBrief = {
+        ...result,
+        createdAt: Date.now(),
+        scenarioType
+      };
+      if (assessment.id) {
+        updateAssessmentRecord(assessment.id, current => ({
+          ...current,
+          reviewerBrief: nextBrief
+        }));
+        UI.toast('Reviewer brief generated.', 'success');
+        renderResults(assessment.id, isShared || assessment._shared);
+        return;
+      }
+      if (body) {
+        body.innerHTML = `
+          <div class="form-help" style="margin-bottom:var(--sp-3)">Generated for quick review. Open Technical Detail only if you want to challenge a specific assumption.</div>
+          ${renderReviewerBriefResultRows(nextBrief, assessment)}
+        `;
+        bindReviewerBriefFocusTracking(assessment);
+        document.querySelectorAll('[data-reviewer-brief-challenge]').forEach(challengeButton => {
+          challengeButton.addEventListener('click', () => {
+            AppState.resultsReviewerBriefTarget = String(challengeButton.dataset.reviewerBriefChallenge || '').trim();
+            activateResultsTab('technical', { focusTarget: 'panel' });
+          });
+        });
+      }
+      UI.toast('Reviewer brief generated.', 'success');
+    } catch (error) {
+      console.error('generateReviewerDecisionBrief failed:', error);
+      button.disabled = false;
+      button.textContent = 'Generate Brief';
+      UI.toast('Reviewer brief unavailable right now. Try again in a moment.', 'danger');
+    }
   });
 
   document.getElementById('btn-submit-review')?.addEventListener('click', async function() {
@@ -3003,6 +3254,7 @@ function renderResults(id, isShared) {
 
   const executiveTab = `
     <section class="results-executive-view ${boardroomMode ? 'results-executive-view--boardroom' : ''} ${activeTab === 'executive' ? '' : 'hidden'}" id="results-tab-executive" role="tabpanel" aria-labelledby="results-tab-btn-executive" tabindex="-1" data-results-panel="executive" data-page-focus>
+      ${renderReviewerBriefPanel(assessment, rolePresentation)}
       ${executiveHero}
       ${reviewSubmitBanner}
       ${renderDecisionDNASection(assessment)}
@@ -3106,6 +3358,26 @@ function renderResults(id, isShared) {
       .challenge-text { font-size:13px; line-height:1.5; }
       .challenge-question { padding:var(--sp-3); background:#fafafa;
         border-radius:6px; border-left:3px solid var(--primary); font-size:13px; }
+      .reviewer-brief-grid { display:flex; flex-direction:column; gap:var(--sp-3); }
+      .reviewer-brief-row {
+        padding:var(--sp-4);
+        border:1px solid var(--border-subtle);
+        border-radius:var(--radius-lg);
+        background:var(--bg-elevated);
+      }
+      .reviewer-brief-row__head {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:var(--sp-3);
+        flex-wrap:wrap;
+        margin-bottom:var(--sp-3);
+      }
+      .reviewer-brief-row__text {
+        font-size:14px;
+        line-height:1.65;
+        color:var(--text-secondary);
+      }
       @media (max-width: 720px) {
         .challenge-grid { grid-template-columns:1fr; }
       }
@@ -3167,7 +3439,14 @@ function renderResults(id, isShared) {
     activeTab,
     r,
     assessmentIntelligence,
-    missingInformation
+    missingInformation,
+    rolePresentation,
+    executiveHeadline,
+    statusTitle,
+    statusDetail,
+    executiveDecision,
+    executiveAction,
+    confidenceFrame
   });
   } catch (error) {
     console.error('renderResults failed:', error);

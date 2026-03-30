@@ -427,6 +427,47 @@ const ReportPresentation = (() => {
     return 'This is within the range typically handled at team level without senior escalation.';
   }
 
+  function buildReviewerBriefSource({
+    assessment,
+    results,
+    executiveHeadline = '',
+    statusTitle = '',
+    statusDetail = '',
+    executiveDecision = null,
+    executiveAction = '',
+    confidenceFrame = null,
+    assessmentIntelligence = null
+  } = {}) {
+    const scenarioSummary = buildExecutiveScenarioSummary(assessment || {});
+    const topAssumption = Array.isArray(assessmentIntelligence?.assumptions)
+      ? assessmentIntelligence.assumptions.find(Boolean)
+      : null;
+    const topDriver = Array.isArray(assessmentIntelligence?.drivers?.upward)
+      ? assessmentIntelligence.drivers.upward.find(Boolean)
+      : '';
+    const toleranceStatus = results?.toleranceBreached
+      ? 'Above tolerance'
+      : results?.nearTolerance
+        ? 'Near tolerance'
+        : results?.annualReviewTriggered
+          ? 'Annual review triggered'
+          : 'Within tolerance';
+    return [
+      `Scenario summary: ${scenarioSummary}`,
+      `Executive headline: ${String(executiveHeadline || statusTitle || 'Management review needed').trim()}`,
+      `Current posture: ${String(statusDetail || '').trim()}`,
+      `Tolerance status: ${toleranceStatus}`,
+      `Severe single-event loss (P90): ${Number(results?.eventLoss?.p90 || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`,
+      `Expected annualized loss: ${Number(results?.annualLoss?.mean || results?.ale?.mean || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`,
+      `Severe annualized loss (P90): ${Number(results?.annualLoss?.p90 || results?.ale?.p90 || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`,
+      `Management decision: ${String(executiveDecision?.decision || 'Review').trim()}`,
+      `Immediate focus: ${String(executiveAction || executiveDecision?.priority || '').trim()}`,
+      `Confidence: ${String(confidenceFrame?.label || 'Moderate confidence').trim()}${confidenceFrame?.summary ? `. ${String(confidenceFrame.summary).trim()}` : ''}`,
+      topAssumption ? `Key assumption: ${String(topAssumption.text || topAssumption).trim()}` : '',
+      topDriver ? `Main upward driver: ${String(topDriver).trim()}` : ''
+    ].filter(Boolean).join('\n');
+  }
+
   const exported = {
     clampNumber,
     cleanExecutiveNarrativeText,
@@ -439,7 +480,8 @@ const ReportPresentation = (() => {
     buildTreatmentDecisionSummary,
     buildAnalystAdvisorySummary,
     buildFastestReductionLever,
-    buildMetricAnchorSentence
+    buildMetricAnchorSentence,
+    buildReviewerBriefSource
   };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = exported;
