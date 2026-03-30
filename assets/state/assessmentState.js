@@ -180,9 +180,18 @@ function getLearningStore() {
   const cache = ensureUserStateCache();
   if (cache.learningStore && typeof cache.learningStore === 'object') return cache.learningStore;
   try {
-    cache.learningStore = JSON.parse(localStorage.getItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX)) || '{"templates":{},"scenarioPatterns":[]}');
+    cache.learningStore = JSON.parse(localStorage.getItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX)) || '{"templates":{},"scenarioPatterns":[],"analystSignals":{"keptRisks":[],"removedRisks":[],"narrativeEdits":[],"rerunDeltas":[]}}');
   } catch {
-    cache.learningStore = { templates: {}, scenarioPatterns: [] };
+    cache.learningStore = {
+      templates: {},
+      scenarioPatterns: [],
+      analystSignals: {
+        keptRisks: [],
+        removedRisks: [],
+        narrativeEdits: [],
+        rerunDeltas: []
+      }
+    };
   }
   return cache.learningStore;
 }
@@ -190,8 +199,26 @@ function getLearningStore() {
 function saveLearningStore(store) {
   const cache = ensureUserStateCache();
   cache.learningStore = store && typeof store === 'object'
-    ? cloneDraftStateSnapshot(store, { templates: {}, scenarioPatterns: [] })
-    : { templates: {}, scenarioPatterns: [] };
+    ? cloneDraftStateSnapshot(store, {
+        templates: {},
+        scenarioPatterns: [],
+        analystSignals: {
+          keptRisks: [],
+          removedRisks: [],
+          narrativeEdits: [],
+          rerunDeltas: []
+        }
+      })
+    : {
+        templates: {},
+        scenarioPatterns: [],
+        analystSignals: {
+          keptRisks: [],
+          removedRisks: [],
+          narrativeEdits: [],
+          rerunDeltas: []
+        }
+      };
   try {
     localStorage.setItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX), JSON.stringify(cache.learningStore));
   } catch {}

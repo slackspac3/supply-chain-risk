@@ -743,6 +743,46 @@ function renderAssessmentValueBand(valueModel) {
   </section>`;
 }
 
+function renderExecutiveBenchmarkContext(assessment, results, runMetadata) {
+  const references = Array.isArray(assessment?.benchmarkReferences) ? assessment.benchmarkReferences.filter(Boolean) : [];
+  const thresholdConfig = runMetadata?.thresholdConfigUsed || {};
+  const warningThreshold = Number(results?.warningThreshold || thresholdConfig.warningThreshold || 0);
+  const toleranceThreshold = Number(results?.threshold || thresholdConfig.eventToleranceThreshold || 0);
+  const annualReviewThreshold = Number(results?.annualReviewThreshold || thresholdConfig.annualReviewThreshold || 0);
+  const triggerCount = [warningThreshold, toleranceThreshold, annualReviewThreshold].filter(value => Number(value) > 0).length;
+  const topReferences = references
+    .map(ref => String(ref?.sourceTitle || ref?.title || ref?.label || '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const benchmarkBasis = String(assessment?.benchmarkBasis || '').trim();
+  const basisSummary = benchmarkBasis
+    ? benchmarkBasis
+    : references.length
+      ? 'Published benchmark references were used where they mapped cleanly, then scenario-calibration baselines were used only where direct comparators were thin.'
+      : 'Governance thresholds and scenario-calibration baselines were used because no published benchmark references were saved for this result.';
+  return `<section class="card card--elevated anim-fade-in">
+    <div class="results-section-heading">Benchmark context</div>
+    <div class="form-help" style="margin-top:8px">Benchmarked against ${references.length || 'no saved'} reference${references.length === 1 ? '' : 's'} and ${triggerCount} governance trigger${triggerCount === 1 ? '' : 's'} so leadership can see what anchored the result.</div>
+    <div class="results-value-grid" style="margin-top:var(--sp-4)">
+      <article class="results-value-card">
+        <span class="results-value-card__label">Reference coverage</span>
+        <strong>${references.length ? `${references.length} saved reference${references.length === 1 ? '' : 's'}` : 'Scenario-calibration baseline'}</strong>
+        <span class="results-value-card__foot">${escapeHtml(topReferences.length ? topReferences.join(' · ') : 'No published benchmark titles were saved for this result.')}</span>
+      </article>
+      <article class="results-value-card">
+        <span class="results-value-card__label">Governance triggers</span>
+        <strong>${triggerCount} active trigger${triggerCount === 1 ? '' : 's'}</strong>
+        <span class="results-value-card__foot">Warning ${fmtCurrency(warningThreshold)} · Tolerance ${fmtCurrency(toleranceThreshold)} · Annual review ${fmtCurrency(annualReviewThreshold)}</span>
+      </article>
+      <article class="results-value-card">
+        <span class="results-value-card__label">Benchmark approach</span>
+        <strong>${references.length ? 'Published references plus governance thresholds' : 'Governance thresholds plus scenario baseline'}</strong>
+        <span class="results-value-card__foot">${escapeHtml(basisSummary)}</span>
+      </article>
+    </div>
+  </section>`;
+}
+
 function renderTrustExplanationLayer({ confidenceNeedsBlock, evidenceGapPlan = [], explanationPanel, impactMix, thresholdModel, results, assessmentIntelligence, assessment, citations, primaryGrounding, supportingReferences, missingInformation }) {
   return UI.resultsSectionBlock({
     title: 'Trust and explanation',
@@ -860,6 +900,21 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
       severeAnnual: fmtCurrency(current.ale?.p90 || 0)
     }
   };
+}
+
+function recordAssessmentRerunLearning(savedAssessment, baselineAssessment, comparison) {
+  const username = AuthService.getCurrentUser()?.username || '';
+  if (!username || !baselineAssessment || !comparison || typeof LearningStore === 'undefined' || typeof LearningStore.recordRerunDelta !== 'function') return;
+  // Keep the learned rerun summary compact so future treatment prompts can reuse the main directional lever without storing the whole result object.
+  LearningStore.recordRerunDelta(username, {
+    buId: savedAssessment?.buId || '',
+    scenarioLens: savedAssessment?.scenarioLens || null,
+    baselineTitle: comparison.baselineTitle || baselineAssessment.scenarioTitle || '',
+    deltaDirection: comparison.severeEvent?.direction || '',
+    annualDirection: comparison.annualExposure?.direction || '',
+    keyDriver: comparison.keyDriver || '',
+    summary: comparison.summary || ''
+  });
 }
 
 function applyTreatmentPrompt(promptId) {
@@ -1666,6 +1721,9 @@ async function runSimulation() {
   await new Promise(requestAnimationFrame);
   try {
     const p = AppState.draft.fairParams;
+    const baselineAssessment = AppState.draft.comparisonBaselineId
+      ? getAssessmentById(AppState.draft.comparisonBaselineId)
+      : null;
     const { ep, scenario, toleranceThreshold, warningThreshold, annualReviewThreshold, currencyContext } = runPayload;
     const progressText = document.getElementById('sim-progress-text');
     const progressMeta = document.getElementById('sim-progress-meta');
@@ -1755,6 +1813,10 @@ async function runSimulation() {
           : ASSESSMENT_LIFECYCLE_STATUS.SIMULATED
     });
     recordLearningFromAssessment(savedAssessment);
+    if (baselineAssessment) {
+      const rerunComparison = buildAssessmentComparison(savedAssessment, baselineAssessment);
+      recordAssessmentRerunLearning(savedAssessment, baselineAssessment, rerunComparison);
+    }
     resetDraft();
     saveDraft();
     completeSimulationState();
@@ -2198,6 +2260,7 @@ function renderResults(id, isShared) {
         ${boardroomMode ? renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView) : ''}
         ${executiveMetrics}
         ${renderAssessmentValueBand(assessmentValue)}
+        ${renderExecutiveBenchmarkContext(assessment, r, runMetadata)}
       </div>
       ${boardroomMode
         ? `${renderBoardroomSummaryBand({ executiveDecision, confidenceFrame, nextStepPlan, scenarioNarrative, analystSummary })}

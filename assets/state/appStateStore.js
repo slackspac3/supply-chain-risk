@@ -9,7 +9,16 @@
       userSettings: null,
       assessments: [],
       savedAssessments: null,
-      learningStore: { templates: {}, scenarioPatterns: [] },
+      learningStore: {
+        templates: {},
+        scenarioPatterns: [],
+        analystSignals: {
+          keptRisks: [],
+          removedRisks: [],
+          narrativeEdits: [],
+          rerunDeltas: []
+        }
+      },
       draft: null,
       draftWorkspace: null,
       _meta: {

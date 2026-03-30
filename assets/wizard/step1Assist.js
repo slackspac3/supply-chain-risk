@@ -29,7 +29,13 @@
 
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
-      const citations = await RAGService.retrieveRelevantDocs(bu?.id, localDraft, 5);
+      const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
+        narrative: localDraft,
+        guidedInput: AppState.draft.guidedInput,
+        scenarioLens: preferredLens,
+        applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
+        businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
+      }), 5);
       const result = await LLMService.buildGuidedScenarioDraft({
         riskStatement: localDraft,
         guidedInput: { ...AppState.draft.guidedInput },
@@ -106,7 +112,14 @@
     if (output) output.innerHTML = UI.wizardAssistSkeleton();
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
-      const citations = await RAGService.retrieveRelevantDocs(bu?.id, assistSeed || AppState.draft.registerFindings, 5);
+      const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
+        narrative: assistSeed || AppState.draft.registerFindings,
+        guidedInput: AppState.draft.guidedInput,
+        structuredScenario: AppState.draft.structuredScenario,
+        scenarioLens: AppState.draft.scenarioLens,
+        applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
+        businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
+      }), 5);
       const result = await LLMService.enhanceRiskContext({
         riskStatement: assistSeed || narrative,
         registerText: AppState.draft.registerFindings,
@@ -148,7 +161,14 @@
     if (output) output.innerHTML = UI.wizardAssistSkeleton();
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
-      const citations = await RAGService.retrieveRelevantDocs(bu?.id, assistSeed || narrative, 5);
+      const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
+        narrative: assistSeed || narrative,
+        guidedInput: AppState.draft.guidedInput,
+        structuredScenario: AppState.draft.structuredScenario,
+        scenarioLens: AppState.draft.scenarioLens,
+        applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
+        businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
+      }), 5);
       const result = await LLMService.enhanceRiskContext({
         riskStatement: assistSeed || narrative,
         registerText: '',

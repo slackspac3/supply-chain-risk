@@ -15,11 +15,22 @@ const {
   reduceSimulationAction
 } = require('../../assets/state/appStateStore.js');
 
+const expectedLearningStore = {
+  templates: {},
+  scenarioPatterns: [],
+  analystSignals: {
+    keptRisks: [],
+    removedRisks: [],
+    narrativeEdits: [],
+    rerunDeltas: []
+  }
+};
+
 test('createEmptyUserStateCache normalises the username and default collections', () => {
   const cache = createEmptyUserStateCache(' Alex.Trafton ');
   assert.equal(cache.username, 'alex.trafton');
   assert.deepEqual(cache.assessments, []);
-  assert.deepEqual(cache.learningStore, { templates: {}, scenarioPatterns: [] });
+  assert.deepEqual(cache.learningStore, expectedLearningStore);
   assert.equal(cache._meta.revision, 0);
   assert.equal(cache._meta.updatedAt, 0);
 });
@@ -62,7 +73,7 @@ test('applyUserStateCache restores safe defaults for missing collections', () =>
     _meta: { revision: 3, updatedAt: 99 }
   });
   assert.deepEqual(next.userStateCache.assessments, []);
-  assert.deepEqual(next.userStateCache.learningStore, { templates: {}, scenarioPatterns: [] });
+  assert.deepEqual(next.userStateCache.learningStore, expectedLearningStore);
   assert.equal(next.userStateCache._meta.revision, 3);
   assert.equal(next.userStateCache._meta.updatedAt, 99);
 });

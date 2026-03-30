@@ -221,7 +221,23 @@ const AppState = {
   disclosureState: {},
   resultsBoardroomMode: false,
   adminSettingsCache: null,
-  userStateCache: { username: '', userSettings: null, assessments: null, learningStore: { templates: {}, scenarioPatterns: [] }, draft: null, _meta: { revision: 0, updatedAt: 0 } },
+  userStateCache: {
+    username: '',
+    userSettings: null,
+    assessments: null,
+    learningStore: {
+      templates: {},
+      scenarioPatterns: [],
+      analystSignals: {
+        keptRisks: [],
+        removedRisks: [],
+        narrativeEdits: [],
+        rerunDeltas: []
+      }
+    },
+    draft: null,
+    _meta: { revision: 0, updatedAt: 0 }
+  },
   userStateSyncTimer: null,
   userStateSyncRevision: 0,
   userStateSyncPending: null,
@@ -309,7 +325,18 @@ function applyUserStateSnapshotLocally(username, state = {}) {
     userSettings: normalizedWorkspace.userSettings || null,
     assessments: Array.isArray(normalizedWorkspace.assessments) ? normalizedWorkspace.assessments : [],
     savedAssessments: normalizedWorkspace.savedAssessments,
-    learningStore: normalizedWorkspace.learningStore && typeof normalizedWorkspace.learningStore === 'object' ? normalizedWorkspace.learningStore : { templates: {}, scenarioPatterns: [] },
+    learningStore: normalizedWorkspace.learningStore && typeof normalizedWorkspace.learningStore === 'object'
+      ? normalizedWorkspace.learningStore
+      : {
+          templates: {},
+          scenarioPatterns: [],
+          analystSignals: {
+            keptRisks: [],
+            removedRisks: [],
+            narrativeEdits: [],
+            rerunDeltas: []
+          }
+        },
     draft: normalizedWorkspace.draft && typeof normalizedWorkspace.draft === 'object' ? normalizedWorkspace.draft : null,
     draftWorkspace: normalizedWorkspace.draftWorkspace,
     _meta: buildExpectedMeta(normalizedWorkspace._meta)
@@ -448,8 +475,28 @@ function persistScenarioPattern(assessment) {
     if (!pattern || !pattern.buId) return;
     const username = AuthService.getCurrentUser()?.username || '';
     const key = buildUserStorageKey(LEARNING_STORAGE_PREFIX, username);
-    let store = { templates: {}, scenarioPatterns: [] };
-    try { store = JSON.parse(localStorage.getItem(key) || '{}') || { templates: {}, scenarioPatterns: [] }; } catch {}
+    let store = {
+      templates: {},
+      scenarioPatterns: [],
+      analystSignals: {
+        keptRisks: [],
+        removedRisks: [],
+        narrativeEdits: [],
+        rerunDeltas: []
+      }
+    };
+    try {
+      store = JSON.parse(localStorage.getItem(key) || '{}') || {
+        templates: {},
+        scenarioPatterns: [],
+        analystSignals: {
+          keptRisks: [],
+          removedRisks: [],
+          narrativeEdits: [],
+          rerunDeltas: []
+        }
+      };
+    } catch {}
     if (!store.scenarioPatterns) store.scenarioPatterns = [];
     store.scenarioPatterns = [
       pattern,
@@ -1292,7 +1339,21 @@ function clearUserPersistentState(username) {
     resetUserStateCache(safeUsername);
   }
   requestUserState('PUT', safeUsername, {
-    state: { userSettings: null, assessments: [], learningStore: { templates: {}, scenarioPatterns: [] }, draft: null },
+    state: {
+      userSettings: null,
+      assessments: [],
+      learningStore: {
+        templates: {},
+        scenarioPatterns: [],
+        analystSignals: {
+          keptRisks: [],
+          removedRisks: [],
+          narrativeEdits: [],
+          rerunDeltas: []
+        }
+      },
+      draft: null
+    },
     expectedMeta
   }, { category: 'user_admin', eventType: 'user_state_reset', target: safeUsername }).catch(error => console.warn('clearUserPersistentState sync failed:', error.message));
 }
@@ -1515,6 +1576,7 @@ function ensureDraftShape() {
     selectedRisks: Array.isArray(AppState.draft.selectedRisks) ? AppState.draft.selectedRisks : [],
     sourceNarrative: AppState.draft.sourceNarrative || AppState.draft.narrative || '',
     enhancedNarrative: AppState.draft.enhancedNarrative || '',
+    aiNarrativeBaseline: AppState.draft.aiNarrativeBaseline || '',
     uploadedRegisterName: AppState.draft.uploadedRegisterName || '',
     registerFindings: AppState.draft.registerFindings || '',
     registerMeta: AppState.draft.registerMeta || null,
@@ -1532,6 +1594,7 @@ function ensureDraftShape() {
     supportingReferences: Array.isArray(AppState.draft.supportingReferences) ? AppState.draft.supportingReferences : [],
     inferredAssumptions: Array.isArray(AppState.draft.inferredAssumptions) ? AppState.draft.inferredAssumptions : [],
     missingInformation: Array.isArray(AppState.draft.missingInformation) ? AppState.draft.missingInformation : [],
+    aiAlignment: AppState.draft.aiAlignment && typeof AppState.draft.aiAlignment === 'object' ? AppState.draft.aiAlignment : null,
     learningNote: AppState.draft.learningNote || '',
     treatmentImprovementRequest: AppState.draft.treatmentImprovementRequest || '',
     guidedInput: {
@@ -2136,6 +2199,52 @@ function buildCurrentAIAssistContext(options = {}) {
     selectedDepartmentEntity: departmentNode,
     businessLayer,
     departmentLayer
+  };
+}
+
+function buildAssessmentRetrievalQuery(options = {}) {
+  const guidedInput = options.guidedInput && typeof options.guidedInput === 'object'
+    ? options.guidedInput
+    : (AppState.draft?.guidedInput || {});
+  const structuredScenario = normaliseStructuredScenario(options.structuredScenario || AppState.draft?.structuredScenario, {
+    preserveUnknown: true
+  });
+  const selectedRiskTitles = Array.isArray(options.selectedRiskTitles)
+    ? options.selectedRiskTitles.map(item => String(item || '').trim()).filter(Boolean)
+    : (typeof getSelectedRisks === 'function'
+        ? getSelectedRisks().map(risk => String(risk?.title || '').trim()).filter(Boolean)
+        : []);
+  const applicableRegulations = Array.isArray(options.applicableRegulations)
+    ? options.applicableRegulations.map(item => String(item || '').trim()).filter(Boolean)
+    : (Array.isArray(AppState.draft?.applicableRegulations) ? AppState.draft.applicableRegulations : []);
+  const geography = String(options.geography || AppState.draft?.geography || '').trim();
+  const businessUnitName = String(options.businessUnitName || AppState.draft?.buName || '').trim();
+  const parts = [
+    String(options.text || options.narrative || options.riskStatement || '').trim(),
+    String(guidedInput.event || '').trim(),
+    String(guidedInput.asset || '').trim(),
+    String(guidedInput.cause || '').trim(),
+    String(guidedInput.impact || '').trim(),
+    String(getStructuredScenarioField(structuredScenario, 'assetService') || '').trim(),
+    String(getStructuredScenarioField(structuredScenario, 'primaryDriver') || '').trim(),
+    String(getStructuredScenarioField(structuredScenario, 'eventPath') || '').trim(),
+    String(getStructuredScenarioField(structuredScenario, 'effect') || '').trim(),
+    options.treatmentRequest ? `Better outcome request: ${String(options.treatmentRequest).trim()}` : '',
+    selectedRiskTitles.length ? `Selected risks: ${selectedRiskTitles.join(', ')}` : '',
+    geography ? `Geography: ${geography}` : '',
+    applicableRegulations.length ? `Applicable regulations: ${applicableRegulations.join(', ')}` : '',
+    businessUnitName ? `Business unit: ${businessUnitName}` : ''
+  ].filter(Boolean);
+  return {
+    text: parts.join('\n'),
+    scenarioLens: options.scenarioLens || AppState.draft?.scenarioLens || null,
+    guidedInput: { ...guidedInput },
+    structuredScenario,
+    selectedRiskTitles,
+    geography,
+    applicableRegulations,
+    businessUnitName,
+    treatmentRequest: String(options.treatmentRequest || '').trim()
   };
 }
 

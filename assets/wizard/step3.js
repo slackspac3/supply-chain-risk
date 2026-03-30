@@ -1247,8 +1247,16 @@ function renderWizard3() {
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: draft.buId });
       const buContext = aiContext.businessUnit || getBUList().find(b => b.id === draft.buId) || bu || null;
-      const citations = await RAGService.retrieveRelevantDocs(draft.buId, `${baselineAssessment.scenarioTitle || ''}
-${request}`, 5);
+      const citations = await RAGService.retrieveRelevantDocs(draft.buId, buildAssessmentRetrievalQuery({
+        narrative: `${baselineAssessment.scenarioTitle || ''}\n${request}`,
+        structuredScenario: draft.structuredScenario || baselineAssessment.structuredScenario,
+        scenarioLens: draft.scenarioLens || baselineAssessment.scenarioLens,
+        selectedRiskTitles: getSelectedRisks().map(risk => risk.title),
+        applicableRegulations: draft.applicableRegulations || baselineAssessment.applicableRegulations || [],
+        geography: draft.geography || baselineAssessment.geography || '',
+        businessUnitName: draft.buName || baselineAssessment.buName || '',
+        treatmentRequest: request
+      }), 5);
       const result = await LLMService.suggestTreatmentImprovement({
         baselineAssessment,
         improvementRequest: request,

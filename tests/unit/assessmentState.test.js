@@ -32,7 +32,16 @@ function loadAssessmentStateRuntime() {
     username: 'alex.trafton',
     assessments: [],
     savedAssessments: { index: [], itemsById: {} },
-    learningStore: { templates: {} },
+    learningStore: {
+      templates: {},
+      scenarioPatterns: [],
+      analystSignals: {
+        keptRisks: [],
+        removedRisks: [],
+        narrativeEdits: [],
+        rerunDeltas: []
+      }
+    },
     draft: null,
     _meta: { revision: 1, updatedAt: 1 }
   };

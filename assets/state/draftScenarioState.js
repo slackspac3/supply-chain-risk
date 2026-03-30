@@ -260,6 +260,7 @@
     AppState.draft.llmAssisted = false;
     AppState.draft.scenarioTitle = '';
     AppState.draft.enhancedNarrative = '';
+    AppState.draft.aiNarrativeBaseline = '';
     AppState.draft.intakeSummary = '';
     AppState.draft.linkAnalysis = '';
     AppState.draft.workflowGuidance = [];
@@ -271,6 +272,7 @@
     AppState.draft.supportingReferences = [];
     AppState.draft.inferredAssumptions = [];
     AppState.draft.missingInformation = [];
+    AppState.draft.aiAlignment = null;
     AppState.draft.citations = [];
     if (!clearGeneratedRisks) return;
     const preservedCandidates = getRiskCandidates().filter((risk) => !REFRESHABLE_SUGGESTED_RISK_SOURCES.has(String(risk?.source || '').trim().toLowerCase()));
@@ -336,6 +338,7 @@
     AppState.draft.sourceNarrative = assistSeed || narrative;
     AppState.draft.narrative = assistSeed || narrative;
     AppState.draft.enhancedNarrative = resolvedNarrative;
+    AppState.draft.aiNarrativeBaseline = resolvedNarrative;
     AppState.draft.intakeSummary = result.summary || AppState.draft.intakeSummary || '';
     AppState.draft.linkAnalysis = result.linkAnalysis || AppState.draft.linkAnalysis || '';
     // Keep one canonical scenario lens on the draft so Step 3, learning, and benchmarking stop re-inferring the scenario in different ways.
@@ -344,6 +347,9 @@
       : (AppState.draft.scenarioLens || null);
     AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
     AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;
+    AppState.draft.aiAlignment = result?.aiAlignment && typeof result.aiAlignment === 'object'
+      ? { ...result.aiAlignment }
+      : (AppState.draft.aiAlignment || null);
     // Keep one canonical structured-scenario object on the draft so later steps stop reading mixed legacy keys.
     AppState.draft.structuredScenario = normaliseStructuredScenario(result?.structuredScenario || AppState.draft.structuredScenario, {
       preserveUnknown: true
@@ -379,6 +385,9 @@
       : (AppState.draft.scenarioLens || null);
     AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
     AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;
+    AppState.draft.aiAlignment = result?.aiAlignment && typeof result.aiAlignment === 'object'
+      ? { ...result.aiAlignment }
+      : (AppState.draft.aiAlignment || null);
     AppState.draft.confidenceLabel = result.confidenceLabel || AppState.draft.confidenceLabel || '';
     AppState.draft.evidenceQuality = result.evidenceQuality || AppState.draft.evidenceQuality || '';
     AppState.draft.evidenceSummary = result.evidenceSummary || AppState.draft.evidenceSummary || '';

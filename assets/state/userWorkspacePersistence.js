@@ -25,8 +25,26 @@
 
   function normaliseLearningStoreSection(learningStore) {
     return learningStore && typeof learningStore === 'object'
-      ? cloneValue(learningStore, { templates: {}, scenarioPatterns: [] })
-      : { templates: {}, scenarioPatterns: [] };
+      ? cloneValue(learningStore, {
+          templates: {},
+          scenarioPatterns: [],
+          analystSignals: {
+            keptRisks: [],
+            removedRisks: [],
+            narrativeEdits: [],
+            rerunDeltas: []
+          }
+        })
+      : {
+          templates: {},
+          scenarioPatterns: [],
+          analystSignals: {
+            keptRisks: [],
+            removedRisks: [],
+            narrativeEdits: [],
+            rerunDeltas: []
+          }
+        };
   }
 
   function normaliseDraftWorkspaceSection(draftWorkspace = {}, legacyDraft = null) {

@@ -263,6 +263,25 @@ function renderStep1FeaturedExampleCard(example, recommendedExamples = [], learn
   </details>`;
 }
 
+function renderStep1AiAlignmentCard(alignment = {}) {
+  const model = alignment && typeof alignment === 'object' ? alignment : {};
+  const checks = Array.isArray(model.checks) ? model.checks.filter(Boolean).slice(0, 4) : [];
+  if (!model.label && !checks.length) return '';
+  return `<div class="wizard-summary-band wizard-summary-band--support mt-4 wizard-ai-alignment-card">
+    <div>
+      <div class="wizard-summary-band__label">AI coherence check</div>
+      <strong>${escapeHtml(String(model.label || 'Working draft'))}</strong>
+      <div class="wizard-summary-band__copy">${escapeHtml(String(model.summary || 'The platform checked whether the draft, lens, structure, and shortlist still agree.'))}</div>
+    </div>
+    <div class="wizard-summary-band__meta wizard-ai-alignment-card__meta">
+      ${checks.map(check => `<div class="wizard-ai-alignment-card__check wizard-ai-alignment-card__check--${check.status === 'ok' ? 'ok' : 'review'}">
+        <span>${escapeHtml(String(check.label || 'Check'))}</span>
+        <strong>${escapeHtml(String(check.detail || ''))}</strong>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
 function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'your role', promptSuggestions = []) {
   const draftPreview = String(draft.guidedDraftPreview || '').trim() || composeStep1GuidedNarrative(draft.guidedInput, getEffectiveSettings(), draft);
   const draftPreviewStatus = String(draft.guidedDraftStatus || '').trim();
@@ -271,9 +290,9 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
   const promptCards = promptSuggestions.length
     ? promptSuggestions
     : [
-      { label: 'Supplier disruption', prompt: 'A critical supplier fails during a high-pressure operating period and key services fall behind.' },
-      { label: 'Control breakdown', prompt: 'A control breakdown remains undetected long enough to create customer, financial, or regulatory exposure.' },
-      { label: 'Recovery shortfall', prompt: 'An outage lasts longer than planned because recovery dependencies do not perform as expected.' }
+      { label: 'Commercial integrity issue', prompt: 'A sourcing, approval, or commercial decision is manipulated or poorly governed and starts creating avoidable downstream exposure.' },
+      { label: 'Disclosure or assurance gap', prompt: 'A control, policy, or reporting gap becomes visible and management now has to respond before the issue widens.' },
+      { label: 'Dependency or labour concern', prompt: 'A supplier, sub-tier dependency, or workforce practice issue becomes visible and starts creating continuity, compliance, or stakeholder pressure.' }
     ];
   const primaryPrompt = String(promptCards[0]?.prompt || 'Describe what happened or what could happen.').trim();
   return `<div class="card card--primary wizard-primary-card anim-fade-in anim-delay-1">
@@ -338,7 +357,7 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
       <div class="context-panel-title">Draft preview</div>
       ${draftPreviewStatus ? `<div class="form-help" style="margin-top:4px">${draftPreviewSource === 'ai' ? 'AI-built draft' : draftPreviewSource === 'fallback' ? 'Context-kept draft' : 'Local draft'} · ${escapeHtml(draftPreviewStatus)}</div>` : ''}
       <p class="context-panel-copy" id="guided-preview">${escapeHtml(String(draftPreview))}</p>
-    </div>` : '<div class="form-help wizard-preview-placeholder" id="guided-preview">Answer the prompts and build the draft. The platform will create a clean starting statement for you.</div>'}
+    </div>${renderStep1AiAlignmentCard(draft.aiAlignment)}` : '<div class="form-help wizard-preview-placeholder" id="guided-preview">Answer the prompts and build the draft. The platform will create a clean starting statement for you.</div>'}
   </div>`;
 }
 
@@ -1570,8 +1589,10 @@ function renderWizard1() {
   const recommendation = getStep1RecommendedAction(draft, selectedRisks);
   const exampleModel = getStep1ExampleExperienceModel(settings, draft);
   const activeDryRun = getLoadedDryRunScenario(draft);
-  const featuredDryRun = STEP1_DRY_RUN_SCENARIOS.find(example => example.id === 'supplier-platform-outage')
+  // Keep the hero example aligned to the user’s function instead of always leading with the same legacy supplier-outage demo.
+  const featuredDryRun = activeDryRun
     || exampleModel.recommendedExamples[0]
+    || exampleModel.learnedExamples[0]
     || exampleModel.availableExamples[0]
     || null;
   const hasScenarioDraft = !!String(draft.narrative || draft.sourceNarrative || '').trim();
@@ -1674,6 +1695,33 @@ function buildStep1AssessmentSignals(narrative) {
   };
 }
 
+function normaliseLearningRiskKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getStep1RiskSignalSummary(assessmentSignals = {}) {
+  const username = AuthService.getCurrentUser()?.username || '';
+  if (!username || typeof LearningStore === 'undefined' || typeof LearningStore.getRiskSignalSummary !== 'function') return null;
+  return LearningStore.getRiskSignalSummary(username, {
+    buId: AppState.draft?.buId || '',
+    functionKey: assessmentSignals?.scenarioLens?.functionKey || '',
+    lensKey: assessmentSignals?.scenarioLens?.key || ''
+  });
+}
+
+function recordStep1RiskDecision(risk, action = 'keep') {
+  const username = AuthService.getCurrentUser()?.username || '';
+  if (!username || typeof LearningStore === 'undefined' || typeof LearningStore.recordRiskDecision !== 'function' || !risk) return;
+  LearningStore.recordRiskDecision(username, {
+    action,
+    buId: AppState.draft?.buId || '',
+    scenarioLens: AppState.draft?.scenarioLens || null,
+    riskTitle: risk.title,
+    riskCategory: risk.category,
+    source: risk.source || ''
+  });
+}
+
 function getRiskAssessmentHaystack(risk) {
   return `${risk.title || ''} ${risk.description || ''} ${risk.category || ''}`.toLowerCase();
 }
@@ -1683,7 +1731,7 @@ function countAssessmentMatches(tokens, haystack) {
   return tokens.reduce((count, token) => count + (haystack.includes(token) ? 1 : 0), 0);
 }
 
-function scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds) {
+function scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds, feedbackSummary = null) {
   let score = 0;
   const reasons = [];
   const haystack = getRiskAssessmentHaystack(risk);
@@ -1734,6 +1782,17 @@ function scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds) {
   if (narrativeMatches >= 2) {
     score += 2;
     reasons.push('Shares the same event wording as the current scenario draft.');
+  }
+
+  const riskKey = normaliseLearningRiskKey(risk.title);
+  const keptCount = Number(feedbackSummary?.keptByTitle?.[riskKey] || 0);
+  const removedCount = Number(feedbackSummary?.removedByTitle?.[riskKey] || 0);
+  if (keptCount > removedCount) {
+    score += Math.min(5, keptCount * 1.5);
+    reasons.push('Analysts in similar scenarios usually keep this risk in scope.');
+  } else if (removedCount > keptCount) {
+    score -= Math.min(5, removedCount * 1.5);
+    reasons.push('Analysts in similar scenarios often remove this risk as out of scope.');
   }
 
   const fit = selectedIds.has(risk.id)
@@ -1805,9 +1864,10 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
   const linkedRecommendations = getLinkedRiskRecommendations(selectedRisks || []);
   const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft) || '';
   const assessmentSignals = buildStep1AssessmentSignals(narrative);
+  const feedbackSummary = getStep1RiskSignalSummary(assessmentSignals);
   const ranked = cleanedRisks
     .map(risk => {
-      const match = scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds);
+      const match = scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds, feedbackSummary);
       return { risk, match, score: match.score };
     })
     .sort((a, b) => b.score - a.score || String(a.risk.title || '').localeCompare(String(b.risk.title || '')));
@@ -1842,26 +1902,38 @@ function bindRiskCardActions({ buList = getBUList() } = {}) {
   });
   document.querySelectorAll('.risk-select-checkbox').forEach(box => {
     box.addEventListener('change', () => {
+      const risk = getRiskCandidates().find(item => item.id === box.dataset.riskId);
       const selectedIds = new Set(Array.isArray(AppState.draft.selectedRiskIds) ? AppState.draft.selectedRiskIds : []);
-      if (box.checked) selectedIds.add(box.dataset.riskId);
-      else selectedIds.delete(box.dataset.riskId);
+      if (box.checked) {
+        selectedIds.add(box.dataset.riskId);
+        // Keep/skip choices are one of the highest-signal learning loops, so record them when analysts confirm scope.
+        recordStep1RiskDecision(risk, 'keep');
+      } else {
+        selectedIds.delete(box.dataset.riskId);
+        recordStep1RiskDecision(risk, 'remove');
+      }
       AppState.draft.selectedRiskIds = Array.from(selectedIds);
       syncRiskSelection();
       persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
     });
   });
   document.getElementById('btn-select-all-risks')?.addEventListener('click', () => {
-    AppState.draft.selectedRiskIds = getRiskCandidates().map(risk => risk.id);
+    const risks = getRiskCandidates();
+    AppState.draft.selectedRiskIds = risks.map(risk => risk.id);
+    risks.forEach(risk => recordStep1RiskDecision(risk, 'keep'));
     syncRiskSelection();
     persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
   });
   document.getElementById('btn-clear-all-risks')?.addEventListener('click', () => {
+    getRiskCandidates().forEach(risk => recordStep1RiskDecision(risk, 'remove'));
     AppState.draft.selectedRiskIds = [];
     syncRiskSelection();
     persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
   });
   document.querySelectorAll('.btn-remove-risk').forEach(btn => {
     btn.addEventListener('click', () => {
+      const risk = getRiskCandidates().find(item => item.id === btn.dataset.riskId);
+      recordStep1RiskDecision(risk, 'remove');
       AppState.draft.riskCandidates = getRiskCandidates().filter(r => r.id !== btn.dataset.riskId);
       AppState.draft.selectedRiskIds = (AppState.draft.selectedRiskIds || []).filter(id => id !== btn.dataset.riskId);
       syncRiskSelection();

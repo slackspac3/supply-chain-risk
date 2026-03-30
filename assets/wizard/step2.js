@@ -34,6 +34,48 @@ const STEP2_SCENARIO_TYPE_OPTIONS = [
   'Identity / access compromise'
 ];
 
+function normaliseStep2NarrativeForLearning(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function isMeaningfulStep2NarrativeChange(before, after) {
+  const prior = normaliseStep2NarrativeForLearning(before).toLowerCase();
+  const next = normaliseStep2NarrativeForLearning(after).toLowerCase();
+  if (!prior || !next || prior === next) return false;
+  const priorTokens = Array.from(new Set(prior.split(/\s+/).filter(Boolean)));
+  const nextTokens = Array.from(new Set(next.split(/\s+/).filter(Boolean)));
+  const overlap = priorTokens.filter(token => nextTokens.includes(token)).length;
+  const similarity = overlap / Math.max(priorTokens.length, nextTokens.length, 1);
+  return similarity < 0.94 || Math.abs(next.length - prior.length) > 24;
+}
+
+function buildStep2NarrativeEditSummary(before, after) {
+  const lensLabel = String(AppState.draft?.scenarioLens?.label || 'scenario').trim().toLowerCase();
+  const beforeWords = normaliseStep2NarrativeForLearning(before).split(/\s+/).filter(Boolean).length;
+  const afterWords = normaliseStep2NarrativeForLearning(after).split(/\s+/).filter(Boolean).length;
+  if (afterWords > beforeWords + 6) return `Analyst expanded the ${lensLabel} narrative after AI structure support.`;
+  if (afterWords < Math.max(6, beforeWords - 6)) return `Analyst tightened the ${lensLabel} narrative after AI structure support.`;
+  return `Analyst materially rewrote the ${lensLabel} narrative after AI structure support.`;
+}
+
+function recordStep2NarrativeEditIfNeeded(nextNarrative) {
+  const username = AuthService.getCurrentUser()?.username || '';
+  if (!username || typeof LearningStore === 'undefined' || typeof LearningStore.recordNarrativeEdit !== 'function') return;
+  if (!AppState.draft?.llmAssisted) return;
+  const before = normaliseStep2NarrativeForLearning(AppState.draft.aiNarrativeBaseline || '');
+  const after = normaliseStep2NarrativeForLearning(nextNarrative);
+  if (!isMeaningfulStep2NarrativeChange(before, after)) return;
+  // Capture only material post-AI rewrites so the platform learns how analysts improve the structured draft over time.
+  LearningStore.recordNarrativeEdit(username, {
+    buId: AppState.draft?.buId || '',
+    scenarioLens: AppState.draft?.scenarioLens || null,
+    before,
+    after,
+    changeSummary: buildStep2NarrativeEditSummary(before, after)
+  });
+  AppState.draft.aiNarrativeBaseline = after;
+}
+
 function renderWizard2() {
   const draft = AppState.draft;
   const structuredScenario = normaliseStructuredScenario(draft.structuredScenario, { preserveUnknown: true }) || {};
@@ -202,6 +244,9 @@ function renderWizard2() {
     markDraftDirty();
     scheduleDraftAutosave();
   });
+  document.getElementById('narrative').addEventListener('blur', function() {
+    recordStep2NarrativeEditIfNeeded(this.value);
+  });
   document.getElementById('asset-service')?.addEventListener('input', function() {
     const next = { ...(AppState.draft.structuredScenario || {}) };
     next.assetService = this.value;
@@ -221,6 +266,7 @@ function renderWizard2() {
   document.getElementById('btn-next-2').addEventListener('click', () => {
     const n = document.getElementById('narrative').value.trim();
     if (!n) { UI.toast('Please enter a risk narrative.', 'warning'); return; }
+    recordStep2NarrativeEditIfNeeded(n);
     AppState.draft.enhancedNarrative = n;
     AppState.draft.narrative = AppState.draft.narrative || n;
     saveDraft(); Router.navigate('/wizard/3');
@@ -555,7 +601,16 @@ async function runLLMAssist() {
     const bu = getBUList().find(b => b.id === AppState.draft.buId);
     const aiContext = buildCurrentAIAssistContext({ buId: AppState.draft.buId });
     const scenarioText = buildScenarioNarrative(assistSeed);
-    const citations = await RAGService.retrieveRelevantDocs(AppState.draft.buId, scenarioText);
+    const citations = await RAGService.retrieveRelevantDocs(AppState.draft.buId, buildAssessmentRetrievalQuery({
+      narrative: scenarioText,
+      guidedInput: AppState.draft.guidedInput,
+      structuredScenario: AppState.draft.structuredScenario,
+      scenarioLens: AppState.draft.scenarioLens,
+      selectedRiskTitles: getSelectedRisks().map(risk => risk.title),
+      applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
+      geography: formatScenarioGeographies(getScenarioGeographies()),
+      businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
+    }));
     const benchmarkCandidates = BenchmarkService.retrieveRelevantBenchmarks({
       query: scenarioText,
       geography: formatScenarioGeographies(getScenarioGeographies()),
@@ -591,6 +646,7 @@ async function runLLMAssist() {
     AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
     AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
     AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
+    AppState.draft.aiNarrativeBaseline = narrative;
     AppState.draft.inputRationale = result.inputRationale || AppState.draft.inputRationale;
     AppState.draft.benchmarkReferences = Array.isArray(result.benchmarkReferences) ? result.benchmarkReferences : (AppState.draft.benchmarkReferences || []);
     AppState.draft.inputProvenance = Array.isArray(result.inputProvenance) ? result.inputProvenance : (AppState.draft.inputProvenance || []);

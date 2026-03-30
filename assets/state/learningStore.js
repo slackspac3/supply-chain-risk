@@ -1,9 +1,17 @@
 'use strict';
 
 const LearningStore = (() => {
+  const DEFAULT_ANALYST_SIGNALS = {
+    keptRisks: [],
+    removedRisks: [],
+    narrativeEdits: [],
+    rerunDeltas: []
+  };
+
   const DEFAULT_STORE = {
     templates: {},
-    scenarioPatterns: []
+    scenarioPatterns: [],
+    analystSignals: DEFAULT_ANALYST_SIGNALS
   };
 
   function _normalizeUsername(username) {
@@ -17,7 +25,27 @@ const LearningStore = (() => {
   function _cloneDefaultStore() {
     return {
       templates: {},
-      scenarioPatterns: []
+      scenarioPatterns: [],
+      analystSignals: {
+        keptRisks: [],
+        removedRisks: [],
+        narrativeEdits: [],
+        rerunDeltas: []
+      }
+    };
+  }
+
+  function _normaliseText(value = '', max = 220) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+  }
+
+  function _normaliseAnalystSignals(signals) {
+    const source = signals && typeof signals === 'object' ? signals : {};
+    return {
+      keptRisks: Array.isArray(source.keptRisks) ? source.keptRisks.filter(Boolean) : [],
+      removedRisks: Array.isArray(source.removedRisks) ? source.removedRisks.filter(Boolean) : [],
+      narrativeEdits: Array.isArray(source.narrativeEdits) ? source.narrativeEdits.filter(Boolean) : [],
+      rerunDeltas: Array.isArray(source.rerunDeltas) ? source.rerunDeltas.filter(Boolean) : []
     };
   }
 
@@ -29,7 +57,8 @@ const LearningStore = (() => {
     const scenarioPatterns = Array.isArray(source.scenarioPatterns)
       ? source.scenarioPatterns
       : [];
-    return { templates, scenarioPatterns };
+    const analystSignals = _normaliseAnalystSignals(source.analystSignals);
+    return { templates, scenarioPatterns, analystSignals };
   }
 
   function _generateId(prefix) {
@@ -63,6 +92,84 @@ const LearningStore = (() => {
     if (/technology|cyber|security|identity|cloud|infrastructure|it\b|digital|phishing|ransomware|breach/.test(haystack)) return 'technology';
     if (/operations|resilience|continuity|service delivery|manufacturing|logistics|facilities|workforce|process failure|backlog/.test(haystack)) return 'operations';
     return 'general';
+  }
+
+  function _normaliseLensKey(source = {}) {
+    const raw = String(
+      source?.lensKey ||
+      source?.scenarioLens?.key ||
+      source?.scenarioLensKey ||
+      ''
+    ).trim().toLowerCase();
+    const aliases = {
+      technology: 'cyber',
+      operations: 'operational',
+      finance: 'financial',
+      continuity: 'business-continuity',
+      'business continuity': 'business-continuity',
+      'supply chain': 'supply-chain',
+      'third party': 'third-party'
+    };
+    return aliases[raw] || raw || '';
+  }
+
+  function _appendSignal(list, item, limit = 40) {
+    return [item, ...(Array.isArray(list) ? list : [])].slice(0, limit);
+  }
+
+  function _normaliseRiskSignal(payload = {}, action = 'keep') {
+    return {
+      action,
+      recordedAt: Number(payload?.recordedAt || Date.now()),
+      buId: _normaliseText(payload?.buId || '', 64),
+      functionKey: _inferFunctionKey(payload),
+      lensKey: _normaliseLensKey(payload),
+      riskTitle: _normaliseText(payload?.riskTitle || payload?.title || '', 180),
+      riskCategory: _normaliseText(payload?.riskCategory || payload?.category || '', 90),
+      source: _normaliseText(payload?.source || '', 40)
+    };
+  }
+
+  function _normaliseNarrativeEdit(payload = {}) {
+    return {
+      recordedAt: Number(payload?.recordedAt || Date.now()),
+      buId: _normaliseText(payload?.buId || '', 64),
+      functionKey: _inferFunctionKey(payload),
+      lensKey: _normaliseLensKey(payload),
+      before: _normaliseText(payload?.before || '', 400),
+      after: _normaliseText(payload?.after || '', 400),
+      changeSummary: _normaliseText(payload?.changeSummary || '', 240)
+    };
+  }
+
+  function _normaliseRerunDelta(payload = {}) {
+    return {
+      recordedAt: Number(payload?.recordedAt || Date.now()),
+      buId: _normaliseText(payload?.buId || '', 64),
+      functionKey: _inferFunctionKey(payload),
+      lensKey: _normaliseLensKey(payload),
+      baselineTitle: _normaliseText(payload?.baselineTitle || '', 180),
+      deltaDirection: _normaliseText(payload?.deltaDirection || '', 40),
+      annualDirection: _normaliseText(payload?.annualDirection || '', 40),
+      keyDriver: _normaliseText(payload?.keyDriver || '', 240),
+      summary: _normaliseText(payload?.summary || '', 260)
+    };
+  }
+
+  function _signalMatches(signal = {}, filters = {}) {
+    const buId = _normaliseText(filters?.buId || '', 64);
+    const functionKey = _normaliseText(filters?.functionKey || '', 64).toLowerCase();
+    const lensKey = _normaliseLensKey(filters);
+    if (buId && String(signal?.buId || '').trim() && String(signal.buId).trim() !== buId) return false;
+    if (functionKey && String(signal?.functionKey || '').trim().toLowerCase() && String(signal.functionKey).trim().toLowerCase() !== functionKey) return false;
+    if (lensKey && String(signal?.lensKey || '').trim().toLowerCase() && String(signal.lensKey).trim().toLowerCase() !== lensKey) return false;
+    return true;
+  }
+
+  function _incrementMapValue(target, key) {
+    const safeKey = _normaliseText(key || '', 180);
+    if (!safeKey) return;
+    target[safeKey] = Number(target[safeKey] || 0) + 1;
   }
 
   function getLearningStore(username) {
@@ -237,6 +344,75 @@ const LearningStore = (() => {
     };
   }
 
+  function recordRiskDecision(username, payload = {}) {
+    try {
+      const store = getLearningStore(username);
+      const signal = _normaliseRiskSignal(payload, payload?.action === 'remove' ? 'remove' : 'keep');
+      if (!signal.riskTitle) return null;
+      const nextSignals = _normaliseAnalystSignals(store.analystSignals);
+      if (signal.action === 'remove') {
+        nextSignals.removedRisks = _appendSignal(nextSignals.removedRisks, signal);
+      } else {
+        nextSignals.keptRisks = _appendSignal(nextSignals.keptRisks, signal);
+      }
+      store.analystSignals = nextSignals;
+      saveLearningStore(username, store);
+      return signal;
+    } catch {
+      return null;
+    }
+  }
+
+  function recordNarrativeEdit(username, payload = {}) {
+    try {
+      const store = getLearningStore(username);
+      const signal = _normaliseNarrativeEdit(payload);
+      if (!signal.before || !signal.after || signal.before === signal.after) return null;
+      const nextSignals = _normaliseAnalystSignals(store.analystSignals);
+      nextSignals.narrativeEdits = _appendSignal(nextSignals.narrativeEdits, signal);
+      store.analystSignals = nextSignals;
+      saveLearningStore(username, store);
+      return signal;
+    } catch {
+      return null;
+    }
+  }
+
+  function recordRerunDelta(username, payload = {}) {
+    try {
+      const store = getLearningStore(username);
+      const signal = _normaliseRerunDelta(payload);
+      if (!signal.baselineTitle && !signal.keyDriver && !signal.summary) return null;
+      const nextSignals = _normaliseAnalystSignals(store.analystSignals);
+      nextSignals.rerunDeltas = _appendSignal(nextSignals.rerunDeltas, signal);
+      store.analystSignals = nextSignals;
+      saveLearningStore(username, store);
+      return signal;
+    } catch {
+      return null;
+    }
+  }
+
+  function getRiskSignalSummary(username, filters = {}) {
+    const signals = _normaliseAnalystSignals(getLearningStore(username).analystSignals);
+    const keptByTitle = {};
+    const removedByTitle = {};
+    const kept = signals.keptRisks.filter(signal => _signalMatches(signal, filters));
+    const removed = signals.removedRisks.filter(signal => _signalMatches(signal, filters));
+    kept.forEach(signal => _incrementMapValue(keptByTitle, signal.riskTitle));
+    removed.forEach(signal => _incrementMapValue(removedByTitle, signal.riskTitle));
+    const narrativeEdits = signals.narrativeEdits.filter(signal => _signalMatches(signal, filters));
+    const rerunDeltas = signals.rerunDeltas.filter(signal => _signalMatches(signal, filters));
+    return {
+      keptByTitle,
+      removedByTitle,
+      narrativeEditCount: narrativeEdits.length,
+      latestNarrativeEdit: narrativeEdits[0] || null,
+      rerunCount: rerunDeltas.length,
+      rerunDrivers: Array.from(new Set(rerunDeltas.map(signal => String(signal.keyDriver || '').trim()).filter(Boolean))).slice(0, 3)
+    };
+  }
+
   return {
     getLearningStore,
     saveLearningStore,
@@ -246,6 +422,10 @@ const LearningStore = (() => {
     templateFromDraft,
     getScenarioPatterns,
     saveScenarioPattern,
-    patternFromAssessment
+    patternFromAssessment,
+    recordRiskDecision,
+    recordNarrativeEdit,
+    recordRerunDelta,
+    getRiskSignalSummary
   };
 })();

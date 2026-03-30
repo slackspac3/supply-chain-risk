@@ -31,6 +31,17 @@ const { writeUserState, patchUserState } = require('../../api/user-state');
 const { materializeSavedAssessments } = require('../../assets/state/userWorkspacePersistence.js');
 const { writeSettings } = require('../../api/settings');
 
+const learningStore = {
+  templates: {},
+  scenarioPatterns: [],
+  analystSignals: {
+    keptRisks: [],
+    removedRisks: [],
+    narrativeEdits: [],
+    rerunDeltas: []
+  }
+};
+
 test.beforeEach(() => {
   kvStore.clear();
 });
@@ -39,7 +50,7 @@ test('writeUserState rejects stale revisions and returns the latest state', asyn
   const initial = await writeUserState('alex', {
     userSettings: { geography: 'UAE' },
     assessments: [],
-    learningStore: { templates: {} },
+    learningStore,
     draft: null
   }, { revision: 0 });
 
@@ -49,7 +60,7 @@ test('writeUserState rejects stale revisions and returns the latest state', asyn
   const stale = await writeUserState('alex', {
     userSettings: { geography: 'USA' },
     assessments: [],
-    learningStore: { templates: {} },
+    learningStore,
     draft: null
   }, { revision: 0 });
 
@@ -62,7 +73,7 @@ test('patchUserState updates only the requested section and increments revision'
   const initial = await writeUserState('alex', {
     userSettings: { geography: 'UAE' },
     assessments: [{ id: 'a-1', scenarioTitle: 'Initial' }],
-    learningStore: { templates: {} },
+    learningStore,
     draft: { id: 'draft-1', scenarioTitle: 'Draft one' }
   }, { revision: 0 });
 
@@ -81,7 +92,7 @@ test('user-state persistence stores bounded draft and saved-assessment sections 
   const initial = await writeUserState('alex', {
     userSettings: { geography: 'UAE' },
     assessments: [{ id: 'a-1', scenarioTitle: 'Initial', lifecycleStatus: 'draft' }],
-    learningStore: { templates: {} },
+    learningStore,
     draft: { id: 'draft-1', scenarioTitle: 'Draft one' }
   }, { revision: 0 });
 

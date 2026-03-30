@@ -1550,6 +1550,120 @@ ${businessUnit.selectedDepartmentContext}` : ''
     };
   }
 
+  function _getStructuredScenarioValue(structuredScenario = {}, field = '') {
+    const source = structuredScenario && typeof structuredScenario === 'object' ? structuredScenario : {};
+    if (field === 'primaryDriver') return _cleanUserFacingText(source.primaryDriver || source.threatCommunity || '', { maxSentences: 1, stripTrailingPeriod: true });
+    if (field === 'eventPath') return _cleanUserFacingText(source.eventPath || source.attackType || '', { maxSentences: 1, stripTrailingPeriod: true });
+    return _cleanUserFacingText(source[field] || '', { maxSentences: field === 'effect' ? 2 : 1, stripTrailingPeriod: field !== 'effect' });
+  }
+
+  function _inferLensFromRiskCard(risk = {}) {
+    const raw = _normaliseScenarioHintKey(risk?.category || '');
+    if (raw) return raw;
+    const text = `${risk?.title || ''} ${risk?.description || ''}`.toLowerCase();
+    if (/procurement|sourcing|contract|supplier due diligence|bid|tender|vendor selection/.test(text)) return 'procurement';
+    if (/supply chain|inventory|logistics|single source|upstream/.test(text)) return 'supply-chain';
+    if (/third party|third-party|vendor|supplier failure/.test(text)) return 'third-party';
+    if (/compliance|policy|control design|assurance|ethics/.test(text)) return 'compliance';
+    if (/regulatory|supervisory|licen[cs]e|sanction|export control/.test(text)) return 'regulatory';
+    if (/financial|fraud|payment|liquidity|reporting/.test(text)) return 'financial';
+    if (/esg|sustainability|human rights|climate|disclosure/.test(text)) return 'esg';
+    if (/business continuity|recovery|outage|downtime|crisis/.test(text)) return 'business-continuity';
+    if (/operational|service disruption|backlog|process/.test(text)) return 'operational';
+    if (/health|safety|environment|injury|spill|hazard/.test(text)) return 'hse';
+    if (/cyber|identity|cloud|data exposure|malware|ransomware/.test(text)) return 'cyber';
+    if (/strategy|strategic|market|programme|investment/.test(text)) return 'strategic';
+    return '';
+  }
+
+  function _buildAiAlignment(input = {}, result = {}, {
+    classification = {},
+    seedNarrative = '',
+    fallbackScenarioExpansion = null
+  } = {}) {
+    const expectedLens = _normaliseScenarioHintKey(input.scenarioLensHint) || classification.key || 'general';
+    const resolvedLens = _normaliseScenarioLens(result?.scenarioLens, _buildScenarioLens(classification));
+    const draftNarrative = _cleanUserFacingText(result?.draftNarrative || result?.enhancedStatement || seedNarrative, { maxSentences: 6 });
+    const draftCandidate = _evaluateGuidedDraftCandidate(draftNarrative, {
+      seedNarrative,
+      guidedInput: input.guidedInput,
+      scenarioLensHint: expectedLens,
+      businessUnit: input.businessUnit
+    });
+    const actualNarrativeLens = _classifyScenario(draftNarrative || seedNarrative, {
+      guidedInput: input.guidedInput,
+      businessUnit: input.businessUnit,
+      scenarioLensHint: expectedLens
+    }).key;
+    const structured = result?.structuredScenario && typeof result.structuredScenario === 'object'
+      ? result.structuredScenario
+      : {};
+    const structuredCount = ['assetService', 'primaryDriver', 'eventPath', 'effect']
+      .filter(field => _getStructuredScenarioValue(structured, field))
+      .length;
+    const risks = _normaliseRiskCards(Array.isArray(result?.risks) && result.risks.length
+      ? result.risks
+      : (fallbackScenarioExpansion?.riskTitles || []));
+    const alignedRiskCount = risks.filter(risk => {
+      const riskLens = _inferLensFromRiskCard(risk);
+      return !riskLens || _isCompatibleScenarioLens(resolvedLens.key, riskLens);
+    }).length;
+    const benchmarkRefs = Array.isArray(result?.benchmarkReferences) ? result.benchmarkReferences : [];
+    const benchmarkSignalCount = [
+      String(result?.benchmarkBasis || '').trim() ? 1 : 0,
+      benchmarkRefs.length ? 1 : 0
+    ].reduce((sum, value) => sum + value, 0);
+    const checks = [
+      {
+        label: 'Primary lens',
+        status: _isCompatibleScenarioLens(expectedLens, resolvedLens.key) && _isCompatibleScenarioLens(expectedLens, actualNarrativeLens) ? 'ok' : 'warning',
+        detail: _isCompatibleScenarioLens(expectedLens, resolvedLens.key) && _isCompatibleScenarioLens(expectedLens, actualNarrativeLens)
+          ? `${resolvedLens.label} stayed consistent with the intended scenario domain.`
+          : `AI drifted toward ${_buildScenarioLens({ key: actualNarrativeLens }).label.toLowerCase()} language and was corrected back toward the ${_buildScenarioLens({ key: expectedLens }).label.toLowerCase()} lens.`
+      },
+      {
+        label: 'Scenario draft',
+        status: draftCandidate.accepted ? 'ok' : 'warning',
+        detail: draftCandidate.accepted
+          ? 'The draft stayed close to the user event, impact, and current function context.'
+          : 'The draft was forced back toward the user statement because the first rewrite was too generic or too far from the described event.'
+      },
+      {
+        label: 'Structured scenario',
+        status: structuredCount >= 3 ? 'ok' : structuredCount >= 2 ? 'warning' : 'warning',
+        detail: structuredCount >= 3
+          ? `${structuredCount} core scenario fields were filled for downstream quantification.`
+          : 'The AI left too much structure blank, so the fallback scenario framing was kept.'
+      },
+      {
+        label: 'Shortlist fit',
+        status: risks.length && alignedRiskCount >= Math.max(1, Math.ceil(risks.length / 2)) ? 'ok' : 'warning',
+        detail: risks.length
+          ? `${alignedRiskCount} of ${risks.length} suggested risks align with the current scenario lens.`
+          : 'No candidate risks were returned, so the shortlist falls back to lens-aware local seeds.'
+      },
+      {
+        label: 'Grounding',
+        status: benchmarkSignalCount ? 'ok' : 'warning',
+        detail: benchmarkSignalCount
+          ? `${benchmarkRefs.length || 0} benchmark reference${benchmarkRefs.length === 1 ? '' : 's'} and a benchmark approach were attached.`
+          : 'Benchmark rationale or reference detail is still thin, so treat the output as a working draft.'
+      }
+    ];
+    const score = checks.reduce((sum, check) => sum + (check.status === 'ok' ? 20 : 8), 0);
+    const label = score >= 85
+      ? 'Aligned and grounded'
+      : score >= 65
+        ? 'Mostly aligned'
+        : 'Needs review';
+    return {
+      label,
+      score,
+      summary: `AI kept the draft in the ${resolvedLens.label.toLowerCase()} lens, aligned ${alignedRiskCount} of ${Math.max(risks.length, 1)} suggested risks, and attached ${benchmarkRefs.length || 0} benchmark reference${benchmarkRefs.length === 1 ? '' : 's'}.`,
+      checks
+    };
+  }
+
   async function buildGuidedScenarioDraft(input = {}) {
     const seedNarrative = _cleanUserFacingText(_cleanScenarioSeed(input.riskStatement || ''), { maxSentences: 5 });
     const classification = _classifyScenario(seedNarrative, {
@@ -1571,7 +1685,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
       aiNarrative: _buildEnhancedNarrative({
         ...input,
         riskStatement: seedNarrative
-      }, result.enhancedStatement || ''),
+      }, result.draftNarrative || result.enhancedStatement || ''),
       fallbackNarrative: fallbackScenarioExpansion.scenarioExpansion,
       seedNarrative,
       guidedInput: input.guidedInput,
@@ -1583,7 +1697,15 @@ ${businessUnit.selectedDepartmentContext}` : ''
       seedNarrative,
       draftNarrative: selectedDraft.narrative,
       draftNarrativeSource: selectedDraft.source,
-      draftNarrativeReason: selectedDraft.reason
+      draftNarrativeReason: selectedDraft.reason,
+      aiAlignment: _buildAiAlignment(input, {
+        ...result,
+        draftNarrative: selectedDraft.narrative
+      }, {
+        classification,
+        seedNarrative,
+        fallbackScenarioExpansion
+      })
     };
   }
 
@@ -1764,6 +1886,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
       businessUnit: input.businessUnit,
       scenarioLensHint: input.scenarioLensHint
     });
+    const scenarioLens = _buildScenarioLens(classification);
     const scenarioExpansion = _buildScenarioExpansion({ ...input, classification });
     const risks = scenarioExpansion.riskTitles.map((risk, idx) => ({
       id: `stub-risk-${idx + 1}`,
@@ -1785,10 +1908,11 @@ ${businessUnit.selectedDepartmentContext}` : ''
           'Challenge any number that does not fit the business context or known incident history.'
         ];
     return {
+      draftNarrative: riskStatement ? scenarioExpansion.scenarioExpansion : '',
       enhancedStatement: riskStatement ? scenarioExpansion.scenarioExpansion : '',
       summary: registerText ? `AI identified ${risks.length} candidate risk${risks.length > 1 ? 's' : ''} from the uploaded material and reframed them into one coherent ${scenarioLens.label.toLowerCase()} scenario.` : scenarioExpansion.summary,
       linkAnalysis: _buildRiskContextLinkAnalysis({ classification, riskTitles: scenarioExpansion.riskTitles }),
-      scenarioLens: _buildScenarioLens(classification),
+      scenarioLens,
       risks,
       regulations: Array.from(new Set([...(input.applicableRegulations || []), ...risks.flatMap(r => r.regulations || [])])),
       workflowGuidance,
@@ -1993,6 +2117,7 @@ If the scenario concerns identity compromise (Azure AD, Entra, SSO, directory se
 
 Return JSON only with this schema:
 {
+  "draftNarrative": "string",
   "enhancedStatement": "string",
   "summary": "string",
   "linkAnalysis": "string",
@@ -2006,6 +2131,8 @@ Return JSON only with this schema:
 }`;
         const evidenceMeta = _buildEvidenceMeta({ citations: input.citations || [], businessUnit: input.businessUnit, geography: input.geography, applicableRegulations: input.applicableRegulations, uploadedText: input.registerText, registerText: input.registerText, userProfile: input.adminSettings?.userProfileSummary, organisationContext: input.adminSettings?.companyStructureContext, adminSettings: input.adminSettings });
         const userPrompt = `Instructions:
+- write draftNarrative as a 2-4 sentence scenario constructor that stays close to the user's event wording while making the scenario sharper, more specific, and easier to assess
+- make draftNarrative explicitly cover the event, the affected area, the primary driver, and the main business consequence without drifting into a different scenario
 - make the enhancedStatement read like a realistic scenario narrative, not a polished restatement
 - explain the most likely progression of the event and the common secondary effects
 - include business and operational consequences, not just the technical failure
@@ -2055,9 +2182,10 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
         const raw = await _callLLM(systemPrompt, userPrompt, { taskName: 'enhanceRiskContext', temperature: 0.6, maxPromptChars: 24000 });
         if (raw) {
           const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
-          return _decorateAiResult(_withEvidenceMeta({
+          const candidateResult = {
             ...parsed,
             scenarioLens: _normaliseScenarioLens(parsed.scenarioLens, _buildScenarioLens(classification)),
+            draftNarrative: _cleanUserFacingText(parsed.draftNarrative || '', { maxSentences: 4 }),
             enhancedStatement: _buildEnhancedNarrative(input, parsed.enhancedStatement),
             summary: _cleanUserFacingText(
               _looksGenericRiskContextCopy(parsed.summary) ? fallbackScenarioExpansion.summary : (parsed.summary || fallbackScenarioExpansion.summary),
@@ -2074,9 +2202,31 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
             risks: _normaliseRiskCards(Array.isArray(parsed.risks) && parsed.risks.length ? parsed.risks : fallbackScenarioExpansion.riskTitles),
             regulations: Array.from(new Set((parsed.regulations || []).map(String).filter(Boolean))),
             citations: input.citations || []
-          }, evidenceMeta), evidenceMeta, {
+          };
+          const candidateAlignment = _buildAiAlignment(input, candidateResult, {
+            classification,
+            seedNarrative: input.riskStatement || input.registerText || '',
+            fallbackScenarioExpansion
+          });
+          const coherenceFallback = candidateAlignment.score < 65;
+          const finalResult = coherenceFallback
+            ? {
+                ...candidateResult,
+                draftNarrative: fallbackScenarioExpansion.scenarioExpansion,
+                summary: fallbackScenarioExpansion.summary,
+                linkAnalysis: _buildRiskContextLinkAnalysis({ classification, riskTitles: fallbackScenarioExpansion.riskTitles }),
+                scenarioLens: _buildScenarioLens(classification),
+                risks: _normaliseRiskCards(fallbackScenarioExpansion.riskTitles)
+              }
+            : candidateResult;
+          finalResult.aiAlignment = _buildAiAlignment(input, finalResult, {
+            classification,
+            seedNarrative: input.riskStatement || input.registerText || '',
+            fallbackScenarioExpansion
+          });
+          return _decorateAiResult(_withEvidenceMeta(finalResult, evidenceMeta), evidenceMeta, {
             contentFields: ['enhancedStatement', 'summary', 'linkAnalysis', 'benchmarkBasis'],
-            fallbackUsed: false
+            fallbackUsed: coherenceFallback
           });
         }
       } catch (e) {
@@ -2085,7 +2235,13 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
       }
     }
     const fallbackMeta = _buildEvidenceMeta({ citations: input.citations || [], businessUnit: input.businessUnit, geography: input.geography, applicableRegulations: input.applicableRegulations, uploadedText: input.registerText, registerText: input.registerText, userProfile: input.adminSettings?.userProfileSummary, organisationContext: input.adminSettings?.companyStructureContext, adminSettings: input.adminSettings });
-    return _decorateAiResult(_withEvidenceMeta(_generateRiskBuilderStub(input), fallbackMeta), fallbackMeta, {
+    const fallbackResult = _generateRiskBuilderStub(input);
+    fallbackResult.aiAlignment = _buildAiAlignment(input, fallbackResult, {
+      classification,
+      seedNarrative: input.riskStatement || input.registerText || '',
+      fallbackScenarioExpansion
+    });
+    return _decorateAiResult(_withEvidenceMeta(fallbackResult, fallbackMeta), fallbackMeta, {
       contentFields: ['enhancedStatement', 'summary', 'linkAnalysis', 'benchmarkBasis'],
       fallbackUsed: true
     });

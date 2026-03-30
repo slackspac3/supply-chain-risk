@@ -881,5 +881,70 @@
     ],
     "contentExcerpt": "ISO 37001 is relevant for procurement integrity, conflict of interest, facilitation payments, third-party due diligence, gifts and hospitality, investigation workflows, and anti-bribery controls. It helps ground procurement and compliance scenarios where corruption or collusion risk may be the true driver.",
     "lastUpdated": "2025-06-15"
+  },
+  {
+    "id": "doc-csddd-58",
+    "title": "EU Corporate Sustainability Due Diligence Directive (CSDDD) Readiness Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "esg",
+      "compliance",
+      "regulatory",
+      "procurement",
+      "supply-chain",
+      "human-rights",
+      "eu",
+      "all-bu"
+    ],
+    "contentExcerpt": "CSDDD readiness is relevant where supplier labour conditions, environmental harm, remediation obligations, board oversight, or value-chain due diligence could create legal, financing, disclosure, or stakeholder pressure. It helps procurement and ESG scenarios stay grounded in emerging enterprise due-diligence expectations rather than generic sustainability language.",
+    "lastUpdated": "2025-06-15"
+  },
+  {
+    "id": "doc-iso14064-59",
+    "title": "ISO 14064-1 Greenhouse Gas Quantification and Reporting Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "esg",
+      "strategic",
+      "environment",
+      "reporting",
+      "compliance",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "ISO 14064-1 is relevant where climate disclosures, emissions baselines, reporting controls, and assurance-quality evidence affect management confidence. It helps ESG scenarios move beyond reputational language by grounding carbon reporting, boundary setting, data quality, and disclosure defensibility in a recognised framework.",
+    "lastUpdated": "2025-06-15"
+  },
+  {
+    "id": "doc-osha-psm-60",
+    "title": "OSHA Process Safety Management Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "hse",
+      "operational",
+      "health-safety",
+      "business-continuity",
+      "operations",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "OSHA Process Safety Management is relevant where hazardous operations, contractor safety, maintenance discipline, management of change, emergency planning, or incident investigation determine whether a site remains safe to operate. It strengthens HSE retrieval for scenarios where shutdown, worker exposure, or process-control failure can rapidly become a continuity issue.",
+    "lastUpdated": "2025-06-15"
+  },
+  {
+    "id": "doc-sa8000-61",
+    "title": "SA8000 Social Accountability and Labour Assurance Reference",
+    "url": "#/admin/docs",
+    "tags": [
+      "esg",
+      "procurement",
+      "supply-chain",
+      "human-rights",
+      "compliance",
+      "global",
+      "all-bu"
+    ],
+    "contentExcerpt": "SA8000 is relevant when supplier labour practices, worker welfare, recruitment standards, grievance handling, corrective action, or social audit quality could materially affect sourcing decisions, disclosures, financing, or customer trust. It helps labour-practice scenarios stay grounded in due-diligence and remediation expectations rather than generic ethics language.",
+    "lastUpdated": "2025-06-15"
   }
 ]

@@ -191,6 +191,51 @@ const RAGService = (() => {
     ));
   }
 
+  function _coerceQueryInput(query = '') {
+    if (typeof query === 'string') {
+      return {
+        raw: String(query || ''),
+        scenarioLens: null,
+        selectedRiskTitles: [],
+        priorityTerms: []
+      };
+    }
+    const source = query && typeof query === 'object' ? query : {};
+    const guidedInput = source.guidedInput && typeof source.guidedInput === 'object' ? source.guidedInput : {};
+    const structuredScenario = source.structuredScenario && typeof source.structuredScenario === 'object' ? source.structuredScenario : {};
+    const selectedRiskTitles = Array.isArray(source.selectedRiskTitles)
+      ? source.selectedRiskTitles.map(item => String(item || '').trim()).filter(Boolean)
+      : [];
+    const applicableRegulations = Array.isArray(source.applicableRegulations)
+      ? source.applicableRegulations.map(item => String(item || '').trim()).filter(Boolean)
+      : [];
+    const priorityTerms = [
+      ...selectedRiskTitles,
+      ...applicableRegulations,
+      String(source.businessUnitName || '').trim(),
+      String(source.geography || '').trim(),
+      String(source.treatmentRequest || '').trim(),
+      String(structuredScenario.assetService || '').trim(),
+      String(structuredScenario.primaryDriver || structuredScenario.threatCommunity || '').trim(),
+      String(structuredScenario.eventPath || structuredScenario.attackType || '').trim(),
+      String(structuredScenario.effect || '').trim()
+    ].filter(Boolean);
+    const raw = [
+      String(source.text || source.narrative || source.riskStatement || '').trim(),
+      String(guidedInput.event || '').trim(),
+      String(guidedInput.asset || '').trim(),
+      String(guidedInput.cause || '').trim(),
+      String(guidedInput.impact || '').trim(),
+      priorityTerms.length ? priorityTerms.join(' ') : ''
+    ].filter(Boolean).join(' ');
+    return {
+      raw,
+      scenarioLens: source.scenarioLens || null,
+      selectedRiskTitles,
+      priorityTerms
+    };
+  }
+
   function _queryIncludesAny(query, patterns = []) {
     const q = _normaliseText(query);
     return patterns.some(pattern => q.includes(_normaliseText(pattern)));
@@ -223,10 +268,14 @@ const RAGService = (() => {
   }
 
   function _expandQuery(query = '') {
-    const raw = String(query || '');
+    const querySource = _coerceQueryInput(query);
+    const raw = String(querySource.raw || '');
     const normalized = _normaliseText(raw);
     const concepts = Array.from(new Set(_extractConceptKeys(raw)));
-    const lensTags = Array.from(new Set(_getMatchingLensTags(raw)));
+    const lensTags = Array.from(new Set([
+      ..._getMatchingLensTags(raw),
+      ..._getMatchingLensTags(String(querySource.scenarioLens?.key || querySource.scenarioLens?.label || ''))
+    ]));
     const phrases = Array.from(new Set(
       CONCEPT_RULES
         .flatMap(rule => rule.patterns || [])
@@ -258,13 +307,19 @@ const RAGService = (() => {
       });
     });
 
+    (querySource.priorityTerms || []).forEach(term => {
+      _tokenise(term).forEach(token => expandedTerms.add(token));
+      if (_normaliseText(term).includes(' ')) phrases.push(term);
+    });
+
     return {
       raw,
       normalized,
       concepts,
       lensTags,
-      phrases,
-      expandedTerms: Array.from(expandedTerms)
+      phrases: Array.from(new Set(phrases)),
+      expandedTerms: Array.from(expandedTerms),
+      priorityTerms: Array.from(new Set((querySource.priorityTerms || []).map(term => _normaliseText(term)).filter(Boolean)))
     };
   }
 
@@ -274,7 +329,9 @@ const RAGService = (() => {
     return {
       doc,
       tags,
+      normalizedTitle: _normaliseText(doc.title || ''),
       normalizedText: _normaliseText(text),
+      titleTokens: new Set(_tokenise(doc.title || '')),
       tokens: new Set(_tokenise(text)),
       concepts: new Set(_extractConceptKeys(`${text} ${tags.join(' ')}`))
     };
@@ -299,6 +356,10 @@ const RAGService = (() => {
     const semanticMatches = (queryInfo.concepts || []).filter(concept => indexedDoc.concepts.has(concept));
     if (semanticMatches.length) {
       reasons.push(`Semantic match: ${semanticMatches[0].replace(/-/g, ' ')}`);
+    }
+    const priorityMatches = (queryInfo.priorityTerms || []).filter(term => term && indexedDoc.normalizedTitle.includes(term));
+    if (priorityMatches.length) {
+      reasons.push(`Title match: ${priorityMatches[0].replace(/-/g, ' ')}`);
     }
     TOPIC_RULES.forEach(rule => {
       if (!_queryIncludesAny(queryInfo.raw, rule.patterns)) return;
@@ -376,6 +437,7 @@ const RAGService = (() => {
     (queryInfo.expandedTerms || []).forEach(term => {
       const hits = (indexedDoc.normalizedText.match(new RegExp(`\\b${term}\\b`, 'g')) || []).length;
       score += hits * 1.4;
+      if (indexedDoc.titleTokens.has(term)) score += 2.3;
     });
 
     const bu = _buData.find(b => b.id === buId);
@@ -390,6 +452,12 @@ const RAGService = (() => {
 
     score += _semanticBoost(indexedDoc, queryInfo);
     score += _topicBoost(indexedDoc, queryInfo.raw);
+
+    (queryInfo.priorityTerms || []).forEach(term => {
+      if (!term) return;
+      if (indexedDoc.normalizedTitle.includes(term)) score += 4.5;
+      if (indexedDoc.normalizedText.includes(term)) score += 1.4;
+    });
 
     if (indexedDoc.tags.includes('all-bu')) score += 0.75;
     if (indexedDoc.tags.includes('nist') || indexedDoc.tags.includes('iso') || indexedDoc.tags.includes('oecd') || indexedDoc.tags.includes('iec')) score += 0.6;
