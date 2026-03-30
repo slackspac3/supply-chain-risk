@@ -66,7 +66,9 @@
   function appendStateTransitionLog(state, scope, action, detail = {}) {
     const nextLog = Array.isArray(state?.stateTransitionLog) ? state.stateTransitionLog.slice() : [];
     nextLog.unshift(createStateTransitionEntry(scope, action, detail));
-    if (nextLog.length > STATE_TRANSITION_LOG_LIMIT) nextLog.length = STATE_TRANSITION_LOG_LIMIT;
+    if (nextLog.length > STATE_TRANSITION_LOG_LIMIT) {
+      nextLog.splice(STATE_TRANSITION_LOG_LIMIT);
+    }
     return {
       ...state,
       stateTransitionLog: nextLog

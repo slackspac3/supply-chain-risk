@@ -209,7 +209,7 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
     }
     if (currentStep === 3) {
       async function loadOnboardingAiSource() {
-        const notes = document.getElementById('onboard-answer-notes')?.value.trim() || '';
+        const notes = (document.getElementById('onboard-answer-notes')?.value || '').trim() || '';
         const file = document.getElementById('onboard-answer-file')?.files?.[0];
         let uploadedText = '';
         if (file) {
@@ -244,8 +244,8 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
               businessUnit: businessEntity?.name || draftSettings.userProfile.businessUnit || '',
               department: departmentEntity?.name || draftSettings.userProfile.department || '',
               focusAreas: draftSettings.userProfile.focusAreas || [],
-              preferredOutputs: document.getElementById('onboard-preferred-outputs').value.trim(),
-              workingContext: document.getElementById('onboard-working-context').value.trim()
+              preferredOutputs: (document.getElementById('onboard-preferred-outputs')?.value || '').trim(),
+              workingContext: (document.getElementById('onboard-working-context')?.value || '').trim()
             },
             organisationContext: {
               businessUnitContext: businessEntity?.profile || getEntityLayerById(globalSettings, businessEntity?.id || '')?.contextSummary || '',
@@ -274,13 +274,13 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
 
     function captureStepValues() {
       if (currentStep === 0) {
-        draftSettings.userProfile.fullName = document.getElementById('onboard-name').value.trim() || AppState.currentUser?.displayName || '';
-        draftSettings.userProfile.jobTitle = document.getElementById('onboard-title').value.trim();
+        draftSettings.userProfile.fullName = (document.getElementById('onboard-name')?.value || '').trim() || AppState.currentUser?.displayName || '';
+        draftSettings.userProfile.jobTitle = (document.getElementById('onboard-title')?.value || '').trim();
       }
       if (currentStep === 1) {
         const businessUnitEntityId = capability.managedBusinessId || capability.selection.businessUnitEntityId || '';
         const departmentEntityId = capability.canManageBusinessUnit && !capability.canManageDepartment
-          ? document.getElementById('onboard-department').value.trim()
+          ? (document.getElementById('onboard-department')?.value || '').trim()
           : (capability.managedDepartmentId || capability.selection.departmentEntityId || '');
         const businessEntity = getEntityById(companyStructure, businessUnitEntityId);
         const departmentEntity = getEntityById(companyStructure, departmentEntityId);
@@ -290,19 +290,19 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
         draftSettings.userProfile.department = departmentEntity?.name || '';
       }
       if (currentStep === 2) {
-        draftSettings.geographyPrimary = document.getElementById('onboard-geo-primary').value.trim() || globalSettings.geography;
-        draftSettings.geographySecondary = document.getElementById('onboard-geo-secondary').value.trim();
-        draftSettings.geographyTertiary = document.getElementById('onboard-geo-tertiary').value.trim();
+        draftSettings.geographyPrimary = (document.getElementById('onboard-geo-primary')?.value || '').trim() || globalSettings.geography;
+        draftSettings.geographySecondary = (document.getElementById('onboard-geo-secondary')?.value || '').trim();
+        draftSettings.geographyTertiary = (document.getElementById('onboard-geo-tertiary')?.value || '').trim();
         draftSettings.geography = draftSettings.geographyPrimary;
         draftSettings.userProfile.focusAreas = focusInput?.getTags() || [];
       }
       if (currentStep === 3) {
-        draftSettings.userProfile.preferredOutputs = document.getElementById('onboard-preferred-outputs').value.trim();
-        draftSettings.userProfile.workingContext = document.getElementById('onboard-working-context').value.trim();
+        draftSettings.userProfile.preferredOutputs = (document.getElementById('onboard-preferred-outputs')?.value || '').trim();
+        draftSettings.userProfile.workingContext = (document.getElementById('onboard-working-context')?.value || '').trim();
       }
       if (currentStep === 4) {
-        draftSettings.companyWebsiteUrl = document.getElementById('onboard-company-url').value.trim();
-        draftSettings.aiInstructions = document.getElementById('onboard-ai-guidance').value.trim() || globalSettings.aiInstructions;
+        draftSettings.companyWebsiteUrl = (document.getElementById('onboard-company-url')?.value || '').trim();
+        draftSettings.aiInstructions = (document.getElementById('onboard-ai-guidance')?.value || '').trim() || globalSettings.aiInstructions;
       }
       draftSettings.userProfile = normaliseUserProfile(draftSettings.userProfile);
     }

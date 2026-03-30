@@ -142,6 +142,23 @@
     renderNotifDrawer();
   }
 
+  function handleCurrencyChange(newCurrency) {
+    if (AppState.currency === newCurrency) return;
+    const hash = String(window.location.hash || '');
+    const onWizard = /^#\/wizard\/[1-4]/.test(hash);
+    if (onWizard) {
+      const narrativeEl = document.getElementById('narrative')
+        || document.getElementById('intake-risk-statement');
+      if (narrativeEl && narrativeEl.value.trim()) {
+        AppState.draft.enhancedNarrative = narrativeEl.value;
+        AppState.draft.narrative = AppState.draft.narrative || narrativeEl.value;
+      }
+    }
+    AppState.currency = newCurrency;
+    AppShellNavigation.renderAppBar();
+    Router.resolve();
+  }
+
   function getAppBarNavModel(currentUser, currentHash) {
     const nonAdminCapability = currentUser && currentUser.role !== 'admin'
       ? getNonAdminCapabilityState(currentUser, getUserSettings(), getAdminSettings())
@@ -211,8 +228,8 @@
         pocTag.classList.add('bar-poc-tag--hidden');
       }
       updateNotifBadge();
-      document.getElementById('cur-usd').addEventListener('click', () => { AppState.currency='USD'; AppShellNavigation.renderAppBar(); Router.resolve(); });
-      document.getElementById('cur-aed').addEventListener('click', () => { AppState.currency='AED'; AppShellNavigation.renderAppBar(); Router.resolve(); });
+      document.getElementById('cur-usd').addEventListener('click', () => handleCurrencyChange('USD'));
+      document.getElementById('cur-aed').addEventListener('click', () => handleCurrencyChange('AED'));
       document.getElementById('btn-notif-bell')?.addEventListener('click', event => {
         event.preventDefault();
         event.stopPropagation();

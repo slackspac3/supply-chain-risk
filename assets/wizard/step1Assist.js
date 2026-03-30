@@ -13,6 +13,16 @@
     return `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`;
   }
 
+  function renderAIStatusBanner() {
+    const qualityState = String(AppState?.draft?.aiQualityState || '').trim().toLowerCase();
+    if (qualityState === 'fallback') {
+      return '<div class="ai-status-banner ai-status-banner--fallback" role="alert">' +
+        '<span>⚠ AI model unavailable — this content was generated locally without live model grounding. Evidence quality may be lower than usual.</span>' +
+        '</div>';
+    }
+    return '';
+  }
+
   function _clearStep1AiUnavailableBanners() {
     document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
   }
@@ -27,6 +37,47 @@
     const assistant = String(assistantText || '').trim();
     if (!user || !assistant) return;
     dispatchDraftAction('APPEND_LLM_CONTEXT', { user, assistant });
+  }
+
+  function _normaliseRiskConfidence(value) {
+    const lowered = String(value || '').trim().toLowerCase();
+    return lowered === 'high' || lowered === 'low' || lowered === 'medium' ? lowered : 'medium';
+  }
+
+  function _ensureRiskConfidence(result = {}) {
+    return {
+      ...result,
+      risks: (Array.isArray(result.risks) ? result.risks : []).map((risk) => ({
+        ...risk,
+        confidence: _normaliseRiskConfidence(risk?.confidence)
+      }))
+    };
+  }
+
+  function _syncRiskConfidenceToDraft(risks = []) {
+    const confidenceByTitle = new Map(
+      (Array.isArray(risks) ? risks : [])
+        .map((risk) => {
+          const titleKey = String(risk?.title || '').trim().toLowerCase();
+          return titleKey ? [titleKey, _normaliseRiskConfidence(risk?.confidence)] : null;
+        })
+        .filter(Boolean)
+    );
+    if (!confidenceByTitle.size) return;
+    const applyConfidence = (risk) => {
+      const titleKey = String(risk?.title || '').trim().toLowerCase();
+      if (!titleKey || !confidenceByTitle.has(titleKey)) return risk;
+      return {
+        ...risk,
+        confidence: confidenceByTitle.get(titleKey)
+      };
+    };
+    if (Array.isArray(AppState?.draft?.riskCandidates)) {
+      AppState.draft.riskCandidates = AppState.draft.riskCandidates.map(applyConfidence);
+    }
+    if (Array.isArray(AppState?.draft?.selectedRisks)) {
+      AppState.draft.selectedRisks = AppState.draft.selectedRisks.map(applyConfidence);
+    }
   }
 
   function _renderStep1AiUnavailableBanner(target, retryHandler) {
@@ -75,7 +126,7 @@
         applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
         businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
       }), 5);
-      const result = await LLMService.buildGuidedScenarioDraft({
+      const rawResult = await LLMService.buildGuidedScenarioDraft({
         riskStatement: localDraft,
         guidedInput: { ...AppState.draft.guidedInput },
         scenarioLensHint: preferredLens,
@@ -86,6 +137,7 @@
         adminSettings: aiContext.adminSettings,
         priorMessages: _getStep1PriorMessages()
       });
+      const result = _ensureRiskConfidence(rawResult);
       const finalDraft = String(result.draftNarrative || result.enhancedStatement || localDraft).trim() || localDraft;
       const guidedDraftSource = String(result.draftNarrativeSource || (result.usedFallback ? 'fallback' : 'ai')).trim() || 'local';
       clearStep1StaleAssistState(finalDraft, { clearGeneratedRisks: true });
@@ -101,6 +153,7 @@
         citations,
         nextNarrative: finalDraft
       });
+      _syncRiskConfidenceToDraft(appliedResult.risks);
       AppState.draft.guidedDraftPreview = finalDraft;
       AppState.draft.guidedDraftSource = guidedDraftSource;
       AppState.draft.guidedDraftStatus = _buildGuidedDraftStatusCopy(guidedDraftSource);
@@ -170,7 +223,7 @@
         applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
         businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
       }), 5);
-      const result = await LLMService.enhanceRiskContext({
+      const rawResult = await LLMService.enhanceRiskContext({
         riskStatement: assistSeed || narrative,
         registerText: AppState.draft.registerFindings,
         registerMeta: AppState.draft.registerMeta,
@@ -183,6 +236,7 @@
         adminSettings: aiContext.adminSettings,
         priorMessages: _getStep1PriorMessages()
       });
+      const result = _ensureRiskConfidence(rawResult);
       draftScenarioState.applyScenarioAssistResultToDraft(result, {
         narrative,
         assistSeed,
@@ -190,6 +244,7 @@
         citations,
         nextNarrative: result.enhancedStatement || narrative
       });
+      _syncRiskConfidenceToDraft(result.risks);
       _appendStep1LlmContext(assistSeed || narrative, result.enhancedStatement || result.draftNarrative || narrative);
       saveDraft();
       renderWizard1();
@@ -230,7 +285,7 @@
         applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
         businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
       }), 5);
-      const result = await LLMService.enhanceRiskContext({
+      const rawResult = await LLMService.enhanceRiskContext({
         riskStatement: assistSeed || narrative,
         registerText: '',
         registerMeta: null,
@@ -243,6 +298,7 @@
         adminSettings: aiContext.adminSettings,
         priorMessages: _getStep1PriorMessages()
       });
+      const result = _ensureRiskConfidence(rawResult);
       draftScenarioState.applyScenarioAssistResultToDraft(result, {
         narrative,
         assistSeed,
@@ -250,6 +306,7 @@
         citations,
         nextNarrative: result.enhancedStatement || narrative
       });
+      _syncRiskConfidenceToDraft(result.risks);
       _appendStep1LlmContext(assistSeed || narrative, result.enhancedStatement || result.draftNarrative || narrative);
       saveDraft();
       renderWizard1();
@@ -283,7 +340,7 @@
     const resetButton = _setStep1ButtonBusy(button, 'Uploading, extracting, and analysing…');
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
-      const result = await LLMService.analyseRiskRegister({
+      const rawResult = await LLMService.analyseRiskRegister({
         registerText: AppState.draft.registerFindings,
         registerMeta: AppState.draft.registerMeta,
         businessUnit: aiContext.businessUnit || bu,
@@ -292,6 +349,7 @@
         adminSettings: aiContext.adminSettings,
         priorMessages: _getStep1PriorMessages()
       });
+      const result = _ensureRiskConfidence(rawResult);
       const parsedFallback = parseRegisterText(AppState.draft.registerFindings).map(title => ({ title, source: 'register' }));
       const extractedRisks = result.risks || parsedFallback;
       if (!extractedRisks.length) {
@@ -299,6 +357,7 @@
         return;
       }
       draftScenarioState.applyRegisterAnalysisResultToDraft(result, { parsedFallback });
+      _syncRiskConfidenceToDraft(result.risks);
       saveDraft();
       renderWizard1();
       if (result.aiUnavailable) {
@@ -317,10 +376,13 @@
     }
   }
 
+  global.renderAIStatusBanner = renderAIStatusBanner;
+
   global.Step1Assist = {
     buildGuidedScenarioDraft,
     runIntakeAssist,
     enhanceNarrativeWithAI,
-    analyseUploadedRegister
+    analyseUploadedRegister,
+    renderAIStatusBanner
   };
 })(window);

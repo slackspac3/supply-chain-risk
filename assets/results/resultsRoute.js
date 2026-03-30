@@ -206,7 +206,7 @@ function renderDecisionSentence(executiveDecision, statusTitle, results) {
   </div>`;
 }
 
-function renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, confidence, rolePresentation) {
+function renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, confidence, rolePresentation, showFallbackBadge = false) {
   const confidenceValue = confidence?.label || 'Moderate confidence';
   const confidenceCopy = confidence?.summary || 'Use this result as a management starting point, then challenge the biggest assumptions.';
   return `${renderDecisionSentence(executiveDecision, statusTitle, null)}
@@ -219,7 +219,7 @@ function renderDecisionRail(statusTitle, statusDetail, executiveDecision, execut
     <div class="results-decision-rail__support">
       ${UI.resultsBriefCard({
         label: 'Confidence',
-        value: confidenceValue,
+        value: `${escapeHtml(String(confidenceValue))}${showFallbackBadge ? ' <span class="badge badge--warning">Local fallback</span>' : ''}`,
         copy: confidence?.implication
           ? confidence.implication
           : confidenceCopy
@@ -795,6 +795,15 @@ function buildAssessmentAiQualitySignal(assessment = {}) {
     label: 'Analyst-built',
     summary: 'This result is primarily analyst-shaped and should be read as a structured management view rather than a strongly AI-grounded output.'
   };
+}
+
+function hasAssessmentLocalFallback(assessment = {}) {
+  const draftQualityState = String(assessment?.draft?.aiQualityState || assessment?.aiQualityState || '').trim().toLowerCase();
+  const runtimeGuardrails = Array.isArray(assessment?.results?.runMetadata?.runtimeGuardrails)
+    ? assessment.results.runMetadata.runtimeGuardrails
+    : [];
+  return draftQualityState === 'fallback'
+    || runtimeGuardrails.some(item => /fallback/i.test(String(item || '')));
 }
 
 function renderExecutiveBenchmarkContext(assessment, results, runMetadata) {
@@ -2117,6 +2126,53 @@ function renderResultsReviewSubmitBanner(assessment, r) {
   </div>`;
 }
 
+function renderAssessmentChallengeDisclosure() {
+  return `<details class="wizard-disclosure card anim-fade-in" id="challenge-mode-section"
+           style="margin-top:var(--sp-5)">
+    <summary>
+      Challenge this assessment
+      <span class="badge badge--neutral">AI review</span>
+    </summary>
+    <div id="challenge-mode-body" style="padding:var(--sp-4)">
+      <button class="btn btn--secondary" id="btn-run-challenge" type="button">
+        Run AI Challenge
+      </button>
+      <p class="form-help" style="margin-top:8px">
+        AI will argue against the current assessment - surface the weakest
+        assumption, offer an alternative view, and ask the one question
+        a risk committee would raise.
+      </p>
+    </div>
+  </details>`;
+}
+
+function renderAssessmentChallengeResult(result = {}) {
+  const verdict = String(result?.confidenceVerdict || 'Challenged');
+  const verdictTone = verdict.includes('Reasonable')
+    ? 'success'
+    : verdict.includes('understated')
+      ? 'warning'
+      : 'danger';
+  return `<div class="challenge-card">
+    <div class="challenge-verdict badge badge--${verdictTone}">${escapeHtml(verdict)}</div>
+    <p class="challenge-summary">${escapeHtml(String(result?.challengeSummary || ''))}</p>
+    <div class="challenge-grid">
+      <div>
+        <div class="challenge-label">Weakest assumption</div>
+        <div class="challenge-text">${escapeHtml(String(result?.weakestAssumption || ''))}</div>
+      </div>
+      <div>
+        <div class="challenge-label">Alternative view</div>
+        <div class="challenge-text">${escapeHtml(String(result?.alternativeView || ''))}</div>
+      </div>
+    </div>
+    <div class="challenge-question">
+      <span class="challenge-label">Question to answer before accepting:</span>
+      <em>${escapeHtml(String(result?.oneQuestion || ''))}</em>
+    </div>
+  </div>`;
+}
+
 function bindReviewBannerActions(assessment) {
   document.getElementById('btn-revise-assessment')?.addEventListener('click', () => {
     if (typeof openDraftFromAssessment === 'function') {
@@ -2291,6 +2347,27 @@ function bindResultsInteractions({
       UI.toast('Could not submit for review. Try again in a moment.', 'danger');
       btn.disabled = false;
       btn.textContent = 'Submit for Review';
+    }
+  });
+
+  document.getElementById('btn-run-challenge')?.addEventListener('click', async function() {
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Challenging…';
+    const body = document.getElementById('challenge-mode-body');
+    try {
+      const result = await LLMService.challengeAssessment({
+        narrative: assessment.enhancedNarrative || assessment.narrative || '',
+        fairParams: assessment.results?.inputs || assessment.draft?.fairParams || {},
+        results: assessment.results,
+        assessmentIntelligence: assessment.assessmentIntelligence || assessmentIntelligence
+      });
+      if (!result) throw new Error('No result');
+      if (body) body.innerHTML = renderAssessmentChallengeResult(result);
+    } catch {
+      if (body) body.innerHTML = '<div class="form-help">Challenge unavailable right now. Try again in a moment.</div>';
+      btn.disabled = false;
+      btn.textContent = 'Run AI Challenge';
     }
   });
 
@@ -2558,9 +2635,10 @@ function renderResults(id, isShared) {
           confidenceFrame,
           AppState.draft?.geography || assessment?.geography || ''
         )}
-        ${renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, assessmentIntelligence.confidence, rolePresentation)}
+        ${renderDecisionRail(statusTitle, statusDetail, executiveDecision, executiveAction, assessmentIntelligence.confidence, rolePresentation, hasAssessmentLocalFallback(assessment))}
         ${boardroomMode ? renderExecutiveBrief(statusTitle, executiveDecision, executiveAction, executiveAnnualView) : ''}
         ${executiveMetrics}
+        ${renderAssessmentChallengeDisclosure()}
         ${renderAssessmentValueBand(assessmentValue)}
         ${renderExecutiveBenchmarkContext(assessment, r, runMetadata)}
       </div>
@@ -2640,6 +2718,17 @@ function renderResults(id, isShared) {
       .review-submit-banner--approved { background:#f0fdf4; border-color:#22c55e; }
       .review-submit-banner--changes { background:#fef3c7; border-color:#d97706; }
       .review-submit-banner--escalated { background:#f5f3ff; border-color:#7c3aed; color:#4c1d95; }
+      .challenge-card { display:flex; flex-direction:column; gap:var(--sp-3); }
+      .challenge-summary { font-size:14px; line-height:1.6; margin:0; }
+      .challenge-grid { display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-4); }
+      .challenge-label { font-size:11px; font-weight:700; text-transform:uppercase;
+        letter-spacing:.04em; color:var(--text-secondary); margin-bottom:4px; }
+      .challenge-text { font-size:13px; line-height:1.5; }
+      .challenge-question { padding:var(--sp-3); background:#fafafa;
+        border-radius:6px; border-left:3px solid var(--primary); font-size:13px; }
+      @media (max-width: 720px) {
+        .challenge-grid { grid-template-columns:1fr; }
+      }
     </style>
     <main class="page">
       <div class="container container--wide" style="padding:var(--sp-8) var(--sp-6)">

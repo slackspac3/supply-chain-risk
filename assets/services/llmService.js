@@ -1544,6 +1544,10 @@ ${businessUnit.selectedDepartmentContext}` : ''
   }
 
   function _normaliseRiskCards(risks = []) {
+    const normaliseConfidence = (value) => {
+      const lowered = String(value || '').trim().toLowerCase();
+      return lowered === 'high' || lowered === 'low' || lowered === 'medium' ? lowered : 'medium';
+    };
     const cleaned = (Array.isArray(risks) ? risks : []).map((risk) => ({
       ...risk,
       title: _cleanUserFacingText(risk.title || '', { maxSentences: 1, stripTrailingPeriod: true }),
@@ -1552,6 +1556,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
       description: _cleanUserFacingText(risk.description || '', { maxSentences: 2 }),
       impact: _cleanUserFacingText(risk.impact || '', { maxSentences: 1 }),
       why: _cleanUserFacingText(risk.why || '', { maxSentences: 2 }),
+      confidence: normaliseConfidence(risk.confidence),
       regulations: Array.from(new Set((risk.regulations || []).map(String).filter(Boolean))).slice(0, 5)
     })).filter((risk) => risk.title);
 
@@ -2471,6 +2476,11 @@ Respond ONLY with valid JSON matching this exact schema:
     "vulnerability": "string",
     "lossComponents": "string"
   },
+  "fieldRationale": {
+    "tefMin": "string",
+    "tefLikely": "string",
+    "tefMax": "string"
+  },
   "suggestedInputs": {
     "TEF": { "min": number, "likely": number, "max": number },
     "controlStrength": { "min": number, "likely": number, "max": number },
@@ -2485,7 +2495,9 @@ Respond ONLY with valid JSON matching this exact schema:
     }
   },
   "recommendations": [{ "title": "string", "why": "string", "impact": "string" }]
-}`;
+}
+
+Also return a 'fieldRationale' object with a one-sentence justification for each FAIR input field you estimated. Keys must match the fairParams field names. Example: { "tefLikely": "Based on GCC financial-sector incident frequency averaging 1.2 events/year (ISO 27001 Annex A ref)." }.`;
         const evidenceMeta = _buildEvidenceMeta({ citations: retrievedDocs, businessUnit: buContext, geography: buContext?.geography, applicableRegulations: buContext?.regulatoryTags || [], userProfile: buContext?.userProfileSummary, organisationContext: buContext?.companyStructureContext });
         const userPrompt = `Risk narrative: ${narrative}
 Scenario taxonomy hint: ${classification.scenarioType} | ${classification.eventPath} | ${classification.effect}
@@ -2535,6 +2547,25 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
           const fallbackInputs = fallback.suggestedInputs || {};
           const parsedLoss = parsedInputs.lossComponents || {};
           const fallbackLoss = fallbackInputs.lossComponents || {};
+          const allowedFieldRationaleKeys = [
+            'tefMin', 'tefLikely', 'tefMax',
+            'controlStrMin', 'controlStrLikely', 'controlStrMax',
+            'threatCapMin', 'threatCapLikely', 'threatCapMax',
+            'irMin', 'irLikely', 'irMax',
+            'biMin', 'biLikely', 'biMax',
+            'dbMin', 'dbLikely', 'dbMax',
+            'rlMin', 'rlLikely', 'rlMax',
+            'tpMin', 'tpLikely', 'tpMax',
+            'rcMin', 'rcLikely', 'rcMax'
+          ];
+          const parsedFieldRationale = Object.fromEntries(
+            allowedFieldRationaleKeys
+              .map((key) => {
+                const value = _cleanUserFacingText(parsed?.fieldRationale?.[key] || '', { maxSentences: 1 });
+                return value ? [key, value] : null;
+              })
+              .filter(Boolean)
+          );
           const ensureRange = (value, fallbackRange) => ({
             min: value?.min ?? fallbackRange?.min ?? 0,
             likely: value?.likely ?? fallbackRange?.likely ?? 0,
@@ -2566,8 +2597,10 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
             inputProvenance: BenchmarkService.buildInputProvenance(benchmarkCandidates),
             inputRationale: _normaliseInputRationale({
               ...fallback.inputRationale,
-              ...(parsed.inputRationale || {})
+              ...(parsed.inputRationale || {}),
+              fieldRationale: parsedFieldRationale
             }),
+            fieldRationale: parsedFieldRationale,
             suggestedInputs: {
               ...fallbackInputs,
               ...parsedInputs,
@@ -2743,7 +2776,7 @@ Return JSON only with this schema:
   "workflowGuidance": ["string"],
   "benchmarkBasis": "string",
   "risks": [
-    { "title": "string", "category": "string", "description": "string", "regulations": ["string"] }
+    { "title": "string", "category": "string", "description": "string", "confidence": "high|medium|low", "regulations": ["string"] }
   ],
   "regulations": ["string"]
 }`;
@@ -2757,6 +2790,7 @@ Return JSON only with this schema:
 - reflect the stated urgency where provided
 - if the scenario involves identity, directory, SSO, or Azure AD/Entra compromise, include plausible knock-on effects such as mailbox compromise, privileged misuse, tenant changes, service disruption, fraud, and data exposure where relevant
 - produce concise but concrete candidate risks that a user can choose from
+- For each risk, include a "confidence" field: "high", "medium", or "low". High = directly evidenced by the scenario description and retrieved docs. Medium = reasonably inferred from the scenario context. Low = potentially relevant but speculative given the current information.
 - classify the scenario using credible enterprise risk taxonomy across strategic, operational, cyber, AI/model risk, data governance/privacy, third-party, regulatory, financial, fraud/integrity, ESG, compliance, legal/contract, geopolitical, supply chain, procurement, business continuity, physical security, OT resilience, people/workforce, investment/JV, transformation delivery, and HSE lenses; do not force a scenario into cyber if the primary driver is strategic, operational, governance, people, or market-related
 
 Business unit: ${input.businessUnit?.name || 'Unknown'}
@@ -2913,7 +2947,7 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
   "workflowGuidance": ["string"],
   "benchmarkBasis": "string",
   "risks": [
-    { "title": "string", "category": "string", "description": "string", "regulations": ["string"] }
+    { "title": "string", "category": "string", "description": "string", "confidence": "high|medium|low", "regulations": ["string"] }
   ]
 }`;
         const userPrompt = `Business unit: ${input.businessUnit?.name || 'Unknown'}
@@ -2945,6 +2979,7 @@ Instructions:
 - produce concise risk titles suitable for selection cards
 - preserve important contextual detail in the descriptions
 - extract up to 8 material risks if the register supports them
+- For each risk, include a "confidence" field: "high", "medium", or "low". High = directly evidenced by the uploaded rows, sheet names, headers, or retrieved documents. Medium = reasonably inferred from the register context. Low = potentially relevant but speculative given the current information.
 - include workflow guidance that tells a non-risk practitioner what to do after extraction
 
 Evidence quality context:
@@ -2968,6 +3003,7 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
               title: risk.title,
               category: risk.category || 'Register',
               description: risk.description || 'Imported from the uploaded register for review.',
+              confidence: risk.confidence || 'medium',
               source: risk.source || 'register',
               regulations: risk.regulations || []
             }))
@@ -3699,6 +3735,53 @@ ${evidenceMeta.promptBlock}`;
   }
 
   async function challengeAssessment(input = {}) {
+    const hasExecutiveChallengeShape = !!(input && (
+      Object.prototype.hasOwnProperty.call(input, 'results') ||
+      Object.prototype.hasOwnProperty.call(input, 'fairParams') ||
+      Object.prototype.hasOwnProperty.call(input, 'assessmentIntelligence')
+    ));
+    if (hasExecutiveChallengeShape) {
+      if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return null;
+      const p90 = Number(input?.results?.eventLoss?.p90 || 0);
+      const assumptions = Array.isArray(input?.assessmentIntelligence?.assumptions)
+        ? input.assessmentIntelligence.assumptions
+        : [];
+      const userPrompt = [
+        `Scenario: ${String(input?.narrative || '').slice(0, 600)}`,
+        `P90 loss: ${p90.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`,
+        `Key assumptions: ${assumptions.slice(0, 3).map(item => item?.text || item).filter(Boolean).join('; ')}`,
+        `Control strength: ${input?.fairParams?.controlStrLikely || 'not set'}`,
+        `TEF: ${input?.fairParams?.tefMin || ''}–${input?.fairParams?.tefMax || ''}/yr`
+      ].join('\n');
+      const systemPrompt = `You are a senior risk committee reviewer. Your job is to
+challenge this assessment - not accept it. Be constructive but skeptical.
+Return JSON only:
+{
+  "challengeSummary": "string (2-3 sentences - your overall challenge)",
+  "weakestAssumption": "string (the single assumption most likely to be wrong)",
+  "alternativeView": "string (1-2 sentences - a credible alternative read)",
+  "confidenceVerdict": "string - 'Reasonable given evidence' | 'Likely overstated' | 'Likely understated'",
+  "oneQuestion": "string - the one question you would ask before accepting this"
+}`;
+      try {
+        const raw = await _callLLM(systemPrompt, userPrompt, {
+          maxCompletionTokens: 400,
+          timeoutMs: 20000
+        });
+        if (!raw) return null;
+        const parsed = JSON.parse(String(raw).replace(/```json\n?|```/g, '').trim() || 'null');
+        if (!parsed || typeof parsed !== 'object') return null;
+        return {
+          challengeSummary: _cleanUserFacingText(parsed.challengeSummary || '', { maxSentences: 3 }),
+          weakestAssumption: _cleanUserFacingText(parsed.weakestAssumption || '', { maxSentences: 1 }),
+          alternativeView: _cleanUserFacingText(parsed.alternativeView || '', { maxSentences: 2 }),
+          confidenceVerdict: _cleanUserFacingText(parsed.confidenceVerdict || '', { maxSentences: 1 }),
+          oneQuestion: _cleanUserFacingText(parsed.oneQuestion || '', { maxSentences: 1 })
+        };
+      } catch {
+        return null;
+      }
+    }
     const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
     const stub = _buildAssessmentChallengeStub(input);
     await new Promise(r => setTimeout(r, 700 + Math.random() * 300));
@@ -3782,6 +3865,39 @@ ${evidenceMeta.promptBlock}`;
       fallbackUsed: true
     });
     return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
+  }
+
+  async function coachRiskShortlist({ selectedRisks, narrative, scenarioLens } = {}) {
+    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return null;
+    const names = (Array.isArray(selectedRisks) ? selectedRisks : [])
+      .map(risk => risk?.title || risk?.category)
+      .filter(Boolean)
+      .slice(0, 12)
+      .join(', ');
+    const systemPrompt = `You are a FAIR risk scoping coach. Reply with JSON only:
+{ "insight": "string (max 2 sentences)", "tone": "ok|warn|tip" }
+tone: "ok" if risks are coherent, "warn" if risks span multiple event trees,
+"tip" if an important risk type is notably absent.`;
+    const userPrompt = `Scenario: ${String(narrative || '').slice(0, 400)}
+Selected risks: ${names}
+Lens: ${scenarioLens?.label || 'general'}`;
+    try {
+      const raw = await _callLLM(systemPrompt, userPrompt, {
+        maxCompletionTokens: 120,
+        timeoutMs: 8000
+      });
+      if (!raw) return null;
+      const parsed = typeof raw === 'object'
+        ? raw
+        : JSON.parse(String(raw).replace(/```json\n?|```/g, '').trim() || 'null');
+      if (!parsed?.insight) return null;
+      return {
+        insight: String(parsed.insight),
+        tone: String(parsed.tone || 'ok')
+      };
+    } catch {
+      return null;
+    }
   }
 
 
@@ -3876,6 +3992,7 @@ ${evidenceMeta.promptBlock}`;
     buildUserPreferenceAssist,
     suggestTreatmentImprovement,
     challengeAssessment,
+    coachRiskShortlist,
     testCompassConnection,
     setCompassAPIKey,
     setCompassConfig,

@@ -488,20 +488,25 @@ function renderUserDashboard() {
         `
       })}
     </section>` : '';
-  const compactRecentRows = compactRecentAssessments.map(assessment => {
+  const portfolioListRows = completedAssessments.map(assessment => {
     const lifecycle = getAssessmentLifecyclePresentation(assessment);
     const memoryCue = buildWorkspaceMemoryCue(assessment);
-    return UI.dashboardAssessmentRow({
+    const rowTitle = String(assessment.scenarioTitle || assessment.title || 'Untitled assessment');
+    const rowBusinessUnit = String(assessment.buName || profile.businessUnit || user?.businessUnit || 'Business unit not set');
+    const rowDate = new Date(assessment.completedAt || assessment.createdAt || 0).getTime() || 0;
+    const rowLoss = Number(assessment.results?.eventLoss?.p90 || 0);
+    const rowStatus = String(assessment.lifecycleStatus || lifecycle.status || '');
+    return `<div data-title="${escapeDashboardText(rowTitle.toLowerCase())}" data-bu="${escapeDashboardText(rowBusinessUnit.toLowerCase())}" data-date="${rowDate}" data-loss="${rowLoss}" data-status="${escapeDashboardText(rowStatus)}">${UI.dashboardAssessmentRow({
       assessmentId: assessment.id,
-      title: escapeDashboardText(assessment.scenarioTitle || 'Untitled assessment'),
-      detail: `${escapeDashboardText(assessment.buName || profile.businessUnit || user?.businessUnit || 'Business unit not set')} · ${escapeDashboardText(new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }))}${memoryCue ? `<div class="dashboard-memory-cue">${escapeDashboardText(memoryCue)}</div>` : ''}`,
+      title: escapeDashboardText(rowTitle),
+      detail: `${escapeDashboardText(rowBusinessUnit)} · ${escapeDashboardText(new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }))}${memoryCue ? `<div class="dashboard-memory-cue">${escapeDashboardText(memoryCue)}</div>` : ''}`,
       badgeClass: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED ? 'badge--gold' : assessment.results?.toleranceBreached ? 'badge--danger' : assessment.results?.nearTolerance ? 'badge--warning' : lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? 'badge--gold' : 'badge--success',
       badgeLabel: lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.BASELINE_LOCKED || lifecycle.status === ASSESSMENT_LIFECYCLE_STATUS.TREATMENT_VARIANT ? lifecycle.label : assessment.results?.toleranceBreached ? 'Above tolerance' : assessment.results?.nearTolerance ? 'Close to tolerance' : lifecycle.label,
       actions: `
         <button type="button" class="btn btn--ghost btn--sm dashboard-open-action" data-assessment-id="${escapeDashboardText(assessment.id || '')}">Open</button>
         ${renderAssessmentRowMenu({ assessmentId: assessment.id })}
       `
-    });
+    })}</div>`;
   }).join('');
   const portfolioChartWidth = 472;
   const portfolioChartHeight = 264;
@@ -562,7 +567,16 @@ function renderUserDashboard() {
           </circle>
         `).join('')}
       </svg>
-      <div id="portfolio-list-view" style="${portfolioDefaultView === 'list' ? '' : 'display:none'}">${compactRecentRows}</div>
+      <div class="dashboard-list-toolbar" id="dashboard-list-toolbar" style="${portfolioDefaultView === 'list' ? '' : 'display:none'}">
+        <input type="search" id="dash-filter-input" class="form-input form-input--sm" placeholder="Filter by title or business unit…" style="max-width:240px">
+        <select id="dash-sort-select" class="form-select form-select--sm" style="max-width:180px">
+          <option value="date-desc">Newest first</option>
+          <option value="date-asc">Oldest first</option>
+          <option value="loss-desc">Highest P90 loss</option>
+          <option value="status">By status</option>
+        </select>
+      </div>
+      <div id="portfolio-list-view" style="${portfolioDefaultView === 'list' ? '' : 'display:none'}">${portfolioListRows}</div>
     </div>
   `;
   const attentionCards = [
@@ -1027,18 +1041,44 @@ function renderUserDashboard() {
   });
   const portfolioHeatmap = document.getElementById('portfolio-heatmap');
   const portfolioListView = document.getElementById('portfolio-list-view');
+  const dashboardListToolbar = document.getElementById('dashboard-list-toolbar');
   const portfolioHeatmapButton = document.getElementById('btn-view-heatmap');
   const portfolioListButton = document.getElementById('btn-view-list');
   const setPortfolioView = mode => {
     if (!portfolioHeatmap || !portfolioListView || !portfolioHeatmapButton || !portfolioListButton) return;
     const showHeatmap = mode !== 'list';
     portfolioHeatmap.style.display = showHeatmap ? 'block' : 'none';
+    if (dashboardListToolbar) dashboardListToolbar.style.display = showHeatmap ? 'none' : 'flex';
     portfolioListView.style.display = showHeatmap ? 'none' : 'block';
     portfolioHeatmapButton.classList.toggle('active', showHeatmap);
     portfolioListButton.classList.toggle('active', !showHeatmap);
   };
   portfolioHeatmapButton?.addEventListener('click', () => setPortfolioView('heatmap'));
   portfolioListButton?.addEventListener('click', () => setPortfolioView('list'));
+  document.getElementById('dash-filter-input')
+    ?.addEventListener('input', function() {
+      const q = this.value.toLowerCase().trim();
+      document.querySelectorAll('[data-title]').forEach(row => {
+        const match = !q ||
+          row.dataset.title.includes(q) ||
+          row.dataset.bu.includes(q);
+        row.style.display = match ? '' : 'none';
+      });
+    });
+  document.getElementById('dash-sort-select')
+    ?.addEventListener('change', function() {
+      const listEl = this.closest('.dashboard-list-toolbar')?.nextElementSibling;
+      if (!listEl) return;
+      const rows = Array.from(listEl.querySelectorAll('[data-title]'));
+      rows.sort((a, b) => {
+        if (this.value === 'date-desc') return Number(b.dataset.date) - Number(a.dataset.date);
+        if (this.value === 'date-asc') return Number(a.dataset.date) - Number(b.dataset.date);
+        if (this.value === 'loss-desc') return Number(b.dataset.loss) - Number(a.dataset.loss);
+        if (this.value === 'status') return a.dataset.status.localeCompare(b.dataset.status);
+        return 0;
+      });
+      rows.forEach(row => listEl.appendChild(row));
+    });
   setPortfolioView(portfolioDefaultView);
   document.querySelectorAll('#portfolio-heatmap [data-id]').forEach(el =>
     el.addEventListener('click', () => Router.navigate('/results/' + el.dataset.id))

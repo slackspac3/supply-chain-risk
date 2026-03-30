@@ -70,6 +70,80 @@ function appendStep2LlmContext(userText, assistantText) {
   dispatchDraftAction('APPEND_LLM_CONTEXT', { user, assistant });
 }
 
+function buildWordDiff(before, after) {
+  const bWords = (before || '').split(/(\s+)/);
+  const aWords = (after || '').split(/(\s+)/);
+  const bSet = new Set(bWords.filter(w => w.trim()));
+  const aSet = new Set(aWords.filter(w => w.trim()));
+  return aWords.map(word => {
+    if (!word.trim()) return word;
+    if (!bSet.has(word)) return `<ins class="diff-add">${escapeHtml(word)}</ins>`;
+    return escapeHtml(word);
+  }).join('') +
+  bWords.filter(w => w.trim() && !aSet.has(w))
+    .map(w => `<del class="diff-del">${escapeHtml(w)}</del>`).join(' ');
+}
+
+function ensureStep2NarrativeDiffStyles() {
+  if (document.getElementById('step2-narrative-diff-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'step2-narrative-diff-styles';
+  style.textContent = `
+    .narrative-diff-panel {
+      background: #f8fafc; border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: var(--sp-4);
+      margin-top: var(--sp-3); font-size: 14px; line-height: 1.7;
+    }
+    ins.diff-add {
+      background: #dcfce7; color: #166534; text-decoration: none;
+      border-radius: 2px; padding: 0 2px;
+    }
+    del.diff-del {
+      background: #fee2e2; color: #991b1b;
+      border-radius: 2px; padding: 0 2px;
+    }
+    .diff-legend { display:flex; gap:12px; margin-bottom:8px; font-size:12px; }
+    .diff-add-legend::before { content:''; display:inline-block; width:10px;
+      height:10px; background:#dcfce7; border-radius:2px; margin-right:4px; }
+    .diff-del-legend::before { content:''; display:inline-block; width:10px;
+      height:10px; background:#fee2e2; border-radius:2px; margin-right:4px; }
+  `;
+  document.head.appendChild(style);
+}
+
+function bindNarrativeDiffToggle() {
+  const existingBtn = document.getElementById('btn-toggle-diff');
+  const diffPanel = document.getElementById('narrative-diff-panel');
+  const before = AppState.draft.sourceNarrative || '';
+  const after = AppState.draft.enhancedNarrative || '';
+  if (!existingBtn || !diffPanel) return;
+  if (!before || !after || before === after) {
+    existingBtn.style.display = 'none';
+    existingBtn.textContent = 'Show what changed';
+    diffPanel.classList.add('hidden');
+    diffPanel.innerHTML = '';
+    return;
+  }
+  const diffBtn = existingBtn.cloneNode(true);
+  existingBtn.parentNode?.replaceChild(diffBtn, existingBtn);
+  diffBtn.style.display = 'inline-flex';
+  diffBtn.textContent = 'Show what changed';
+  let diffVisible = false;
+  diffBtn.addEventListener('click', () => {
+    diffVisible = !diffVisible;
+    diffBtn.textContent = diffVisible ? 'Hide changes' : 'Show what changed';
+    if (diffVisible) {
+      diffPanel.innerHTML = '<div class="diff-legend">' +
+        '<span class="diff-add-legend">Added</span>' +
+        '<span class="diff-del-legend">Removed</span>' +
+        '</div><div class="diff-body">' + buildWordDiff(before, after) + '</div>';
+      diffPanel.classList.remove('hidden');
+    } else {
+      diffPanel.classList.add('hidden');
+    }
+  });
+}
+
 function recordStep2NarrativeEditIfNeeded(nextNarrative) {
   const username = AuthService.getCurrentUser()?.username || '';
   if (!username || typeof LearningStore === 'undefined' || typeof LearningStore.recordNarrativeEdit !== 'function') return;
@@ -153,7 +227,7 @@ function renderWizard2() {
             description: 'This is the one required task on this step. Keep the wording to one coherent assessment scope so the estimate stays credible.',
             className: 'card anim-fade-in',
             headerExtras: UI.sectionStatusBadge('Required', 'gold'),
-            body: `<div class="form-group"><textarea class="form-textarea" id="narrative" rows="5" placeholder="Describe the risk: What could happen? Who might cause it? What assets are at risk? What are the potential impacts?" style="min-height:160px">${draft.enhancedNarrative || draft.narrative || ''}</textarea></div>`
+            body: `<div class="form-group"><textarea class="form-textarea" id="narrative" rows="5" placeholder="Describe the risk: What could happen? Who might cause it? What assets are at risk? What are the potential impacts?" style="min-height:160px">${draft.enhancedNarrative || draft.narrative || ''}</textarea><div id="narrative-diff-panel" class="narrative-diff-panel hidden" aria-live="polite"></div><button type="button" class="btn btn--ghost btn--sm" id="btn-toggle-diff" style="display:none;margin-top:8px">Show what changed</button></div>`
           })}
           ${renderStep2TopEvidenceNudge(draft)}
           ${UI.disclosureSection({
@@ -283,6 +357,8 @@ function renderWizard2() {
     AppState.draft.narrative = AppState.draft.narrative || n;
     saveDraft(); Router.navigate('/wizard/3');
   });
+  ensureStep2NarrativeDiffStyles();
+  bindNarrativeDiffToggle();
   attachCitationHandlers();
 }
 
@@ -682,6 +758,7 @@ async function runLLMAssist() {
       : (AppState.draft.scenarioLens || null);
     AppState.draft.structuredScenario = normaliseStructuredScenario(result.structuredScenario, { preserveUnknown: true });
     AppState.draft.llmAssisted = true;
+    AppState.draft.aiQualityState = result.usedFallback ? 'fallback' : 'ai';
     AppState.draft.enhancedNarrative = narrative;
     AppState.draft.citations = normaliseCitations(result.citations || citations);
     AppState.draft.recommendations = result.recommendations || [];
@@ -709,8 +786,10 @@ async function runLLMAssist() {
         ...aiPayload.keyOrigins
       };
     }
+    bindNarrativeDiffToggle();
     saveDraft();
-    output.innerHTML = `${renderWizard2AiChangeSummary(result, previousNarrative)}${renderWizard2AnalystReasoning(AppState.draft, result)}<div class="card card--glow mt-4 anim-fade-in">
+    const aiStatusBanner = typeof renderAIStatusBanner === 'function' ? renderAIStatusBanner() : '';
+    output.innerHTML = `${aiStatusBanner}${renderWizard2AiChangeSummary(result, previousNarrative)}${renderWizard2AnalystReasoning(AppState.draft, result)}<div class="card card--glow mt-4 anim-fade-in">
       <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-3);flex-wrap:wrap">
         <span class="badge badge--${/high/i.test(result.confidenceLabel || '') ? 'gold' : /low/i.test(result.confidenceLabel || '') ? 'danger' : 'neutral'}" style="font-size:.8rem">${escapeHtml(result.confidenceLabel || 'Moderate confidence')}${result.evidenceQuality ? ' · ' + escapeHtml(result.evidenceQuality) : ''}</span>
       </div>

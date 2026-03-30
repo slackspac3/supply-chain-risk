@@ -7,6 +7,94 @@ function getStep3PriorMessages() {
   return Array.isArray(AppState?.draft?.llmContext) ? AppState.draft.llmContext : [];
 }
 
+function ensureFairRationaleStyles() {
+  if (document.getElementById('fair-rationale-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'fair-rationale-styles';
+  style.textContent = `
+    .fair-rationale {
+      display: flex; gap: 6px; align-items: flex-start;
+      font-size: 12px; color: var(--text-secondary);
+      margin-top: 4px; padding: 4px 8px;
+      background: #f0f9ff; border-radius: 4px;
+      border-left: 2px solid #38bdf8;
+    }
+    .fair-rationale--overridden {
+      background: #fafafa; border-left-color: var(--border);
+      color: var(--text-tertiary, #9ca3af);
+    }
+    .fair-rationale__icon { flex-shrink: 0; }
+  `;
+  document.head.appendChild(style);
+}
+
+function getStep3FieldRationaleMap(draft) {
+  const explicit = draft?.fairParams?.fieldRationale && typeof draft.fairParams.fieldRationale === 'object'
+    ? draft.fairParams.fieldRationale
+    : null;
+  const nested = draft?.inputRationale?.fieldRationale && typeof draft.inputRationale.fieldRationale === 'object'
+    ? draft.inputRationale.fieldRationale
+    : null;
+  const fallback = {};
+  const assignmentReason = (id) => String(
+    (Array.isArray(draft?.inputAssignments) ? draft.inputAssignments : []).find((item) => item?.id === id)?.reason || ''
+  ).trim();
+  const lossSummary = String(draft?.inputRationale?.lossComponents || '').trim();
+  const setReason = (keys, text) => {
+    const reason = String(text || '').trim();
+    if (!reason) return;
+    keys.forEach((key) => {
+      if (!fallback[key]) fallback[key] = reason;
+    });
+  };
+  if (!explicit && !nested) {
+    setReason(['tefMin', 'tefLikely', 'tefMax'], assignmentReason('event-frequency') || draft?.inputRationale?.tef);
+    setReason(['threatCapMin', 'threatCapLikely', 'threatCapMax'], assignmentReason('threat-capability') || draft?.inputRationale?.vulnerability);
+    setReason(['controlStrMin', 'controlStrLikely', 'controlStrMax'], assignmentReason('control-strength') || draft?.inputRationale?.vulnerability);
+    setReason(['irMin', 'irLikely', 'irMax'], assignmentReason('incident-response') || lossSummary);
+    setReason(['biMin', 'biLikely', 'biMax'], assignmentReason('business-interruption') || lossSummary);
+    setReason(['dbMin', 'dbLikely', 'dbMax'], assignmentReason('data-breach-remediation') || lossSummary);
+    setReason(['rlMin', 'rlLikely', 'rlMax'], assignmentReason('regulatory-legal') || lossSummary);
+    setReason(['tpMin', 'tpLikely', 'tpMax'], assignmentReason('third-party-liability') || lossSummary);
+    setReason(['rcMin', 'rcLikely', 'rcMax'], assignmentReason('reputation-contract') || lossSummary);
+  }
+  return Object.fromEntries(
+    Object.entries(explicit || nested || fallback)
+      .map(([key, value]) => [key, String(value || '').trim()])
+      .filter(([, value]) => value)
+  );
+}
+
+function fairFieldNameToInputId(fieldName) {
+  const match = String(fieldName || '').match(/^(.*?)(Min|Likely|Max)$/);
+  if (!match) return '';
+  return `${match[1]}-${match[2].toLowerCase()}`;
+}
+
+function bindFairRationaleChips() {
+  ensureFairRationaleStyles();
+  const fairParams = AppState.draft.fairParams || (AppState.draft.fairParams = {});
+  const fieldRationale = getStep3FieldRationaleMap(AppState.draft);
+  fairParams.fieldRationale = fieldRationale;
+  Object.entries(fieldRationale).forEach(([fieldName, rationaleText]) => {
+    const input = document.getElementById(fairFieldNameToInputId(fieldName));
+    if (!input) return;
+    const formGroup = input.closest('.form-group');
+    if (!formGroup) return;
+    const rationaleId = `rationale-${fieldName}`;
+    const existing = document.getElementById(rationaleId);
+    if (existing) existing.remove();
+    formGroup.insertAdjacentHTML('beforeend', `<div class="fair-rationale" id="${rationaleId}"><span class="fair-rationale__icon">ℹ</span><span class="fair-rationale__text">${escapeHtml(rationaleText)}</span></div>`);
+    const rationale = document.getElementById(rationaleId);
+    input.addEventListener('input', () => {
+      if (!rationale) return;
+      rationale.classList.add('fair-rationale--overridden');
+      const icon = rationale.querySelector('.fair-rationale__icon');
+      if (icon) icon.textContent = '✏';
+    });
+  });
+}
+
 function describeExposureBand(value) {
   const num = Number(value || 0);
   if (num <= 0.25) return 'low chance of succeeding';
@@ -1401,6 +1489,7 @@ function renderWizard3() {
     scheduleDraftAutosave();
   });
   attachFormattedMoneyInputs();
+  bindFairRationaleChips();
   document.querySelectorAll('.fair-input, #adv-dist, #adv-iter, #adv-seed, #corr-bi-ir, #corr-rl-rc, #treatment-improvement-request').forEach(input => {
     const eventName = input.tagName === 'SELECT' ? 'change' : 'input';
     input.addEventListener(eventName, () => {

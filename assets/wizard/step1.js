@@ -442,6 +442,9 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
   const draftPreview = String(draft.guidedDraftPreview || '').trim() || composeStep1GuidedNarrative(draft.guidedInput, getEffectiveSettings(), draft);
   const draftPreviewStatus = String(draft.guidedDraftStatus || '').trim();
   const draftPreviewSource = String(draft.guidedDraftSource || '').trim();
+  const draftSourceBanner = draftPreviewSource === 'fallback' && typeof renderAIStatusBanner === 'function'
+    ? renderAIStatusBanner()
+    : '';
   const optionalContextDisclosureKey = getDisclosureStateKey('/wizard/1', 'add more context only if you need it');
   const promptCards = promptSuggestions.length
     ? promptSuggestions
@@ -458,11 +461,12 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
         <p>Answer a few plain-language prompts. The platform will turn them into a structured starting point you can edit before continuing.</p>
         <div class="wizard-builder-note">
           <strong>${recommendation.title}</strong>
-          <span>${recommendation.copy} Your current examples are tuned for ${escapeHtml(functionLabel.toLowerCase())} work.</span>
-        </div>
+      <span>${recommendation.copy} Your current examples are tuned for ${escapeHtml(functionLabel.toLowerCase())} work.</span>
+    </div>
       </div>
       <span class="badge badge--gold">Recommended</span>
     </div>
+    ${draftSourceBanner}
     <div class="grid-2">
       <div class="form-group">
         <label class="form-label" for="guided-event">What happened or what could happen?</label>
@@ -2061,6 +2065,19 @@ function renderWizard1() {
   bindStep1ScenarioActions({ buList, settings, exampleModel });
   bindStep1NavigationActions({ buList, settings, wizardGeographyInput });
   bindRiskCardActions({ buList });
+  document.getElementById('btn-risk-empty-add')
+    ?.addEventListener('click', () => {
+      const input = document.getElementById('risk-empty-manual-input');
+      const value = (input?.value || '').trim();
+      if (!value) return;
+      clearLoadedDryRunFlag();
+      appendRiskCandidates(
+        [{ title: value, category: 'Manual', source: 'manual' }],
+        { selectNew: true }
+      );
+      if (input) input.value = '';
+      persistAndRenderStep1();
+    });
 }
 
 function normaliseAssessmentTokens(text) {
@@ -2237,15 +2254,20 @@ function renderRiskSelectionSection(title, subtitle, risks, selectedIds, regulat
     : risk.source === 'dry-run'
       ? 'Example'
       : risk.source === 'scenario-draft'
-        ? 'Built draft'
-        : risk.source === 'register' || risk.source === 'ai+register'
-          ? 'Upload'
-          : 'AI generated';
+      ? 'Built draft'
+      : risk.source === 'register' || risk.source === 'ai+register'
+        ? 'Upload'
+        : 'AI generated';
+  const renderConfidenceBadge = (risk) => risk?.confidence === 'high'
+    ? '<span class="risk-confidence risk-confidence--high">Strong match</span>'
+    : risk?.confidence === 'low'
+      ? '<span class="risk-confidence risk-confidence--low">Speculative</span>'
+      : '';
   // Risk titles, descriptions, and regulation labels can come from uploaded files or AI suggestions, so escape before rendering.
   return `<div class="${escapeHtml(String(sectionClass))}" style="display:flex;flex-direction:column;gap:var(--sp-4)"><div><div class="context-panel-title">${escapeHtml(String(title))}</div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(subtitle))}</div></div><div class="risk-selection-grid">${risks.map(({ risk, match }) => {
     const needsReview = match?.fit === 'selected-review';
     const retainedReason = explainSelectedReviewRisk(risk, match);
-    return `<div class="risk-pick-card ${needsReview ? 'risk-pick-card--review' : ''}"><div class="risk-pick-head" style="align-items:flex-start"><label style="display:flex;gap:12px;align-items:flex-start;flex:1;cursor:pointer"><input type="checkbox" class="risk-select-checkbox" data-risk-id="${escapeHtml(String(risk.id || ''))}" ${selectedIds.has(risk.id) ? 'checked' : ''} style="margin-top:4px"><div><div class="risk-pick-title">${escapeHtml(String(risk.title || 'Untitled risk'))}</div><div class="risk-pick-badges"><span class="risk-pick-badge ${needsReview ? 'risk-pick-badge--review' : ''}">${escapeHtml(String(risk.category || 'Uncategorized'))}</span><span class="risk-pick-badge risk-pick-badge--source">${escapeHtml(String(sourceLabel(risk)))}</span>${needsReview ? '<span class="risk-pick-badge risk-pick-badge--review">Needs review</span>' : ''}</div></div></label><button class="btn btn--ghost btn--sm btn-remove-risk" data-risk-id="${escapeHtml(String(risk.id || ''))}" type="button">Remove</button></div>${risk.description ? `<p class="risk-pick-desc">${escapeHtml(String(risk.description))}</p>` : ''}${retainedReason ? `<div class="risk-pick-review-note">${escapeHtml(retainedReason)}</div>` : ''}<div class="form-help" style="margin-bottom:10px">${escapeHtml(String(explainRiskFit(match, selectedIds.has(risk.id))))}</div><div class="citation-chips">${(risk.regulations || []).length ? risk.regulations.slice(0, 4).map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('') : regulations.slice(0, 2).map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('')}</div></div>`;
+    return `<div class="risk-pick-card ${needsReview ? 'risk-pick-card--review' : ''}"><div class="risk-pick-head" style="align-items:flex-start"><label style="display:flex;gap:12px;align-items:flex-start;flex:1;cursor:pointer"><input type="checkbox" class="risk-select-checkbox" data-risk-id="${escapeHtml(String(risk.id || ''))}" ${selectedIds.has(risk.id) ? 'checked' : ''} style="margin-top:4px"><div><div class="risk-pick-title">${escapeHtml(String(risk.title || 'Untitled risk'))}${renderConfidenceBadge(risk)}</div><div class="risk-pick-badges"><span class="risk-pick-badge ${needsReview ? 'risk-pick-badge--review' : ''}">${escapeHtml(String(risk.category || 'Uncategorized'))}</span><span class="risk-pick-badge risk-pick-badge--source">${escapeHtml(String(sourceLabel(risk)))}</span>${needsReview ? '<span class="risk-pick-badge risk-pick-badge--review">Needs review</span>' : ''}</div></div></label><button class="btn btn--ghost btn--sm btn-remove-risk" data-risk-id="${escapeHtml(String(risk.id || ''))}" type="button">Remove</button></div>${risk.description ? `<p class="risk-pick-desc">${escapeHtml(String(risk.description))}</p>` : ''}${retainedReason ? `<div class="risk-pick-review-note">${escapeHtml(retainedReason)}</div>` : ''}<div class="form-help" style="margin-bottom:10px">${escapeHtml(String(explainRiskFit(match, selectedIds.has(risk.id))))}</div><div class="citation-chips">${(risk.regulations || []).length ? risk.regulations.slice(0, 4).map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('') : regulations.slice(0, 2).map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('')}</div></div>`;
   }).join('')}</div></div>`;
 }
 
@@ -2254,7 +2276,7 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
   const selectedIds = new Set((selectedRisks || []).map(risk => risk.id));
   if (!cleanedRisks.length) {
     const hasDraft = !!String(AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || '').trim();
-    return `<div class="empty-state"><div>No candidate risks yet. Start with the guided builder, refine a scenario draft with AI, or import a register to build your shortlist.</div>${hasDraft ? `<div style="margin-top:var(--sp-4)"><button class="btn btn--secondary" id="btn-generate-risks-empty-state" type="button">Generate Risks From Current Draft</button></div>` : ''}</div>`;
+    return `<div class="empty-state"><div>No candidate risks yet. Start with the guided builder, refine a scenario draft with AI, or import a register to build your shortlist.</div>${hasDraft ? `<div style="margin-top:var(--sp-4)"><button class="btn btn--secondary" id="btn-generate-risks-empty-state" type="button">Generate Risks From Current Draft</button></div>` : ''}<div class="risk-empty-manual" style="margin-top:var(--sp-5);padding-top:var(--sp-4);border-top:1px solid var(--border)"><div class="form-help" style="margin-bottom:8px">Know the exact risk? Add it directly:</div><div class="inline-action-row"><input class="form-input" id="risk-empty-manual-input" type="text" placeholder="e.g. Export control screening failure"><button class="btn btn--secondary" id="btn-risk-empty-add" type="button">Add Risk</button></div></div></div>`;
   }
   const linkedRecommendations = getLinkedRiskRecommendations(selectedRisks || []);
   const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft) || '';
@@ -2284,9 +2306,12 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
     <span class="badge badge--neutral">${selectedCount} selected</span>
     <span class="form-help">${scopeHint}</span>
   </div>
+  <div id="shortlist-coach-banner" class="shortlist-coach-banner" style="display:none" role="status" aria-live="polite"></div>
   ${renderRiskSelectionSection('Recommended for this assessment', 'These are the strongest candidates based on the current event, asset, cause, and impact you described.', recommended, selectedIds, regulations)}
   ${extras.length ? `<details class="wizard-disclosure" data-disclosure-state-key="${escapeHtml(additionalRisksDisclosureKey)}" ${getDisclosureOpenState(additionalRisksDisclosureKey, false) ? 'open' : ''}><summary>Show additional possible risks <span class="badge badge--neutral">${extras.length}</span></summary><div class="wizard-disclosure-body">${renderRiskSelectionSection('Available but likely out of scope', 'Keep these only if they clearly belong in the same event path or business outcome.', extras, selectedIds, regulations)}</div></details>` : ''}`;
 }
+
+let _coachDebounce = null;
 
 function bindRiskCardActions({ buList = getBUList() } = {}) {
   document.getElementById('btn-generate-risks-empty-state')?.addEventListener('click', () => {
@@ -2310,6 +2335,26 @@ function bindRiskCardActions({ buList = getBUList() } = {}) {
       AppState.draft.selectedRiskIds = Array.from(selectedIds);
       syncRiskSelection();
       persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
+      clearTimeout(_coachDebounce);
+      _coachDebounce = setTimeout(async () => {
+        const selected = getSelectedRisks();
+        if (selected.length < 2) return;
+        const coachResult = await LLMService.coachRiskShortlist({
+          selectedRisks: selected,
+          narrative: AppState.draft.enhancedNarrative || AppState.draft.narrative || '',
+          scenarioLens: AppState.draft.scenarioLens
+        });
+        if (!coachResult) return;
+        const coachEl = document.getElementById('shortlist-coach-banner');
+        if (!coachEl) return;
+        const toneClass = coachResult.tone === 'warn' ? 'shortlist-coach--warn'
+          : coachResult.tone === 'tip' ? 'shortlist-coach--tip' : 'shortlist-coach--ok';
+        coachEl.className = 'shortlist-coach-banner ' + toneClass;
+        coachEl.innerHTML = '<span class="shortlist-coach__icon">' +
+          (coachResult.tone === 'warn' ? '⚠' : coachResult.tone === 'tip' ? '💡' : '✓') +
+          '</span><span>' + escapeHtml(coachResult.insight) + '</span>';
+        coachEl.style.display = 'flex';
+      }, 1800);
     });
   });
   document.getElementById('btn-select-all-risks')?.addEventListener('click', () => {
@@ -2351,7 +2396,23 @@ async function handleRegisterUpload(e) {
     UI.toast('This file type is not supported for direct browser parsing. Please export the register as Excel, TXT, CSV, TSV, JSON, or Markdown first.', 'warning', 7000);
     return;
   }
-  const parsed = await parseRegisterFile(file);
+  let parsed;
+  try {
+    parsed = await parseRegisterFile(file);
+  } catch (parseError) {
+    console.error('parseRegisterFile failed:', parseError);
+    AppState.draft.uploadedRegisterName = '';
+    AppState.draft.registerFindings = '';
+    AppState.draft.registerMeta = null;
+    saveDraft();
+    e.target.value = '';
+    UI.toast(
+      'The file could not be read. Try saving as CSV or plain text first.',
+      'danger',
+      7000
+    );
+    return;
+  }
   if (looksLikeBinaryRegister(parsed.text) && !['xlsx', 'xls'].includes(ext)) {
     AppState.draft.uploadedRegisterName = '';
     AppState.draft.registerFindings = '';
