@@ -9,8 +9,21 @@
     return 'Built directly from the guided inputs while AI guidance was unavailable.';
   }
 
-  function _buildAiUnavailableBannerHtml() {
-    return `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`;
+  function _getStep1AiFailureMessage(error = null) {
+    const message = String(error?.message || '').replace(/\s+/g, ' ').trim();
+    if (!message) return 'AI assistance is temporarily unavailable.';
+    if (/temporarily unavailable/i.test(message)) return 'AI assistance is temporarily unavailable.';
+    if (/Sign in again|session is no longer valid/i.test(message)) {
+      return 'Your session is no longer valid for AI requests. Sign in again, then retry.';
+    }
+    if (/unusable structured response/i.test(message)) {
+      return 'AI replied, but the structured draft could not be used for this task. Try again.';
+    }
+    return message;
+  }
+
+  function _buildAiUnavailableBannerHtml(error = null) {
+    return `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">${escapeHtml(_getStep1AiFailureMessage(error))} You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`;
   }
 
   function renderAIStatusBanner() {
@@ -80,16 +93,16 @@
     }
   }
 
-  function _renderStep1AiUnavailableBanner(target, retryHandler) {
+  function _renderStep1AiUnavailableBanner(target, retryHandler, error = null) {
     const targetEl = typeof target === 'string' ? document.getElementById(target) : target;
     if (!targetEl) return;
     _clearStep1AiUnavailableBanners();
     let bannerEl = null;
     if (targetEl.id === 'guided-preview') {
-      targetEl.insertAdjacentHTML('afterend', _buildAiUnavailableBannerHtml());
+      targetEl.insertAdjacentHTML('afterend', _buildAiUnavailableBannerHtml(error));
       bannerEl = targetEl.parentElement?.querySelector('.ai-unavailable-banner') || targetEl.nextElementSibling;
     } else {
-      targetEl.innerHTML = _buildAiUnavailableBannerHtml();
+      targetEl.innerHTML = _buildAiUnavailableBannerHtml(error);
       bannerEl = targetEl.querySelector('.ai-unavailable-banner');
     }
     bannerEl?.querySelector('#btn-retry-ai')?.addEventListener('click', event => {
@@ -188,7 +201,7 @@
       saveDraft();
       renderWizard1();
       if (error?.code === 'LLM_UNAVAILABLE') {
-        _renderStep1AiUnavailableBanner('guided-preview', buildGuidedScenarioDraft);
+        _renderStep1AiUnavailableBanner('guided-preview', buildGuidedScenarioDraft, error);
       }
       UI.toast(
         seededCount
@@ -255,7 +268,7 @@
     } catch (error) {
       console.error('runIntakeAssist failed:', error);
       if (error?.code === 'LLM_UNAVAILABLE') {
-        _renderStep1AiUnavailableBanner(output, runIntakeAssist);
+        _renderStep1AiUnavailableBanner(output, runIntakeAssist, error);
         return;
       }
       if (output) output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI intake is unavailable right now. The current draft stays intact.</span></div>`;
@@ -316,7 +329,7 @@
       UI.toast(result.usedFallback ? 'Suggested draft enhancement loaded with fallback guidance. Review before continuing.' : 'Suggested draft enhancement loaded.', result.usedFallback ? 'warning' : 'success', 5000);
     } catch (error) {
       if (error?.code === 'LLM_UNAVAILABLE') {
-        _renderStep1AiUnavailableBanner(output, enhanceNarrativeWithAI);
+        _renderStep1AiUnavailableBanner(output, enhanceNarrativeWithAI, error);
         return;
       }
       if (output) output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI enhancement is unavailable right now. Try again in a moment.</span></div>`;
@@ -367,7 +380,7 @@
     } catch (error) {
       console.error('analyseUploadedRegister failed:', error);
       if (error?.code === 'LLM_UNAVAILABLE') {
-        _renderStep1AiUnavailableBanner('intake-output', analyseUploadedRegister);
+        _renderStep1AiUnavailableBanner('intake-output', analyseUploadedRegister, error);
         return;
       }
       UI.toast('Register analysis is unavailable right now. Try again in a moment.', 'danger');

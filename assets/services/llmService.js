@@ -133,13 +133,79 @@ const LLMService = (() => {
     if (msg === 'Failed to fetch' || /NetworkError/i.test(msg)) {
       return new Error('Compass preflight/CORS blocked. The browser could not complete the cross-origin request to api.core42.ai.');
     }
+    if (/AUTH_REQUIRED|Please sign in and try again/i.test(msg)) {
+      return new Error('Your session is no longer valid for AI requests. Sign in again, then retry the AI action.');
+    }
     if (/LLM API error 400/i.test(msg)) {
       return new Error(msg);
     }
     if (/LLM API error 401|LLM API error 403/i.test(msg)) {
       return new Error('Compass rejected the request. Check the API key, permissions, and model access.');
     }
+    if (/Unexpected token|JSON|schema|structured response|response shape was not usable|unterminated|string literal/i.test(msg)) {
+      return new Error('The AI returned an unusable structured response for this task. Try again.');
+    }
     return error instanceof Error ? error : new Error(msg);
+  }
+
+  function _extractBalancedJsonCandidate(text = '') {
+    const source = String(text || '');
+    const start = source.search(/[\[{]/);
+    if (start < 0) return '';
+    const stack = [];
+    let inString = false;
+    let escapeNext = false;
+    for (let index = start; index < source.length; index += 1) {
+      const ch = source[index];
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+      if (ch === '\\') {
+        if (inString) escapeNext = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === '{' || ch === '[') {
+        stack.push(ch);
+        continue;
+      }
+      if (ch === '}' || ch === ']') {
+        const expected = ch === '}' ? '{' : '[';
+        if (stack[stack.length - 1] !== expected) break;
+        stack.pop();
+        if (!stack.length) {
+          return source.slice(start, index + 1);
+        }
+      }
+    }
+    return '';
+  }
+
+  function _parseStructuredJson(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return null;
+    const cleaned = text.replace(/```json\s*|```/gi, '').trim();
+    const candidates = [
+      text,
+      cleaned
+    ];
+    const braceMatch = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (braceMatch?.[0]) candidates.push(braceMatch[0]);
+    const balanced = _extractBalancedJsonCandidate(cleaned);
+    if (balanced) candidates.push(balanced);
+    for (const candidate of candidates) {
+      const next = String(candidate || '').trim();
+      if (!next) continue;
+      try {
+        return JSON.parse(next);
+      } catch {}
+    }
+    throw new Error('The AI returned an unusable structured response for this task. Try again.');
   }
 
   function _getSessionToken() {
@@ -2541,7 +2607,7 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
           priorMessages: Array.isArray(buContext?.priorMessages) ? buContext.priorMessages : []
         });
         if (raw) {
-          const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+          const parsed = _parseStructuredJson(raw) || {};
           const fallback = _generateStub(narrative, buContext, retrievedDocs, benchmarkCandidates);
           const parsedInputs = parsed?.suggestedInputs || {};
           const fallbackInputs = fallback.suggestedInputs || {};
@@ -2839,7 +2905,7 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
           priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : []
         });
         if (raw) {
-          const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+          const parsed = _parseStructuredJson(raw) || {};
           const candidateResult = {
             ...parsed,
             scenarioLens: _normaliseScenarioLens(parsed.scenarioLens, _buildScenarioLens(classification)),
@@ -2992,7 +3058,7 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
           priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : []
         });
         if (raw) {
-          const parsed = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+          const parsed = _parseStructuredJson(raw) || {};
           return _decorateAiResult(_withEvidenceMeta({
             summary: _cleanUserFacingText(parsed.summary || '', { maxSentences: 3 }),
             linkAnalysis: _cleanUserFacingText(parsed.linkAnalysis || '', { maxSentences: 3 }),

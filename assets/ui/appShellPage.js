@@ -10,30 +10,33 @@
   }
 
   function buildWizardStepBarMarkup(currentStep) {
+    const steps = [
+      { number: 1, label: 'Risks' },
+      { number: 2, label: 'Scenario' },
+      { number: 3, label: 'Estimate' },
+      { number: 4, label: 'Run Model' }
+    ];
     const getStepClass = (stepNumber) => {
       if (stepNumber < currentStep) return 'wizard-step wizard-step--complete';
       if (stepNumber === currentStep) return 'wizard-step wizard-step--active';
       return 'wizard-step';
     };
+    const activeStep = steps.find(step => step.number === currentStep) || steps[0];
     return `<nav class="wizard-step-bar" aria-label="Assessment progress">
-      <div class="${getStepClass(1)}" data-step="1">
-        <div class="wizard-step__dot">1</div>
-        <div class="wizard-step__label">Risks</div>
-      </div>
-      <div class="wizard-step-connector"></div>
-      <div class="${getStepClass(2)}" data-step="2">
-        <div class="wizard-step__dot">2</div>
-        <div class="wizard-step__label">Scenario</div>
-      </div>
-      <div class="wizard-step-connector"></div>
-      <div class="${getStepClass(3)}" data-step="3">
-        <div class="wizard-step__dot">3</div>
-        <div class="wizard-step__label">Estimate</div>
-      </div>
-      <div class="wizard-step-connector"></div>
-      <div class="${getStepClass(4)}" data-step="4">
-        <div class="wizard-step__dot">4</div>
-        <div class="wizard-step__label">Run Model</div>
+      <div class="wizard-step-bar__inner">
+        <div class="wizard-step-bar__intro">
+          <div class="wizard-step-bar__eyebrow">Assessment flow</div>
+          <div class="wizard-step-bar__headline">Step ${activeStep.number} of ${steps.length} · ${activeStep.label}</div>
+        </div>
+        <div class="wizard-step-track">
+          ${steps.map((step, index) => `
+            <div class="${getStepClass(step.number)}" data-step="${step.number}">
+              <div class="wizard-step__dot">${step.number}</div>
+              <div class="wizard-step__label">${step.label}</div>
+            </div>
+            ${index < steps.length - 1 ? '<div class="wizard-step-connector"></div>' : ''}
+          `).join('')}
+        </div>
       </div>
     </nav>`;
   }
