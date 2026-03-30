@@ -875,8 +875,13 @@ function renderTrustExplanationLayer({ confidenceNeedsBlock, evidenceGapPlan = [
       body: `
         ${renderExecutiveDriversSummary(assessmentIntelligence.drivers, assessment)}
         <div class="results-visual-grid">
-          ${renderExecutiveImpactMix(impactMix)}
           ${renderExecutiveThresholdTracks(thresholdModel)}
+          <div class="chart-wrap" style="margin:var(--sp-6) 0">
+            <div class="chart-title">Loss Exceedance Curve</div>
+            <div class="chart-subtitle">P(Annual Loss &gt; x) · orange line = tolerance threshold</div>
+            <canvas id="chart-lec"></canvas>
+          </div>
+          ${renderExecutiveImpactMix(impactMix)}
         </div>
         ${renderExecutiveSignalCard(results)}
       `
@@ -2134,10 +2139,16 @@ function bindResultsInteractions({
     AppState.resultsFocusTarget = focusTarget;
     AppState.resultsTab = nextTab;
     renderResults(id, isShared || assessment._shared);
+    if (nextTab === 'executive') {
+      window.requestAnimationFrame(() => {
+        const lc = document.getElementById('chart-lec');
+        if (lc) UI.drawLEC(lc, r.lec, r.threshold, AppState.currency, AppState.fxRate);
+      });
+    }
   };
 
   bindResultsTabBar({ activeTab, activateResultsTab });
-  if (activeTab === 'appendix') drawResultsTechnicalCharts(r);
+  if (activeTab === 'appendix' || activeTab === 'executive') drawResultsTechnicalCharts(r);
   else attachCitationHandlers();
 
   document.getElementById('btn-share-results')?.addEventListener('click', event => {

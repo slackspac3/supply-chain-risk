@@ -163,11 +163,6 @@
                 <div class="chart-subtitle">Annual Loss Exposure · ${r.iterations.toLocaleString()} iterations · ${AppState.currency}</div>
                 <canvas id="chart-hist"></canvas>
               </div>
-              <div class="chart-wrap">
-                <div class="chart-title">Loss Exceedance Curve</div>
-                <div class="chart-subtitle">P(Annual Loss &gt; x) · orange line = ${fmtCurrency(r.threshold)} threshold</div>
-                <canvas id="chart-lec"></canvas>
-              </div>
             </div>
             ${citations.length ? renderCitationBlock(citations) : ''}
             ${recommendations.length ? `<div style="display:flex;flex-direction:column;gap:var(--sp-4)">
