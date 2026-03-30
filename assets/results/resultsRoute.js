@@ -1922,17 +1922,23 @@ function renderMissingResultsState(id) {
       </div>
     </div>
   </div></main>`);
-  document.getElementById('btn-results-missing-template')?.addEventListener('click', () => loadScenarioTemplateById(ScenarioTemplates?.[0]?.id));
+  document.getElementById('btn-results-missing-template')?.addEventListener('click', () => {
+    const templateId = typeof pickScenarioTemplateForContext === 'function'
+      ? pickScenarioTemplateForContext({ functionKey: 'general' })?.id
+      : ScenarioTemplates?.[0]?.id;
+    loadScenarioTemplateById(templateId);
+  });
   document.getElementById('btn-results-missing-sample')?.addEventListener('click', () => launchPilotSampleAssessment());
 }
 
 function renderResultsFailureState(id, isShared, error) {
+  if (error) console.error('renderResultsFailureState:', error);
   setPage(`
     <main class="page">
       <div class="container container--narrow" style="padding:var(--sp-12) var(--sp-6)">
         <div class="card">
           <h2 style="margin-bottom:var(--sp-3)">This result could not be opened cleanly</h2>
-          <p style="color:var(--text-muted);margin-bottom:var(--sp-5)">The saved assessment data is missing something the results page expected. The assessment is still stored, but this view needed a safer fallback.${error?.message ? ' Error: ' + String(error.message) : ''}</p>
+          <p style="color:var(--text-muted);margin-bottom:var(--sp-5)">The saved assessment data is missing something the results page expected. The assessment is still stored, but this view needed a safer fallback.</p>
           <div class="flex items-center gap-3" style="flex-wrap:wrap">
             <a href="#/dashboard" class="btn btn--primary">Go to dashboard</a>
             <button class="btn btn--secondary" id="btn-results-retry" type="button">Try again</button>
@@ -2500,17 +2506,6 @@ function userNeedsOrganisationSelection(user = AuthService.getCurrentUser(), set
   if (!businessUnitEntityId) return true;
   const departments = getDepartmentEntities(companyStructure, businessUnitEntityId);
   return !!departments.length && !departmentEntityId;
-}
-
-function requireAuth() {
-  const user = AuthService.getCurrentUser();
-  if (!user) {
-    AppState.currentUser = null;
-    Router.navigate('/login');
-    return false;
-  }
-  AppState.currentUser = user;
-  return true;
 }
 
 function renderLoginOrganisationSelection(currentUser, existingSettings = getUserSettings()) {

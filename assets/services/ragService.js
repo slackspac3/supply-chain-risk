@@ -1,11 +1,12 @@
 /**
  * ragService.js — Retrieval-Augmented Generation service
  *
- * PoC: still local-file based, but now uses concept expansion and
- * semantic-style overlap scoring rather than pure literal keyword hits.
+ * Local-file based hybrid retrieval with concept expansion, phrase
+ * matching, and TF-IDF-style semantic weighting rather than literal
+ * keyword hits alone.
  *
- * TODO: Replace with real vector search (Azure Cognitive Search,
- * or SharePoint Embedded vector store) for production.
+ * Production can still replace this with native vector retrieval,
+ * but the current scorer already behaves as a local hybrid retriever.
  * [RAG-INTEGRATION] marks integration points.
  */
 
@@ -13,6 +14,9 @@ const RAGService = (() => {
   let _docs = [];
   let _buData = [];
   let _indexedDocs = [];
+  let _docFrequency = new Map();
+  let _inverseDocFrequency = new Map();
+  let _docCount = 0;
 
   const LENS_TAGS = [
     'strategic',
@@ -278,6 +282,7 @@ const RAGService = (() => {
     _docs = Array.isArray(docs) ? docs : [];
     _buData = Array.isArray(buData) ? buData : [];
     _indexedDocs = _docs.map(doc => _buildDocIndex(doc));
+    _rebuildCorpusStats();
   }
 
   function _normaliseText(text = '') {
@@ -300,13 +305,44 @@ const RAGService = (() => {
     return value;
   }
 
+  function _tokeniseAll(text = '') {
+    return _normaliseText(text)
+      .split(/\s+/)
+      .map(_stemToken)
+      .filter(token => token.length > 2 && !STOP_WORDS.has(token));
+  }
+
   function _tokenise(text = '') {
     return Array.from(new Set(
-      _normaliseText(text)
-        .split(/\s+/)
-        .map(_stemToken)
-        .filter(token => token.length > 2 && !STOP_WORDS.has(token))
+      _tokeniseAll(text)
     ));
+  }
+
+  function _countTerms(tokens = []) {
+    const counts = new Map();
+    tokens.forEach(token => {
+      counts.set(token, (counts.get(token) || 0) + 1);
+    });
+    return counts;
+  }
+
+  function _rebuildCorpusStats() {
+    _docCount = _indexedDocs.length;
+    _docFrequency = new Map();
+    _indexedDocs.forEach(indexedDoc => {
+      indexedDoc.tokens.forEach(token => {
+        _docFrequency.set(token, (_docFrequency.get(token) || 0) + 1);
+      });
+    });
+    _inverseDocFrequency = new Map();
+    _docFrequency.forEach((count, token) => {
+      const idf = Math.log(1 + (_docCount + 1) / (1 + count));
+      _inverseDocFrequency.set(token, idf);
+    });
+  }
+
+  function _getIdf(token = '') {
+    return _inverseDocFrequency.get(token) || Math.log(1 + (_docCount + 1));
   }
 
   function _coerceQueryInput(query = '') {
@@ -440,6 +476,26 @@ const RAGService = (() => {
       if (_normaliseText(term).includes(' ')) phrases.push(term);
     });
 
+    const termWeights = new Map();
+    const addTermWeight = (term, weight) => {
+      if (!term) return;
+      termWeights.set(term, (termWeights.get(term) || 0) + weight);
+    };
+
+    Array.from(expandedTerms).forEach(term => addTermWeight(term, 1));
+    (querySource.priorityTerms || []).forEach(term => {
+      _tokenise(term).forEach(token => addTermWeight(token, 1.2));
+    });
+    lensTags.forEach(tag => {
+      _tokenise(tag).forEach(token => addTermWeight(token, 0.6));
+    });
+    concepts.forEach(key => {
+      const rule = CONCEPT_RULES.find(item => item.key === key);
+      (rule?.patterns || []).forEach(pattern => {
+        _tokenise(pattern).forEach(token => addTermWeight(token, 0.45));
+      });
+    });
+
     return {
       raw,
       normalized,
@@ -447,22 +503,57 @@ const RAGService = (() => {
       lensTags,
       phrases: Array.from(new Set(phrases)),
       expandedTerms: Array.from(expandedTerms),
-      priorityTerms: Array.from(new Set((querySource.priorityTerms || []).map(term => _normaliseText(term)).filter(Boolean)))
+      priorityTerms: Array.from(new Set((querySource.priorityTerms || []).map(term => _normaliseText(term)).filter(Boolean))),
+      termWeights
     };
   }
 
   function _buildDocIndex(doc = {}) {
     const tags = Array.isArray(doc.tags) ? doc.tags.map(tag => String(tag || '').toLowerCase()) : [];
     const text = `${doc.title || ''} ${doc.contentExcerpt || ''} ${doc.contentFull || ''} ${tags.join(' ')}`;
+    const allTokens = _tokeniseAll(text);
+    const titleTokens = _tokenise(doc.title || '');
+    const tokenFrequency = _countTerms(allTokens);
     return {
       doc,
       tags,
       normalizedTitle: _normaliseText(doc.title || ''),
       normalizedText: _normaliseText(text),
-      titleTokens: new Set(_tokenise(doc.title || '')),
-      tokens: new Set(_tokenise(text)),
+      titleTokens: new Set(titleTokens),
+      tokens: new Set(allTokens),
+      tokenFrequency,
+      maxTokenFrequency: Math.max(1, allTokens.length ? Math.max(...Array.from(tokenFrequency.values())) : 1),
       concepts: new Set(_extractConceptKeys(`${text} ${tags.join(' ')}`))
     };
+  }
+
+  function _tfidfWeight(term, frequencyMap, maxFrequency) {
+    const tf = Number(frequencyMap?.get(term) || 0);
+    if (!tf) return 0;
+    return (0.5 + 0.5 * (tf / Math.max(1, maxFrequency || 1))) * _getIdf(term);
+  }
+
+  function _queryVectorWeight(term, queryInfo) {
+    const base = Number(queryInfo?.termWeights?.get(term) || 0);
+    if (!base) return 0;
+    return base * _getIdf(term);
+  }
+
+  function _vectorSimilarity(indexedDoc, queryInfo) {
+    const terms = Array.from(queryInfo?.termWeights?.keys?.() || []);
+    if (!terms.length) return 0;
+    let numerator = 0;
+    let queryMagnitude = 0;
+    let docMagnitude = 0;
+    terms.forEach(term => {
+      const queryWeight = _queryVectorWeight(term, queryInfo);
+      const docWeight = _tfidfWeight(term, indexedDoc.tokenFrequency, indexedDoc.maxTokenFrequency);
+      numerator += queryWeight * docWeight;
+      queryMagnitude += queryWeight ** 2;
+      docMagnitude += docWeight ** 2;
+    });
+    if (!numerator || !queryMagnitude || !docMagnitude) return 0;
+    return numerator / (Math.sqrt(queryMagnitude) * Math.sqrt(docMagnitude));
   }
 
   function _classifyDocSource(doc) {
@@ -568,6 +659,9 @@ const RAGService = (() => {
       if (indexedDoc.titleTokens.has(term)) score += 2.3;
     });
 
+    // Hybrid local semantic retrieval: TF-IDF cosine similarity helps nuanced enterprise phrasing match beyond direct literals.
+    score += _vectorSimilarity(indexedDoc, queryInfo) * 16;
+
     const bu = _buData.find(b => b.id === buId);
     if (bu && bu.docIds && bu.docIds.includes(indexedDoc.doc.id)) {
       score += 5;
@@ -660,10 +754,28 @@ const RAGService = (() => {
       _docs.push(normalised);
     }
     _indexedDocs = _docs.map(item => _buildDocIndex(item));
+    _rebuildCorpusStats();
   }
 
   function bulkAddDocuments(docs = []) {
-    (Array.isArray(docs) ? docs : []).forEach(doc => addDocument(doc));
+    (Array.isArray(docs) ? docs : []).forEach(doc => {
+      if (!doc || !doc.id) return;
+      const existing = _docs.findIndex(item => item.id === doc.id);
+      const normalised = {
+        id: String(doc.id || '').trim(),
+        title: String(doc.title || '').trim(),
+        url: String(doc.url || '').trim(),
+        contentExcerpt: String(doc.contentExcerpt || doc.excerpt || '').slice(0, 500).trim(),
+        contentFull: String(doc.contentFull || doc.content || doc.contentExcerpt || '').slice(0, 8000).trim(),
+        tags: Array.isArray(doc.tags) ? doc.tags.map(String).filter(Boolean) : [],
+        lastUpdated: doc.lastUpdated || new Date().toISOString(),
+        buIds: Array.isArray(doc.buIds) ? doc.buIds : []
+      };
+      if (existing >= 0) _docs[existing] = normalised;
+      else _docs.push(normalised);
+    });
+    _indexedDocs = _docs.map(item => _buildDocIndex(item));
+    _rebuildCorpusStats();
   }
 
   function _simulateLatency(ms) {

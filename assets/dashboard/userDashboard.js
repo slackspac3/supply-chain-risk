@@ -353,7 +353,13 @@ function renderUserDashboard() {
     : assessmentsNeedingReview.length
       ? 'Open the highest-priority completed scenario and confirm the next management action.'
       : 'Use the guided path to get to a first useful result quickly, then refine only if needed.';
-  const recommendedTemplate = Array.isArray(ScenarioTemplates) ? ScenarioTemplates[0] : null;
+  const recommendedTemplate = typeof pickScenarioTemplateForContext === 'function'
+    ? pickScenarioTemplateForContext({
+        functionKey: typeof getStep1ExampleExperienceModel === 'function'
+          ? getStep1ExampleExperienceModel(getEffectiveSettings(), AppState.draft || {}).functionKey
+          : 'general'
+      })
+    : (Array.isArray(ScenarioTemplates) ? ScenarioTemplates[0] : null);
   const primarySettingsLabel = capability.canManageBusinessUnit || capability.canManageDepartment
     ? capability.experience.primaryActionLabel
     : 'Personal Settings';

@@ -1921,7 +1921,9 @@ function launchPilotSampleAssessment() {
       UI.toast(`Sample assessment path loaded for ${experienceModel?.functionLabel?.toLowerCase?.() || 'your workspace'}.`, 'info', 4500);
       return;
     }
-    const fallbackTemplate = Array.isArray(ScenarioTemplates) ? ScenarioTemplates[0] : null;
+    const fallbackTemplate = typeof pickScenarioTemplateForContext === 'function'
+      ? pickScenarioTemplateForContext({ functionKey: experienceModel?.functionKey || 'general' })
+      : (Array.isArray(ScenarioTemplates) ? ScenarioTemplates[0] : null);
     if (fallbackTemplate) {
       loadTemplate(fallbackTemplate);
       UI.toast('A sample assessment was loaded from the recommended template path.', 'info', 5000);
@@ -4431,7 +4433,7 @@ function renderLanding() {
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--sp-4)">
               ${[
                 ['What to prepare','A short risk statement, affected business unit, and any known business or regulatory impact.'],
-                ['When to use templates','Use a template when the scenario is similar to ransomware, BEC, insider threat, cloud exposure, or supply chain compromise.'],
+                ['When to use templates','Use a template when the scenario is similar to procurement shortfall, compliance breakdown, AI governance failure, supply chain disruption, or a cyber/resilience event.'],
                 ['When to upload a register','Upload a register when you want AI to extract multiple risks and let you assess several together.'],
                 ['How to read the result','Focus first on P90 per-event loss, annual exposure, and whether the scenario sits above or within tolerance.']
               ].map(([title, desc]) => `
@@ -6146,19 +6148,6 @@ function renderLogin() {
   });
 }
 
-function requireAdmin() {
-  if (!requireAuth()) return false;
-  if (!AuthService.isAdminAuthenticated()) { Router.navigate('/settings'); return false; }
-  return true;
-}
-
-function withAuth(renderer) {
-  return (params, hash) => {
-    if (!requireAuth()) return;
-    renderer(params, hash);
-  };
-}
-
 function adminLayout(active, content, activeSettingsSection = 'org') {
   return `<div class="admin-shell">
     <nav class="admin-sidebar">
@@ -7193,8 +7182,7 @@ function safeRenderAdminSettings(section = getPreferredAdminSection()) {
       UI.toast('A problem affected the selected admin section, so the page reopened in Organisation Setup.', 'warning', 5000);
     } catch (fallbackError) {
       console.error('safeRenderAdminSettings hard failure:', fallbackError);
-      const errorMessage = String(fallbackError?.message || error?.message || 'Unknown admin render error');
-      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="form-help mt-4" style="word-break:break-word"><strong>Error:</strong> ${errorMessage}</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/org">Open Organisation Setup</a><a class="btn btn--ghost" href="#/dashboard">Home</a></div></div></div></main>`);
+      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="form-help mt-4">The platform logged the technical failure server-side or in the browser console for follow-up.</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/org">Open Organisation Setup</a><a class="btn btn--ghost" href="#/dashboard">Home</a></div></div></div></main>`);
     }
   }
 }

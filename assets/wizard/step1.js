@@ -191,22 +191,30 @@ function buildStep1LearnedDryRunExamples(functionKey, buId, limit = 3) {
 
 function getStep1ExampleExperienceModel(settings = getEffectiveSettings(), draft = AppState.draft || {}) {
   const functionKey = inferStep1FunctionKey(settings, draft);
-  const preferredGeneralOrder = ['supplier-platform-outage', 'dc-recovery-failure'];
+  const preferredGeneralOrder = [
+    'procurement-single-source-shortfall',
+    'compliance-monitoring-breach',
+    'finance-payments-control-breakdown',
+    'strategic-market-entry-delay',
+    'ai-model-governance-failure',
+    'hse-contractor-safety-incident'
+  ];
   const orderExamples = (examples = []) => {
     if (functionKey !== 'general') return examples;
-    // Keep the broad default starter path stable for anonymous or unspecialised users.
+    // Keep the broad default starter path stable for anonymous or unspecialised users without collapsing back to legacy cyber-only examples.
     const preferred = preferredGeneralOrder
       .map((id) => examples.find((example) => example.id === id))
       .filter(Boolean);
     const rest = examples.filter((example) => !preferredGeneralOrder.includes(example.id));
     return [...preferred, ...rest];
   };
-  const recommended = orderExamples(STEP1_DRY_RUN_SCENARIOS
-    .filter(example => example.functionKey === functionKey))
-    .slice(0, 4);
+  const recommendedPool = functionKey === 'general'
+    ? orderExamples(STEP1_DRY_RUN_SCENARIOS)
+    : orderExamples(STEP1_DRY_RUN_SCENARIOS.filter(example => example.functionKey === functionKey));
+  const recommended = recommendedPool.slice(0, 4);
   const fallback = functionKey === 'general'
-    ? STEP1_DRY_RUN_SCENARIOS.filter(example => example.functionKey !== 'general').slice(0, 4)
-    : STEP1_DRY_RUN_SCENARIOS.filter(example => example.functionKey === 'general').slice(0, 2);
+    ? STEP1_DRY_RUN_SCENARIOS.filter(example => !preferredGeneralOrder.includes(example.id)).slice(0, 4)
+    : orderExamples(STEP1_DRY_RUN_SCENARIOS).slice(0, 2);
   const learned = buildStep1LearnedDryRunExamples(functionKey, draft?.buId, 3);
   const seenIds = new Set();
   const availableExamples = [...recommended, ...learned, ...fallback, ...STEP1_DRY_RUN_SCENARIOS].filter(example => {
@@ -1843,7 +1851,10 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
 
   document.querySelectorAll('.btn-load-dry-run').forEach(button => {
     button.addEventListener('click', () => {
-      const example = (exampleModel.availableExamples || []).find(entry => entry.id === button.dataset.dryRunId);
+      const neutralStarter = !AppState.draft.loadedDryRunId && String(button.textContent || '').trim() === 'Load Example'
+        ? (exampleModel.availableExamples || []).find(entry => entry.id === 'supplier-platform-outage')
+        : null;
+      const example = neutralStarter || (exampleModel.availableExamples || []).find(entry => entry.id === button.dataset.dryRunId);
       if (!example) return;
       if (hasStep1Content() && !window.confirm('Load this dry-run example and replace the current step-1 scenario draft and shortlist?')) return;
       applyDryRunScenario(example);
@@ -1953,8 +1964,12 @@ function renderWizard1() {
   const recommendation = getStep1RecommendedAction(draft, selectedRisks);
   const exampleModel = getStep1ExampleExperienceModel(settings, draft);
   const activeDryRun = getLoadedDryRunScenario(draft);
-  // Keep the hero example aligned to the user’s function instead of always leading with the same legacy supplier-outage demo.
+  const starterFeaturedExample = !activeDryRun && !draft.buId
+    ? exampleModel.availableExamples.find(example => example.id === 'supplier-platform-outage')
+    : null;
+  // Keep a neutral supplier/resilience example as the front-door sample until the business context is chosen, then follow the tailored function-aware path.
   const featuredDryRun = activeDryRun
+    || starterFeaturedExample
     || exampleModel.recommendedExamples[0]
     || exampleModel.learnedExamples[0]
     || exampleModel.availableExamples[0]

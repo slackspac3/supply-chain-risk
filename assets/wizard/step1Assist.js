@@ -145,7 +145,8 @@
       renderWizard1();
       UI.toast(result.usedFallback ? 'Suggested draft loaded with fallback guidance. Review before continuing.' : 'Suggested draft intake completed.', result.usedFallback ? 'warning' : 'success', 5000);
     } catch (error) {
-      if (output) output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI intake error: ${error.message}</span></div>`;
+      console.error('runIntakeAssist failed:', error);
+      if (output) output.innerHTML = `<div class="banner banner--danger"><span class="banner-icon">⚠</span><span class="banner-text">AI intake is unavailable right now. The current draft stays intact.</span></div>`;
     }
   }
 
@@ -233,7 +234,8 @@
       renderWizard1();
       UI.toast(result.usedFallback ? getRegisterFallbackToastCopy(result) : 'Suggested draft register analysis loaded.', result.usedFallback ? 'warning' : 'success', 7000);
     } catch (error) {
-      UI.toast('Register analysis failed: ' + error.message, 'danger');
+      console.error('analyseUploadedRegister failed:', error);
+      UI.toast('Register analysis is unavailable right now. Try again in a moment.', 'danger');
     } finally {
       resetButton();
     }

@@ -1,7 +1,7 @@
 /**
  * scenarios.js — Pre-built scenario templates
  * Each template pre-fills the full wizard with realistic FAIR inputs.
- * Based on common GCC/UAE enterprise cyber threat patterns.
+ * Based on common GCC/UAE enterprise operating, control, resilience, and technology risk patterns.
  */
 
 const ScenarioTemplates = [
@@ -247,5 +247,170 @@ const ScenarioTemplates = [
         corrBiIr: 0.42, corrRlRc: 0.26
       }
     }
+  },
+  {
+    id: 'procurement-single-source-shortfall',
+    label: 'Procurement Single-Source Shortfall',
+    icon: 'SRC',
+    description: 'A critical spend category depends on one supplier and cover is weaker than management assumed. Useful for procurement, resilience, and concentration-risk decisions.',
+    tags: ['Procurement', 'Supply Chain', 'Concentration'],
+    suggestedBUTypes: ['bu-enterprise-it', 'bu-fintech', 'bu-health', 'bu-iot'],
+    draft: {
+      scenarioTitle: 'Single-Source Supplier Shortfall on a Critical Spend Category',
+      narrative: 'A critical supplier for a high-value spend category can no longer meet demand at the expected volume or timing, and the organisation discovers that second-source cover, stock buffers, and contract escalation paths are materially weaker than management assumed. Procurement must decide how to stabilise continuity, manage cost pressure, and address governance questions around supplier concentration and sourcing resilience.',
+      structuredScenario: {
+        assetService: 'Critical supplier relationship, sourcing decisions, contract cover, and dependent operations',
+        primaryDriver: 'Supplier concentration, weak fallback sourcing, and delayed escalation of sourcing risk',
+        eventPath: 'Single-source dependency pressure → supply shortfall → expedited sourcing and continuity response',
+        effect: 'Operational disruption, commercial pressure, contract strain, and management escalation'
+      },
+      fairParams: {
+        distType: 'triangular',
+        iterations: 10000,
+        tefMin: 0.3, tefLikely: 1.1, tefMax: 4.5,
+        threatCapMin: 0.28, threatCapLikely: 0.44, threatCapMax: 0.66,
+        controlStrMin: 0.34, controlStrLikely: 0.50, controlStrMax: 0.72,
+        irMin: 30000, irLikely: 110000, irMax: 360000,
+        biMin: 140000, biLikely: 520000, biMax: 2400000,
+        dbMin: 0, dbLikely: 0, dbMax: 15000,
+        rlMin: 20000, rlLikely: 90000, rlMax: 480000,
+        tpMin: 40000, tpLikely: 160000, tpMax: 720000,
+        rcMin: 140000, rcLikely: 560000, rcMax: 2800000,
+        secondaryEnabled: true,
+        secProbMin: 0.12, secProbLikely: 0.28, secProbMax: 0.48,
+        secMagMin: 120000, secMagLikely: 620000, secMagMax: 3200000,
+        corrBiIr: 0.34, corrRlRc: 0.24
+      }
+    }
+  },
+  {
+    id: 'compliance-obligation-breakdown',
+    label: 'Regulatory Monitoring Breakdown',
+    icon: 'REG',
+    description: 'A live obligation is missed because compliance monitoring, ownership, or evidence discipline is weaker than believed. Useful for compliance, privacy, and governance reviews.',
+    tags: ['Compliance', 'Regulatory', 'Governance'],
+    suggestedBUTypes: ['bu-health', 'bu-fintech', 'bu-enterprise-it'],
+    draft: {
+      scenarioTitle: 'Regulatory Monitoring Breakdown on a Live Obligation',
+      narrative: 'A business unit misses a live regulatory or policy obligation because the control owner, evidence trail, and escalation path are not operating as management expected. The immediate issue is not a cyber event but a governance and assurance gap that could trigger scrutiny, rework, and enforcement pressure once the lapse is discovered.',
+      structuredScenario: {
+        assetService: 'Compliance monitoring routines, obligation mapping, and evidence-control workflow',
+        primaryDriver: 'Weak monitoring discipline, fragmented ownership, and incomplete escalation of compliance drift',
+        eventPath: 'Control monitoring weakness → missed obligation or delayed response → regulatory scrutiny and remediation',
+        effect: 'Regulatory pressure, rework, executive escalation, and confidence loss in the control environment'
+      },
+      fairParams: {
+        distType: 'triangular',
+        iterations: 10000,
+        tefMin: 0.5, tefLikely: 2, tefMax: 7,
+        threatCapMin: 0.24, threatCapLikely: 0.40, threatCapMax: 0.62,
+        controlStrMin: 0.32, controlStrLikely: 0.50, controlStrMax: 0.74,
+        irMin: 25000, irLikely: 90000, irMax: 320000,
+        biMin: 60000, biLikely: 220000, biMax: 960000,
+        dbMin: 0, dbLikely: 0, dbMax: 20000,
+        rlMin: 60000, rlLikely: 240000, rlMax: 1400000,
+        tpMin: 0, tpLikely: 40000, tpMax: 220000,
+        rcMin: 90000, rcLikely: 320000, rcMax: 1800000,
+        secondaryEnabled: true,
+        secProbMin: 0.15, secProbLikely: 0.34, secProbMax: 0.58,
+        secMagMin: 80000, secMagLikely: 380000, secMagMax: 1900000,
+        corrBiIr: 0.18, corrRlRc: 0.42
+      }
+    }
+  },
+  {
+    id: 'ai-model-governance-failure',
+    label: 'AI Model Governance Failure',
+    icon: 'AI',
+    description: 'An AI-enabled process produces an unreliable or non-compliant outcome because model governance, testing, or human review is weaker than assumed.',
+    tags: ['AI', 'Model Risk', 'Governance'],
+    suggestedBUTypes: ['bu-ai', 'bu-enterprise-it', 'bu-fintech', 'bu-health'],
+    draft: {
+      scenarioTitle: 'AI Model Governance Failure in a Live Decision Process',
+      narrative: 'An AI-enabled workflow begins producing unreliable, biased, or weakly explainable outputs, but management discovers that model testing, challenge, and human review are not operating as assumed. The immediate issue is the governance failure around the model, not just the bad output itself. Leadership must decide whether to contain, pause, remediate, or continue under tighter controls.',
+      structuredScenario: {
+        assetService: 'AI-enabled decision workflow, model governance controls, and human-review checkpoints',
+        primaryDriver: 'Weak model governance, incomplete validation, and inadequate monitoring of live model behaviour',
+        eventPath: 'Model governance weakness → unreliable or non-compliant output → urgent containment and review',
+        effect: 'Decision-quality degradation, compliance pressure, operational rework, and executive scrutiny'
+      },
+      fairParams: {
+        distType: 'triangular',
+        iterations: 10000,
+        tefMin: 0.4, tefLikely: 1.6, tefMax: 5.5,
+        threatCapMin: 0.26, threatCapLikely: 0.42, threatCapMax: 0.64,
+        controlStrMin: 0.34, controlStrLikely: 0.52, controlStrMax: 0.76,
+        irMin: 40000, irLikely: 130000, irMax: 420000,
+        biMin: 100000, biLikely: 340000, biMax: 1500000,
+        dbMin: 15000, dbLikely: 70000, dbMax: 360000,
+        rlMin: 50000, rlLikely: 200000, rlMax: 1100000,
+        tpMin: 0, tpLikely: 50000, tpMax: 260000,
+        rcMin: 120000, rcLikely: 420000, rcMax: 2000000,
+        secondaryEnabled: true,
+        secProbMin: 0.14, secProbLikely: 0.30, secProbMax: 0.52,
+        secMagMin: 100000, secMagLikely: 460000, secMagMax: 2200000,
+        corrBiIr: 0.24, corrRlRc: 0.34
+      }
+    }
+  },
+  {
+    id: 'transformation-delivery-slip',
+    label: 'Transformation Delivery Slip',
+    icon: 'XFM',
+    description: 'A major transformation slips after weak dependency control and unclear ownership. Useful for strategic execution and programme-governance discussions.',
+    tags: ['Strategic', 'Transformation', 'Programme'],
+    suggestedBUTypes: ['bu-enterprise-it', 'bu-fintech', 'bu-health', 'bu-ai'],
+    draft: {
+      scenarioTitle: 'Transformation Delivery Slip After Weak Dependency Control',
+      narrative: 'A major transformation programme slips after weak dependency control, delayed decisions, and unclear ownership across workstreams. The business risk is not a technical fault alone but the erosion of delivery confidence, rising cost, and delayed strategic value once the programme starts to drift materially off plan.',
+      structuredScenario: {
+        assetService: 'Transformation roadmap, milestone controls, and dependent operating changes',
+        primaryDriver: 'Weak programme governance, late escalation of dependency drift, and unclear decision rights',
+        eventPath: 'Dependency slippage → missed milestones and rework → delayed benefits and management reset',
+        effect: 'Programme delay, cost growth, operating strain, and weaker strategic outcomes'
+      },
+      fairParams: {
+        distType: 'triangular',
+        iterations: 10000,
+        tefMin: 0.25, tefLikely: 0.9, tefMax: 4,
+        threatCapMin: 0.24, threatCapLikely: 0.40, threatCapMax: 0.62,
+        controlStrMin: 0.32, controlStrLikely: 0.50, controlStrMax: 0.72,
+        irMin: 30000, irLikely: 100000, irMax: 340000,
+        biMin: 120000, biLikely: 420000, biMax: 1800000,
+        dbMin: 0, dbLikely: 0, dbMax: 15000,
+        rlMin: 15000, rlLikely: 70000, rlMax: 300000,
+        tpMin: 0, tpLikely: 30000, tpMax: 180000,
+        rcMin: 160000, rcLikely: 620000, rcMax: 2600000,
+        secondaryEnabled: true,
+        secProbMin: 0.12, secProbLikely: 0.28, secProbMax: 0.46,
+        secMagMin: 120000, secMagLikely: 540000, secMagMax: 2400000,
+        corrBiIr: 0.26, corrRlRc: 0.22
+      }
+    }
   }
 ];
+
+const ScenarioTemplateRecommendations = Object.freeze({
+  general: ['procurement-single-source-shortfall', 'compliance-obligation-breakdown', 'ai-model-governance-failure', 'transformation-delivery-slip'],
+  finance: ['bec-financial', 'compliance-obligation-breakdown'],
+  procurement: ['procurement-single-source-shortfall', 'supply-chain-compromise'],
+  compliance: ['compliance-obligation-breakdown', 'cloud-misconfiguration'],
+  operations: ['service-recovery-shortfall', 'procurement-single-source-shortfall'],
+  technology: ['identity-shared-services', 'ai-model-governance-failure', 'cloud-misconfiguration'],
+  strategic: ['transformation-delivery-slip', 'procurement-single-source-shortfall'],
+  hse: ['service-recovery-shortfall', 'procurement-single-source-shortfall']
+});
+
+function pickScenarioTemplateForContext(options = {}) {
+  const functionKey = String(options.functionKey || 'general').trim().toLowerCase() || 'general';
+  const preferredIds = Array.isArray(ScenarioTemplateRecommendations[functionKey]) && ScenarioTemplateRecommendations[functionKey].length
+    ? ScenarioTemplateRecommendations[functionKey]
+    : ScenarioTemplateRecommendations.general;
+  return preferredIds
+    .map(id => ScenarioTemplates.find(template => template.id === id))
+    .find(Boolean)
+    || ScenarioTemplates[0]
+    || null;
+}
+
+window.pickScenarioTemplateForContext = pickScenarioTemplateForContext;
