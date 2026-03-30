@@ -229,7 +229,11 @@
     next.lifecycleStatus = target;
     next.lifecycleUpdatedAt = Date.parse(at) || Date.now();
     next.lifecycleFlags.treatmentVariant = isTreatmentVariantAssessment(next);
-    return normaliseAssessmentRecord(next);
+    const normalized = normaliseAssessmentRecord(next);
+    if (options.notificationType) {
+      emitAssessmentDecisionNotification(options.notificationType, normalized);
+    }
+    return normalized;
   }
 
   function restoreAssessmentLifecycle(assessment, options = {}) {
@@ -243,6 +247,39 @@
       ? preferredStatus
       : fallbackStatus;
     return transitionAssessmentLifecycle(current, targetStatus, options);
+  }
+
+  function emitAssessmentDecisionNotification(type, assessment) {
+    if (typeof NotificationService === 'undefined' || !assessment) return null;
+    const safeType = String(type || '').trim().toLowerCase();
+    const title = String(
+      assessment.title
+      || assessment.scenarioTitle
+      || assessment.draft?.title
+      || 'Your assessment'
+    ).trim();
+    const linkHash = assessment.id ? `#/results/${assessment.id}` : '';
+    const notificationMap = {
+      review_requested: {
+        title: 'Review requested',
+        body: `"${title}" was sent for review.`
+      },
+      changes_requested: {
+        title: 'Changes requested',
+        body: `"${title}" needs updates before approval.`
+      },
+      approved: {
+        title: 'Assessment approved',
+        body: `"${title}" was approved.`
+      },
+      escalated: {
+        title: 'Assessment escalated',
+        body: `"${title}" was escalated for management attention.`
+      }
+    };
+    const notification = notificationMap[safeType];
+    if (!notification) return null;
+    return NotificationService.addNotification(safeType, notification.title, notification.body, linkHash);
   }
 
   function getAssessmentLifecyclePresentation(assessment) {
@@ -303,6 +340,7 @@
     canTransitionAssessmentLifecycle,
     transitionAssessmentLifecycle,
     restoreAssessmentLifecycle,
+    emitAssessmentDecisionNotification,
     prepareAssessmentForSave,
     hasResults,
     needsReview,

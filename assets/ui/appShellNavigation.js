@@ -1,6 +1,123 @@
 (function(global) {
   'use strict';
 
+  let notifOutsideClickHandler = null;
+
+  function escapeNavText(value) {
+    const text = String(value || '');
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function relativeTime(ts) {
+    const value = Number(new Date(ts || 0).getTime());
+    if (!value) return 'Just now';
+    const diffMs = Math.max(0, Date.now() - value);
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (diffMs < minute) return 'Just now';
+    if (diffMs < hour) {
+      const count = Math.max(1, Math.round(diffMs / minute));
+      return `${count} minute${count === 1 ? '' : 's'} ago`;
+    }
+    if (diffMs < day) {
+      const count = Math.max(1, Math.round(diffMs / hour));
+      return `${count} hour${count === 1 ? '' : 's'} ago`;
+    }
+    const count = Math.max(1, Math.round(diffMs / day));
+    return `${count} day${count === 1 ? '' : 's'} ago`;
+  }
+
+  function updateNotifBadge() {
+    const badge = document.getElementById('notif-badge');
+    if (!badge || typeof NotificationService === 'undefined') return;
+    const count = NotificationService.getUnread().length;
+    badge.textContent = String(count);
+    badge.classList.toggle('hidden', count <= 0);
+  }
+
+  function closeNotifDrawer() {
+    document.getElementById('notif-drawer')?.remove();
+    if (notifOutsideClickHandler) {
+      document.removeEventListener('click', notifOutsideClickHandler, true);
+      notifOutsideClickHandler = null;
+    }
+  }
+
+  function navigateToNotifLink(linkHash) {
+    const safeLink = String(linkHash || '').trim();
+    if (!safeLink) return;
+    if (safeLink.startsWith('#/')) {
+      Router.navigate(safeLink.slice(1));
+      return;
+    }
+    window.location.hash = safeLink;
+  }
+
+  function renderNotifDrawer() {
+    closeNotifDrawer();
+    const bell = document.getElementById('btn-notif-bell');
+    const bar = document.getElementById('app-bar');
+    if (!bell || !bar || typeof NotificationService === 'undefined') return;
+    const notifications = NotificationService.getAll();
+    const drawer = document.createElement('div');
+    drawer.id = 'notif-drawer';
+    drawer.className = 'notif-drawer';
+    drawer.innerHTML = `
+      <div class="flex items-center justify-between" style="padding:8px 16px 12px 16px;border-bottom:1px solid var(--border);margin-bottom:4px">
+        <strong style="font-size:13px">Notifications</strong>
+        <button type="button" class="btn btn--ghost btn--sm" id="btn-notif-mark-all">Mark all read</button>
+      </div>
+      ${notifications.length ? notifications.map(n => `
+        <div class="notif-item ${n.read ? '' : 'notif-item--unread'}" data-nid="${escapeNavText(n.id)}" data-link="${escapeNavText(n.linkHash || '')}">
+          <div class="notif-title">${escapeNavText(n.title)}</div>
+          <div class="notif-body">${escapeNavText(n.body)}</div>
+          <div class="notif-time">${escapeNavText(relativeTime(n.createdAt))}</div>
+        </div>
+      `).join('') : `<div class="notif-item"><div class="notif-title">No notifications yet</div><div class="notif-body">New review, change, approval, or escalation updates will appear here.</div></div>`}
+    `;
+    bar.appendChild(drawer);
+    drawer.querySelector('#btn-notif-mark-all')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      NotificationService.markAllRead();
+      updateNotifBadge();
+      renderNotifDrawer();
+    });
+    drawer.querySelectorAll('.notif-item[data-nid]').forEach(item => {
+      item.addEventListener('click', event => {
+        event.preventDefault();
+        const notificationId = item.dataset.nid || '';
+        const linkHash = item.dataset.link || '';
+        NotificationService.markRead(notificationId);
+        updateNotifBadge();
+        closeNotifDrawer();
+        if (linkHash) navigateToNotifLink(linkHash);
+      });
+    });
+    notifOutsideClickHandler = event => {
+      const nextDrawer = document.getElementById('notif-drawer');
+      const nextBell = document.getElementById('btn-notif-bell');
+      if (!nextDrawer) return;
+      if (nextDrawer.contains(event.target) || nextBell?.contains(event.target)) return;
+      closeNotifDrawer();
+    };
+    document.addEventListener('click', notifOutsideClickHandler, true);
+  }
+
+  function toggleNotifDrawer() {
+    if (document.getElementById('notif-drawer')) {
+      closeNotifDrawer();
+      return;
+    }
+    renderNotifDrawer();
+  }
+
   function getAppBarNavModel(currentUser, currentHash) {
     const nonAdminCapability = currentUser && currentUser.role !== 'admin'
       ? getNonAdminCapabilityState(currentUser, getUserSettings(), getAdminSettings())
@@ -34,6 +151,7 @@
       const currentHash = String(window.location.hash || '#/');
       const navModel = getAppBarNavModel(currentUser, currentHash);
       const bar = document.getElementById('app-bar');
+      closeNotifDrawer();
       bar.innerHTML = `
         <div class="bar-inner">
           <a href="${navModel.homeHref}" class="bar-logo">
@@ -47,6 +165,10 @@
           </nav>
           <div class="bar-spacer"></div>
           ${currentUser ? `
+            <button class="notif-bell" id="btn-notif-bell" aria-label="Notifications" type="button">
+              🔔
+              <span class="notif-badge hidden" id="notif-badge">0</span>
+            </button>
             <a href="#/help" class="btn btn--ghost btn--sm${currentHash.startsWith('#/help') ? ' active' : ''}" id="btn-open-help">Help</a>
             <span class="bar-nav-link" style="pointer-events:none">${currentUser.displayName}</span>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-sign-out">Sign Out</button>
@@ -64,8 +186,14 @@
       )) {
         pocTag.classList.add('bar-poc-tag--hidden');
       }
+      updateNotifBadge();
       document.getElementById('cur-usd').addEventListener('click', () => { AppState.currency='USD'; AppShellNavigation.renderAppBar(); Router.resolve(); });
       document.getElementById('cur-aed').addEventListener('click', () => { AppState.currency='AED'; AppShellNavigation.renderAppBar(); Router.resolve(); });
+      document.getElementById('btn-notif-bell')?.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleNotifDrawer();
+      });
       document.getElementById('btn-sign-out')?.addEventListener('click', () => {
         performLogout();
       });
