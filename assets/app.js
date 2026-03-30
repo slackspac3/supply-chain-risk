@@ -32,6 +32,9 @@ const DEFAULT_TYPICAL_DEPARTMENTS = [
   'Procurement',
   'Legal',
   'Risk & Compliance',
+  'ESG',
+  'Business Continuity',
+  'HSE',
   'Human Resources',
   'Internal Audit',
   'Data & AI',
@@ -187,7 +190,7 @@ function normaliseAdminSettings(settings = {}) {
     buOverrides: Array.isArray(settings.buOverrides) ? settings.buOverrides : [],
     docOverrides: Array.isArray(settings.docOverrides) ? settings.docOverrides : [],
     typicalDepartments: Array.isArray(settings.typicalDepartments) && settings.typicalDepartments.length
-      ? settings.typicalDepartments.map(name => String(name || '').trim()).filter(Boolean)
+      ? mergeTypicalDepartmentList(settings.typicalDepartments)
       : [...(DEFAULT_ADMIN_SETTINGS.typicalDepartments || [])],
     valueBenchmarkSettings: typeof window !== 'undefined' && window.ValueQuantService
       ? window.ValueQuantService.normaliseBenchmarkSettings(settings.valueBenchmarkSettings || DEFAULT_ADMIN_SETTINGS.valueBenchmarkSettings)
@@ -1595,9 +1598,22 @@ const DEPARTMENT_RELATIONSHIP_TYPES = [
 
 const TYPICAL_DEPARTMENTS = [...DEFAULT_TYPICAL_DEPARTMENTS];
 
+function mergeTypicalDepartmentList(list = []) {
+  const saved = Array.isArray(list) ? list.map(name => String(name || '').trim()).filter(Boolean) : [];
+  const seen = new Set(saved.map(name => name.toLowerCase()));
+  const merged = [...saved];
+  DEFAULT_TYPICAL_DEPARTMENTS.forEach(name => {
+    const key = String(name || '').trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(name);
+  });
+  return merged;
+}
+
 function getTypicalDepartments(settings = getAdminSettings()) {
   if (Array.isArray(settings.typicalDepartments) && settings.typicalDepartments.length) {
-    return settings.typicalDepartments.map(name => String(name || '').trim()).filter(Boolean);
+    return mergeTypicalDepartmentList(settings.typicalDepartments);
   }
   return [...DEFAULT_TYPICAL_DEPARTMENTS];
 }
