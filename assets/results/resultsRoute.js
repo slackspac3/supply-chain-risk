@@ -1564,6 +1564,137 @@ function getSimulationYieldEvery(iterations) {
   return Math.max(100, Math.min(1000, Math.round(total / 80) || 250));
 }
 
+function createSimulationCancelledError() {
+  const error = new Error('Simulation cancelled.');
+  error.code = 'SIMULATION_CANCELLED';
+  return error;
+}
+
+function runSimulationInWorker(params, { onProgress = null, timeoutMs = 20000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const totalIterations = Number(params?.iterations || 0);
+    let settled = false;
+
+    const settle = (handler, value) => {
+      if (settled) return;
+      settled = true;
+      handler(value);
+    };
+
+    if (typeof Worker !== 'function') {
+      const fallbackSignal = { aborted: false };
+      const timeoutId = window.setTimeout(() => {
+        fallbackSignal.aborted = true;
+        settle(reject, (() => {
+          const error = new Error('Simulation timed out during computation.');
+          error.code = 'SIMULATION_TIMEOUT';
+          return error;
+        })());
+      }, timeoutMs);
+
+      const cleanup = () => {
+        window.clearTimeout(timeoutId);
+      };
+
+      AppState.simulationRunToken = {
+        cancel: () => {
+          if (settled) return;
+          fallbackSignal.aborted = true;
+          cleanup();
+          settle(reject, createSimulationCancelledError());
+        }
+      };
+
+      RiskEngine.runAsync(params, {
+        yieldEvery: getSimulationYieldEvery(totalIterations),
+        signal: fallbackSignal,
+        onProgress: (ratio, completed, total) => {
+          if (settled || typeof onProgress !== 'function') return;
+          const percent = Math.max(0, Math.min(100, Math.round((Number(ratio) || 0) * 100)));
+          onProgress(percent, completed, total);
+        }
+      }).then(result => {
+        if (settled) return;
+        cleanup();
+        settle(resolve, result);
+      }).catch(error => {
+        if (settled) return;
+        cleanup();
+        settle(reject, error);
+      });
+      return;
+    }
+
+    const worker = new Worker('assets/engine/riskEngineWorker.js');
+    const timeoutId = window.setTimeout(() => {
+      worker.terminate();
+      settle(reject, (() => {
+        const error = new Error('Simulation timed out during computation.');
+        error.code = 'SIMULATION_TIMEOUT';
+        return error;
+      })());
+    }, timeoutMs);
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      worker.onmessage = null;
+      worker.onerror = null;
+    };
+
+    AppState.simulationRunToken = {
+      worker,
+      cancel: () => {
+        if (settled) return;
+        cleanup();
+        worker.terminate();
+        settle(reject, createSimulationCancelledError());
+      }
+    };
+
+    worker.onmessage = event => {
+      if (settled) return;
+      const data = event?.data && typeof event.data === 'object' ? event.data : {};
+      if (data.type === 'PROGRESS') {
+        const percent = Math.max(0, Math.min(100, Number.parseInt(data.percent, 10) || 0));
+        const completed = totalIterations > 0 ? Math.min(totalIterations, Math.round((percent / 100) * totalIterations)) : 0;
+        if (typeof onProgress === 'function') onProgress(percent, completed, totalIterations);
+        return;
+      }
+      if (data.type === 'RESULT') {
+        cleanup();
+        worker.terminate();
+        settle(resolve, data.result);
+        return;
+      }
+      if (data.type === 'ERROR') {
+        cleanup();
+        worker.terminate();
+        const workerError = data.error && typeof data.error === 'object' ? data.error : {};
+        const error = new Error(String(workerError.message || 'The simulation could not be completed right now.'));
+        error.code = String(workerError.code || 'SIMULATION_WORKER_ERROR');
+        if (workerError.validation && typeof workerError.validation === 'object') {
+          error.validation = workerError.validation;
+        }
+        settle(reject, error);
+      }
+    };
+
+    worker.onerror = () => {
+      if (settled) return;
+      cleanup();
+      worker.terminate();
+      const error = new Error('The simulation worker could not be started.');
+      error.code = 'SIMULATION_WORKER_ERROR';
+      settle(reject, error);
+    };
+
+    worker.postMessage({
+      type: 'RUN_SIMULATION',
+      payload: params
+    });
+  });
+}
+
 function renderRunGuardrailSummary(validation) {
   const warnings = Array.isArray(validation?.warnings) ? validation.warnings : [];
   if (!warnings.length) return '';
@@ -1763,13 +1894,13 @@ function renderWizard4() {
   document.getElementById('btn-run-sim')?.addEventListener('click', runSimulation);
   document.getElementById('btn-cancel-sim')?.addEventListener('click', () => {
     const token = AppState.simulationRunToken;
-    if (!token || token.aborted) return;
-    token.aborted = true;
+    if (!token || typeof token.cancel !== 'function') return;
     cancelSimulationState('Cancellation requested…');
+    token.cancel();
     const progressText = document.getElementById('sim-progress-text');
     const progressMeta = document.getElementById('sim-progress-meta');
     if (progressText) progressText.textContent = 'Cancelling the simulation…';
-    if (progressMeta) progressMeta.textContent = 'The current run will stop at the next safe checkpoint.';
+    if (progressMeta) progressMeta.textContent = 'The worker is stopping the current run.';
   });
 }
 
@@ -1800,27 +1931,21 @@ async function runSimulation() {
     const progressMeta = document.getElementById('sim-progress-meta');
     const progressBar = document.getElementById('sim-progress-bar');
     const progressButton = document.getElementById('btn-cancel-sim');
-    const runToken = { aborted: false };
-    AppState.simulationRunToken = runToken;
     p.iterations = validation.normalizedParams.iterations;
     p.seed = validation.normalizedParams.seed;
     startSimulationState(validation.normalizedParams.iterations);
     if (runtimeWarnings.length && progressMeta) progressMeta.textContent = runtimeWarnings.join(' ');
-    const yieldEvery = getSimulationYieldEvery(validation.normalizedParams.iterations);
-    const results = await Promise.race([
-      RiskEngine.runAsync(validation.normalizedParams, {
-        yieldEvery,
-        signal: runToken,
-        onProgress: (ratio, completed, total) => {
-          const message = `Computing ${completed.toLocaleString()} of ${total.toLocaleString()} Monte Carlo iterations…`;
-          updateSimulationProgressState({ ratio, completed, total, message });
-          if (progressText) progressText.textContent = message;
-          if (progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, ratio * 100))}%`;
-          if (progressMeta) progressMeta.textContent = `Seed ${String(validation.normalizedParams.seed ?? 'pending')} · checkpoint every ${yieldEvery.toLocaleString()} iterations`;
-        }
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Simulation timed out during computation.')), 20000))
-    ]);
+    const results = await runSimulationInWorker(validation.normalizedParams, {
+      timeoutMs: 20000,
+      onProgress: (percent, completed, total) => {
+        const ratio = Math.max(0, Math.min(1, percent / 100));
+        const message = `Computing ${completed.toLocaleString()} of ${total.toLocaleString()} Monte Carlo iterations…`;
+        updateSimulationProgressState({ ratio, completed, total, message });
+        if (progressText) progressText.textContent = message;
+        if (progressBar) progressBar.style.width = `${percent}%`;
+        if (progressMeta) progressMeta.textContent = `Worker progress checkpoint every 10% of the run`;
+      }
+    });
     AppState.simulationRunToken = null;
     if (progressText) progressText.textContent = 'Finalising the simulation results…';
     if (progressButton) {
