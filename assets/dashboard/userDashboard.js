@@ -13,16 +13,27 @@ function buildWatchlistDeltaLine(item) {
   return parts.slice(0, 2).join(' ');
 }
 
+const ADMIN_WORKSPACE_PREVIEW_SESSION_KEY = 'rq_admin_workspace_preview';
+
+function isAdminWorkspacePreviewEnabled() {
+  try {
+    return sessionStorage.getItem(ADMIN_WORKSPACE_PREVIEW_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function renderUserDashboard() {
   if (!requireAuth()) return;
-  if (AuthService.isAdminAuthenticated()) {
+  const isAdminWorkspacePreview = AuthService.isAdminAuthenticated() && isAdminWorkspacePreviewEnabled();
+  if (AuthService.isAdminAuthenticated() && !isAdminWorkspacePreview) {
     Router.navigate(getDefaultRouteForCurrentUser());
     return;
   }
   OrgIntelligenceService?.refresh?.().catch?.(() => {});
 
   const settings = getUserSettings();
-  if (!settings.onboardedAt) {
+  if (!settings.onboardedAt && !isAdminWorkspacePreview) {
     renderUserOnboarding(settings);
     return;
   }

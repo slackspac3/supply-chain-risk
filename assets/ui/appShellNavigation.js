@@ -159,6 +159,16 @@
     Router.resolve();
   }
 
+  function isAdminHomeRoute(currentHash = '') {
+    const hash = String(currentHash || '').trim();
+    return hash === '#/admin/home' || hash === '#/admin/home/';
+  }
+
+  function isAdminConsoleRoute(currentHash = '') {
+    const hash = String(currentHash || '').trim();
+    return hash.startsWith('#/admin/') && !isAdminHomeRoute(hash);
+  }
+
   function getAppBarNavModel(currentUser, currentHash) {
     const nonAdminCapability = currentUser && currentUser.role !== 'admin'
       ? getNonAdminCapabilityState(currentUser, getUserSettings(), getAdminSettings())
@@ -167,8 +177,8 @@
     const navLinks = currentUser?.role === 'admin'
       ? [
           // Keep the app bar at the section level so detailed admin destinations only live in the sidebar.
-          { href: '#/admin/home', label: 'Platform Home', active: currentHash.startsWith('#/admin/home') },
-          { href: '#/admin/settings/org', label: 'Admin Console', active: currentHash.startsWith('#/admin/') }
+          { href: '#/admin/home', label: 'Platform Home', active: isAdminHomeRoute(currentHash) },
+          { href: '#/admin/settings/org', label: 'Admin Console', active: isAdminConsoleRoute(currentHash) }
         ]
       : currentUser
         ? [
@@ -201,8 +211,8 @@
             </span>
             <span class="bar-logo-text">Risk <span>Intelligence</span> Platform</span>
           </a>
-          <nav class="flex items-center gap-3">
-            ${navModel.navLinks.map(link => `<a href="${link.href}" class="bar-nav-link${link.active ? ' active' : ''}">${link.label}</a>`).join('')}
+          <nav class="bar-nav" aria-label="Primary">
+            ${navModel.navLinks.map(link => `<a href="${link.href}" class="bar-nav-link${link.active ? ' active' : ''}"${link.active ? ' aria-current="page"' : ''}>${link.label}</a>`).join('')}
           </nav>
           <div class="bar-spacer"></div>
           ${currentUser ? `
@@ -210,7 +220,7 @@
               🔔
               <span class="notif-badge hidden" id="notif-badge">0</span>
             </button>
-            <a href="#/help" class="btn btn--ghost btn--sm${currentHash.startsWith('#/help') ? ' active' : ''}" id="btn-open-help">Help</a>
+            <a href="#/help" class="btn btn--ghost btn--sm bar-top-action${currentHash.startsWith('#/help') ? ' active' : ''}" id="btn-open-help"${currentHash.startsWith('#/help') ? ' aria-current="page"' : ''}>Help</a>
             <span class="bar-nav-link" style="pointer-events:none">${currentUser.displayName}</span>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-sign-out">Sign Out</button>
           ` : `<a href="#/login" class="bar-nav-link bar-nav-link--admin">Sign In</a>`}

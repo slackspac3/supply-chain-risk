@@ -10,7 +10,9 @@
             Router.navigate('/login');
             return;
           }
-          Router.navigate('/dashboard');
+          Router.navigate(typeof getDefaultRouteForCurrentUser === 'function'
+            ? getDefaultRouteForCurrentUser()
+            : '/dashboard');
         })
         .on('/dashboard', withAuth(renderUserDashboard))
         .on('/wizard/1', withAuth(renderWizard1))

@@ -121,7 +121,7 @@
                 <div class="form-help">Use the same guided workflow as end users when you want to model a scenario directly or review the working experience from the front door.</div>
                 <div class="flex items-center gap-3" style="flex-wrap:wrap">
                   <button type="button" class="btn btn--primary" id="btn-admin-home-start-assessment">Start Guided Assessment</button>
-                  <a class="btn btn--secondary" href="#/dashboard">Open User Workspace</a>
+                  <a class="btn btn--secondary" href="#/dashboard" id="btn-admin-home-open-workspace">Open User Workspace</a>
                 </div>
               `
             })}
@@ -178,6 +178,13 @@
         }
         resetDraft();
         openDraftWorkspaceRoute();
+      });
+      document.getElementById('btn-admin-home-open-workspace')?.addEventListener('click', event => {
+        event.preventDefault();
+        try {
+          sessionStorage.setItem('rq_admin_workspace_preview', '1');
+        } catch {}
+        Router.navigate('/dashboard');
       });
       document.getElementById('btn-admin-home-open-console')?.addEventListener('click', () => {
         Router.navigate(preferredAdminRoute);
