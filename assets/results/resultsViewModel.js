@@ -87,7 +87,9 @@
       eventLoss: rawResults.eventLoss || rawResults.lm || { mean: 0, p50: 0, p90: 0, p95: 0, min: 0, max: 0 },
       ale: rawResults.ale || rawResults.annualLoss || { mean: 0, p50: 0, p90: 0, p95: 0, min: 0, max: 0 },
       annualLoss: rawResults.annualLoss || rawResults.ale || { mean: 0, p50: 0, p90: 0, p95: 0, min: 0, max: 0 },
-      toleranceDetail: rawResults.toleranceDetail || { lmExceedProb: 0, aleExceedProb: 0, lmP90: 0, aleP90: 0 },
+      toleranceDetail: rawResults.toleranceDetail && typeof rawResults.toleranceDetail === 'object'
+        ? rawResults.toleranceDetail
+        : null,
       annualReviewDetail: rawResults.annualReviewDetail || { annualExceedProb: 0, annualP90: 0 },
       metricSemantics: rawResults.metricSemantics || {
         eventLoss: 'Conditional loss if a materially successful event occurs.',
@@ -142,7 +144,11 @@
     const scenarioScopeSummary = r.portfolioMeta?.linked
       ? `${r.selectedRiskCount || assessment.selectedRisks?.length || 1} linked risks are being treated as one connected scenario.`
       : `${r.selectedRiskCount || assessment.selectedRisks?.length || 1} risks are being assessed together without linked uplift.`;
-    const exceedancePct = ((r.toleranceDetail?.lmExceedProb || 0) * 100).toFixed(1);
+    const hasToleranceData = r?.toleranceDetail != null
+      && typeof r.toleranceDetail.lmExceedProb === 'number';
+    const exceedancePct = hasToleranceData
+      ? (r.toleranceDetail.lmExceedProb * 100).toFixed(1)
+      : null;
     const completedLabel = new Date(assessment.completedAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' });
     const lifecycle = getAssessmentLifecyclePresentation(assessment);
     const scenarioNarrative = ReportPresentation.buildExecutiveScenarioSummary(assessment) || 'No scenario narrative available.';

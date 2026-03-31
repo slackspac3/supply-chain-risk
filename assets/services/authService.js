@@ -328,7 +328,11 @@ function resolveApiUrl(path) {
   }
 
   function logout() {
+    const username = getCurrentUser()?.username || '';
     try {
+      if (username) {
+        sessionStorage.removeItem('rq_results_tab__' + username);
+      }
       sessionStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem(ADMIN_SECRET_KEY);
       localStorage.removeItem(ACCOUNTS_CACHE_KEY);

@@ -1,0 +1,76 @@
+'use strict';
+
+function getKvUrl() {
+  return process.env.APPLE_CAT
+    || process.env.FOO_URL_TEST
+    || process.env.RC_USER_STORE_URL
+    || process.env.USER_STORE_KV_URL
+    || process.env.KV_REST_API_URL
+    || '';
+}
+
+function getKvToken() {
+  return process.env.BANANA_DOG
+    || process.env.FOO_TOKEN_TEST
+    || process.env.RC_USER_STORE_TOKEN
+    || process.env.USER_STORE_KV_TOKEN
+    || process.env.KV_REST_API_TOKEN
+    || '';
+}
+
+function getKvConfig() {
+  const url = getKvUrl();
+  const token = getKvToken();
+  if (!url) {
+    throw new Error('KV store URL is not configured. Set RC_USER_STORE_URL or another supported KV URL environment variable.');
+  }
+  if (!token) {
+    throw new Error('KV store token is not configured. Set RC_USER_STORE_TOKEN or another supported KV token environment variable.');
+  }
+  return { url, token };
+}
+
+async function runKvCommand(command) {
+  const { url, token } = getKvConfig();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(command),
+      signal: controller.signal
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `KV request failed with HTTP ${res.status}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function get(key) {
+  const response = await runKvCommand(['GET', key]);
+  return response?.result ?? null;
+}
+
+async function set(key, value) {
+  return runKvCommand(['SET', key, value]);
+}
+
+async function setex(key, ttlSeconds, value) {
+  const ttl = Math.max(1, Number(ttlSeconds || 0));
+  if (ttl) {
+    try {
+      return await runKvCommand(['SETEX', key, ttl, value]);
+    } catch {}
+  }
+  return set(key, value);
+}
+
+module.exports = { get, set, setex };

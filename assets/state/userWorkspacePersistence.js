@@ -12,6 +12,28 @@
     }
   }
 
+  function buildDefaultLearningStore() {
+    return {
+      templates: {},
+      scenarioPatterns: [],
+      analystSignals: {
+        keptRisks: [],
+        removedRisks: [],
+        narrativeEdits: [],
+        rerunDeltas: []
+      },
+      aiMemory: {
+        paramHistory: [],
+        learnApplied: [],
+        reviewerFocus: {},
+        execModeUsers: {},
+        cloneLearn: [],
+        corrActed: [],
+        flagSignals: []
+      }
+    };
+  }
+
   function normaliseMeta(meta = {}) {
     return {
       revision: Number(meta?.revision || 0),
@@ -24,27 +46,23 @@
   }
 
   function normaliseLearningStoreSection(learningStore) {
-    return learningStore && typeof learningStore === 'object'
-      ? cloneValue(learningStore, {
-          templates: {},
-          scenarioPatterns: [],
-          analystSignals: {
-            keptRisks: [],
-            removedRisks: [],
-            narrativeEdits: [],
-            rerunDeltas: []
-          }
-        })
-      : {
-          templates: {},
-          scenarioPatterns: [],
-          analystSignals: {
-            keptRisks: [],
-            removedRisks: [],
-            narrativeEdits: [],
-            rerunDeltas: []
-          }
-        };
+    const fallback = buildDefaultLearningStore();
+    if (!learningStore || typeof learningStore !== 'object') {
+      return fallback;
+    }
+    const cloned = cloneValue(learningStore, {});
+    return {
+      ...fallback,
+      ...cloned,
+      templates: cloned.templates && typeof cloned.templates === 'object' ? cloned.templates : fallback.templates,
+      scenarioPatterns: Array.isArray(cloned.scenarioPatterns) ? cloned.scenarioPatterns : fallback.scenarioPatterns,
+      analystSignals: cloned.analystSignals && typeof cloned.analystSignals === 'object'
+        ? { ...fallback.analystSignals, ...cloned.analystSignals }
+        : fallback.analystSignals,
+      aiMemory: cloned.aiMemory && typeof cloned.aiMemory === 'object'
+        ? { ...fallback.aiMemory, ...cloned.aiMemory }
+        : fallback.aiMemory
+    };
   }
 
   function normaliseDraftWorkspaceSection(draftWorkspace = {}, legacyDraft = null) {

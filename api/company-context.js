@@ -1,6 +1,7 @@
 const dns = require('dns').promises;
 const net = require('net');
 const { resolveAdminActor } = require('./_apiAuth');
+const { get: kvGet, set: kvSet } = require('./_kvStore');
 
 function stripHtml(html) {
   return String(html || '')
@@ -27,18 +28,22 @@ function extractLinks(html, baseUrl) {
   return Array.from(new Set(links));
 }
 
-const _rateLimitMap = new Map();
-
-function checkRateLimit(key, maxPerMinute = 20) {
-  const now = Date.now();
+async function checkRateLimit(key, maxPerMinute = 20) {
+  const kvKey = 'ratelimit::' + key;
   const windowMs = 60000;
-  const entry = _rateLimitMap.get(key) || { count: 0, reset: now + windowMs };
-  if (now > entry.reset) {
-    entry.count = 0;
-    entry.reset = now + windowMs;
-  }
+  const now = Date.now();
+  let entry = { count: 0, reset: now + windowMs };
+  try {
+    const raw = await kvGet(kvKey);
+    if (raw) entry = JSON.parse(raw);
+    if (now > entry.reset) entry = { count: 0, reset: now + windowMs };
+  } catch {}
   entry.count += 1;
-  _rateLimitMap.set(key, entry);
+  try {
+    const ttl = Math.ceil((entry.reset - now) / 1000) + 5;
+    void ttl;
+    await kvSet(kvKey, JSON.stringify(entry));
+  } catch {}
   return entry.count <= maxPerMinute
     ? null
     : Math.ceil((entry.reset - now) / 1000);
@@ -622,7 +627,7 @@ module.exports = async function handler(req, res) {
   });
   if (!actor) return;
 
-  const retryAfterSeconds = checkRateLimit(getRateLimitKey(req, actor));
+  const retryAfterSeconds = await checkRateLimit(getRateLimitKey(req, actor));
   if (retryAfterSeconds) {
     res.setHeader('Retry-After', String(retryAfterSeconds));
     res.status(429).json({ error: 'Rate limit exceeded' });

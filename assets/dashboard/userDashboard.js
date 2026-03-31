@@ -194,6 +194,81 @@ function buildAiFlagFallbackReason(item = {}) {
   return `${signals[0]}, and ${signals[1].charAt(0).toLowerCase()}${signals[1].slice(1)}. A fresh pass would confirm whether the current view still holds.`;
 }
 
+const WATCHLIST_CONFIDENCE_RANKS = Object.freeze({
+  'Very High': 5,
+  'High': 4,
+  'High confidence': 4,
+  'Medium': 3,
+  'Medium confidence': 3,
+  'Moderate': 3,
+  'Moderate confidence': 3,
+  'Low': 2,
+  'Low confidence': 2,
+  'Very Low': 1,
+  'Very Low confidence': 1,
+  'Not assessed': 0
+});
+
+function getWatchlistAssessmentCompletedAt(assessment = {}) {
+  return Number(
+    new Date(
+      assessment?.completedAt
+      || assessment?.lifecycleUpdatedAt
+      || assessment?.createdAt
+      || 0
+    ).getTime()
+  ) || 0;
+}
+
+function getWatchlistConfidenceRank(label = '') {
+  const safeLabel = String(label || '').trim();
+  if (!safeLabel) return 0;
+  return WATCHLIST_CONFIDENCE_RANKS[safeLabel] ?? 0;
+}
+
+function attachWatchlistConfidenceTrajectory(items = [], savedAssessments = []) {
+  const watchlist = Array.isArray(items) ? items : [];
+  const assessments = Array.isArray(savedAssessments) ? savedAssessments : [];
+  return watchlist.map(item => {
+    const currentAssessment = assessments.find(assessment => String(assessment?.id || '').trim() === String(item?.id || '').trim()) || null;
+    const currentCompletedAt = getWatchlistAssessmentCompletedAt(currentAssessment);
+    const currentConfidenceLabel = String(
+      currentAssessment?.confidenceLabel
+      || currentAssessment?.assessmentIntelligence?.confidence?.label
+      || 'Not assessed'
+    ).trim();
+    const currentRank = getWatchlistConfidenceRank(currentConfidenceLabel);
+    const currentScenarioTitle = String(currentAssessment?.scenarioTitle || item?.title || '').trim().toLowerCase();
+    const previousAssessment = assessments
+      .filter(candidate => {
+        if (!candidate?.results) return false;
+        const candidateCompletedAt = getWatchlistAssessmentCompletedAt(candidate);
+        if (!candidateCompletedAt || candidateCompletedAt === currentCompletedAt) return false;
+        const sameId = String(candidate?.id || '').trim() === String(item?.id || '').trim();
+        const candidateTitle = String(candidate?.scenarioTitle || '').trim().toLowerCase();
+        const sameScenario = !!currentScenarioTitle && !!candidateTitle && candidateTitle === currentScenarioTitle;
+        return (sameId || sameScenario) && candidateCompletedAt < currentCompletedAt;
+      })
+      .sort((left, right) => getWatchlistAssessmentCompletedAt(right) - getWatchlistAssessmentCompletedAt(left))[0] || null;
+    const previousRank = previousAssessment
+      ? getWatchlistConfidenceRank(String(
+          previousAssessment?.confidenceLabel
+          || previousAssessment?.assessmentIntelligence?.confidence?.label
+          || 'Not assessed'
+        ).trim())
+      : null;
+    const confidenceTrajectory = previousRank === null ? 'unknown'
+      : currentRank > previousRank ? 'improving'
+      : currentRank < previousRank ? 'declining'
+      : 'stable';
+    return {
+      ...item,
+      confidenceLabel: currentConfidenceLabel,
+      confidenceTrajectory
+    };
+  });
+}
+
 function scoreAiFlagCandidate(item, promptBias = {}) {
   const prioritised = new Set((Array.isArray(promptBias?.prioritised) ? promptBias.prioritised : []).map(value => String(value || '').trim().toLowerCase()));
   const deprioritised = new Set((Array.isArray(promptBias?.deprioritised) ? promptBias.deprioritised : []).map(value => String(value || '').trim().toLowerCase()));
@@ -373,11 +448,11 @@ function renderUserDashboard() {
   const activeQueueAssessmentIds = openAssessmentRows
     .map(item => item.action)
     .filter(id => id && id !== 'draft');
-  const watchlistItems = buildAssessmentWatchlist({
+  const watchlistItems = attachWatchlistConfidenceTrajectory(buildAssessmentWatchlist({
     assessments,
     excludeAssessmentIds: activeQueueAssessmentIds,
     maxItems: 6
-  });
+  }), allAssessments);
   const watchlistSummary = buildAssessmentWatchlistSummary(watchlistItems);
   const visibleWatchlistItems = watchlistItems.slice(0, 3);
   const hiddenWatchlistItems = watchlistItems.slice(3);
@@ -773,7 +848,6 @@ function renderUserDashboard() {
         </div>
       </details>
     </section>` : '';
-  // TODO: extend buildAssessmentWatchlist to derive and attach confidenceTrajectory by comparing the current assessment confidenceLabel to the previous saved result for the same scenario.
   const renderWatchlistRows = items => items.map(item => UI.dashboardAssessmentRow({
     assessmentId: item.id,
     title: escapeDashboardText(item.title || 'Untitled assessment'),
@@ -781,11 +855,20 @@ function renderUserDashboard() {
       <div class="dashboard-watchlist-meta">
         <span>${escapeDashboardText(item.businessContext || 'Business context not set')}</span>
         <span>${escapeDashboardText(item.reviewAgeLabel || 'Reviewed recently')}</span>
-        ${item.confidenceTrajectory
-          ? `<span class="badge badge--neutral">${
-              item.confidenceTrajectory === 'up' ? '↑ confidence improving'
-              : item.confidenceTrajectory === 'down' ? '↓ confidence degraded'
-              : '→ confidence stable'
+        <span class="badge badge--neutral">Confidence: ${escapeDashboardText(item.confidenceLabel || 'Not assessed')}</span>
+        ${item.confidenceTrajectory && item.confidenceTrajectory !== 'unknown'
+          ? `<span class="badge ${
+              item.confidenceTrajectory === 'improving'
+                ? 'badge--success'
+                : item.confidenceTrajectory === 'declining'
+                  ? 'badge--warning'
+                  : 'badge--neutral'
+            }">${
+              item.confidenceTrajectory === 'improving'
+                ? '↑ Improving'
+                : item.confidenceTrajectory === 'declining'
+                  ? '↓ Declining'
+                  : '→ Stable'
             }</span>`
           : ''}
         <span class="badge ${escapeDashboardText(item.urgencyBadgeClass || 'badge--neutral')}">${escapeDashboardText(item.urgencyLabel || 'Check basis')}</span>

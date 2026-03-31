@@ -67,6 +67,28 @@ const DEFAULT_ADMIN_SETTINGS = {
     : { internalHourlyRatesUsd: {}, externalDayRatesUsd: {} }
 };
 
+function buildDefaultLearningStoreState() {
+  return {
+    templates: {},
+    scenarioPatterns: [],
+    analystSignals: {
+      keptRisks: [],
+      removedRisks: [],
+      narrativeEdits: [],
+      rerunDeltas: []
+    },
+    aiMemory: {
+      paramHistory: [],
+      learnApplied: [],
+      reviewerFocus: {},
+      execModeUsers: {},
+      cloneLearn: [],
+      corrActed: [],
+      flagSignals: []
+    }
+  };
+}
+
 
 function escapeHtml(value = '') {
   return String(value || '')
@@ -229,16 +251,7 @@ const AppState = {
     username: '',
     userSettings: null,
     assessments: null,
-    learningStore: {
-      templates: {},
-      scenarioPatterns: [],
-      analystSignals: {
-        keptRisks: [],
-        removedRisks: [],
-        narrativeEdits: [],
-        rerunDeltas: []
-      }
-    },
+    learningStore: buildDefaultLearningStoreState(),
     draft: null,
     _meta: { revision: 0, updatedAt: 0 }
   },
@@ -478,16 +491,7 @@ function applyUserStateSnapshotLocally(username, state = {}) {
     savedAssessments: normalizedWorkspace.savedAssessments,
     learningStore: normalizedWorkspace.learningStore && typeof normalizedWorkspace.learningStore === 'object'
       ? normalizedWorkspace.learningStore
-      : {
-          templates: {},
-          scenarioPatterns: [],
-          analystSignals: {
-            keptRisks: [],
-            removedRisks: [],
-            narrativeEdits: [],
-            rerunDeltas: []
-          }
-        },
+      : buildDefaultLearningStoreState(),
     draft: normalizedWorkspace.draft && typeof normalizedWorkspace.draft === 'object' ? normalizedWorkspace.draft : null,
     draftWorkspace: normalizedWorkspace.draftWorkspace,
     _meta: buildExpectedMeta(normalizedWorkspace._meta)
@@ -1641,36 +1645,64 @@ function persistScenarioPattern(assessment) {
     if (username && typeof LearningStore !== 'undefined' && typeof LearningStore.saveScenarioPattern === 'function') {
       LearningStore.saveScenarioPattern(username, pattern);
     }
-    const key = buildUserStorageKey(LEARNING_STORAGE_PREFIX, username);
-    let store = {
-      templates: {},
-      scenarioPatterns: [],
-      analystSignals: {
-        keptRisks: [],
-        removedRisks: [],
-        narrativeEdits: [],
-        rerunDeltas: []
-      }
-    };
+    let patterns = Array.isArray(AppState.userStateCache?.learningStore?.scenarioPatterns)
+      ? AppState.userStateCache.learningStore.scenarioPatterns
+      : [];
     try {
-      store = JSON.parse(localStorage.getItem(key) || '{}') || {
-        templates: {},
-        scenarioPatterns: [],
-        analystSignals: {
-          keptRisks: [],
-          removedRisks: [],
-          narrativeEdits: [],
-          rerunDeltas: []
-        }
-      };
+      if (!patterns.length) {
+        const key = buildUserStorageKey(LEARNING_STORAGE_PREFIX, username);
+        const store = JSON.parse(localStorage.getItem(key) || '{}') || {};
+        patterns = Array.isArray(store.scenarioPatterns) ? store.scenarioPatterns : [];
+      }
     } catch {}
-    if (!store.scenarioPatterns) store.scenarioPatterns = [];
-    store.scenarioPatterns = [
+    const updatedPatternsArray = [
       pattern,
-      ...(store.scenarioPatterns || []).filter(p => p.id !== pattern.id)
+      ...patterns.filter(p => p.id !== pattern.id)
     ].slice(0, 20);
-    localStorage.setItem(key, JSON.stringify(store));
+    patchLearningStore({ scenarioPatterns: updatedPatternsArray });
   } catch {}
+}
+
+function deepMergeLearningStore(current, updates) {
+  const baseCurrent = current && typeof current === 'object' ? current : {};
+  const sourceUpdates = updates && typeof updates === 'object' ? updates : {};
+  const result = { ...baseCurrent };
+  Object.keys(sourceUpdates).forEach(key => {
+    const val = sourceUpdates[key];
+    if (val && typeof val === 'object' && !Array.isArray(val)
+        && baseCurrent[key] && typeof baseCurrent[key] === 'object'
+        && !Array.isArray(baseCurrent[key])) {
+      result[key] = { ...baseCurrent[key], ...val };
+    } else {
+      result[key] = val;
+    }
+  });
+  return result;
+}
+
+function patchLearningStore(updates = {}) {
+  const username = AuthService.getCurrentUser()?.username || '';
+  if (!username) return;
+
+  const current = typeof normaliseLearningStoreSection === 'function'
+    ? normaliseLearningStoreSection(AppState.userStateCache?.learningStore || {})
+    : (AppState.userStateCache?.learningStore || buildDefaultLearningStoreState());
+  const next = typeof normaliseLearningStoreSection === 'function'
+    ? normaliseLearningStoreSection(deepMergeLearningStore(current, updates))
+    : deepMergeLearningStore(current, updates);
+
+  updateUserStateCache({
+    ...(AppState.userStateCache || {}),
+    username: String(AppState.userStateCache?.username || username).trim().toLowerCase(),
+    learningStore: next
+  });
+
+  try {
+    const key = buildUserStorageKey(LEARNING_STORAGE_PREFIX, username);
+    localStorage.setItem(key, JSON.stringify(next));
+  } catch {}
+
+  queueSharedUserStateSync({ learningStore: next }, username);
 }
 
 function getRelevantScenarioPatterns(buId, limit = 3) {
@@ -1690,13 +1722,26 @@ function getRelevantScenarioPatterns(buId, limit = 3) {
   } catch {}
   try {
     const username = AuthService.getCurrentUser()?.username || '';
-    const key = buildUserStorageKey(LEARNING_STORAGE_PREFIX, username);
-    const store = JSON.parse(localStorage.getItem(key) || '{}') || {};
-    const patterns = Array.isArray(store.scenarioPatterns) ? store.scenarioPatterns : [];
+    const store = AppState.userStateCache?.learningStore || {};
+    const cachedPatterns = Array.isArray(store.scenarioPatterns)
+      ? store.scenarioPatterns
+      : [];
+    const patterns = cachedPatterns.length
+      ? cachedPatterns
+      : (() => {
+          try {
+            const parsed = JSON.parse(localStorage.getItem(
+              buildUserStorageKey(LEARNING_STORAGE_PREFIX, username)
+            ) || '{}') || {};
+            return Array.isArray(parsed.scenarioPatterns) ? parsed.scenarioPatterns : [];
+          } catch {
+            return [];
+          }
+        })();
     return patterns
-      .filter(p => !buId || p.buId === buId)
-      .sort((a, b) => b.completedAt - a.completedAt)
-      .slice(0, limit);
+        .filter(p => !buId || p.buId === buId)
+        .sort((a, b) => b.completedAt - a.completedAt)
+        .slice(0, limit);
   } catch {
     return [];
   }
@@ -2590,14 +2635,7 @@ function clearUserPersistentState(username) {
       userSettings: null,
       assessments: [],
       learningStore: {
-        templates: {},
-        scenarioPatterns: [],
-        analystSignals: {
-          keptRisks: [],
-          removedRisks: [],
-          narrativeEdits: [],
-          rerunDeltas: []
-        }
+        ...buildDefaultLearningStoreState()
       },
       draft: null
     },

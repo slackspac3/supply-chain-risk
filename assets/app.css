@@ -5714,6 +5714,48 @@ canvas { display: block; width: 100%; }
   flex-direction: column;
   gap: var(--sp-4);
 }
+.step1-path-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+  margin: var(--sp-5) 0;
+}
+.step1-path-card {
+  cursor: pointer;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  background: var(--bg-surface);
+  transition: border-color 0.15s, background 0.15s;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+.step1-path-card:hover {
+  border-color: var(--accent);
+}
+.step1-path-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+.step1-sticky-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  padding: var(--sp-4);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  z-index: 10;
+}
+@media (max-width: 640px) {
+  .step1-path-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .wizard-scope-band {
   display: flex;
   flex-direction: column;

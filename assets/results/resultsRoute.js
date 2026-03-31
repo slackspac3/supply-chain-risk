@@ -1,3 +1,63 @@
+const RESULTS_TAB_SESSION_PREFIX = 'rq_results_tab__';
+const VALID_RESULTS_TABS = ['executive', 'technical', 'appendix'];
+const BOARDROOM_SESSION_PREFIX = 'rq_boardroom__';
+
+function persistResultsTabPreference(nextTab) {
+  const tab = String(nextTab || '').trim();
+  if (!VALID_RESULTS_TABS.includes(tab)) return;
+  try {
+    const username = AuthService.getCurrentUser()?.username || '';
+    if (username) {
+      sessionStorage.setItem(RESULTS_TAB_SESSION_PREFIX + username, tab);
+    }
+  } catch {}
+}
+
+function getPersistedResultsTabPreference() {
+  try {
+    const username = AuthService.getCurrentUser()?.username || '';
+    const storedTab = username
+      ? (sessionStorage.getItem(RESULTS_TAB_SESSION_PREFIX + username) || '')
+      : '';
+    return VALID_RESULTS_TABS.includes(storedTab) ? storedTab : '';
+  } catch {
+    return '';
+  }
+}
+
+function resolveResultsAssessmentId(id = '') {
+  return String(
+    AppState.currentResultsId
+    || Router.getCurrentParams()?.id
+    || id
+    || ''
+  ).trim();
+}
+
+function restoreBoardroomModePreference(id = '') {
+  try {
+    const assessmentId = resolveResultsAssessmentId(id);
+    if (assessmentId) {
+      AppState.resultsBoardroomMode =
+        sessionStorage.getItem(BOARDROOM_SESSION_PREFIX + assessmentId) === '1';
+    }
+  } catch {}
+}
+
+function persistBoardroomModePreference(id = '') {
+  try {
+    const assessmentId = resolveResultsAssessmentId(id);
+    if (assessmentId) {
+      const key = BOARDROOM_SESSION_PREFIX + assessmentId;
+      if (AppState.resultsBoardroomMode) {
+        sessionStorage.setItem(key, '1');
+      } else {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch {}
+}
+
 function renderExecutiveThresholdTracks(model) {
   const renderCard = item => `
     <div class="results-track-card">
@@ -50,15 +110,22 @@ function renderExecutiveImpactMix(mix) {
 }
 
 function renderExecutiveSignalCard(results) {
-  const breach = ReportPresentation.clampNumber((Number(results?.toleranceDetail?.lmExceedProb || 0) * 100), 0, 100);
+  const hasToleranceData = results?.toleranceDetail != null
+    && typeof results.toleranceDetail.lmExceedProb === 'number';
+  const breach = hasToleranceData
+    ? ReportPresentation.clampNumber(results.toleranceDetail.lmExceedProb * 100, 0, 100)
+    : null;
   const annualStress = ReportPresentation.clampNumber(((Number(results?.ale?.p90 || 0) / Math.max(Number(results?.annualReviewThreshold || getAnnualReviewThreshold() || 1), 1)) * 100), 0, 180);
   return UI.resultsVisualCard({
     title: 'Risk signal at a glance',
     body: `<div class="results-signal-stack">
       <div class="results-signal-metric">
         <div class="results-driver-label">Tolerance breach likelihood</div>
-        <div class="results-signal-bar"><span style="width:${breach}%"></span></div>
-        <div class="results-comparison-foot">${breach.toFixed(1)}% chance of breaching tolerance in the model</div>
+        ${breach == null
+          ? `<div class="results-signal-label">Not assessed</div>
+             <div class="form-help">Run the simulation to see breach probability.</div>`
+          : `<div class="results-signal-bar"><span style="width:${breach}%"></span></div>
+             <div class="results-comparison-foot">${breach.toFixed(1)}% chance of breaching tolerance in the model</div>`}
       </div>
       <div class="results-signal-metric">
         <div class="results-driver-label">Annual stress versus review trigger</div>
@@ -3695,6 +3762,7 @@ function bindResultsInteractions({
     AppState.resultsShouldScrollTop = true;
     AppState.resultsFocusTarget = focusTarget;
     AppState.resultsTab = nextTab;
+    persistResultsTabPreference(nextTab);
     renderResults(id, isShared || assessment._shared);
     if (nextTab === 'executive') {
       window.requestAnimationFrame(() => {
@@ -4353,7 +4421,9 @@ function bindResultsInteractions({
   });
   document.getElementById('btn-toggle-boardroom-mode')?.addEventListener('click', () => {
     AppState.resultsBoardroomMode = !AppState.resultsBoardroomMode;
+    persistBoardroomModePreference(id);
     AppState.resultsTab = 'executive';
+    persistResultsTabPreference('executive');
     AppState.resultsShouldScrollTop = true;
     AppState.resultsFocusTarget = 'panel';
     UI.toast(AppState.resultsBoardroomMode ? 'Executive mode enabled.' : 'Full executive review restored.', 'info');
@@ -4468,6 +4538,8 @@ function bindResultsInteractions({
 }
 
 function renderResults(id, isShared) {
+  AppState.currentResultsId = String(id || '').trim();
+  restoreBoardroomModePreference(id);
   if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }));
   }
@@ -4483,6 +4555,8 @@ function renderResults(id, isShared) {
     renderMissingResultsState(id);
     return;
   }
+  const requestedTab = getPersistedResultsTabPreference() || String(AppState.resultsTab || 'executive');
+  AppState.resultsTab = VALID_RESULTS_TABS.includes(requestedTab) ? requestedTab : 'executive';
 
   try {
   const sharedBanner = (isShared || assessment._shared) ? `
@@ -4560,7 +4634,10 @@ function renderResults(id, isShared) {
       <div class="results-signal-ring ${statusClass}">
         <div class="results-signal-ring-inner">${statusIcon}</div>
       </div>
-      <div class="results-signal-label">${exceedancePct}% breach likelihood</div>
+      <div class="results-signal-label">${exceedancePct == null ? 'Not assessed' : `${exceedancePct}% breach likelihood`}</div>
+      ${exceedancePct == null
+        ? '<div class="form-help">Run the simulation to see breach probability.</div>'
+        : ''}
       <div class="results-hero-action-card">
         <span class="results-driver-label">Immediate focus</span>
         <strong>${escapeHtml(String(executiveDecision?.decision || 'Review'))}</strong>

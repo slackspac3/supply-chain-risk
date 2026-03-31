@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { appendAuditEvent } = require('./_audit');
 const { sendApiError, resolveAdminActor, requireSession } = require('./_apiAuth');
 const { validatePasswordPolicy, generateStrongPassword } = require('./_passwordPolicy');
+const { get: kvGet, set: kvSet } = require('./_kvStore');
 
 const DEFAULT_ACCOUNTS = [];
 const PASSWORD_HASH_VERSION = 'scrypt-v1';
@@ -23,7 +24,7 @@ const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || '';
 const LOGIN_WINDOW_MS = 30 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 5;
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-const loginAttempts = new Map();
+const LOGIN_ATTEMPT_PREFIX = 'login_attempts::';
 const LOGIN_BACKOFF_STEPS_MS = [
   2 * 60 * 1000,
   10 * 60 * 1000,
@@ -174,44 +175,57 @@ function getLoginThrottleKey(req, username) {
   return `${String(username || '').trim().toLowerCase()}::${ip || 'unknown'}`;
 }
 
-function getLoginLockoutMs(count = 0) {
-  if (count < LOGIN_MAX_ATTEMPTS) return 0;
-  const index = Math.min(count - LOGIN_MAX_ATTEMPTS, LOGIN_BACKOFF_STEPS_MS.length - 1);
-  return LOGIN_BACKOFF_STEPS_MS[index];
-}
-
-function getLoginRateLimitState(key) {
-  const entry = loginAttempts.get(key);
-  if (!entry) return { limited: false, retryAfterMs: 0, count: 0 };
-  if (Date.now() - entry.firstAttemptAt > LOGIN_WINDOW_MS) {
-    loginAttempts.delete(key);
-    return { limited: false, retryAfterMs: 0, count: 0 };
+async function checkLoginThrottle(key) {
+  try {
+    const raw = await kvGet(LOGIN_ATTEMPT_PREFIX + key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (Date.now() > Number(entry.lockUntil || 0)) return null;
+    return Math.ceil((Number(entry.lockUntil || 0) - Date.now()) / 1000);
+  } catch (error) {
+    console.warn('checkLoginThrottle failed open:', error?.message || error);
+    return null;
   }
-  const retryAfterMs = Math.max(0, Number(entry.lockUntil || 0) - Date.now());
-  return {
-    limited: retryAfterMs > 0,
-    retryAfterMs,
-    count: Number(entry.count || 0)
-  };
 }
 
-function recordFailedLogin(key) {
-  const now = Date.now();
-  const entry = loginAttempts.get(key);
-  if (!entry || now - entry.firstAttemptAt > LOGIN_WINDOW_MS) {
-    const count = 1;
-    const lockMs = getLoginLockoutMs(count);
-    loginAttempts.set(key, { count, firstAttemptAt: now, lockUntil: lockMs ? now + lockMs : 0 });
-    return;
+async function recordLoginAttempt(key, failed) {
+  try {
+    const raw = await kvGet(LOGIN_ATTEMPT_PREFIX + key);
+    let entry = raw
+      ? JSON.parse(raw)
+      : { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
+    const windowMs = LOGIN_WINDOW_MS;
+    if (Date.now() - Number(entry.firstAttemptAt || 0) > windowMs) {
+      entry = { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
+    }
+    if (failed) {
+      entry.count += 1;
+      const stepIndex = Math.min(
+        entry.count - LOGIN_MAX_ATTEMPTS,
+        LOGIN_BACKOFF_STEPS_MS.length - 1
+      );
+      if (entry.count >= LOGIN_MAX_ATTEMPTS) {
+        const lockMs = LOGIN_BACKOFF_STEPS_MS[Math.max(0, stepIndex)];
+        entry.lockUntil = Date.now() + lockMs;
+      }
+    } else {
+      entry = { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
+    }
+    await kvSet(LOGIN_ATTEMPT_PREFIX + key, JSON.stringify(entry));
+  } catch (error) {
+    console.warn('recordLoginAttempt failed open:', error?.message || error);
   }
-  entry.count += 1;
-  const lockMs = getLoginLockoutMs(entry.count);
-  entry.lockUntil = lockMs ? now + lockMs : 0;
-  loginAttempts.set(key, entry);
 }
 
-function clearFailedLogin(key) {
-  loginAttempts.delete(key);
+async function clearLoginAttempts(key) {
+  try {
+    await kvSet(
+      LOGIN_ATTEMPT_PREFIX + key,
+      JSON.stringify({ count: 0, firstAttemptAt: 0, lockUntil: 0 })
+    );
+  } catch (error) {
+    console.warn('clearLoginAttempts failed open:', error?.message || error);
+  }
 }
 
 async function runKvCommand(command) {
@@ -323,9 +337,8 @@ module.exports = async function handler(req, res) {
         const username = String(body.username || '').trim().toLowerCase();
         const password = String(body.password || '');
         const throttleKey = getLoginThrottleKey(req, username);
-        const throttle = getLoginRateLimitState(throttleKey);
-        if (throttle.limited) {
-          const retryAfterSeconds = Math.max(1, Math.ceil(throttle.retryAfterMs / 1000));
+        const retryAfterSeconds = await checkLoginThrottle(throttleKey);
+        if (retryAfterSeconds) {
           await appendAuditEvent({
             category: 'auth',
             eventType: 'login_rate_limited',
@@ -345,8 +358,8 @@ module.exports = async function handler(req, res) {
         });
         const matched = matchIndex > -1 ? accounts[matchIndex] : null;
         if (!matched) {
-          recordFailedLogin(throttleKey);
-          const state = getLoginRateLimitState(throttleKey);
+          await recordLoginAttempt(throttleKey, true);
+          const retryAfterSeconds = await checkLoginThrottle(throttleKey);
           await appendAuditEvent({
             category: 'auth',
             eventType: 'login_failure',
@@ -354,12 +367,12 @@ module.exports = async function handler(req, res) {
             actorRole: 'anonymous',
             status: 'failed',
             source: 'server',
-            details: state.limited ? { retryAfterSeconds: Math.max(1, Math.ceil(state.retryAfterMs / 1000)) } : {}
+            details: retryAfterSeconds ? { retryAfterSeconds } : {}
           });
           sendApiError(res, 401, 'INVALID_CREDENTIALS', 'Invalid username or password.');
           return;
         }
-        clearFailedLogin(throttleKey);
+        await clearLoginAttempts(throttleKey);
         const verification = verifyAccountPassword(matched, password);
         if (verification.needsUpgrade && hasWritableKv()) {
           const upgradedAccounts = accounts.slice();
