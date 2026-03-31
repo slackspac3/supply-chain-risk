@@ -57,16 +57,31 @@ function ensureSmartPrefillStyles() {
 }
 
 function getSmartPrefillHistoryKey() {
-  return 'rip_param_history';
+  const username = String(AuthService.getCurrentUser()?.username || '').trim().toLowerCase();
+  return username ? `rip_param_history_${username}` : 'rip_param_history';
 }
 
 function getSmartPrefillLearnKey() {
-  return 'rip_learn_applied';
+  const username = String(AuthService.getCurrentUser()?.username || '').trim().toLowerCase();
+  return username ? `rip_learn_applied_${username}` : 'rip_learn_applied';
+}
+
+function migrateStep3LegacyLocalKey(baseKey, scopedKey) {
+  if (!scopedKey || scopedKey === baseKey) return;
+  try {
+    if (localStorage.getItem(scopedKey) != null) return;
+    const legacy = localStorage.getItem(baseKey);
+    if (!legacy) return;
+    localStorage.setItem(scopedKey, legacy);
+  } catch {}
 }
 
 function readStep3LocalArray(key) {
+  const safeKey = String(key || '').trim();
+  if (safeKey.startsWith('rip_param_history_')) migrateStep3LegacyLocalKey('rip_param_history', safeKey);
+  if (safeKey.startsWith('rip_learn_applied_')) migrateStep3LegacyLocalKey('rip_learn_applied', safeKey);
   try {
-    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(safeKey) || '[]');
     return Array.isArray(parsed) ? parsed.filter(item => item && typeof item === 'object') : [];
   } catch {
     return [];

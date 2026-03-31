@@ -3,6 +3,7 @@
 
   let notifOutsideClickHandler = null;
   let notifViewportHandler = null;
+  let notifSyncBound = false;
 
   function escapeNavText(value) {
     const text = String(value || '');
@@ -142,6 +143,23 @@
     renderNotifDrawer();
   }
 
+  function bindNotifSync() {
+    if (notifSyncBound || typeof window === 'undefined') return;
+    notifSyncBound = true;
+    const refreshNotifications = (event) => {
+      const currentUsername = String(AuthService.getCurrentUser()?.username || '').trim().toLowerCase();
+      if (!currentUsername) return;
+      const changedUsername = String(event?.detail?.username || '').trim().toLowerCase();
+      const changedKey = String(event?.key || '').trim();
+      if (changedUsername && changedUsername !== currentUsername) return;
+      if (changedKey && changedKey !== `rq_notifications_${currentUsername}`) return;
+      updateNotifBadge();
+      if (document.getElementById('notif-drawer')) renderNotifDrawer();
+    };
+    window.addEventListener('rq:notifications-changed', refreshNotifications);
+    window.addEventListener('storage', refreshNotifications);
+  }
+
   function handleCurrencyChange(newCurrency) {
     if (AppState.currency === newCurrency) return;
     const hash = String(window.location.hash || '');
@@ -238,6 +256,7 @@
         pocTag.classList.add('bar-poc-tag--hidden');
       }
       updateNotifBadge();
+      bindNotifSync();
       document.getElementById('cur-usd').addEventListener('click', () => handleCurrencyChange('USD'));
       document.getElementById('cur-aed').addEventListener('click', () => handleCurrencyChange('AED'));
       document.getElementById('btn-notif-bell')?.addEventListener('click', event => {

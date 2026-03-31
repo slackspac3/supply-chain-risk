@@ -337,6 +337,17 @@ function createStep1DryRunScenario(input = {}) {
 
 function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppState.draft || {}) {
   const profile = normaliseUserProfile(settings?.userProfile, AuthService.getCurrentUser());
+  const guidedInput = draft?.guidedInput || {};
+  const scenarioSignals = [
+    draft?.__step1NarrativeOverride,
+    draft?.narrative,
+    draft?.sourceNarrative,
+    draft?.enhancedNarrative,
+    guidedInput.event,
+    guidedInput.asset,
+    guidedInput.cause,
+    guidedInput.impact
+  ].filter(Boolean).join(' ');
   const haystack = [
     profile.jobTitle,
     profile.department,
@@ -344,7 +355,8 @@ function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppSta
     profile.workingContext,
     ...(Array.isArray(profile.focusAreas) ? profile.focusAreas : []),
     draft?.buName,
-    draft?.contextNotes
+    draft?.contextNotes,
+    scenarioSignals
   ].filter(Boolean).join(' ').toLowerCase();
   if (/procurement|sourcing|vendor|supplier|purchase|third[- ]party|supply chain|supplier assurance|supplier due diligence/.test(haystack)) return 'procurement';
   if (/compliance|regulatory|legal|privacy|data governance|policy|governance|controls|audit|contract|litigation|ip\b|intellectual property/.test(haystack)) return 'compliance';
@@ -356,11 +368,38 @@ function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppSta
   return 'general';
 }
 
-function getStep1PreferredScenarioLens(settings = getEffectiveSettings(), draft = AppState.draft || {}) {
-  if (draft?.scenarioLens?.key) return { ...draft.scenarioLens };
-  return {
-    ...(STEP1_FUNCTION_TO_SCENARIO_LENS[inferStep1FunctionKey(settings, draft)] || STEP1_FUNCTION_TO_SCENARIO_LENS.general)
+function getStep1PreferredScenarioLens(settings = getEffectiveSettings(), draft = AppState.draft || {}, narrativeOverride = '') {
+  const inferred = {
+    ...(STEP1_FUNCTION_TO_SCENARIO_LENS[inferStep1FunctionKey(settings, {
+      ...draft,
+      __step1NarrativeOverride: narrativeOverride
+    })] || STEP1_FUNCTION_TO_SCENARIO_LENS.general)
   };
+  const stored = draft?.scenarioLens?.key ? { ...draft.scenarioLens } : null;
+  if (!stored) return inferred;
+  const hasScenarioContext = !!String(
+    narrativeOverride
+    || draft?.narrative
+    || draft?.sourceNarrative
+    || draft?.enhancedNarrative
+    || draft?.guidedInput?.event
+    || draft?.guidedInput?.asset
+    || draft?.guidedInput?.cause
+    || draft?.guidedInput?.impact
+    || ''
+  ).trim();
+  if (!hasScenarioContext) return stored;
+  if (!stored.key || stored.key === 'general') return inferred.key && inferred.key !== 'general' ? inferred : stored;
+  if (inferred.key && inferred.key !== 'general' && inferred.key !== stored.key) {
+    return {
+      ...inferred,
+      secondaryKeys: Array.from(new Set([
+        ...(Array.isArray(stored.secondaryKeys) ? stored.secondaryKeys : []),
+        stored.key
+      ])).filter(Boolean)
+    };
+  }
+  return stored;
 }
 
 function composeStep1GuidedNarrative(guidedInput = (AppState.draft?.guidedInput || {}), settings = getEffectiveSettings(), draft = AppState.draft || {}) {
@@ -2015,7 +2054,7 @@ function seedRisksFromScenarioDraft(narrative, { force = false, replaceGenerated
       description: risk.description || 'Generated from the current scenario draft to give you a clear shortlist for the next step.'
     }));
   if (!extractedRisks.length) return 0;
-  if (replaceGenerated) replaceSuggestedRiskCandidates(extractedRisks, { selectNew: true });
+  if (replaceGenerated || force) replaceSuggestedRiskCandidates(extractedRisks, { selectNew: true });
   else appendRiskCandidates(extractedRisks, { selectNew: true });
   if (!AppState.draft.scenarioTitle && getSelectedRisks()[0]) AppState.draft.scenarioTitle = getSelectedRisks()[0].title;
   return extractedRisks.length;
@@ -2096,7 +2135,9 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
       const hadGuidedAiDraft = !!(AppState.draft.guidedDraftSource || AppState.draft.aiNarrativeBaseline);
       AppState.draft.guidedInput[key] = this.value;
       clearLoadedDryRunFlag();
-      clearStep1StaleAssistState(composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft));
+      const composed = composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft);
+      clearStep1StaleAssistState(composed);
+      AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, composed);
       if (hadGuidedAiDraft) AppState.draft.aiQualityState = 'analyst-reshaped';
       updateStep1GuidedPreview();
       markDraftDirty();
@@ -2108,7 +2149,9 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
     const hadGuidedAiDraft = !!(AppState.draft.guidedDraftSource || AppState.draft.aiNarrativeBaseline);
     AppState.draft.guidedInput.urgency = this.value;
     clearLoadedDryRunFlag();
-    clearStep1StaleAssistState(composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft));
+    const composed = composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft);
+    clearStep1StaleAssistState(composed);
+    AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, composed);
     if (hadGuidedAiDraft) AppState.draft.aiQualityState = 'analyst-reshaped';
     updateStep1GuidedPreview();
     markDraftDirty();
@@ -2121,7 +2164,7 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
     AppState.draft.narrative = this.value;
     AppState.draft.sourceNarrative = this.value;
     // Preserve the current function-aware lens while the user edits so later shortlist and AI steps do not reclassify the draft from scratch on every keystroke.
-    AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft);
+    AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, this.value);
     if (hadAssistedDraft) AppState.draft.aiQualityState = 'analyst-reshaped';
     clearLoadedDryRunFlag();
     markDraftDirty();
@@ -2136,7 +2179,9 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
     btn.addEventListener('click', () => {
       AppState.draft.guidedInput.event = btn.dataset.prompt;
       document.getElementById('guided-event').value = btn.dataset.prompt;
-      clearStep1StaleAssistState(composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft));
+      const composed = composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft);
+      clearStep1StaleAssistState(composed);
+      AppState.draft.scenarioLens = getStep1PreferredScenarioLens(settings, AppState.draft, composed);
       updateStep1GuidedPreview();
       markDraftDirty();
       scheduleDraftAutosave();

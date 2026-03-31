@@ -2593,7 +2593,7 @@ function bindReviewBannerActions(assessment) {
 }
 
 async function refreshReviewStatus(assessment, r) {
-  if (!assessment?.id || !assessment?.reviewSubmission) return;
+  if (!assessment?.id || !assessment?.results) return;
   try {
     const sessionToken = typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
       ? AuthService.getApiSessionToken()
@@ -2607,7 +2607,22 @@ async function refreshReviewStatus(assessment, r) {
     if (!matched) return;
     const localStatus = String(assessment.reviewSubmission?.reviewStatus || '').trim().toLowerCase();
     const remoteStatus = String(matched.reviewStatus || '').trim().toLowerCase();
-    if (!remoteStatus || remoteStatus === localStatus) return;
+    const localNote = String(assessment.reviewSubmission?.reviewNote || '').trim();
+    const remoteNote = String(matched.reviewNote || '').trim();
+    const localReviewedBy = String(assessment.reviewSubmission?.reviewedBy || '').trim();
+    const remoteReviewedBy = String(matched.reviewedBy || '').trim();
+    const localReviewedAt = Number(assessment.reviewSubmission?.reviewedAt || 0);
+    const remoteReviewedAt = Number(matched.reviewedAt || 0);
+    const localEscalatedTo = String(assessment.reviewSubmission?.escalatedTo || '').trim();
+    const remoteEscalatedTo = String(matched.escalatedTo || '').trim();
+    const hasChanged = !!remoteStatus && (
+      remoteStatus !== localStatus
+      || remoteNote !== localNote
+      || remoteReviewedBy !== localReviewedBy
+      || remoteReviewedAt !== localReviewedAt
+      || remoteEscalatedTo !== localEscalatedTo
+    );
+    if (!hasChanged) return;
     const next = updateAssessmentRecord(assessment.id, rec => ({
       ...rec,
       reviewSubmission: {

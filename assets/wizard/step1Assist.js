@@ -124,7 +124,7 @@
     const resetButton = _setStep1ButtonBusy(button, 'Building…');
     const preview = document.getElementById('guided-preview');
     const bu = getBUList().find(b => b.id === (document.getElementById('wizard-bu')?.value || AppState.draft.buId));
-    const preferredLens = getStep1PreferredScenarioLens(settings, AppState.draft);
+    const preferredLens = getStep1PreferredScenarioLens(settings, AppState.draft, localDraft);
 
     if (preview) {
       preview.textContent = 'Building a scenario draft from the current event, impact, and context…';
@@ -227,12 +227,13 @@
     }
     if (output) output.innerHTML = UI.wizardAssistSkeleton();
     try {
+      const preferredLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
         narrative: assistSeed || AppState.draft.registerFindings,
         guidedInput: AppState.draft.guidedInput,
         structuredScenario: AppState.draft.structuredScenario,
-        scenarioLens: AppState.draft.scenarioLens,
+        scenarioLens: preferredLens,
         applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
         businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
       }), 5);
@@ -240,7 +241,7 @@
         riskStatement: assistSeed || narrative,
         registerText: AppState.draft.registerFindings,
         registerMeta: AppState.draft.registerMeta,
-        scenarioLensHint: AppState.draft.scenarioLens,
+        scenarioLensHint: preferredLens,
         businessUnit: aiContext.businessUnit || bu,
         geography: formatScenarioGeographies(getScenarioGeographies()),
         applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
@@ -289,12 +290,13 @@
     const resetButton = _setStep1ButtonBusy(button, 'Enhancing…');
     if (output) output.innerHTML = UI.wizardAssistSkeleton();
     try {
+      const preferredLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
         narrative: assistSeed || narrative,
         guidedInput: AppState.draft.guidedInput,
         structuredScenario: AppState.draft.structuredScenario,
-        scenarioLens: AppState.draft.scenarioLens,
+        scenarioLens: preferredLens,
         applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
         businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
       }), 5);
@@ -302,7 +304,7 @@
         riskStatement: assistSeed || narrative,
         registerText: '',
         registerMeta: null,
-        scenarioLensHint: AppState.draft.scenarioLens,
+        scenarioLensHint: preferredLens,
         businessUnit: aiContext.businessUnit || bu,
         geography: formatScenarioGeographies(getScenarioGeographies()),
         applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),

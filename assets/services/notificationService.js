@@ -23,6 +23,13 @@ const NotificationService = (() => {
     try {
       localStorage.setItem(getStorageKey(username), JSON.stringify(Array.isArray(notifications) ? notifications : []));
     } catch {}
+    try {
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('rq:notifications-changed', {
+          detail: { username, count: Array.isArray(notifications) ? notifications.length : 0 }
+        }));
+      }
+    } catch {}
   }
 
   function addNotification(type, title, body, linkHash) {

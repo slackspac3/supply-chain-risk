@@ -358,7 +358,17 @@ function applyUserStateSnapshotLocally(username, state = {}) {
   } catch {}
   try {
     if (nextCache.draft) {
-      sessionStorage.setItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername), JSON.stringify(nextCache.draft));
+      sessionStorage.setItem(
+        buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername),
+        JSON.stringify(
+          typeof buildSessionDraftPayload === 'function'
+            ? buildSessionDraftPayload(nextCache.draft, Number(nextCache.draftWorkspace?.lastSavedAt || Date.now()))
+            : {
+                savedAt: Number(nextCache.draftWorkspace?.lastSavedAt || Date.now()),
+                draft: nextCache.draft
+              }
+        )
+      );
     } else {
       sessionStorage.removeItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername));
     }
@@ -1328,6 +1338,61 @@ function ensureUserStateCache(username = AuthService.getCurrentUser()?.username 
     });
   }
   return AppState.userStateCache;
+}
+
+let _workspaceStorageSyncBound = false;
+
+function bindWorkspaceStorageSync() {
+  if (_workspaceStorageSyncBound || typeof window === 'undefined') return;
+  _workspaceStorageSyncBound = true;
+  window.addEventListener('storage', (event) => {
+    const safeUsername = String(AuthService.getCurrentUser()?.username || AppState.userStateCache.username || '').trim().toLowerCase();
+    const key = String(event?.key || '').trim();
+    if (!key) return;
+
+    if (key === GLOBAL_ADMIN_STORAGE_KEY) {
+      try {
+        const nextSettings = event.newValue ? JSON.parse(event.newValue) : null;
+        if (nextSettings && typeof nextSettings === 'object') {
+          applySharedSettingsLocally(nextSettings);
+        } else {
+          clearAdminSettingsState();
+        }
+      } catch {
+        clearAdminSettingsState();
+      }
+      if (!/^#\/wizard\//.test(String(window.location.hash || ''))) Router.render?.();
+      return;
+    }
+
+    if (!safeUsername) return;
+
+    const nextCache = { ...(AppState.userStateCache || {}) };
+    let changed = false;
+    if (key === buildUserStorageKey(USER_SETTINGS_STORAGE_PREFIX, safeUsername)) {
+      nextCache.userSettings = null;
+      changed = true;
+    }
+    if (key === buildUserStorageKey(ASSESSMENTS_STORAGE_PREFIX, safeUsername)) {
+      nextCache.assessments = null;
+      nextCache.savedAssessments = null;
+      changed = true;
+    }
+    if (key === buildUserStorageKey(LEARNING_STORAGE_PREFIX, safeUsername)) {
+      nextCache.learningStore = null;
+      changed = true;
+    }
+    if (key === buildUserStorageKey(DRAFT_RECOVERY_STORAGE_PREFIX, safeUsername) && !AppState.draftDirty) {
+      nextCache.draft = null;
+      nextCache.draftWorkspace = null;
+      changed = true;
+    }
+    if (!changed) return;
+    updateUserStateCache(nextCache);
+    if (!/^#\/wizard\//.test(String(window.location.hash || ''))) {
+      Router.render?.();
+    }
+  });
 }
 
 const USER_SETTINGS_KEYS = [
@@ -7982,6 +8047,7 @@ async function init() {
   RAGService.init(getDocList(), getBUList());
   BenchmarkService.init(AppState.benchmarkList);
   activateAuthenticatedState();
+  bindWorkspaceStorageSync();
 
   window.AppRoutes.register(Router);
 

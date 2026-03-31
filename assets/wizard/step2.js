@@ -147,7 +147,7 @@ function bindNarrativeDiffToggle() {
 function recordStep2NarrativeEditIfNeeded(nextNarrative) {
   const username = AuthService.getCurrentUser()?.username || '';
   if (!username || typeof LearningStore === 'undefined' || typeof LearningStore.recordNarrativeEdit !== 'function') return;
-  if (!AppState.draft?.llmAssisted) return;
+  if (!AppState.draft?.llmAssisted && !String(AppState.draft?.aiNarrativeBaseline || '').trim()) return;
   const before = normaliseStep2NarrativeForLearning(AppState.draft.aiNarrativeBaseline || '');
   const after = normaliseStep2NarrativeForLearning(nextNarrative);
   if (!isMeaningfulStep2NarrativeChange(before, after)) return;
@@ -160,6 +160,31 @@ function recordStep2NarrativeEditIfNeeded(nextNarrative) {
     changeSummary: buildStep2NarrativeEditSummary(before, after)
   });
   AppState.draft.aiNarrativeBaseline = after;
+}
+
+function invalidateStep2AiAnalysisIfNeeded(nextNarrative) {
+  if (!AppState.draft?.llmAssisted) return;
+  const baseline = AppState.draft.aiNarrativeBaseline
+    || AppState.draft.enhancedNarrative
+    || AppState.draft.narrative
+    || '';
+  if (!isMeaningfulStep2NarrativeChange(baseline, nextNarrative)) return;
+  AppState.draft.llmAssisted = false;
+  AppState.draft.aiQualityState = 'analyst-reshaped';
+  AppState.draft.scenarioLens = null;
+  AppState.draft.confidenceLabel = '';
+  AppState.draft.evidenceQuality = '';
+  AppState.draft.evidenceSummary = '';
+  AppState.draft.workflowGuidance = [];
+  AppState.draft.benchmarkBasis = '';
+  AppState.draft.recommendations = [];
+  AppState.draft.primaryGrounding = [];
+  AppState.draft.supportingReferences = [];
+  AppState.draft.inferredAssumptions = [];
+  AppState.draft.missingInformation = [];
+  AppState.draft.inputProvenance = [];
+  AppState.draft.inputRationale = null;
+  AppState.draft.benchmarkReferences = [];
 }
 
 function renderWizard2() {
@@ -323,10 +348,9 @@ function renderWizard2() {
 
   document.getElementById('btn-back-2').addEventListener('click', () => { saveDraft(); Router.navigate('/wizard/1'); });
   document.getElementById('narrative').addEventListener('input', function() {
+    invalidateStep2AiAnalysisIfNeeded(this.value);
     AppState.draft.enhancedNarrative = this.value;
     if (!AppState.draft.narrative) AppState.draft.narrative = this.value;
-    // Preserve the working lens through scenario edits so Step 2 does not throw away the domain context before the next AI or estimate step.
-    AppState.draft.scenarioLens = AppState.draft.scenarioLens || null;
     markDraftDirty();
     scheduleDraftAutosave();
   });
@@ -352,6 +376,7 @@ function renderWizard2() {
   document.getElementById('btn-next-2').addEventListener('click', () => {
     const n = document.getElementById('narrative').value.trim();
     if (!n) { UI.toast('Please enter a risk narrative.', 'warning'); return; }
+    invalidateStep2AiAnalysisIfNeeded(n);
     recordStep2NarrativeEditIfNeeded(n);
     AppState.draft.enhancedNarrative = n;
     AppState.draft.narrative = AppState.draft.narrative || n;

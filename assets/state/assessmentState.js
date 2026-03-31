@@ -5,6 +5,50 @@
 const _assessmentPersistenceWarnings = new Set();
 const SMART_PARAM_HISTORY_KEY = 'rip_param_history';
 
+function getCurrentScopedLocalKey(baseKey) {
+  const username = String((typeof AuthService !== 'undefined' && AuthService.getCurrentUser?.()?.username) || '').trim().toLowerCase();
+  return username ? `${baseKey}_${username}` : baseKey;
+}
+
+function migrateLegacyLocalArrayKey(baseKey, scopedKey) {
+  if (!scopedKey || scopedKey === baseKey || typeof localStorage === 'undefined') return;
+  try {
+    if (localStorage.getItem(scopedKey) != null) return;
+    const legacy = localStorage.getItem(baseKey);
+    if (!legacy) return;
+    localStorage.setItem(scopedKey, legacy);
+  } catch {}
+}
+
+function getSmartParamHistoryStorageKey() {
+  const scopedKey = getCurrentScopedLocalKey(SMART_PARAM_HISTORY_KEY);
+  migrateLegacyLocalArrayKey(SMART_PARAM_HISTORY_KEY, scopedKey);
+  return scopedKey;
+}
+
+function buildSessionDraftPayload(draft, savedAt = Date.now()) {
+  return {
+    savedAt: Number(savedAt || 0),
+    draft: draft && typeof draft === 'object' ? draft : null
+  };
+}
+
+function normaliseSessionDraftPayload(payload) {
+  if (payload && typeof payload === 'object' && payload.draft && typeof payload.draft === 'object') {
+    return {
+      draft: payload.draft,
+      savedAt: Number(payload.savedAt || payload.lastSavedAt || 0)
+    };
+  }
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    return {
+      draft: payload,
+      savedAt: Number(payload.savedAt || payload.lastSavedAt || 0)
+    };
+  }
+  return { draft: null, savedAt: 0 };
+}
+
 function warnAssessmentPersistenceOnce(key, message, error = null) {
   if (typeof window === 'undefined') return;
   if (_assessmentPersistenceWarnings.has(key)) return;
@@ -263,7 +307,7 @@ function recordTemplateLoad(templateId) {
 
 function getSmartParamHistory() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(SMART_PARAM_HISTORY_KEY) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(getSmartParamHistoryStorageKey()) || '[]');
     return Array.isArray(parsed) ? parsed.filter(item => item && typeof item === 'object') : [];
   } catch {
     return [];
@@ -272,7 +316,7 @@ function getSmartParamHistory() {
 
 function saveSmartParamHistory(history) {
   try {
-    localStorage.setItem(SMART_PARAM_HISTORY_KEY, JSON.stringify(Array.isArray(history) ? history.slice(0, 80) : []));
+    localStorage.setItem(getSmartParamHistoryStorageKey(), JSON.stringify(Array.isArray(history) ? history.slice(0, 80) : []));
   } catch (error) {
     warnAssessmentPersistenceOnce('smart-param-history-write', 'saveSmartParamHistory local write failed:', error);
   }
@@ -343,9 +387,10 @@ function applyLearnedTemplateDraft(tmpl) {
 }
 
 function saveDraft() {
+  const savedAt = Date.now();
   try {
     if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX), JSON.stringify(AppState.draft));
+      sessionStorage.setItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX), JSON.stringify(buildSessionDraftPayload(AppState.draft, savedAt)));
     }
   } catch (error) {
     warnAssessmentPersistenceOnce('draft-write', 'saveDraft session write failed:', error);
@@ -354,10 +399,10 @@ function saveDraft() {
   const cache = ensureUserStateCache();
   // Keep the cache snapshot detached from the live draft so later nested edits do not mutate the “saved” copy in memory.
   cache.draft = cloneDraftStateSnapshot(AppState.draft, { ...(AppState.draft || {}) });
-  dispatchDraftAction('MARK_DRAFT_SAVED', { at: Date.now() });
+  dispatchDraftAction('MARK_DRAFT_SAVED', { at: savedAt });
   cache.draftWorkspace = buildDraftWorkspaceSection(cache.draft, {
     lastSavedAt: Number(AppState.draftLastSavedAt || 0),
-    recoverySnapshotAt: Date.now()
+    recoverySnapshotAt: savedAt
   });
   if (typeof updateWizardSaveState === 'function') updateWizardSaveState();
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -372,30 +417,30 @@ function loadDraft() {
     lifecycleStatus: deriveAssessmentLifecycleStatus(draft || {})
   });
   const cache = ensureUserStateCache();
+  const candidates = [];
   const cachedDraft = cache.draftWorkspace?.draft && typeof cache.draftWorkspace.draft === 'object'
     ? cache.draftWorkspace.draft
     : cache.draft;
   if (cachedDraft && typeof cachedDraft === 'object') {
-    dispatchDraftAction('SET_DRAFT', {
-      draft: {
-        ...(AppState.draft || {}),
-        ...withDraftIdentity(cachedDraft)
-      }
+    candidates.push({
+      source: 'cache',
+      savedAt: Number(cache.draftWorkspace?.lastSavedAt || 0),
+      draft: cachedDraft,
+      priority: 1
     });
-    return;
   }
   try {
-    const d = typeof sessionStorage !== 'undefined'
+    const rawDraft = typeof sessionStorage !== 'undefined'
       ? JSON.parse(sessionStorage.getItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX)) || 'null')
       : null;
-    if (d && typeof d === 'object' && Object.keys(d).length) {
-      dispatchDraftAction('SET_DRAFT', {
-        draft: {
-          ...(AppState.draft || {}),
-          ...withDraftIdentity(d)
-        }
+    const sessionDraft = normaliseSessionDraftPayload(rawDraft);
+    if (sessionDraft.draft && typeof sessionDraft.draft === 'object' && Object.keys(sessionDraft.draft).length) {
+      candidates.push({
+        source: 'session',
+        savedAt: Number(sessionDraft.savedAt || 0),
+        draft: sessionDraft.draft,
+        priority: 3
       });
-      return;
     }
   } catch (error) {
     warnAssessmentPersistenceOnce('draft-session-read', 'loadDraft session read failed:', error);
@@ -403,19 +448,35 @@ function loadDraft() {
   try {
     const recovered = typeof readDraftRecoverySnapshot === 'function' ? readDraftRecoverySnapshot() : null;
     if (recovered?.draft) {
-      dispatchDraftAction('SET_DRAFT', {
-        draft: {
-          ...(AppState.draft || {}),
-          ...withDraftIdentity(recovered.draft)
-        }
+      candidates.push({
+        source: 'recovery',
+        savedAt: Number(recovered.savedAt || 0),
+        draft: recovered.draft,
+        priority: 2
       });
-      if (typeof updateWizardSaveState === 'function') updateWizardSaveState();
-      if (typeof UI?.toast === 'function') {
-        UI.toast('Recovered your latest draft from this browser.', 'info', 4500);
-      }
     }
   } catch (error) {
     warnAssessmentPersistenceOnce('draft-recovery-read', 'loadDraft recovery read failed:', error);
+  }
+  if (!candidates.length) return;
+  const chosen = candidates
+    .filter(item => item?.draft && typeof item.draft === 'object')
+    .sort((left, right) => (
+      Number(right.savedAt || 0) - Number(left.savedAt || 0)
+      || Number(right.priority || 0) - Number(left.priority || 0)
+    ))[0];
+  if (!chosen?.draft) return;
+  dispatchDraftAction('SET_DRAFT', {
+    draft: {
+      ...(AppState.draft || {}),
+      ...withDraftIdentity(chosen.draft)
+    }
+  });
+  if (chosen.source === 'recovery') {
+    if (typeof updateWizardSaveState === 'function') updateWizardSaveState();
+    if (typeof UI?.toast === 'function') {
+      UI.toast('Recovered your latest draft from this browser.', 'info', 4500);
+    }
   }
 }
 function resetDraft() {
