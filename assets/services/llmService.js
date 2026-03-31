@@ -148,6 +148,11 @@ const LLMService = (() => {
     return error instanceof Error ? error : new Error(msg);
   }
 
+  function _isStructuredResponseFailure(error) {
+    const msg = String(error?.message || error || '').trim();
+    return /unusable structured response|Unexpected token|JSON|schema|unterminated|string literal|response shape was not usable/i.test(msg);
+  }
+
   function _extractBalancedJsonCandidate(text = '') {
     const source = String(text || '');
     const start = source.search(/[\[{]/);
@@ -2731,6 +2736,13 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
         await _auditAiFallback('generateScenarioAndInputs', e);
         console.warn('LLM API call failed, falling back to stub:', e.message);
         const normalisedError = _normaliseLLMError(e);
+        if (_isStructuredResponseFailure(normalisedError) || _isStructuredResponseFailure(e)) {
+          const fallbackMeta = _buildEvidenceMeta({ citations: retrievedDocs, businessUnit: buContext, geography: buContext?.geography, applicableRegulations: buContext?.regulatoryTags || [], userProfile: buContext?.userProfileSummary, organisationContext: buContext?.companyStructureContext });
+          return _decorateAiResult(_withEvidenceMeta(_generateStub(narrative, buContext, retrievedDocs, benchmarkCandidates), fallbackMeta), fallbackMeta, {
+            contentFields: ['scenarioTitle', 'benchmarkBasis'],
+            fallbackUsed: true
+          });
+        }
         throw Object.assign(new Error(normalisedError?.message || e?.message || 'AI request failed'), {
           code: 'LLM_UNAVAILABLE',
           retriable: true,
@@ -2996,6 +3008,19 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
         await _auditAiFallback('enhanceRiskContext', e);
         console.warn('enhanceRiskContext fallback:', e.message);
         const normalisedError = _normaliseLLMError(e);
+        if (_isStructuredResponseFailure(normalisedError) || _isStructuredResponseFailure(e)) {
+          const fallbackMeta = _buildEvidenceMeta({ citations: input.citations || [], businessUnit: input.businessUnit, geography: input.geography, applicableRegulations: input.applicableRegulations, uploadedText: input.registerText, registerText: input.registerText, userProfile: input.adminSettings?.userProfileSummary, organisationContext: input.adminSettings?.companyStructureContext, adminSettings: input.adminSettings });
+          const fallbackResult = _generateRiskBuilderStub(input);
+          fallbackResult.aiAlignment = _buildAiAlignment(input, fallbackResult, {
+            classification,
+            seedNarrative: input.riskStatement || input.registerText || '',
+            fallbackScenarioExpansion
+          });
+          return _decorateAiResult(_withEvidenceMeta(fallbackResult, fallbackMeta), fallbackMeta, {
+            contentFields: ['enhancedStatement', 'summary', 'linkAnalysis', 'benchmarkBasis'],
+            fallbackUsed: true
+          });
+        }
         throw Object.assign(new Error(normalisedError?.message || e?.message || 'AI request failed'), {
           code: 'LLM_UNAVAILABLE',
           retriable: true,
@@ -3125,11 +3150,15 @@ ${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
         await _auditAiFallback('analyseRiskRegister', e);
         console.warn('analyseRiskRegister fallback:', e.message);
         const normalisedError = _normaliseLLMError(e);
-        throw Object.assign(new Error(normalisedError?.message || e?.message || 'AI request failed'), {
-          code: 'LLM_UNAVAILABLE',
-          retriable: true,
-          originalError: e
-        });
+        if (_isStructuredResponseFailure(normalisedError) || _isStructuredResponseFailure(e)) {
+          fallbackReason = _classifyAiFallbackReason(normalisedError);
+        } else {
+          throw Object.assign(new Error(normalisedError?.message || e?.message || 'AI request failed'), {
+            code: 'LLM_UNAVAILABLE',
+            retriable: true,
+            originalError: e
+          });
+        }
       }
     }
     const stub = _generateRiskBuilderStub({ ...input, riskStatement: lines.slice(0, 4).join('. ') });
