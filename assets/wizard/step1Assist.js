@@ -149,6 +149,26 @@
     return `<div class="form-help js-ai-trace-link" style="margin-top:8px"><button type="button" class="link-btn" id="${id}" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">Why this?</button></div>`;
   }
 
+  function _warnIfRagNotReady() {
+    const ready = !!(typeof RAGService !== 'undefined'
+      && RAGService
+      && typeof RAGService.isReady === 'function'
+      && RAGService.isReady());
+    if (ready) return;
+    console.warn('RAGService not ready — AI will run without document citations.');
+    const role = String(AuthService?.getCurrentUser?.()?.role || '').trim().toLowerCase();
+    if (role !== 'admin') return;
+    try {
+      if (sessionStorage.getItem('rip_rag_warned') === '1') return;
+      sessionStorage.setItem('rip_rag_warned', '1');
+    } catch {}
+    UI.toast(
+      'Document library not loaded — AI is running without citations. Check the Admin document library.',
+      'warning',
+      6000
+    );
+  }
+
   function mountAiTraceLinks() {
     document.querySelectorAll('.js-ai-trace-link').forEach((node) => node.remove());
     if (!UI || typeof UI.openAiTraceModal !== 'function') return;
@@ -225,6 +245,7 @@
 
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+      _warnIfRagNotReady();
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
         narrative: localDraft,
         guidedInput: AppState.draft.guidedInput,
@@ -327,6 +348,7 @@
     try {
       const preferredLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+      _warnIfRagNotReady();
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
         narrative: assistSeed || AppState.draft.registerFindings,
         guidedInput: AppState.draft.guidedInput,
@@ -394,6 +416,7 @@
     try {
       const preferredLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+      _warnIfRagNotReady();
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
         narrative: assistSeed || narrative,
         guidedInput: AppState.draft.guidedInput,

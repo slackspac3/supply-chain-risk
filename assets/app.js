@@ -9123,6 +9123,9 @@ async function init() {
     AppState.buList = []; AppState.docList = []; AppState.benchmarkList = [];
   }
   RAGService.init(getDocList(), getBUList());
+  if (!RAGService.isReady() && getDocList().length === 0) {
+    console.warn('RAGService initialised with zero documents. Add documents via Admin > Document Library.');
+  }
   BenchmarkService.init(AppState.benchmarkList);
   activateAuthenticatedState();
   bindWorkspaceStorageSync();

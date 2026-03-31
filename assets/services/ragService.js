@@ -699,6 +699,9 @@ const RAGService = (() => {
       && typeof LLMService.isUsingStub === 'function'
       && LLMService.isUsingStub();
     if (isDemo) await _simulateLatency(400);
+    if (_indexedDocs.length === 0) {
+      console.warn('RAGService: retrieveRelevantDocs called before docs were indexed. Citations will be empty.');
+    }
 
     const queryInfo = _expandQuery(query);
     const scored = _indexedDocs.map(indexed => ({
@@ -796,5 +799,9 @@ const RAGService = (() => {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  return { init, retrieveRelevantDocs, getDocsForBU, addDocument, bulkAddDocuments };
+  function isReady() {
+    return _indexedDocs.length > 0;
+  }
+
+  return { init, isReady, retrieveRelevantDocs, getDocsForBU, addDocument, bulkAddDocuments };
 })();
