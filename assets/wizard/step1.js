@@ -410,6 +410,118 @@ function composeStep1GuidedNarrative(guidedInput = (AppState.draft?.guidedInput 
   });
 }
 
+function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, exampleModel = null) {
+  const guidedInput = draft?.guidedInput || {};
+  const sourceText = [
+    guidedInput.event,
+    guidedInput.impact,
+    guidedInput.cause,
+    guidedInput.asset,
+    draft?.narrative,
+    draft?.enhancedNarrative,
+    draft?.sourceNarrative
+  ].filter(Boolean).join(' ');
+  const haystack = ` ${String(sourceText || '').toLowerCase()} `;
+  const suggestions = [];
+  const seen = new Set();
+  const pushSuggestion = (label, prompt) => {
+    const safeLabel = String(label || '').trim();
+    const safePrompt = String(prompt || '').trim();
+    if (!safeLabel || !safePrompt) return;
+    const key = `${safeLabel.toLowerCase()}::${safePrompt.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    suggestions.push({ label: safeLabel, prompt: safePrompt });
+  };
+
+  if (/(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|delinquen|default)/.test(haystack)) {
+    pushSuggestion(
+      'Counterparty insolvency',
+      'A major client becomes insolvent and recoverable receivables become materially harder to collect.'
+    );
+    pushSuggestion(
+      'Receivables write-off',
+      'A customer default forces a significant receivables write-off, provisioning increase, and finance escalation.'
+    );
+  }
+
+  if (/(major client|key client|single client|single customer|customer concentration|client concentration|customer default|client default|customer failure|client failure)/.test(haystack)
+    || ((/client|customer|buyer|counterparty/.test(haystack)) && /major|critical|material|single/.test(haystack))) {
+    pushSuggestion(
+      'Customer concentration exposure',
+      'One major client failure cascades into concentration exposure, delayed collections, and a broader commercial recovery problem.'
+    );
+  }
+
+  if (/(cashflow|liquidity|working capital|collections|collect|recover|financial impact|provision|provisioning|treasury)/.test(haystack)) {
+    pushSuggestion(
+      'Cashflow strain after default',
+      'A client default creates an immediate collections gap, cashflow strain, and pressure on provisioning decisions.'
+    );
+  }
+
+  if (/(supplier|vendor|third party|single[- ]source|sole source|concentration|procurement|delivery commitment|fallback|substitute)/.test(haystack)) {
+    pushSuggestion(
+      'Single-source shortfall',
+      'A critical supplier cannot meet a key delivery commitment and no ready substitute is available in the current sourcing plan.'
+    );
+    pushSuggestion(
+      'Vendor dependency weakness',
+      'A concentrated third-party dependency becomes visible and starts creating continuity, leverage, and remediation pressure.'
+    );
+  }
+
+  if (/(payment|payable|invoice|collections|settlement|treasury|disbursement)/.test(haystack)) {
+    pushSuggestion(
+      'Payment control failure',
+      'A breakdown in payment or collections controls creates avoidable financial loss, delayed recovery, or reconciliation strain.'
+    );
+  }
+
+  if (/(monitor|oversight|review|assurance|reporting|disclosure|governance|control gap)/.test(haystack)) {
+    pushSuggestion(
+      'Monitoring failure',
+      'A weak monitoring or assurance process allows a material issue to build before management intervenes.'
+    );
+  }
+
+  if (/(data|privacy|personal data|identity|access|credential|cyber|security|breach|ransomware|phishing)/.test(haystack)) {
+    pushSuggestion(
+      'Data or identity exposure',
+      'A control failure exposes sensitive data or privileged access and creates a wider regulatory and operational response.'
+    );
+  }
+
+  const hasLiveSignal = normaliseAssessmentTokens(sourceText).length >= 2;
+  const fallbackExamples = ((exampleModel && Array.isArray(exampleModel.recommendedExamples))
+    ? exampleModel.recommendedExamples
+    : getStep1ExampleExperienceModel(getEffectiveSettings(), draft).recommendedExamples || [])
+    .map((example) => ({
+      label: example.promptLabel,
+      prompt: example.event
+    }));
+
+  if (!hasLiveSignal && !suggestions.length) {
+    return fallbackExamples.slice(0, 3);
+  }
+  fallbackExamples.forEach((example) => pushSuggestion(example.label, example.prompt));
+  return suggestions.slice(0, 3);
+}
+
+function renderStep1GuidedPromptIdeaChips(promptSuggestions = []) {
+  const promptCards = promptSuggestions.length
+    ? promptSuggestions
+    : [
+      { label: 'Commercial integrity issue', prompt: 'A sourcing, approval, or commercial decision is manipulated or poorly governed and starts creating avoidable downstream exposure.' },
+      { label: 'Disclosure or assurance gap', prompt: 'A control, policy, or reporting gap becomes visible and management now has to respond before the issue widens.' },
+      { label: 'Dependency or labour concern', prompt: 'A supplier, sub-tier dependency, or workforce practice issue becomes visible and starts creating continuity, compliance, or stakeholder pressure.' }
+    ];
+  return promptCards
+    .slice(0, 3)
+    .map(prompt => `<button class="citation-chip guided-prompt-chip" data-prompt="${escapeHtml(prompt.prompt)}">${escapeHtml(prompt.label)}</button>`)
+    .join('');
+}
+
 function getStep1LearnedExampleSummary(pattern = {}) {
   const parts = [
     pattern.geography ? `Completed in ${pattern.geography}` : '',
@@ -1049,11 +1161,7 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
   const optionalContextDisclosureKey = getDisclosureStateKey('/wizard/1', 'add more context only if you need it');
   const promptCards = promptSuggestions.length
     ? promptSuggestions
-    : [
-      { label: 'Commercial integrity issue', prompt: 'A sourcing, approval, or commercial decision is manipulated or poorly governed and starts creating avoidable downstream exposure.' },
-      { label: 'Disclosure or assurance gap', prompt: 'A control, policy, or reporting gap becomes visible and management now has to respond before the issue widens.' },
-      { label: 'Dependency or labour concern', prompt: 'A supplier, sub-tier dependency, or workforce practice issue becomes visible and starts creating continuity, compliance, or stakeholder pressure.' }
-    ];
+    : buildStep1GuidedPromptSuggestions(draft);
   const primaryPrompt = String(promptCards[0]?.prompt || 'Describe what happened or what could happen.').trim();
   return `<div class="card card--primary wizard-primary-card anim-fade-in anim-delay-1">
     <div class="wizard-premium-head" style="margin-bottom:var(--sp-5)">
@@ -1103,8 +1211,8 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
           </div>
           <div class="form-group">
             <label class="form-label">Prompt ideas</label>
-            <div class="citation-chips">
-              ${promptCards.slice(0, 3).map(prompt => `<button class="citation-chip guided-prompt-chip" data-prompt="${escapeHtml(prompt.prompt)}">${escapeHtml(prompt.label)}</button>`).join('')}
+            <div class="citation-chips" id="guided-prompt-ideas">
+              ${renderStep1GuidedPromptIdeaChips(promptCards)}
             </div>
           </div>
         </div>
@@ -2627,10 +2735,16 @@ function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false
 
 function updateStep1GuidedPreview() {
   const preview = document.getElementById('guided-preview');
-  if (!preview) return;
-  preview.textContent = String(AppState.draft.guidedDraftPreview || '').trim()
-    || composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft)
-    || 'Complete the guided questions and click “Build Scenario Draft”.';
+  if (preview) {
+    preview.textContent = String(AppState.draft.guidedDraftPreview || '').trim()
+      || composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft)
+      || 'Complete the guided questions and click “Build Scenario Draft”.';
+  }
+  const promptIdeasHost = document.getElementById('guided-prompt-ideas');
+  if (promptIdeasHost) {
+    promptIdeasHost.innerHTML = renderStep1GuidedPromptIdeaChips(buildStep1GuidedPromptSuggestions(AppState.draft));
+    bindStep1PromptIdeaChips(promptIdeasHost.parentElement || document, getEffectiveSettings());
+  }
 }
 
 function createStep1GeographySyncHandler({ buList, settings }) {
@@ -2931,20 +3045,7 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
 function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
   document.getElementById('btn-build-guided-narrative')?.addEventListener('click', () => Step1Assist.buildGuidedScenarioDraft());
 
-  document.querySelectorAll('.guided-prompt-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      AppState.draft.guidedInput.event = btn.dataset.prompt;
-      document.getElementById('guided-event').value = btn.dataset.prompt;
-      const composed = composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft);
-      clearStep1StaleAssistState(composed);
-      AppState.draft.scenarioLens = getStep1PreferredScenarioLens(settings, AppState.draft, composed);
-      updateStep1GuidedPreview();
-      markDraftDirty();
-      scheduleDraftAutosave();
-      scheduleStep1ScenarioMemoryRefresh();
-      scheduleStep1ScenarioCrossReferenceRefresh();
-    });
-  });
+  bindStep1PromptIdeaChips(document, settings);
 
   document.querySelectorAll('.btn-load-dry-run').forEach(button => {
     button.addEventListener('click', () => {
@@ -3004,6 +3105,25 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
         buList,
         scenarioGeographies: getScenarioGeographies()
       });
+    });
+  });
+}
+
+function bindStep1PromptIdeaChips(root = document, settings = getEffectiveSettings()) {
+  root.querySelectorAll('.guided-prompt-chip').forEach(btn => {
+    if (btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      AppState.draft.guidedInput.event = btn.dataset.prompt;
+      document.getElementById('guided-event').value = btn.dataset.prompt;
+      const composed = composeStep1GuidedNarrative(AppState.draft.guidedInput, settings, AppState.draft);
+      clearStep1StaleAssistState(composed);
+      AppState.draft.scenarioLens = getStep1PreferredScenarioLens(settings, AppState.draft, composed);
+      updateStep1GuidedPreview();
+      markDraftDirty();
+      scheduleDraftAutosave();
+      scheduleStep1ScenarioMemoryRefresh();
+      scheduleStep1ScenarioCrossReferenceRefresh();
     });
   });
 }
@@ -3096,10 +3216,7 @@ function renderWizard1() {
   const hasImportedSource = !!String(draft.uploadedRegisterName || draft.loadedDryRunId || '').trim()
     || (riskCandidates || []).some(risk => risk.source === 'register' || risk.source === 'ai+register' || risk.source === 'manual');
   const canContinue = !!String(draft.buId || '').trim() && (!!narrative || selectedRisks.length > 0);
-  const promptSuggestions = exampleModel.recommendedExamples.map(example => ({
-    label: example.promptLabel,
-    prompt: example.event
-  }));
+  const promptSuggestions = buildStep1GuidedPromptSuggestions(draft, exampleModel);
 
   setPage(`
     <main class="page">
