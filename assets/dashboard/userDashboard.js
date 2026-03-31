@@ -332,6 +332,7 @@ function renderUserDashboard() {
     .sort((a, b) => new Date(b.archivedAt || b.completedAt || b.createdAt || 0).getTime() - new Date(a.archivedAt || a.completedAt || a.createdAt || 0).getTime())
     .slice(0, 6);
   const completedAssessments = assessments.filter(item => item?.results);
+  const hasVisibleBoardBriefAssessments = canGenerateBoardBrief && completedAssessments.length > 0;
   const recentAssessments = assessments.slice(0, 4);
   const latestAssessment = recentAssessments[0] || null;
   const compactRecentAssessments = assessments.slice(0, 3);
@@ -653,8 +654,8 @@ function renderUserDashboard() {
     `;
   };
   const openBoardBriefModal = () => {
-    if (!canGenerateBoardBrief) return;
-    if (!boardBriefAssessments.length) {
+    if (!hasVisibleBoardBriefAssessments) return;
+    if (!completedAssessments.length) {
       UI.toast('At least one completed assessment is needed before a board brief can be generated.', 'warning');
       return;
     }
@@ -1058,10 +1059,10 @@ function renderUserDashboard() {
         spotlightTitle: 'Worked example and templates',
         spotlightCopy: 'Use the worked example when you want a fast demo path. Open templates when you want structure without starting from a blank assessment.'
       };
-  const boardBriefButtonMarkup = canGenerateBoardBrief
+  const boardBriefButtonMarkup = hasVisibleBoardBriefAssessments
     ? `<button class="btn btn--secondary btn--lg" id="btn-dashboard-board-brief" aria-label="Generate Board Brief">Generate Board Brief</button>`
     : '';
-  const boardBriefSupportMarkup = canGenerateBoardBrief
+  const boardBriefSupportMarkup = hasVisibleBoardBriefAssessments
     ? `<div class="card card--elevated dashboard-section-card dashboard-section-card--secondary" style="margin-bottom:var(--sp-4)">
         <div class="flex items-center justify-between" style="gap:var(--sp-4);flex-wrap:wrap">
           <div style="max-width:58ch">
