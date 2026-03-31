@@ -969,8 +969,15 @@ Repair the response into the required JSON schema. Preserve scenario-specific me
       } catch (error) {
         lastError = error;
         const message = String(error?.message || error || '');
-        if (attempt < AI_MAX_RETRIES && (/timed out/i.test(message) || /Failed to fetch|NetworkError|502|503|504/i.test(message))) {
-          await new Promise(resolve => setTimeout(resolve, 300 * attempt));
+        if (attempt < AI_MAX_RETRIES && (
+          /timed out/i.test(message) ||
+          /Failed to fetch|NetworkError|502|503|504/i.test(message) ||
+          /LLM API error 429/i.test(message)
+        )) {
+          const backoffMs = /LLM API error 429/i.test(message)
+            ? 2000 * attempt
+            : 300 * attempt;
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
           continue;
         }
       } finally {
@@ -981,6 +988,9 @@ Repair the response into the required JSON schema. Preserve scenario-specific me
     const message = String(lastError?.message || lastError || '');
     if (lastError?.name === 'AbortError' || /timed out/i.test(message)) {
       throw new Error('AI assist timed out. Try again, shorten the prompt, or check the model configuration.');
+    }
+    if (/LLM API error 429/i.test(message)) {
+      throw new Error('AI requests are temporarily rate limited. Wait a moment and try again.');
     }
     throw _normaliseLLMError(lastError);
   }
