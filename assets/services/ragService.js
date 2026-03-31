@@ -695,7 +695,10 @@ const RAGService = (() => {
    * [RAG-INTEGRATION] Replace with Azure Cognitive Search vector query
    */
   async function retrieveRelevantDocs(buId, query, topK = 4) {
-    await _simulateLatency(400);
+    const isDemo = typeof LLMService !== 'undefined'
+      && typeof LLMService.isUsingStub === 'function'
+      && LLMService.isUsingStub();
+    if (isDemo) await _simulateLatency(400);
 
     const queryInfo = _expandQuery(query);
     const scored = _indexedDocs.map(indexed => ({

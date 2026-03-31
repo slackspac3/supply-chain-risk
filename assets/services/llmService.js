@@ -405,6 +405,10 @@ Repair the response into the required JSON schema. Preserve scenario-specific me
     }
   }
 
+  function isUsingStub() {
+    return _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
+  }
+
   function _normaliseScenarioHintKey(value) {
     const rawValues = value && typeof value === 'object'
       ? [value.key, value.label, value.functionKey, value.estimatePresetKey]
@@ -2652,7 +2656,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
    * [LLM-INTEGRATION] Replace stub body with real API call + JSON parsing
    */
   async function generateScenarioAndInputs(narrative, buContext, retrievedDocs, benchmarkCandidates = [], options = {}) {
-    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
+    const aiUnavailable = isUsingStub();
     const classification = _classifyScenario(narrative, {
       businessUnit: buContext,
       scenarioLensHint: buContext?.scenarioLensHint
@@ -2972,7 +2976,7 @@ Return only the refined scenario narrative text.`;
   }
 
   async function enhanceRiskContext(input) {
-    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
+    const aiUnavailable = isUsingStub();
     const classification = _classifyScenario(input.riskStatement || input.registerText || '', {
       guidedInput: input.guidedInput,
       businessUnit: input.businessUnit,
@@ -3162,8 +3166,10 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
   }
 
   async function analyseRiskRegister(input) {
-    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
-    await new Promise(r => setTimeout(r, 1000 + Math.random() * 500));
+    const aiUnavailable = isUsingStub();
+    if (aiUnavailable) {
+      await new Promise(r => setTimeout(r, 1000 + Math.random() * 500));
+    }
     const lines = String(input.registerText || '')
       .split(/\r?\n|;/)
       .map(line => line.trim())
@@ -3852,9 +3858,11 @@ ${evidenceMeta.promptBlock}`;
   }
 
   async function suggestTreatmentImprovement(input = {}) {
-    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
+    const aiUnavailable = isUsingStub();
     const stub = _buildTreatmentImprovementStub(input);
-    await new Promise(r => setTimeout(r, 900 + Math.random() * 400));
+    if (aiUnavailable) {
+      await new Promise(r => setTimeout(r, 900 + Math.random() * 400));
+    }
     if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
       try {
         const systemPrompt = `You are a senior FAIR analyst helping a user model an improved future state. Return JSON only with this schema:
@@ -4040,9 +4048,11 @@ Return JSON only:
         return null;
       }
     }
-    const aiUnavailable = _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
+    const aiUnavailable = isUsingStub();
     const stub = _buildAssessmentChallengeStub(input);
-    await new Promise(r => setTimeout(r, 700 + Math.random() * 300));
+    if (aiUnavailable) {
+      await new Promise(r => setTimeout(r, 700 + Math.random() * 300));
+    }
     const evidenceMeta = _buildEvidenceMeta({
       citations: input.citations || [],
       businessUnit: input.businessUnit,
@@ -5249,6 +5259,7 @@ Keep the numbers realistic, internally ordered, and anchored to the user's own h
     coachRiskShortlist,
     suggestSmartParamPrefill,
     getLatestTrace,
+    isUsingStub,
     testCompassConnection,
     setCompassAPIKey,
     setCompassConfig,
