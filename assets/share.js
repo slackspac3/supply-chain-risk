@@ -31,6 +31,16 @@ const ShareService = (() => {
    */
   function generateShareURL(assessment) {
     const payload = _pick(assessment, SHARE_FIELDS);
+    const resolvedScenarioTitle = typeof resolveScenarioDisplayTitle === 'function'
+      ? resolveScenarioDisplayTitle({
+          ...assessment,
+          narrative: String(assessment?.narrative || '').trim(),
+          enhancedNarrative: String(assessment?.enhancedNarrative || assessment?.narrative || '').trim()
+        })
+      : String(payload.scenarioTitle || '').trim();
+    const currentNarrative = String(assessment?.enhancedNarrative || assessment?.narrative || payload.narrative || '').trim();
+    if (resolvedScenarioTitle) payload.scenarioTitle = resolvedScenarioTitle;
+    if (currentNarrative) payload.narrative = currentNarrative;
 
     // Trim heavy arrays to keep URL manageable
     if (payload.results) {

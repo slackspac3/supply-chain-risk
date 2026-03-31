@@ -2367,8 +2367,25 @@ function seedRisksFromScenarioDraft(narrative, { force = false, replaceGenerated
   if (!extractedRisks.length) return 0;
   if (replaceGenerated || force) replaceSuggestedRiskCandidates(extractedRisks, { selectNew: true });
   else appendRiskCandidates(extractedRisks, { selectNew: true });
-  if (!AppState.draft.scenarioTitle && getSelectedRisks()[0]) AppState.draft.scenarioTitle = getSelectedRisks()[0].title;
+  syncStep1ScenarioTitle(draftText);
   return extractedRisks.length;
+}
+
+function syncStep1ScenarioTitle(narrative = '') {
+  const nextNarrative = String(narrative || AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || '').trim();
+  const matchingEnhancedNarrative = normaliseScenarioSeedText(AppState.draft.enhancedNarrative || '') === normaliseScenarioSeedText(nextNarrative)
+    ? AppState.draft.enhancedNarrative
+    : '';
+  AppState.draft.scenarioTitle = typeof resolveScenarioDisplayTitle === 'function'
+    ? resolveScenarioDisplayTitle({
+        ...AppState.draft,
+        narrative: nextNarrative || AppState.draft.narrative,
+        sourceNarrative: nextNarrative || AppState.draft.sourceNarrative,
+        enhancedNarrative: matchingEnhancedNarrative,
+        selectedRisks: getSelectedRisks()
+      })
+    : (nextNarrative || getSelectedRisks()[0]?.title || AppState.draft.scenarioTitle || '');
+  return String(AppState.draft.scenarioTitle || '').trim();
 }
 
 function persistAndRenderStep1({
@@ -2393,6 +2410,7 @@ function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false
     AppState.draft.guidedDraftPreview = '';
     AppState.draft.guidedDraftSource = '';
     AppState.draft.guidedDraftStatus = '';
+    AppState.draft.scenarioTitle = '';
     resetStep1RegulationSelectionState();
     return;
   }
@@ -2406,6 +2424,7 @@ function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false
   AppState.draft.guidedDraftPreview = '';
   AppState.draft.guidedDraftSource = '';
   AppState.draft.guidedDraftStatus = '';
+  syncStep1ScenarioTitle(nextSeed);
   resetStep1RegulationSelectionState();
   clearScenarioAssistArtifacts({ clearGeneratedRisks });
 }
@@ -2808,9 +2827,7 @@ function bindStep1NavigationActions({ buList, settings, wizardGeographyInput }) 
     AppState.draft.sourceNarrative = normaliseScenarioSeedText(AppState.draft.sourceNarrative || AppState.draft.narrative);
     AppState.draft.enhancedNarrative = AppState.draft.enhancedNarrative || AppState.draft.narrative;
     updateStep1ApplicableRegulations(buList, AppState.draft.geographies);
-    if (!AppState.draft.scenarioTitle) {
-      AppState.draft.scenarioTitle = selected.length === 1 ? selected[0].title : `${selected.length || 1}-risk scenario for ${AppState.draft.buName}`;
-    }
+    syncStep1ScenarioTitle(AppState.draft.enhancedNarrative || AppState.draft.narrative || narrative);
     scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true, force: true, narrativeOverride: AppState.draft.narrative });
     saveDraft();
     Router.navigate('/wizard/2');

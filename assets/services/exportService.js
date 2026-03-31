@@ -29,6 +29,23 @@ const ExportService = (() => {
     return ReportPresentation.buildExecutiveScenarioSummary(assessment);
   }
 
+  function _resolveAssessmentDisplayTitle(assessment) {
+    return String(
+      (typeof resolveScenarioDisplayTitle === 'function'
+        ? resolveScenarioDisplayTitle({
+            ...assessment,
+            narrative: String(assessment?.narrative || assessment?.draft?.narrative || '').trim(),
+            enhancedNarrative: String(assessment?.enhancedNarrative || assessment?.draft?.enhancedNarrative || assessment?.narrative || '').trim()
+          })
+        : '')
+      || assessment?.title
+      || assessment?.scenarioTitle
+      || assessment?.draft?.title
+      || assessment?.draft?.scenario?.title
+      || 'Risk Assessment'
+    ).trim();
+  }
+
 
 
   function _clampNumber(value, min = 0, max = 100) {
@@ -135,7 +152,7 @@ const ExportService = (() => {
         ? 'up'
         : 'flat';
     return {
-      baselineTitle: baseline.scenarioTitle || 'Selected baseline',
+      baselineTitle: _resolveAssessmentDisplayTitle(baseline) || 'Selected baseline',
       baselineDate: new Date(baseline.completedAt || baseline.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }),
       severeEvent: { direction: severeDirection },
       annualExposure: { direction: annualDirection },
@@ -200,7 +217,7 @@ const ExportService = (() => {
       { label: 'Severe annual exposure', value: fmt(r.ale?.p90 || 0), copy: 'High-stress annual planning view.' }
     ];
     return {
-      title: assessment.scenarioTitle || 'Risk assessment',
+      title: _resolveAssessmentDisplayTitle(assessment) || 'Risk assessment',
       businessContext: `${assessment.buName || '—'} · ${assessment.geography || '—'}`,
       completedLabel: new Date(assessment.completedAt || assessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' }),
       posture,
@@ -578,7 +595,7 @@ const ExportService = (() => {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Risk Quantifier — ${assessment.scenarioTitle || 'Assessment'}</title>
+<title>Risk Quantifier — ${displayTitle || 'Assessment'}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   body { margin: 0; font-family: 'DM Sans', 'Segoe UI', Arial, sans-serif; color: #172033; background: #f5f7fb; }
@@ -675,7 +692,7 @@ const ExportService = (() => {
       <div class="header">
         <div>
           <div class="eyebrow">Risk Quantifier report</div>
-          <h1>${assessment.scenarioTitle || 'Risk Assessment'}</h1>
+          <h1>${displayTitle || 'Risk Assessment'}</h1>
           <div class="meta">${assessment.buName || '—'} · ${assessment.geography || '—'} · ${completed}</div>
         </div>
         <div class="tagline">PoC report · executive version</div>
@@ -999,13 +1016,7 @@ const ExportService = (() => {
   }
 
   function _pdfResolveAssessmentTitle(assessment) {
-    return String(
-      assessment?.title
-      || assessment?.scenarioTitle
-      || assessment?.draft?.title
-      || assessment?.draft?.scenario?.title
-      || 'Risk Assessment'
-    ).trim();
+    return _resolveAssessmentDisplayTitle(assessment);
   }
 
   function _pdfResolveOrganisationName(assessment) {
@@ -1044,6 +1055,7 @@ const ExportService = (() => {
     const fxRate = (typeof AppState !== 'undefined' && Number(AppState?.fxRate || 0)) ? Number(AppState.fxRate) : 3.6725;
     const results = _pdfResolveResults(assessment);
     const fairInputs = _pdfResolveFairInputs(assessment);
+    const displayTitle = _pdfResolveAssessmentTitle(assessment);
     const assumptionsRaw = Array.isArray(results?.runMetadata?.assumptions) ? results.runMetadata.assumptions.slice(0, 10) : [];
     const runtimeGuardrails = Array.isArray(results?.runMetadata?.runtimeGuardrails) ? results.runMetadata.runtimeGuardrails : [];
     const completedLabel = new Date(assessment?.completedAt || assessment?.createdAt || Date.now()).toLocaleDateString('en-GB');
@@ -1395,12 +1407,12 @@ const ExportService = (() => {
 
     const slideSpec = {
       _note: 'Feed this JSON into pptxgenjs to generate a real PPTX. See README for integration instructions.',
-      title: `Risk Intelligence Platform Assessment: ${assessment.scenarioTitle || 'Assessment'}`,
+      title: `Risk Intelligence Platform Assessment: ${_resolveAssessmentDisplayTitle(assessment) || 'Assessment'}`,
       slides: [
         {
           slideIndex: 1,
           type: 'cover',
-          title: assessment.scenarioTitle || 'Risk Assessment',
+          title: _resolveAssessmentDisplayTitle(assessment) || 'Risk Assessment',
           subtitle: `Business Unit: ${assessment.buName || '—'}`,
           date: new Date().toLocaleDateString('en-AE'),
           footer: 'Risk Intelligence Platform | Pilot report'

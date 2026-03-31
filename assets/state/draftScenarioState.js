@@ -271,7 +271,6 @@
     const settings = getEffectiveSettings();
     const tags = [
       ...settings.applicableRegulations,
-      ...(AppState.draft.applicableRegulations || []),
       ...(bu?.regulatoryTags || []),
       ...deriveGeographyRegulations(geographies),
       ...selectedRisks.flatMap((risk) => risk.regulations || [])
@@ -432,7 +431,16 @@
       ...(result.regulations || [])
     ]));
     AppState.draft.citations = normaliseCitations(result.citations || citations);
-    if (!AppState.draft.scenarioTitle && getSelectedRisks()[0]) AppState.draft.scenarioTitle = getSelectedRisks()[0].title;
+    AppState.draft.scenarioTitle = typeof resolveScenarioDisplayTitle === 'function'
+      ? resolveScenarioDisplayTitle({
+          ...AppState.draft,
+          scenarioTitle: String(result?.scenarioTitle || AppState.draft.scenarioTitle || '').trim(),
+          narrative: assistSeed || narrative || AppState.draft.narrative,
+          sourceNarrative: assistSeed || narrative || AppState.draft.sourceNarrative,
+          enhancedNarrative: resolvedNarrative || AppState.draft.enhancedNarrative,
+          selectedRisks: getSelectedRisks()
+        })
+      : (String(result?.scenarioTitle || '').trim() || getSelectedRisks()[0]?.title || AppState.draft.scenarioTitle || '');
   }
 
   function applyRegisterAnalysisResultToDraft(result, { parsedFallback = [] } = {}) {

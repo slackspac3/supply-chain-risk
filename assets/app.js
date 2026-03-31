@@ -593,6 +593,94 @@ function inferStoredScenarioFunctionKey(source = {}) {
   return 'general';
 }
 
+const SCENARIO_DISPLAY_TITLE_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'into', 'this', 'that', 'your', 'have', 'will',
+  'risk', 'scenario', 'assessment', 'about', 'after', 'before', 'when', 'what', 'could',
+  'would', 'should', 'been', 'were', 'they', 'them', 'their', 'there', 'where', 'while',
+  'only', 'also', 'than', 'then', 'because', 'through', 'across', 'still', 'team', 'current',
+  'draft', 'built', 'using', 'used', 'high', 'urgency', 'general', 'enterprise', 'material',
+  'view', 'read', 'context', 'most', 'likely', 'area', 'exposed'
+]);
+
+function tokeniseScenarioDisplayTitleText(text = '') {
+  return Array.from(new Set(
+    String(text || '')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .map(token => token.trim())
+      .filter(token => token.length > 2 && !SCENARIO_DISPLAY_TITLE_STOPWORDS.has(token))
+  ));
+}
+
+function buildScenarioHeadlineFromNarrative(text = '', { maxLength = 96 } = {}) {
+  const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  const sentences = cleaned
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+  let headline = sentences.find((sentence) => {
+    const lower = sentence.toLowerCase();
+    if (/^g\d+\b.*assessing\b/.test(lower)) return false;
+    if (/^(the company|the organisation|the organization)\b.*assessing\b/.test(lower)) return false;
+    if (/^assess(?: the)? potential impact of\b/.test(lower)) return false;
+    if (/^selected risks:/i.test(sentence)) return false;
+    if (/^this (?:view|scenario)\b/.test(lower)) return false;
+    return true;
+  }) || sentences[0] || cleaned;
+  headline = headline
+    .replace(/^[a-z- ]+risk scenario:\s*/i, '')
+    .replace(/^[a-z- ]+scenario:\s*/i, '')
+    .replace(/^assess(?: the)? potential impact of\s+/i, '')
+    .replace(/^this points to\b/i, '')
+    .replace(/[.]+$/g, '')
+    .trim();
+  if (!headline) return '';
+  if (headline.length <= maxLength) return headline;
+  const truncated = headline.slice(0, maxLength);
+  const cutAt = truncated.lastIndexOf(' ');
+  return `${(cutAt > 48 ? truncated.slice(0, cutAt) : truncated).trim()}…`;
+}
+
+function isScenarioTitleAlignedWithSource(title = '', source = {}) {
+  const titleTokens = tokeniseScenarioDisplayTitleText(title);
+  if (!titleTokens.length) return false;
+  const contextText = [
+    getStructuredScenarioField(source?.structuredScenario, 'eventPath'),
+    getStructuredScenarioField(source?.structuredScenario, 'primaryDriver'),
+    getStructuredScenarioField(source?.structuredScenario, 'assetService'),
+    source?.enhancedNarrative,
+    source?.narrative,
+    source?.sourceNarrative,
+    source?.scenarioLens?.label,
+    source?.scenarioLens?.key,
+    ...(Array.isArray(source?.selectedRisks) ? source.selectedRisks.map(item => item?.title || item?.category || '') : []),
+    ...(Array.isArray(source?.selectedRiskTitles) ? source.selectedRiskTitles : [])
+  ].map(item => String(item || '').trim()).filter(Boolean).join(' ');
+  const contextTokens = new Set(tokeniseScenarioDisplayTitleText(contextText));
+  const overlap = titleTokens.filter(token => contextTokens.has(token)).length;
+  if (titleTokens.length === 1) return overlap === 1;
+  return overlap >= Math.min(2, titleTokens.length);
+}
+
+function resolveScenarioDisplayTitle(source = {}) {
+  const storedTitle = String(source?.scenarioTitle || source?.title || '').trim();
+  if (storedTitle && isScenarioTitleAlignedWithSource(storedTitle, source)) return storedTitle;
+  const narrativeHeadline = buildScenarioHeadlineFromNarrative(
+    source?.enhancedNarrative || source?.narrative || source?.sourceNarrative || ''
+  );
+  if (narrativeHeadline) return narrativeHeadline;
+  const eventPath = String(getStructuredScenarioField(source?.structuredScenario, 'eventPath') || '').trim();
+  if (eventPath) return eventPath;
+  const firstSelectedRisk = Array.isArray(source?.selectedRisks)
+    ? source.selectedRisks.map(item => String(item?.title || item?.category || '').trim()).find(Boolean)
+    : '';
+  if (firstSelectedRisk) return firstSelectedRisk;
+  if (storedTitle) return storedTitle;
+  const lensLabel = String(source?.scenarioLens?.label || source?.scenarioLens?.key || '').trim();
+  return lensLabel ? `${lensLabel} risk scenario` : 'Risk scenario';
+}
+
 function _smartPrefillClamp(value, min = 0, max = 1) {
   const num = Number(value);
   if (!Number.isFinite(num)) return min;
@@ -1499,6 +1587,13 @@ function flagPortfolioCorrelationClusterForReview(assessmentIds = [], {
 
 function extractScenarioPattern(assessment) {
   if (!assessment || !assessment.results) return null;
+  const resolvedTitle = typeof resolveScenarioDisplayTitle === 'function'
+    ? resolveScenarioDisplayTitle({
+        ...assessment,
+        narrative: String(assessment?.narrative || '').trim(),
+        enhancedNarrative: String(assessment?.enhancedNarrative || assessment?.narrative || '').trim()
+      })
+    : String(assessment.scenarioTitle || getStructuredScenarioField(assessment.structuredScenario, 'eventPath') || '').trim();
   return {
     id: String(assessment.id || '').trim(),
     buId: String(assessment.buId || '').trim(),
@@ -1506,8 +1601,8 @@ function extractScenarioPattern(assessment) {
     scenarioLens: assessment?.scenarioLens && typeof assessment.scenarioLens === 'object'
       ? { ...assessment.scenarioLens }
       : null,
-    title: String(assessment.scenarioTitle || getStructuredScenarioField(assessment.structuredScenario, 'eventPath') || '').trim(),
-    scenarioType: String(getStructuredScenarioField(assessment.structuredScenario, 'eventPath') || assessment.scenarioTitle || '').trim(),
+    title: resolvedTitle,
+    scenarioType: String(getStructuredScenarioField(assessment.structuredScenario, 'eventPath') || resolvedTitle || '').trim(),
     geography: String(assessment.geography || '').trim(),
     narrative: String(assessment.enhancedNarrative || assessment.narrative || '').trim(),
     guidedInput: assessment.guidedInput && typeof assessment.guidedInput === 'object'
@@ -6477,7 +6572,9 @@ function buildAssessmentWatchlist({
         : 'Review date not available';
       return {
         id: assessment.id,
-        title: assessment.scenarioTitle || 'Untitled assessment',
+        title: typeof resolveScenarioDisplayTitle === 'function'
+          ? resolveScenarioDisplayTitle(assessment)
+          : (assessment.scenarioTitle || 'Untitled assessment'),
         priority: topReason.priority,
         updatedAt: completedAt,
         businessContext: assessment.buName || assessment.businessUnit || 'Saved assessment',

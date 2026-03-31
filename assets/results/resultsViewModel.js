@@ -197,7 +197,7 @@
       .slice(0, 12)
       .map(item => ({
         id: item.id,
-        label: `${item.scenarioTitle || 'Untitled assessment'} · ${item.buName || '—'} · ${new Date(item.completedAt || item.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}`
+        label: `${typeof resolveScenarioDisplayTitle === 'function' ? resolveScenarioDisplayTitle(item) : (item.scenarioTitle || 'Untitled assessment')} · ${item.buName || '—'} · ${new Date(item.completedAt || item.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' })}`
       }));
     const activeComparisonId = AppState.resultsComparisonId || assessment.comparisonBaselineId || '';
     const baselineAssessment = activeComparisonId ? getAssessmentById(activeComparisonId) : null;

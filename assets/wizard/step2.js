@@ -209,9 +209,29 @@ function invalidateStep2AiAnalysisIfNeeded(nextNarrative) {
     || AppState.draft.narrative
     || '';
   if (!isMeaningfulStep2NarrativeChange(baseline, nextNarrative)) return;
+  const nextStructuredScenario = {
+    ...(AppState.draft.structuredScenario && typeof AppState.draft.structuredScenario === 'object'
+      ? AppState.draft.structuredScenario
+      : {})
+  };
+  delete nextStructuredScenario.primaryDriver;
+  delete nextStructuredScenario.eventPath;
+  delete nextStructuredScenario.effect;
+  delete nextStructuredScenario.threatCommunity;
+  delete nextStructuredScenario.attackType;
   AppState.draft.llmAssisted = false;
   AppState.draft.aiQualityState = 'analyst-reshaped';
   AppState.draft.scenarioLens = null;
+  AppState.draft.scenarioTitle = typeof resolveScenarioDisplayTitle === 'function'
+    ? resolveScenarioDisplayTitle({
+        ...AppState.draft,
+        narrative: String(AppState.draft.narrative || '').trim() || String(nextNarrative || '').trim(),
+        sourceNarrative: String(AppState.draft.sourceNarrative || '').trim() || String(nextNarrative || '').trim(),
+        enhancedNarrative: String(nextNarrative || '').trim(),
+        selectedRisks: typeof getSelectedRisks === 'function' ? getSelectedRisks() : AppState.draft.selectedRisks
+      })
+    : String(nextNarrative || AppState.draft.narrative || AppState.draft.scenarioTitle || '').trim();
+  AppState.draft.structuredScenario = normaliseStructuredScenario(nextStructuredScenario, { preserveUnknown: true });
   AppState.draft.confidenceLabel = '';
   AppState.draft.evidenceQuality = '';
   AppState.draft.evidenceSummary = '';

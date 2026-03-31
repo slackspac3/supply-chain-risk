@@ -246,7 +246,26 @@ const OrgIntelligenceService = (() => {
     ).toLowerCase();
   }
 
+  function _resolveScenarioTitle(source = {}) {
+    if (typeof resolveScenarioDisplayTitle === 'function') {
+      const resolved = resolveScenarioDisplayTitle(source);
+      if (String(resolved || '').trim()) return String(resolved).trim();
+    }
+    return String(
+      source?.scenarioTitle
+      || source?.title
+      || (typeof getStructuredScenarioField === 'function'
+        ? getStructuredScenarioField(source?.structuredScenario, 'eventPath')
+        : '')
+      || ''
+    ).trim();
+  }
+
   function _extractAssessmentPattern(assessment = {}) {
+    const resolvedTitle = _resolveScenarioTitle(assessment);
+    const scenarioType = typeof getStructuredScenarioField === 'function'
+      ? getStructuredScenarioField(assessment.structuredScenario, 'eventPath')
+      : '';
     return _normalisePattern({
       id: assessment.id,
       assessmentId: assessment.id,
@@ -254,10 +273,8 @@ const OrgIntelligenceService = (() => {
       buName: assessment.buName,
       functionKey: _functionKeyFromSource(assessment),
       scenarioLens: assessment.scenarioLens,
-      title: assessment.scenarioTitle || (typeof getStructuredScenarioField === 'function' ? getStructuredScenarioField(assessment.structuredScenario, 'eventPath') : ''),
-      scenarioType: typeof getStructuredScenarioField === 'function'
-        ? getStructuredScenarioField(assessment.structuredScenario, 'eventPath')
-        : (assessment.scenarioTitle || ''),
+      title: resolvedTitle,
+      scenarioType: scenarioType || resolvedTitle,
       geography: assessment.geography,
       narrative: assessment.enhancedNarrative || assessment.narrative,
       guidedInput: assessment.guidedInput,
@@ -487,8 +504,8 @@ const OrgIntelligenceService = (() => {
         return acc;
       }, new Map());
     const contextTokens = _patternTokens({
-      title: context.scenarioTitle,
-      scenarioType: context.scenarioType,
+      title: _resolveScenarioTitle(context),
+      scenarioType: context.scenarioType || _resolveScenarioTitle(context),
       narrative: context.narrative,
       guidedInput: context.guidedInput,
       selectedRiskTitles: context.selectedRiskTitles || []

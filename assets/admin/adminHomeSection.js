@@ -10,6 +10,14 @@
       .replace(/'/g, '&#39;');
   }
 
+  function resolveAdminHomeScenarioTitle(source = {}) {
+    if (typeof resolveScenarioDisplayTitle === 'function') {
+      const resolved = resolveScenarioDisplayTitle(source);
+      if (String(resolved || '').trim()) return String(resolved).trim();
+    }
+    return String(source?.scenarioTitle || source?.title || 'Untitled assessment').trim() || 'Untitled assessment';
+  }
+
   const AdminHomeSection = {
     render({
       settings,
@@ -258,11 +266,13 @@
             listEl.innerHTML = '<div class="form-help">No assessments are currently waiting for review.</div>';
             return;
           }
+          const localAssessments = typeof getAssessments === 'function' ? getAssessments() : [];
+          const assessmentById = new Map((Array.isArray(localAssessments) ? localAssessments : []).map(item => [String(item?.id || ''), item]));
           listEl.innerHTML = items.map(item => `
             <div class="review-queue-item" data-queue-id="${escapeAdminHomeText(item.id)}"
                  data-assessment-id="${escapeAdminHomeText(item.assessmentId)}">
               <div class="review-queue-item__meta">
-                <strong>${escapeAdminHomeText(item.scenarioTitle || 'Untitled assessment')}</strong>
+                <strong>${escapeAdminHomeText(resolveAdminHomeScenarioTitle(assessmentById.get(String(item.assessmentId || '')) || item))}</strong>
                 <span class="badge ${item.toleranceBreached ? 'badge--danger' : item.nearTolerance ? 'badge--warning' : 'badge--neutral'}">
                   ${item.toleranceBreached ? 'Above tolerance' : item.nearTolerance ? 'Near tolerance' : 'Annual review'}
                 </span>
@@ -324,14 +334,15 @@
                 }
               }));
             }
+            const localScenarioTitle = resolveAdminHomeScenarioTitle(localAssessment || queueItem);
             await OrgIntelligenceService?.recordReviewDecision?.({
               id: `${queueItem.id}_${queueItem.reviewedAt || Date.now()}`,
               assessmentId: queueItem.assessmentId,
               buId: queueItem.buId || localAssessment?.buId || '',
               buName: queueItem.buName || localAssessment?.buName || '',
               scenarioLensKey: localAssessment?.scenarioLens?.key || '',
-              scenarioLensLabel: localAssessment?.scenarioLens?.label || localAssessment?.scenarioTitle || queueItem.scenarioTitle || '',
-              scenarioTitle: localAssessment?.scenarioTitle || queueItem.scenarioTitle || '',
+              scenarioLensLabel: localAssessment?.scenarioLens?.label || localScenarioTitle,
+              scenarioTitle: localScenarioTitle,
               decision: queueItem.reviewStatus || '',
               reviewNote: queueItem.reviewNote || '',
               challengedAssumption: queueItem.reviewStatus === 'changes_requested' ? (queueItem.reviewNote || '') : '',

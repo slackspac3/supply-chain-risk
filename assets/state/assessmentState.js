@@ -160,7 +160,13 @@ function unarchiveAssessment(id) {
 }
 function archiveCurrentDraft() {
   ensureDraftShape();
-  const draftTitle = String(AppState.draft?.scenarioTitle || AppState.draft?.narrative || '').trim();
+  const draftTitle = typeof resolveScenarioDisplayTitle === 'function'
+    ? resolveScenarioDisplayTitle({
+        ...AppState.draft,
+        narrative: String(AppState.draft?.narrative || '').trim(),
+        enhancedNarrative: String(AppState.draft?.enhancedNarrative || AppState.draft?.narrative || '').trim()
+      })
+    : String(AppState.draft?.scenarioTitle || AppState.draft?.narrative || '').trim();
   if (!draftTitle) return null;
   let archivedDraft = null;
   try {

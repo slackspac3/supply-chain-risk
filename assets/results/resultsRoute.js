@@ -230,7 +230,11 @@ function renderDecisionRail(statusTitle, statusDetail, executiveDecision, execut
 }
 
 function renderExecutiveScenarioStatement(assessment, scenarioNarrative) {
-  const title = String(assessment?.scenarioTitle || 'Risk scenario').trim();
+  const title = getResultsScenarioDisplayTitle({
+    ...assessment,
+    narrative: assessment?.narrative || scenarioNarrative || '',
+    enhancedNarrative: assessment?.enhancedNarrative || scenarioNarrative || ''
+  });
   const narrative = String(
     scenarioNarrative
     || assessment?.enhancedNarrative
@@ -256,6 +260,14 @@ function renderExecutiveScenarioStatement(assessment, scenarioNarrative) {
     </div>
     <p class="results-scenario-statement__copy">${escapeHtml(narrative)}</p>
   </section>`;
+}
+
+function getResultsScenarioDisplayTitle(assessment) {
+  if (typeof resolveScenarioDisplayTitle === 'function') {
+    const resolved = resolveScenarioDisplayTitle(assessment || {});
+    if (String(resolved || '').trim()) return String(resolved).trim();
+  }
+  return String(assessment?.scenarioTitle || assessment?.title || 'Risk assessment').trim() || 'Risk assessment';
 }
 
 function renderAnalystSummaryBlock(summary) {
@@ -981,7 +993,7 @@ function buildAssessmentComparison(currentAssessment, baselineAssessment) {
       : 'The current case and baseline are directionally similar, so the outcome is not being moved by one dominant lever.';
 
   return {
-    baselineTitle: baselineAssessment.scenarioTitle || 'Selected baseline',
+    baselineTitle: getResultsScenarioDisplayTitle(baselineAssessment || {}),
     baselineDate: new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }),
     severeEvent,
     annualExposure,
@@ -1023,7 +1035,7 @@ function recordAssessmentRerunLearning(savedAssessment, baselineAssessment, comp
   LearningStore.recordRerunDelta(username, {
     buId: savedAssessment?.buId || '',
     scenarioLens: savedAssessment?.scenarioLens || null,
-    baselineTitle: comparison.baselineTitle || baselineAssessment.scenarioTitle || '',
+    baselineTitle: comparison.baselineTitle || getResultsScenarioDisplayTitle(baselineAssessment || {}),
     deltaDirection: comparison.severeEvent?.direction || '',
     annualDirection: comparison.annualExposure?.direction || '',
     keyDriver: comparison.keyDriver || '',
@@ -1074,7 +1086,7 @@ function applyTreatmentPrompt(promptId) {
 
 function createTreatmentDraftFromAssessment(assessment) {
   const clone = JSON.parse(JSON.stringify(assessment || {}));
-  const originalTitle = clone.scenarioTitle || 'Untitled assessment';
+  const originalTitle = getResultsScenarioDisplayTitle(clone);
   const treatmentStartedAt = Date.now();
   delete clone.results;
   delete clone.completedAt;
@@ -3807,7 +3819,7 @@ function bindResultsInteractions({
       button.textContent = 'Finding…';
       try {
         const result = await LLMService.generateConsensusRecommendation({
-          scenarioTitle: latest.scenarioTitle || '',
+          scenarioTitle: getResultsScenarioDisplayTitle(latest),
           scenarioSummary: latest.enhancedNarrative || latest.narrative || '',
           originalAleRange: analysis.baseAleRange,
           adjustedAleRange: analysis.adjustedAleRange,
@@ -3958,7 +3970,7 @@ function bindResultsInteractions({
       button.textContent = 'Synthesising…';
       try {
         const result = await LLMService.generateChallengeSynthesis({
-          scenarioTitle: latest.scenarioTitle || '',
+          scenarioTitle: getResultsScenarioDisplayTitle(latest),
           scenarioSummary: latest.enhancedNarrative || latest.narrative || '',
           baseAleRange: `${fmtCurrency(Number(latest?.results?.annualLoss?.mean || latest?.results?.ale?.mean || 0))} mean ALE · ${fmtCurrency(Number(latest?.results?.annualLoss?.p90 || latest?.results?.ale?.p90 || latest?.results?.eventLoss?.p90 || 0))} bad year`,
           records: records.map(item => ({
@@ -4377,7 +4389,7 @@ function bindResultsInteractions({
     try {
       const aiContext = buildCurrentAIAssistContext({ buId: assessment.buId });
       const result = await LLMService.challengeAssessment({
-        scenarioTitle: assessment.scenarioTitle,
+        scenarioTitle: getResultsScenarioDisplayTitle(assessment),
         narrative: assessment.enhancedNarrative || assessment.narrative || '',
         geography: assessment.geography,
         businessUnitName: assessment.buName,
@@ -4524,6 +4536,13 @@ function renderResults(id, isShared) {
     assessmentValue,
     rolePresentation
   } = window.ResultsViewModel.buildResultsRenderModel(assessment, { isShared });
+  const displayScenarioTitle = typeof resolveScenarioDisplayTitle === 'function'
+    ? resolveScenarioDisplayTitle({
+        ...assessment,
+        narrative: assessment?.narrative || scenarioNarrative || '',
+        enhancedNarrative: assessment?.enhancedNarrative || scenarioNarrative || ''
+      })
+    : String(assessment.scenarioTitle || 'Risk Assessment').trim();
 
   const executiveHero = `<div class="results-hero ${statusClass}">
     <div class="results-hero-main">
@@ -4713,7 +4732,7 @@ function renderResults(id, isShared) {
         <div class="flex items-center justify-between mb-6 anim-fade-in results-header-bar" style="gap:var(--sp-4);flex-wrap:wrap">
           <div>
             <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:4px">Assessment Results</div>
-            <h1 style="font-size:var(--text-3xl)">${assessment.scenarioTitle || 'Risk Assessment'}</h1>
+            <h1 style="font-size:var(--text-3xl)">${escapeHtml(displayScenarioTitle || 'Risk Assessment')}</h1>
             <div style="font-size:var(--text-sm);color:var(--text-muted);margin-top:4px">${assessment.buName || '—'} · ${assessment.geography || '—'} · ${completedLabel}</div>
           </div>
           <div class="flex items-center gap-3 results-header-actions" style="flex-wrap:wrap">

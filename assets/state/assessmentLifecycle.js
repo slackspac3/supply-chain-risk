@@ -139,11 +139,22 @@
     // Prefer the actual draft start timestamp when it exists so measured cycle time is not reset on first save.
     next.createdAt = Number(next.createdAt || next.startedAt || Date.now());
     next.startedAt = Number(next.startedAt || next.createdAt || Date.now());
-    if (!String(next.scenarioTitle || '').trim()) {
+    const explicitScenarioTitle = String(next.scenarioTitle || '').trim();
+    const preserveExplicitTitle = !!String(next.comparisonBaselineId || '').trim() || /\bcopy$/i.test(explicitScenarioTitle);
+    const resolvedScenarioTitle = typeof resolveScenarioDisplayTitle === 'function'
+      ? resolveScenarioDisplayTitle({
+          ...next,
+          narrative: String(next.narrative || '').trim(),
+          enhancedNarrative: String(next.enhancedNarrative || next.narrative || '').trim()
+        })
+      : '';
+    if (!preserveExplicitTitle && resolvedScenarioTitle) {
+      next.scenarioTitle = resolvedScenarioTitle;
+    } else if (!String(next.scenarioTitle || '').trim()) {
       const eventPath = typeof getStructuredScenarioField === 'function'
         ? getStructuredScenarioField(next.structuredScenario, 'eventPath')
         : '';
-      next.scenarioTitle = String(next.narrative || eventPath || 'Untitled assessment').trim() || 'Untitled assessment';
+      next.scenarioTitle = String(resolvedScenarioTitle || next.narrative || eventPath || 'Untitled assessment').trim() || 'Untitled assessment';
     }
     if (!String(next.buId || '').trim() && !String(next.buName || '').trim()) {
       next.buName = 'Business unit not set';

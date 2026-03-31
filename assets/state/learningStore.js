@@ -252,10 +252,17 @@ const LearningStore = (() => {
   }
 
   function templateFromDraft(draft) {
+    const resolvedTitle = typeof resolveScenarioDisplayTitle === 'function'
+      ? resolveScenarioDisplayTitle({
+          ...draft,
+          narrative: String(draft?.narrative || '').trim(),
+          enhancedNarrative: String(draft?.enhancedNarrative || draft?.narrative || '').trim()
+        })
+      : String(draft?.scenarioTitle || '').trim();
     return {
       id: String(draft?.templateId || '').trim(),
-      title: String(draft?.scenarioTitle || '').trim(),
-      scenarioType: String(getStructuredScenarioField(draft?.structuredScenario, 'eventPath') || '').trim(),
+      title: resolvedTitle,
+      scenarioType: String(getStructuredScenarioField(draft?.structuredScenario, 'eventPath') || resolvedTitle || '').trim(),
       functionKey: _inferFunctionKey(draft),
       buId: String(draft?.buId || '').trim(),
       buName: String(draft?.buName || '').trim(),
@@ -327,6 +334,13 @@ const LearningStore = (() => {
 
   function patternFromAssessment(assessment) {
     if (!assessment || !assessment.results) return null;
+    const resolvedTitle = typeof resolveScenarioDisplayTitle === 'function'
+      ? resolveScenarioDisplayTitle({
+          ...assessment,
+          narrative: String(assessment?.narrative || '').trim(),
+          enhancedNarrative: String(assessment?.enhancedNarrative || assessment?.narrative || '').trim()
+        })
+      : String(assessment.scenarioTitle || getStructuredScenarioField(assessment.structuredScenario, 'eventPath') || '').trim();
     return {
       id: String(assessment.id || '').trim(),
       buId: String(assessment.buId || '').trim(),
@@ -334,8 +348,8 @@ const LearningStore = (() => {
       scenarioLens: assessment?.scenarioLens && typeof assessment.scenarioLens === 'object'
         ? { ...assessment.scenarioLens }
         : null,
-      title: String(assessment.scenarioTitle || getStructuredScenarioField(assessment.structuredScenario, 'eventPath') || '').trim(),
-      scenarioType: String(getStructuredScenarioField(assessment.structuredScenario, 'eventPath') || assessment.scenarioTitle || '').trim(),
+      title: resolvedTitle,
+      scenarioType: String(getStructuredScenarioField(assessment.structuredScenario, 'eventPath') || resolvedTitle || '').trim(),
       geography: String(assessment.geography || '').trim(),
       narrative: String(assessment.enhancedNarrative || assessment.narrative || '').trim(),
       guidedInput: assessment?.guidedInput && typeof assessment.guidedInput === 'object'
