@@ -2745,7 +2745,7 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
     saveDraft();
   });
 
-  document.getElementById('btn-add-manual-risk').addEventListener('click', () => {
+  document.getElementById('btn-add-manual-risk')?.addEventListener('click', () => {
     const input = document.getElementById('manual-risk-add');
     const value = input.value.trim();
     if (!value) return;
@@ -2755,8 +2755,8 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
     persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
   });
 
-  document.getElementById('risk-register-file').addEventListener('change', handleRegisterUpload);
-  document.getElementById('btn-enhance-risk-statement').addEventListener('click', enhanceNarrativeWithAI);
+  document.getElementById('risk-register-file')?.addEventListener('change', handleRegisterUpload);
+  document.getElementById('btn-enhance-risk-statement')?.addEventListener('click', enhanceNarrativeWithAI);
 
   document.getElementById('btn-generate-risks-from-draft')?.addEventListener('click', () => {
     const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
@@ -2773,7 +2773,7 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
     UI.toast(seededCount ? `Added ${seededCount} risk${seededCount === 1 ? '' : 's'} from the scenario draft.` : 'No additional risks were generated from that draft.', seededCount ? 'success' : 'warning');
   });
 
-  document.getElementById('btn-register-analyse').addEventListener('click', analyseUploadedRegister);
+  document.getElementById('btn-register-analyse')?.addEventListener('click', analyseUploadedRegister);
   document.querySelectorAll('[data-regulation-tag]').forEach((button) => {
     button.addEventListener('click', () => {
       toggleStep1ApplicableRegulation(button.dataset.regulationTag, {
