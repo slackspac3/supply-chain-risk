@@ -335,6 +335,20 @@ function createStep1DryRunScenario(input = {}) {
   };
 }
 
+function inferStep1FunctionKeyFromText(text = '') {
+  const haystack = String(text || '').toLowerCase();
+  if (!haystack.trim()) return 'general';
+  if (/(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collectability|collections|cashflow|working capital|provisioning|provision)/.test(haystack)) return 'finance';
+  if (/procurement|sourcing|vendor|supplier|purchase|third[- ]party|supply chain|supplier assurance|supplier due diligence/.test(haystack)) return 'procurement';
+  if (/finance|treasury|accounting|financial|cash|payment|payroll|credit|collections|ledger|fraud|aml|financial crime|integrity/.test(haystack)) return 'finance';
+  if (/compliance|regulatory|legal|privacy|data governance|policy|governance|controls|audit|contract|litigation|ip\b|intellectual property/.test(haystack)) return 'compliance';
+  if (/hse|ehs|health|safety|environment|workplace safety|incident response|worker welfare|labou?r/.test(haystack)) return 'hse';
+  if (/strategy|strategic|enterprise|portfolio|market|growth|investment|merger|acquisition|joint venture|jv|integration|geopolitical|sanctions|market access|sovereign|transformation delivery/.test(haystack)) return 'strategic';
+  if (/technology|cyber|security|identity|cloud|infrastructure|it\b|digital|ai\b|model risk|responsible ai|machine learning|llm|algorithm|ot\b|ics|scada|site systems/.test(haystack)) return 'technology';
+  if (/operations|resilience|continuity|service delivery|manufacturing|logistics|facilities|workforce|physical security|executive protection|industrial control|plant network/.test(haystack)) return 'operations';
+  return 'general';
+}
+
 function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppState.draft || {}) {
   const profile = normaliseUserProfile(settings?.userProfile, AuthService.getCurrentUser());
   const guidedInput = draft?.guidedInput || {};
@@ -348,24 +362,19 @@ function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppSta
     guidedInput.cause,
     guidedInput.impact
   ].filter(Boolean).join(' ');
-  const haystack = [
+  const scenarioMatch = inferStep1FunctionKeyFromText(scenarioSignals);
+  if (scenarioMatch !== 'general') return scenarioMatch;
+  const profileHaystack = [
     profile.jobTitle,
     profile.department,
     profile.businessUnit,
     profile.workingContext,
     ...(Array.isArray(profile.focusAreas) ? profile.focusAreas : []),
     draft?.buName,
-    draft?.contextNotes,
-    scenarioSignals
-  ].filter(Boolean).join(' ').toLowerCase();
-  if (/procurement|sourcing|vendor|supplier|purchase|third[- ]party|supply chain|supplier assurance|supplier due diligence/.test(haystack)) return 'procurement';
-  if (/compliance|regulatory|legal|privacy|data governance|policy|governance|controls|audit|contract|litigation|ip\b|intellectual property/.test(haystack)) return 'compliance';
-  if (/finance|treasury|accounting|financial|cash|payment|payroll|credit|collections|ledger|fraud|aml|financial crime|integrity/.test(haystack)) return 'finance';
-  if (/hse|ehs|health|safety|environment|workplace safety|incident response|worker welfare|labou?r/.test(haystack)) return 'hse';
-  if (/strategy|strategic|enterprise|portfolio|market|growth|investment|merger|acquisition|joint venture|jv|integration|geopolitical|sanctions|market access|sovereign|transformation delivery/.test(haystack)) return 'strategic';
-  if (/technology|cyber|security|identity|cloud|infrastructure|it\b|digital|ai\b|model risk|responsible ai|machine learning|llm|algorithm|ot\b|ics|scada|site systems/.test(haystack)) return 'technology';
-  if (/operations|resilience|continuity|service delivery|manufacturing|logistics|facilities|workforce|physical security|executive protection|industrial control|plant network/.test(haystack)) return 'operations';
-  return 'general';
+    draft?.contextNotes
+  ].filter(Boolean).join(' ');
+  const combinedHaystack = [scenarioSignals, profileHaystack].filter(Boolean).join(' ');
+  return inferStep1FunctionKeyFromText(combinedHaystack);
 }
 
 function getStep1PreferredScenarioLens(settings = getEffectiveSettings(), draft = AppState.draft || {}, narrativeOverride = '') {

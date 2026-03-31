@@ -772,6 +772,31 @@ Repair the response into the required JSON schema. Preserve scenario-specific me
   function _extractRiskCandidates(text, { lensHint = null } = {}) {
     const source = String(text || '').toLowerCase();
     const lensKey = _normaliseScenarioHintKey(lensHint);
+    if (/bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collections|collectability|cashflow|working capital|provisioning|provision/.test(source)) {
+      return [
+        {
+          key: 'financial',
+          title: 'Counterparty default and bad-debt exposure',
+          category: 'Financial',
+          regulations: ['COSO Internal Control Framework'],
+          description: 'A customer insolvency or payment default could force a material write-off, provisioning review, and pressure on the control environment around receivables.'
+        },
+        {
+          key: 'financial',
+          title: 'Receivables recovery shortfall after customer insolvency',
+          category: 'Financial',
+          regulations: ['COSO Internal Control Framework'],
+          description: 'Collections may deteriorate quickly once a major client fails, creating cashflow strain and a weaker recovery path than management assumed.'
+        },
+        {
+          key: 'legal-contract',
+          title: 'Legal recovery or contractual claim uncertainty',
+          category: 'Legal / Contract',
+          regulations: ['ISO 37301'],
+          description: 'Recovery may depend on enforceability of credit terms, security, guarantees, or the speed of insolvency-related legal action.'
+        }
+      ];
+    }
     if (/exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights/.test(source)) {
       return [
         {
@@ -855,7 +880,7 @@ Repair the response into the required JSON schema. Preserve scenario-specific me
       { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'UAE NESA IAS', 'ISO 27001'], terms: ['ransom', 'phish', 'malware', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud', 'misconfig', 'vulnerability', 'privileged'] },
       { key: 'third-party', title: 'Third-party dependency or supplier failure', category: 'Third-Party', regulations: ['ISO 27036', 'ISO 28000'], terms: ['supplier', 'vendor', 'third party', 'third-party', 'outsourc', 'dependency', 'subprocessor', 'partner'] },
       { key: 'regulatory', title: 'Regulatory or licensing exposure', category: 'Regulatory', regulations: ['BIS Export Controls', 'OFAC Sanctions', 'UAE PDPL'], terms: ['regulator', 'regulatory', 'licence', 'license', 'filing', 'notification', 'sanction', 'export control'] },
-      { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'misstatement'] },
+      { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'misstatement', 'bankruptcy', 'insolvency', 'receivable', 'bad debt', 'write-off', 'counterparty', 'customer default', 'client default', 'collections', 'working capital', 'provisioning'] },
       { key: 'fraud-integrity', title: 'Fraud, integrity, or financial-crime exposure', category: 'Fraud / Integrity', regulations: ['ISO 37001', 'UAE AML/CFT'], terms: ['fraud', 'integrity', 'financial crime', 'money laundering', 'kickback', 'bribery', 'corruption', 'embezzlement'] },
       { key: 'esg', title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2', 'GRI Universal Standards'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure'] },
       { key: 'compliance', title: 'Compliance control or policy breakdown', category: 'Compliance', regulations: ['ISO 37301', 'UAE PDPL'], terms: ['policy breach', 'control failure', 'non-compliance', 'compliance', 'obligation', 'conduct', 'ethics'] },
@@ -1592,7 +1617,8 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const isStrategic = n.includes('strategy') || n.includes('strategic') || n.includes('market') || n.includes('competitive') || n.includes('transformation') || n.includes('portfolio') || n.includes('investment') || n.includes('operating model') || n.includes('programme');
     const isOperational = n.includes('operational') || n.includes('process failure') || n.includes('breakdown') || n.includes('capacity') || n.includes('service failure') || n.includes('backlog');
     const isRegulatory = n.includes('regulator') || n.includes('regulatory') || n.includes('licen') || n.includes('sanction') || n.includes('export control') || n.includes('filing');
-    const isFinancial = n.includes('fraud') || n.includes('payment') || n.includes('invoice') || n.includes('treasury') || n.includes('liquidity') || n.includes('capital') || n.includes('financial');
+    const isCounterpartyCredit = n.includes('bankrupt') || n.includes('bankruptcy') || n.includes('insolv') || n.includes('receivable') || n.includes('bad debt') || n.includes('write-off') || n.includes('write off') || n.includes('counterparty') || n.includes('customer default') || n.includes('client default') || n.includes('credit loss') || n.includes('credit exposure') || n.includes('collections') || n.includes('provisioning') || n.includes('working capital');
+    const isFinancial = isCounterpartyCredit || n.includes('fraud') || n.includes('payment') || n.includes('invoice') || n.includes('treasury') || n.includes('liquidity') || n.includes('capital') || n.includes('financial');
     const isFraudIntegrity = n.includes('financial crime') || n.includes('money laundering') || n.includes('bribery') || n.includes('corruption') || n.includes('kickback') || n.includes('embezzlement') || (n.includes('integrity') && !n.includes('data integrity'));
     const isEsg = n.includes('esg') || n.includes('sustainability') || n.includes('climate') || n.includes('emission') || n.includes('carbon') || n.includes('greenwashing');
     const isCompliance = n.includes('compliance') || n.includes('non-compliance') || n.includes('policy breach') || n.includes('conduct') || n.includes('ethics') || n.includes('assurance');
@@ -2517,11 +2543,24 @@ ${businessUnit.selectedDepartmentContext}` : ''
         'This should be assessed for enforcement likelihood, remediation effort, operational interruption, and whether the issue could cascade into reputational or financial damage.'
       ].join(' ');
     } else if (resolvedClassificationKey === 'financial') {
-      scenarioExpansion = [
-        _buildScenarioLead({ geography, businessUnit, asset: asset || 'the affected financial process or exposure', cause: cause || 'fraud, financial control weakness, or commercial failure', impact: impact || 'direct financial loss and control pressure', scenarioLabel: 'financial risk scenario' }),
-        'The most likely progression is payment manipulation, weak approvals, or financial-control failure leading to direct loss, delayed detection, escalation, and remediation work.',
-        'This should be assessed for direct loss, control weakness, liquidity or capital impact, and any related regulatory or stakeholder consequences.'
-      ].join(' ');
+      if (/bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collections|collectability|cashflow|working capital|provisioning|provision/.test(intakeText)) {
+        scenarioExpansion = [
+          _buildScenarioLead({ geography, businessUnit, asset: asset || 'the customer exposure, receivables position, or commercial counterparty relationship in scope', cause: cause || 'customer insolvency, payment default, or weakening collectability', impact: impact || 'bad-debt write-off and cashflow strain', scenarioLabel: 'counterparty-credit risk scenario' }),
+          'The most likely progression is a major client failure reducing collectability, forcing provisioning or write-off decisions, and escalating management scrutiny over concentration, recovery options, and the speed of financial response.',
+          'This should be assessed for direct loss, collections recovery, working-capital strain, and whether legal or contractual action can materially reduce the downside.'
+        ].join(' ');
+        riskTitles = [
+          { title: 'Counterparty default and bad-debt exposure', category: 'Financial', description: 'A client insolvency or payment default could force a material write-off and a reassessment of expected recoveries.', regulations: ['COSO Internal Control Framework'] },
+          { title: 'Receivables recovery shortfall after customer insolvency', category: 'Financial', description: 'Collections may deteriorate quickly once the customer fails, creating cashflow strain and weaker recovery than management expected.', regulations: ['COSO Internal Control Framework'] },
+          { title: 'Legal recovery or contractual claim uncertainty', category: 'Legal / Contract', description: 'Recovery may depend on the enforceability of payment terms, security, guarantees, or the speed of insolvency-related legal action.', regulations: ['ISO 37301'] }
+        ];
+      } else {
+        scenarioExpansion = [
+          _buildScenarioLead({ geography, businessUnit, asset: asset || 'the affected financial process or exposure', cause: cause || 'fraud, financial control weakness, or commercial failure', impact: impact || 'direct financial loss and control pressure', scenarioLabel: 'financial risk scenario' }),
+          'The most likely progression is payment manipulation, weak approvals, or financial-control failure leading to direct loss, delayed detection, escalation, and remediation work.',
+          'This should be assessed for direct loss, control weakness, liquidity or capital impact, and any related regulatory or stakeholder consequences.'
+        ].join(' ');
+      }
     } else if (resolvedClassificationKey === 'fraud-integrity') {
       scenarioExpansion = [
         _buildScenarioLead({ geography, businessUnit, asset: asset || 'the approval, payment, or conduct-control path in scope', cause: cause || 'collusion, corruption, or financial-crime control weakness', impact: impact || 'direct loss and integrity challenge', scenarioLabel: 'fraud and integrity scenario' }),

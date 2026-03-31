@@ -5048,6 +5048,28 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
   const source = String(text || '').toLowerCase();
   const lensKey = normaliseScenarioLensHint(lensHint);
   const specialisedSeeds = (() => {
+    if (/bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collections|collectability|cashflow|working capital|provisioning|provision/.test(source)) {
+      return [
+        {
+          title: 'Counterparty default and bad-debt exposure',
+          category: 'Financial',
+          regulations: ['COSO Internal Control Framework'],
+          description: 'A customer insolvency or payment default could force a material write-off, provisioning review, and pressure on the control environment around receivables.'
+        },
+        {
+          title: 'Receivables recovery shortfall after customer insolvency',
+          category: 'Financial',
+          regulations: ['COSO Internal Control Framework'],
+          description: 'Collections may deteriorate quickly once a major client fails, creating cashflow strain and a weaker recovery path than management assumed.'
+        },
+        {
+          title: 'Legal recovery or contractual claim uncertainty',
+          category: 'Legal / Contract',
+          regulations: ['ISO 37301'],
+          description: 'Recovery may depend on enforceability of credit terms, guarantees, set-off rights, or the speed of insolvency-related legal action.'
+        }
+      ];
+    }
     if (/exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights/.test(source)) {
       return [
         {
@@ -5125,7 +5147,7 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
     { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'ISO 27001'], terms: ['ransom', 'malware', 'phish', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud', 'misconfig', 'vulnerability', 'privileged'] },
     { key: 'third-party', title: 'Third-party dependency or supplier failure', category: 'Third-Party', regulations: ['ISO 27036', 'ISO 28000'], terms: ['vendor', 'supplier', 'third-party', 'third party', 'outsourc', 'dependency', 'subprocessor', 'partner'] },
     { key: 'regulatory', title: 'Regulatory or licensing exposure', category: 'Regulatory', regulations: ['BIS Export Controls', 'OFAC Sanctions'], terms: ['regulator', 'regulatory', 'licence', 'license', 'supervisory', 'filing', 'notification', 'sanction', 'export control'] },
-    { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'financial reporting', 'misstatement'] },
+    { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'financial reporting', 'misstatement', 'bankruptcy', 'insolvency', 'receivable', 'bad debt', 'write-off', 'counterparty', 'customer default', 'client default', 'collections', 'working capital', 'provisioning'] },
     { key: 'fraud-integrity', title: 'Fraud, integrity, or financial-crime exposure', category: 'Fraud / Integrity', regulations: ['ISO 37001', 'UAE AML/CFT'], terms: ['fraud', 'integrity', 'financial crime', 'money laundering', 'kickback', 'bribery', 'corruption', 'collusion', 'embezzlement'] },
     { key: 'esg', title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure'] },
     { key: 'compliance', title: 'Compliance control or policy breakdown', category: 'Compliance', regulations: ['ISO 37301', 'UAE PDPL'], terms: ['policy breach', 'control failure', 'non-compliance', 'compliance', 'obligation', 'conduct', 'ethics'] },
@@ -5515,6 +5537,15 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         driver: 'supplier collusion, weak tender challenge, or poor detection of distorted pricing patterns',
         impact: 'commercial overpayment, challenge to the award decision, and regulatory scrutiny',
         followOn: 'If the pattern is not challenged quickly, the organisation can lock in avoidable cost and face questions about how the sourcing decision was governed.'
+      };
+    }
+    if (/bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collections|collectability|cashflow|working capital|provisioning|provision/.test(text)) {
+      return {
+        positioning: 'This points to a counterparty-credit and receivables-recovery issue, not a generic compliance breakdown.',
+        affected: 'the customer exposure, receivables position, and recovery path in scope',
+        driver: 'client insolvency, delayed collections, or weak visibility over concentration and recovery risk',
+        impact: 'bad debt write-off, cashflow strain, and pressure on provisioning and reporting judgement',
+        followOn: 'Once a major client fails, management usually has to move quickly on collections strategy, provisioning, legal recovery options, and wider concentration exposure.'
       };
     }
     if (/single[- ]source|sole source|supplier shortfall|supplier concentration|critical supplier/.test(text)) {
