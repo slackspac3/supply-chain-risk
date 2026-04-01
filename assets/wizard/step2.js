@@ -761,11 +761,17 @@ function clearWizard2AiUnavailableBanner() {
   document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
 }
 
+function getWizard2AiUnavailableMessage() {
+  return typeof getAiUnavailableMessage === 'function'
+    ? getAiUnavailableMessage()
+    : 'AI assistance is temporarily unavailable.';
+}
+
 function renderWizard2AiUnavailableBanner(retryHandler) {
   clearWizard2AiUnavailableBanner();
   const output = document.getElementById('llm-output-area');
   if (!output) return;
-  output.innerHTML = `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`;
+  output.innerHTML = `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">${escapeHtml(getWizard2AiUnavailableMessage())} You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`;
   output.querySelector('#btn-retry-ai')?.addEventListener('click', event => {
     event.preventDefault();
     retryHandler();
@@ -906,7 +912,7 @@ async function runLLMAssist() {
       ? 'A fallback suggested draft is ready. Review the changes, assumptions, and source basis before continuing.'
       : 'A suggested draft is ready. Review the changes, assumptions, and source basis before continuing.';
     if (result.aiUnavailable) {
-      output.insertAdjacentHTML('afterbegin', `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`);
+      output.insertAdjacentHTML('afterbegin', `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">${escapeHtml(getWizard2AiUnavailableMessage())} You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`);
       output.querySelector('#btn-retry-ai')?.addEventListener('click', event => {
         event.preventDefault();
         runLLMAssist();
@@ -918,7 +924,7 @@ async function runLLMAssist() {
     document.getElementById('btn-wizard2-ai-continue')?.addEventListener('click', () => document.getElementById('btn-next-2')?.click());
   } catch(e) {
     if (e?.code === 'LLM_UNAVAILABLE') {
-      if (status) status.textContent = 'AI is temporarily unavailable. You can continue manually with your own wording.';
+      if (status) status.textContent = `${getWizard2AiUnavailableMessage()} You can continue manually with your own wording.`;
       renderWizard2AiUnavailableBanner(runLLMAssist);
     } else {
       if (status) status.textContent = 'AI is unavailable right now. You can continue manually with your own wording.';

@@ -39,7 +39,13 @@
             Router.navigate('/login');
             return;
           }
-          setPage(`<div class="container" style="padding:var(--sp-12)"><h2>Page Not Found</h2><a href="#/dashboard" class="btn btn--primary" style="margin-top:var(--sp-4)">← Dashboard</a></div>`);
+          const fallbackRoute = typeof getDefaultRouteForCurrentUser === 'function'
+            ? getDefaultRouteForCurrentUser()
+            : '/dashboard';
+          const fallbackLabel = fallbackRoute === '/admin/home'
+            ? '← Platform Home'
+            : '← Dashboard';
+          setPage(`<div class="container" style="padding:var(--sp-12)"><h2>Page Not Found</h2><a href="#${fallbackRoute}" class="btn btn--primary" style="margin-top:var(--sp-4)">${fallbackLabel}</a></div>`);
         });
     }
   };

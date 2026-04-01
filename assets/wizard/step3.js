@@ -1265,7 +1265,7 @@ function recommendEstimatePreset(draft) {
     getStructuredScenarioField(draft.structuredScenario, 'primaryDriver'),
     ...(getSelectedRisks().map(r => r.title || ''))
   ].join(' ').toLowerCase();
-  if (/(phish|bec|email compromise|business email|invoice fraud)/.test(text)) return 'phishing';
+  if (/(phish|\bbec\b|business email compromise|email compromise|business email|invoice fraud)/.test(text)) return 'phishing';
   if (/(identity|entra|sso|directory|mailbox compromise|session hijack|account takeover)/.test(text)) return 'identity';
   if (/(cloud|bucket|tenant|misconfig|public exposure|saas)/.test(text)) return 'cloud';
   if (/(responsible ai|model risk|ai governance|hallucination|model drift|algorithmic bias|training data|ai act)/.test(text)) return 'aiModelRisk';
@@ -2333,7 +2333,7 @@ function renderWizard3() {
       UI.toast(result.usedFallback ? 'A fallback suggested better-outcome draft was loaded. Review the numbers before rerunning.' : 'A suggested better-outcome draft was loaded. Review the numbers before rerunning.', result.usedFallback ? 'warning' : 'success', 5000);
     } catch (error) {
       if (error?.code === 'LLM_UNAVAILABLE') {
-        if (statusEl) statusEl.textContent = 'AI assistance is temporarily unavailable. Keep the current values or try again.';
+        if (statusEl) statusEl.textContent = `${getStep3AiUnavailableMessage()} Keep the current values or try again.`;
         renderStep3AiUnavailableBanner(() => document.getElementById('btn-treatment-ai-assist')?.click());
       } else {
         if (statusEl) statusEl.textContent = 'AI could not update the values just now. Keep the current values or try again in a moment.';
@@ -2378,12 +2378,18 @@ function clearStep3AiUnavailableBanner() {
   document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
 }
 
+function getStep3AiUnavailableMessage() {
+  return typeof getAiUnavailableMessage === 'function'
+    ? getAiUnavailableMessage()
+    : 'AI assistance is temporarily unavailable.';
+}
+
 function renderStep3AiUnavailableBanner(retryHandler) {
   clearStep3AiUnavailableBanner();
   const statusEl = document.getElementById('treatment-improvement-status');
   const container = statusEl?.closest('.card') || statusEl?.parentElement;
   if (!container) return;
-  container.insertAdjacentHTML('beforeend', `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">AI assistance is temporarily unavailable. You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`);
+  container.insertAdjacentHTML('beforeend', `<div class="ai-unavailable-banner banner banner--warning mt-4" role="alert"><span class="banner-icon">△</span><span class="banner-text">${escapeHtml(getStep3AiUnavailableMessage())} You can continue manually or <button class="link-btn" id="btn-retry-ai" type="button" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">try again</button>.</span></div>`);
   container.querySelector('#btn-retry-ai')?.addEventListener('click', event => {
     event.preventDefault();
     retryHandler();

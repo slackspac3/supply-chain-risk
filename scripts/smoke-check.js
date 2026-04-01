@@ -24,6 +24,7 @@ function extractAssetVersions(indexHtml) {
 
 const indexHtml = read('index.html');
 const appJs = read('assets/app.js');
+const appRoutesJs = read('assets/appRoutes.js');
 const exportJs = read('assets/services/exportService.js');
 const llmJs = read('assets/services/llmService.js');
 const benchmarkServiceJs = read('assets/services/benchmarkService.js');
@@ -41,6 +42,7 @@ const workspacePersistenceJs = read('assets/state/userWorkspacePersistence.js');
 const appStateStoreJs = read('assets/state/appStateStore.js');
 const workspaceStateModelJs = read('assets/state/workspaceStateModel.js');
 const auditLogSectionJs = read('assets/admin/auditLogSection.js');
+const demoModeJs = read('assets/demo/demoMode.js');
 const e2eSmokeSpecJs = read('tests/e2e/smoke.spec.js');
 const pagesWorkflow = read('.github/workflows/pages.yml');
 const ciWorkflow = read('.github/workflows/ci.yml');
@@ -56,6 +58,9 @@ expect(nvmrc === '24', `.nvmrc must pin Node 24 for the pilot release flow. Foun
 expect(nodeVersionFile === '24', `.node-version must pin Node 24 for the pilot release flow. Found: ${nodeVersionFile || 'empty'}`);
 expect(appJs.includes('function getReleaseInfo()'), 'app.js is missing getReleaseInfo helper');
 expect(appJs.includes('function getReleaseLabel()'), 'app.js is missing getReleaseLabel helper');
+expect(appJs.includes('function isPilotOrStagingRelease()'), 'app.js is missing isPilotOrStagingRelease helper');
+expect(appJs.includes('function getSessionLLMHealth()'), 'app.js is missing getSessionLLMHealth helper');
+expect(appJs.includes('function maybeWarnPilotAiExpectation()'), 'app.js is missing maybeWarnPilotAiExpectation helper');
 expect(String(packageJson.version || '').trim().length > 0, 'package.json must include an application version');
 expect(String(packageJson.engines?.node || '').trim() === '>=24 <25', 'package.json engines.node must pin the supported Node major version.');
 expect(appJs.includes(`const APP_ASSET_VERSION = '${versions[0] || ''}'`), 'app.js asset version does not match index.html asset version');
@@ -71,11 +76,13 @@ expect(indexHtml.includes('assets/state/assessmentLifecycle.js'), 'index.html is
 expect(appJs.includes('function safeRenderAdminSettings('), 'safeRenderAdminSettings helper missing');
 expect(appJs.includes('function rerenderCurrentAdminSection()'), 'rerenderCurrentAdminSection helper missing from admin renderer');
 expect(appJs.includes('function normaliseAdminSettings('), 'frontend normaliseAdminSettings helper missing');
+expect(appRoutesJs.includes("fallbackRoute === '/admin/home'"), 'appRoutes not-found handling is missing the admin-safe recovery target');
 expect(settingsApi.includes('function normaliseSettings('), 'backend normaliseSettings helper missing');
 expect(appStateStoreJs.includes('function dispatchDraftAction('), 'appStateStore is missing draft action dispatch support');
 expect(appStateStoreJs.includes('function dispatchSimulationAction('), 'appStateStore is missing simulation action dispatch support');
 
 expect(llmJs.includes('function _withEvidenceMeta('), 'AI evidence wrapper missing');
+expect(llmJs.includes('function getRuntimeStatus()'), 'LLM service is missing getRuntimeStatus helper');
 expect(llmJs.includes('confidenceLabel'), 'AI evidence contract missing confidenceLabel');
 expect(llmJs.includes('evidenceQuality'), 'AI evidence contract missing evidenceQuality');
 expect(llmJs.includes('missingInformation'), 'AI evidence contract missing missingInformation');
@@ -117,6 +124,9 @@ expect(!authServiceJs.includes('departmentEntityId: payload.departmentEntityId')
 expect(resultsRouteJs.includes('Confirm your organisation context'), 'results route is missing the updated organisation-context copy');
 expect(resultsRouteJs.includes('const canChooseDepartment = capability.canManageBusinessUnit && !capability.canManageDepartment;'), 'results route is missing the aligned BU-admin-only department chooser guard');
 expect(systemAccessSectionJs.includes('Pilot release diagnostics'), 'admin system access section is missing pilot release diagnostics');
+expect(systemAccessSectionJs.includes('Pilot AI readiness'), 'admin system access section is missing pilot AI readiness guidance');
+expect(!demoModeJs.includes("Router.navigate('/results');"), 'demo mode still navigates to the stale /results route');
+expect(appJs.includes('href="#/admin/home">Platform Home</a>'), 'admin settings hard-failure fallback no longer points to platform home');
 
 expect(userPreferencesJs.includes('Your business-unit and function assignment is controlled by your current role.'), 'user preferences role guidance is missing');
 expect(userOnboardingJs.includes('Your organisation assignment is set by your current admin-managed role.'), 'user onboarding role guidance is missing');

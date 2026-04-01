@@ -1,8 +1,5 @@
 'use strict';
 
-// TODO: Add to index.html before </body>:
-// <script src="assets/demo/demoMode.js"></script>
-
 const DemoMode = (() => {
   const DEMO_SCENARIO = {
     id: 'demo-identity-compromise',
@@ -280,7 +277,15 @@ const DemoMode = (() => {
 
       _setStatus('Opening results...');
       await _sleep(600);
-      if (typeof Router !== 'undefined') Router.navigate('/results');
+      const currentRoute = typeof window !== 'undefined'
+        ? String(window.location.hash || '').replace(/^#/, '')
+        : '';
+      const currentResultsId = typeof AppState !== 'undefined'
+        ? String(AppState.currentResultsId || '').trim()
+        : '';
+      if (typeof Router !== 'undefined' && !/^\/results\/[^/]+/.test(currentRoute) && currentResultsId) {
+        Router.navigate('/results/' + currentResultsId);
+      }
       await _sleep(800);
 
       const execTab = document.querySelector('[data-results-tab="executive"]')

@@ -724,6 +724,87 @@ test('authenticated admin shell renders without crashing', async ({ page }) => {
   });
 });
 
+test('admin system access warns calmly when pilot is using local fallback AI', async ({ page }) => {
+  await seedAuthenticatedUser(page, {
+    username: 'admin',
+    displayName: 'Global Admin',
+    role: 'admin',
+    adminSettings: {
+      geography: 'United Arab Emirates',
+      companyStructure: [],
+      entityContextLayers: [],
+      applicableRegulations: ['UAE PDPL'],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    preferredAdminSection: 'access'
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      companyStructure: [],
+      entityContextLayers: [],
+      applicableRegulations: ['UAE PDPL'],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/admin/settings/access', async () => {
+    await expect(page.getByRole('heading', { name: /system access/i })).toBeVisible();
+    const accessSection = page.locator('details.settings-section').filter({
+      has: page.locator('.settings-section__title', { hasText: /system access/i })
+    }).first();
+    await accessSection.evaluate(node => { node.open = true; });
+    await page.locator('#admin-compass-url').fill('https://api.core42.ai/v1/chat/completions');
+    await page.locator('#admin-compass-key').fill('');
+    await page.locator('details.results-actions-disclosure').first().evaluate(node => { node.open = true; });
+    await page.getByRole('button', { name: /save session key/i }).click();
+    const readinessPanel = page.locator('#pilot-ai-readiness-panel');
+    await expect(readinessPanel.getByText(/live ai required for pilot sign-off/i)).toBeVisible();
+    await expect(readinessPanel.getByText(/local fallback guidance/i)).toBeVisible();
+    await expect(readinessPanel.getByText(/local fallback active/i).first()).toBeVisible();
+  });
+});
+
+test('unknown admin routes recover to platform home instead of the user dashboard', async ({ page }) => {
+  await seedAuthenticatedUser(page, {
+    username: 'admin',
+    displayName: 'Global Admin',
+    role: 'admin',
+    adminSettings: {
+      geography: 'United Arab Emirates',
+      companyStructure: [],
+      entityContextLayers: [],
+      applicableRegulations: ['UAE PDPL'],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    preferredAdminSection: 'org'
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      companyStructure: [],
+      entityContextLayers: [],
+      applicableRegulations: ['UAE PDPL'],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/admin/does-not-exist', async () => {
+    await expect(page.getByRole('heading', { name: /page not found/i })).toBeVisible();
+    const recoveryLink = page.locator('#main-content').getByRole('link', { name: /^← Platform Home$/ });
+    await expect(recoveryLink).toBeVisible();
+    await expect(recoveryLink).toHaveAttribute('href', '#/admin/home');
+  });
+});
+
 test('authenticated admin document library renders without crashing', async ({ page }) => {
   await seedAuthenticatedUser(page, {
     username: 'admin',

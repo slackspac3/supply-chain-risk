@@ -424,8 +424,25 @@ Repair the response into the required JSON schema. Preserve scenario-specific me
     }
   }
 
+  function getRuntimeStatus() {
+    const apiUrl = String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL;
+    const model = String(_compassModel || DEFAULT_COMPASS_MODEL).trim() || DEFAULT_COMPASS_MODEL;
+    const hasApiKey = !!String(_compassApiKey || '').trim();
+    const usingDirectCompass = _isDirectCompassUrl(apiUrl);
+    const usingStub = usingDirectCompass && !hasApiKey;
+    return {
+      apiUrl,
+      model,
+      hasApiKey,
+      usingDirectCompass,
+      usingProxy: !!apiUrl && !usingDirectCompass,
+      usingStub,
+      configFingerprint: [apiUrl, model, hasApiKey ? 'keyed' : 'keyless'].join('::')
+    };
+  }
+
   function isUsingStub() {
-    return _isDirectCompassUrl(_compassApiUrl) && !_compassApiKey;
+    return getRuntimeStatus().usingStub;
   }
 
   function _normaliseScenarioHintKey(value) {
@@ -1951,7 +1968,13 @@ ${businessUnit.selectedDepartmentContext}` : ''
 
     const isRansomware = n.includes('ransomware') || n.includes('encrypt') || n.includes('ransom');
     const isIdentity = n.includes('azure ad') || n.includes('active directory') || n.includes('entra') || n.includes('identity') || n.includes('sso') || n.includes('directory service');
-    const isPhishing = !isIdentity && (n.includes('phish') || n.includes('bec') || n.includes('email compromise') || n.includes('spoof'));
+    const isPhishing = !isIdentity && (
+      n.includes('phish')
+      || /\bbec\b/.test(n)
+      || n.includes('business email compromise')
+      || n.includes('email compromise')
+      || n.includes('spoof')
+    );
     const isDataBreach = n.includes('breach') || n.includes('data theft') || n.includes('exfil') || n.includes('data exposure');
     const isInsider = n.includes('insider') || n.includes('employee misuse') || n.includes('malicious insider') || n.includes('privilege abuse');
     const isCloud = !isIdentity && (n.includes('cloud') || n.includes('misconfigur') || n.includes('s3') || n.includes('bucket') || n.includes('storage exposure') || n.includes('public exposure') || n.includes('azure'));
@@ -5764,6 +5787,7 @@ Keep the numbers realistic, internally ordered, and anchored to the user's own h
     coachRiskShortlist,
     suggestSmartParamPrefill,
     getLatestTrace,
+    getRuntimeStatus,
     isUsingStub,
     testCompassConnection,
     setCompassAPIKey,

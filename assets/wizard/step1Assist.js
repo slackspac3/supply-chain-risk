@@ -17,8 +17,11 @@
 
   function _getStep1AiFailureMessage(error = null) {
     const message = String(error?.message || '').replace(/\s+/g, ' ').trim();
-    if (!message) return 'AI assistance is temporarily unavailable.';
-    if (/temporarily unavailable/i.test(message)) return 'AI assistance is temporarily unavailable.';
+    const unavailableMessage = typeof getAiUnavailableMessage === 'function'
+      ? getAiUnavailableMessage()
+      : 'AI assistance is temporarily unavailable.';
+    if (!message) return unavailableMessage;
+    if (/temporarily unavailable/i.test(message) || /No Compass API key configured/i.test(message)) return unavailableMessage;
     if (/Sign in again|session is no longer valid/i.test(message)) {
       return 'Your session is no longer valid for AI requests. Sign in again, then retry.';
     }
@@ -36,7 +39,7 @@
     const qualityState = String(AppState?.draft?.aiQualityState || '').trim().toLowerCase();
     if (qualityState === 'fallback') {
       return '<div class="ai-status-banner ai-status-banner--fallback" role="alert">' +
-        '<span>⚠ AI model unavailable — this content was generated locally without live model grounding. Evidence quality may be lower than usual.</span>' +
+        '<span>⚠ Live AI was not available for this step — this content was generated locally without live model grounding. Evidence quality may be lower than usual.</span>' +
         '</div>';
     }
     return '';

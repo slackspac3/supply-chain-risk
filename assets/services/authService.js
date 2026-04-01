@@ -30,6 +30,28 @@ function resolveApiUrl(path) {
     console.warn(message, error?.message || error || '');
   }
 
+  function clearSessionStorageEntries({ exactKeys = [], prefixKeys = [] } = {}) {
+    try {
+      exactKeys.filter(Boolean).forEach(key => sessionStorage.removeItem(key));
+      const safePrefixes = prefixKeys.map(prefix => String(prefix || '').trim()).filter(Boolean);
+      if (!safePrefixes.length) return;
+      const sessionKeys = [];
+      if (typeof sessionStorage.length === 'number' && typeof sessionStorage.key === 'function') {
+        for (let index = 0; index < sessionStorage.length; index += 1) {
+          const key = sessionStorage.key(index);
+          if (key) sessionKeys.push(String(key));
+        }
+      }
+      sessionKeys.forEach((key) => {
+        if (safePrefixes.some(prefix => key.startsWith(prefix))) {
+          sessionStorage.removeItem(key);
+        }
+      });
+    } catch (error) {
+      warnAuthIssueOnce('session-clear-supplemental', 'AuthService supplemental session cleanup failed:', error);
+    }
+  }
+
   function getUsersApiUrl() {
     return DEFAULT_USERS_API_URL;
   }
@@ -328,13 +350,23 @@ function resolveApiUrl(path) {
   }
 
   function logout() {
-    const username = getCurrentUser()?.username || '';
     try {
-      if (username) {
-        sessionStorage.removeItem('rq_results_tab__' + username);
-      }
-      sessionStorage.removeItem(SESSION_KEY);
-      sessionStorage.removeItem(ADMIN_SECRET_KEY);
+      clearSessionStorageEntries({
+        exactKeys: [
+          SESSION_KEY,
+          ADMIN_SECRET_KEY,
+          SESSION_NOTICE_KEY,
+          'rq_admin_workspace_preview',
+          'rip_ai_trace',
+          'rip_flags_generated',
+          'rip_flags_session_id',
+          'rip_rag_warned'
+        ],
+        prefixKeys: [
+          'rq_results_tab__',
+          'rq_boardroom__'
+        ]
+      });
       localStorage.removeItem(ACCOUNTS_CACHE_KEY);
       localStorage.removeItem(ADMIN_SECRET_KEY);
     } catch (error) {

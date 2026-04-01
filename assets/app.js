@@ -22,6 +22,8 @@ const LEARNING_STORAGE_PREFIX = 'rq_learning_store';
 const DRAFT_STORAGE_PREFIX = 'rq_draft';
 const DRAFT_RECOVERY_STORAGE_PREFIX = 'rq_draft_recovery';
 const SESSION_LLM_STORAGE_PREFIX = 'rq_llm_session';
+const SESSION_LLM_HEALTH_STORAGE_PREFIX = 'rq_llm_health';
+const SESSION_PILOT_AI_WARNING_STORAGE_PREFIX = 'rq_pilot_ai_warned';
 const MAX_AI_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_AI_UPLOAD_CHARS = 20000;
 const MAX_ASSESSMENT_VERSION_HISTORY = 5;
@@ -148,6 +150,15 @@ function getReleaseInfo() {
 function getReleaseLabel() {
   const release = getReleaseInfo();
   return `Version ${release.version} · ${String(release.channel || 'pilot').toUpperCase()} · Build ${release.build}`;
+}
+
+function getReleaseChannel() {
+  return String(getReleaseInfo()?.channel || 'pilot').trim().toLowerCase() || 'pilot';
+}
+
+function isPilotOrStagingRelease() {
+  const channel = getReleaseChannel();
+  return channel === 'pilot' || channel === 'staging';
 }
 
 function formatRelativePilotTime(timestamp, fallback = 'just now') {
@@ -2625,6 +2636,8 @@ function clearUserPersistentState(username) {
     localStorage.removeItem(buildUserStorageKey(DRAFT_RECOVERY_STORAGE_PREFIX, safeUsername));
     sessionStorage.removeItem(buildUserStorageKey(DRAFT_STORAGE_PREFIX, safeUsername));
     sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX, safeUsername));
+    sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_HEALTH_STORAGE_PREFIX, safeUsername));
+    sessionStorage.removeItem(buildUserStorageKey(SESSION_PILOT_AI_WARNING_STORAGE_PREFIX, safeUsername));
   } catch {}
   const expectedMeta = buildExpectedMeta(AppState.userStateCache.username === safeUsername ? AppState.userStateCache._meta : {});
   if (AppState.userStateCache.username === safeUsername) {
@@ -2845,6 +2858,7 @@ function activateAuthenticatedState() {
   }
 
   renderAppBar();
+  maybeWarnPilotAiExpectation();
 }
 
 function ensureDraftShape() {
@@ -4762,6 +4776,75 @@ function saveSessionLLMConfig(config) {
   try {
     localStorage.setItem(storageKey, JSON.stringify(config));
     sessionStorage.setItem(storageKey, JSON.stringify(config));
+  } catch {}
+}
+
+function getSessionLLMHealth() {
+  try {
+    const storageKey = buildUserStorageKey(SESSION_LLM_HEALTH_STORAGE_PREFIX);
+    const parsed = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSessionLLMHealth(health) {
+  try {
+    const storageKey = buildUserStorageKey(SESSION_LLM_HEALTH_STORAGE_PREFIX);
+    sessionStorage.setItem(storageKey, JSON.stringify({
+      status: String(health?.status || '').trim(),
+      checkedAt: Number(health?.checkedAt || Date.now()),
+      message: String(health?.message || '').trim(),
+      configFingerprint: String(health?.configFingerprint || '').trim()
+    }));
+  } catch {}
+}
+
+function clearSessionLLMHealth(username = getCurrentUserOrThrow().username) {
+  try {
+    sessionStorage.removeItem(buildUserStorageKey(SESSION_LLM_HEALTH_STORAGE_PREFIX, username));
+  } catch {}
+}
+
+function clearPilotAiExpectationWarning(username = getCurrentUserOrThrow().username) {
+  try {
+    sessionStorage.removeItem(buildUserStorageKey(SESSION_PILOT_AI_WARNING_STORAGE_PREFIX, username));
+  } catch {}
+}
+
+function getAiUnavailableMessage() {
+  const runtimeStatus = typeof LLMService !== 'undefined' && LLMService && typeof LLMService.getRuntimeStatus === 'function'
+    ? LLMService.getRuntimeStatus()
+    : {
+        usingStub: typeof LLMService !== 'undefined'
+          && LLMService
+          && typeof LLMService.isUsingStub === 'function'
+          && LLMService.isUsingStub()
+      };
+  if (runtimeStatus.usingStub) {
+    return 'Live AI is not configured for this session. Local fallback guidance is active.';
+  }
+  return 'AI assistance is temporarily unavailable.';
+}
+
+function maybeWarnPilotAiExpectation() {
+  try {
+    const user = AppState.currentUser || AuthService.getCurrentUser();
+    if (!user?.username || String(user.role || '').trim().toLowerCase() !== 'admin') return;
+    if (!isPilotOrStagingRelease()) return;
+    const runtimeStatus = typeof LLMService !== 'undefined' && LLMService && typeof LLMService.getRuntimeStatus === 'function'
+      ? LLMService.getRuntimeStatus()
+      : null;
+    if (!runtimeStatus?.usingStub) return;
+    const warningKey = buildUserStorageKey(SESSION_PILOT_AI_WARNING_STORAGE_PREFIX, user.username);
+    if (sessionStorage.getItem(warningKey) === '1') return;
+    sessionStorage.setItem(warningKey, '1');
+    UI.toast(
+      'Pilot channel is running without live AI. Local fallback guidance is active. Check System Access before AI sign-off.',
+      'warning',
+      7000
+    );
   } catch {}
 }
 
@@ -8412,7 +8495,11 @@ function renderAdminSettings(activeSection = 'org') {
     businessProfile: settings.companyContextProfile || ''
   });
   const sessionLLM = getSessionLLMConfig();
-  const directCompass = !sessionLLM.apiUrl || sessionLLM.apiUrl.includes('api.core42.ai');
+  const runtimeStatus = typeof LLMService !== 'undefined' && LLMService && typeof LLMService.getRuntimeStatus === 'function'
+    ? LLMService.getRuntimeStatus()
+    : null;
+  const activeApiUrl = String(runtimeStatus?.apiUrl || sessionLLM.apiUrl || DEFAULT_COMPASS_PROXY_URL).trim();
+  const directCompass = activeApiUrl.includes('api.core42.ai');
   const buCount = getBUList().length;
   const docCount = getDocList().length;
   const managedAccounts = getManagedAccountsForAdmin(settings);
@@ -8430,7 +8517,8 @@ function renderAdminSettings(activeSection = 'org') {
   const governanceSection = AdminPlatformDefaultsSection.renderSection({ settings, mode: 'governance' });
   const systemAccessSection = AdminSystemAccessSection.renderSection({
     directCompass,
-    sessionLLM
+    sessionLLM,
+    runtimeStatus
   });
   const auditCache = AppState.auditLogCache || { loaded: false, loading: false, entries: [], summary: null, error: '' };
   const auditLogSection = AdminAuditLogSection.renderSection({ auditCache });
@@ -8717,7 +8805,7 @@ function safeRenderAdminSettings(section = getPreferredAdminSection()) {
       UI.toast('A problem affected the selected admin section, so the page reopened in Organisation Setup.', 'warning', 5000);
     } catch (fallbackError) {
       console.error('safeRenderAdminSettings hard failure:', fallbackError);
-      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="form-help mt-4">The platform logged the technical failure server-side or in the browser console for follow-up.</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/org">Open Organisation Setup</a><a class="btn btn--ghost" href="#/dashboard">Home</a></div></div></div></main>`);
+      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="form-help mt-4">The platform logged the technical failure server-side or in the browser console for follow-up.</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/org">Open Organisation Setup</a><a class="btn btn--ghost" href="#/admin/home">Platform Home</a></div></div></div></main>`);
     }
   }
 }
