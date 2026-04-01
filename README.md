@@ -226,6 +226,15 @@ Important guardrails:
 - this is not direct online model retraining
 - the current system improves retrieval, ranking, and prompt assembly first; curated offline review is still the path for benchmark and model-training updates
 
+Plain-language boundary:
+- the base LLM is not being re-trained each time a user moves a slider or saves a rating
+- instead, the platform gets better at:
+  - choosing better grounding documents
+  - ranking better-matching risks higher
+  - suppressing repeatedly weak or off-path risks
+  - assembling stronger prompt/context instructions for similar future scenarios
+- if the organisation later wants true model training, that should come from reviewed and curated feedback data, not raw production clicks
+
 Practical implication:
 - better-quality repeated feedback should make similar scenarios land more cleanly for the same user first
 - then for the wider function, BU, and platform once the signal is strong enough

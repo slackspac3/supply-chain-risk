@@ -8105,6 +8105,11 @@ function renderHelpPage() {
               <div class="help-mini-card"><strong>What the platform learns</strong><p>The app uses repeated signals to improve retrieval relevance, shortlist ordering, and prompt/context priors. It does not treat every single rating as instant model retraining.</p></div>
             </div>
             ${renderHelpCallout({
+              tone: 'trust',
+              title: 'What this does not mean',
+              body: 'Saving feedback does not retrain the base model in real time. The platform is learning around the model first by changing retrieval, ranking, and prompt assembly. True model training, if introduced later, should come only from reviewed and curated feedback data.'
+            })}
+            ${renderHelpCallout({
               tone: 'best',
               title: 'Important guardrail',
               body: 'Live-AI feedback and fallback-mode feedback are tracked separately. Fallback keeps the workflow moving, but it does not automatically become shared pilot-quality learning for everyone.'
