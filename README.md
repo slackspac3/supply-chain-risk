@@ -102,6 +102,32 @@ Current AI behavior:
 
 The product is grounded by a growing enterprise corpus that includes ISO, NIST, COSO, IFRS/ESRS, OECD, UNGP, sector guidance, and UAE/GCC-relevant references.
 
+## Pilot AI Readiness Policy
+
+Pilot and staging environments should be treated as live-AI-required when AI quality matters.
+
+Current policy:
+- safe local fallback remains available so the workflow does not hard-stop
+- local fallback is not equivalent to pilot-quality live AI
+- if pilot or staging users are relying on AI quality for sign-off, the active AI path should be verified in the current browser session first
+- the preferred path is the hosted proxy
+- direct browser keys are for temporary testing only
+
+Current product behavior:
+- `Admin > System Access` now shows a `Pilot AI readiness` card
+- that card distinguishes:
+  - `Live AI verified`
+  - `Not yet verified`
+  - `Local fallback active`
+- `Test Connection` records browser-session verification state for the current runtime path
+- if an admin puts the current session into local fallback during `pilot` or `staging`, the app shows a one-time calm warning toast
+- Step 1, Step 2, and Step 3 now say `Live AI is not configured for this session. Local fallback guidance is active.` when the runtime is in config-driven local fallback
+
+Operational expectation:
+- do not treat fallback-generated AI guidance as pilot-quality AI output
+- verify the live path in `System Access` before AI-dependent review, demo, or sign-off activity
+- if the platform is intentionally being exercised in stub/fallback mode, be explicit about that in the session context
+
 ## Results And Exports
 
 Results are intentionally split by audience:
@@ -283,6 +309,12 @@ That file covers the expected configuration for:
 - session signing
 - shared KV/user store access
 - bootstrap admin/account seeding
+
+AI environment notes:
+- server-side pilot environments should provide real `COMPASS_API_KEY`, `COMPASS_API_URL`, and `COMPASS_MODEL` values
+- the frontend defaults to the hosted proxy path and should normally run keyless in the browser
+- direct `api.core42.ai` browser usage without a key drops into local fallback mode
+- use `Admin > System Access > Test Connection` to confirm the live path in the current browser session before relying on AI quality
 
 ## Deployment
 

@@ -5,7 +5,30 @@
     'material technology and cyber risk requiring structured assessment',
     'technology outage affecting core business services'
   ]);
-  const REFRESHABLE_SUGGESTED_RISK_SOURCES = new Set(['ai', 'ai+register', 'register', 'scenario-draft']);
+
+  function normaliseRiskSource(source = '', fallback = 'manual') {
+    const lowered = String(source || '').trim().toLowerCase();
+    if (!lowered) return String(fallback || 'manual').trim().toLowerCase() || 'manual';
+    if (lowered === 'manual') return 'manual';
+    if (['dry-run', 'example', 'sample', 'learned-pattern'].includes(lowered)) return 'dry-run';
+    if (['register', 'upload', 'import'].includes(lowered)) return 'register';
+    if (['ai+register', 'register+ai', 'ai-register', 'upload+ai'].includes(lowered)) return 'ai+register';
+    if (['scenario-draft', 'built-draft', 'built draft', 'scenario draft'].includes(lowered)) return 'scenario-draft';
+    if (
+      lowered === 'ai'
+      || lowered.includes('legacy')
+      || lowered.includes('generated')
+      || lowered.includes('fallback')
+      || lowered.includes('local')
+    ) {
+      return 'ai';
+    }
+    return lowered;
+  }
+
+  function isRefreshableSuggestedRiskSource(source = '') {
+    return normaliseRiskSource(source, '') !== 'manual';
+  }
 
   function normaliseRisk(risk, source = 'manual') {
     const parsedLine = typeof risk === 'string' ? parseStructuredRiskLine(risk) : parseStructuredRiskLine(risk?.title);
@@ -19,7 +42,7 @@
       title,
       category,
       description,
-      source: risk?.source || source,
+      source: normaliseRiskSource(risk?.source || source, source),
       regulations: Array.isArray(risk?.regulations) ? risk.regulations : [],
       linkedTo: Array.isArray(risk?.linkedTo) ? risk.linkedTo : []
     };
@@ -92,7 +115,7 @@
     const incomingTitles = new Set(incomingRisks.map((risk) => risk.title.toLowerCase()));
     const existingIds = new Set(Array.isArray(AppState.draft.selectedRiskIds) ? AppState.draft.selectedRiskIds : []);
     // When the analyst refreshes Step 1 suggestions, stale AI/register cards from the previous draft make the shortlist look unrelated.
-    const preservedCandidates = getRiskCandidates().filter((risk) => !REFRESHABLE_SUGGESTED_RISK_SOURCES.has(String(risk?.source || '').trim().toLowerCase()));
+    const preservedCandidates = getRiskCandidates().filter((risk) => !isRefreshableSuggestedRiskSource(risk?.source));
     const merged = mergeRisks(preservedCandidates, incomingRisks);
     const selectedIds = merged
       .filter((risk) => existingIds.has(risk.id) || (selectNew && incomingTitles.has(risk.title.toLowerCase())))
@@ -224,9 +247,15 @@
     return activeLensKeys.some((key) => (compatibility[key] || [key]).some(term => category.includes(term) || title.includes(term)));
   }
 
-  function getAlignedRiskSeed(aiRisks, narrative, lens) {
-    const resolvedAiRisks = Array.isArray(aiRisks) ? aiRisks : [];
-    const hintedRisks = guessRisksFromText(narrative, { lensHint: lens });
+  function getAlignedRiskSeed(aiRisks, narrative, lens, { riskSource = 'ai' } = {}) {
+    const resolvedAiRisks = (Array.isArray(aiRisks) ? aiRisks : []).map((risk) => ({
+      ...risk,
+      source: normaliseRiskSource(risk?.source, riskSource)
+    }));
+    const hintedRisks = guessRisksFromText(narrative, { lensHint: lens }).map((risk) => ({
+      ...risk,
+      source: normaliseRiskSource(risk?.source, riskSource)
+    }));
     const alignedAiRisks = resolvedAiRisks.filter((risk) => riskMatchesLens(risk, lens));
     if (alignedAiRisks.length) return mergeRisks(alignedAiRisks, hintedRisks);
     return hintedRisks.length ? hintedRisks : resolvedAiRisks;
@@ -334,7 +363,7 @@
     AppState.draft.aiAlignment = null;
     AppState.draft.citations = [];
     if (!clearGeneratedRisks) return;
-    const preservedCandidates = getRiskCandidates().filter((risk) => !REFRESHABLE_SUGGESTED_RISK_SOURCES.has(String(risk?.source || '').trim().toLowerCase()));
+    const preservedCandidates = getRiskCandidates().filter((risk) => !isRefreshableSuggestedRiskSource(risk?.source));
     const selectedIds = new Set(Array.isArray(AppState.draft.selectedRiskIds) ? AppState.draft.selectedRiskIds : []);
     AppState.draft.riskCandidates = preservedCandidates;
     AppState.draft.selectedRiskIds = preservedCandidates
@@ -393,6 +422,10 @@
     nextNarrative = ''
   } = {}) {
     const resolvedNarrative = nextNarrative || result.enhancedStatement || narrative;
+    const suggestedRiskSource = AppState.draft.registerFindings ? 'ai+register' : 'ai';
+    const alignedRisks = getAlignedRiskSeed(result.risks, resolvedNarrative || narrative, AppState.draft.scenarioLens, {
+      riskSource: suggestedRiskSource
+    });
     AppState.draft.llmAssisted = true;
     AppState.draft.sourceNarrative = assistSeed || narrative;
     AppState.draft.narrative = assistSeed || narrative;
@@ -422,10 +455,7 @@
     AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
     AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
     // Refresh AI-generated suggestions from the current scenario so old AI/register cards do not stay selected after the analyst rewrites the draft.
-    replaceSuggestedRiskCandidates(
-      getAlignedRiskSeed(result.risks, resolvedNarrative || narrative, AppState.draft.scenarioLens),
-      { selectNew: true }
-    );
+    replaceSuggestedRiskCandidates(alignedRisks, { selectNew: true });
     AppState.draft.applicableRegulations = Array.from(new Set([
       ...(deriveApplicableRegulations(bu, getSelectedRisks(), getScenarioGeographies()) || []),
       ...(result.regulations || [])
@@ -444,7 +474,12 @@
   }
 
   function applyRegisterAnalysisResultToDraft(result, { parsedFallback = [] } = {}) {
-    const extractedRisks = Array.isArray(result?.risks) && result.risks.length ? result.risks : parsedFallback;
+    const defaultRegisterRiskSource = result?.usedFallback ? 'register' : 'ai+register';
+    const extractedRisks = (Array.isArray(result?.risks) && result.risks.length ? result.risks : parsedFallback)
+      .map((risk) => ({
+        ...risk,
+        source: normaliseRiskSource(risk?.source, defaultRegisterRiskSource)
+      }));
     replaceSuggestedRiskCandidates(extractedRisks, { selectNew: true });
     const workbookSummary = AppState.draft.registerMeta?.sheetCount > 1 ? ` across ${AppState.draft.registerMeta.sheetCount} sheets` : '';
     AppState.draft.intakeSummary = result.summary || `Extracted ${getSelectedRisks().length} risks from ${AppState.draft.uploadedRegisterName}${workbookSummary}.`;

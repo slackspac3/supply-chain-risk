@@ -8075,6 +8075,22 @@ function renderHelpPage() {
               body: 'If the company brief says the business operates regulated digital services in the UAE, the app will tend to surface geography, regulatory, resilience, and customer-impact considerations earlier than it would for a non-regulated internal-only service.'
             })}
           `
+        }),
+        renderHelpDisclosure('context', {
+          title: 'How live AI and fallback behave in pilot',
+          summary: 'Pilot-quality AI requires a verified live path; fallback keeps the workflow moving but should be treated differently.',
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Live AI verified</strong><p>Use this state when the active runtime has been checked successfully in <strong>Admin &gt; System Access</strong>. This is the right state for pilot-quality AI review, provided the evidence and assumptions still hold up.</p></div>
+              <div class="help-mini-card"><strong>Local fallback active</strong><p>The workflow still continues, but the draft or guidance was assembled locally rather than from the live model. Treat this as continuity support, not as pilot-quality AI sign-off.</p></div>
+              <div class="help-mini-card"><strong>Who checks it</strong><p>Admins should use the <strong>Pilot AI readiness</strong> card and <strong>Test Connection</strong> in System Access. End users should expect calmer in-step wording if live AI is not configured for the current session.</p></div>
+            </div>
+            ${renderHelpCallout({
+              tone: 'trust',
+              title: 'Practical rule for pilot and staging',
+              body: 'If AI quality matters for the current session, confirm the live path first. If the platform says local fallback guidance is active, do not treat the AI output as equivalent to a verified live run.'
+            })}
+          `
         })
       ]
     }),
