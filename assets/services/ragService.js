@@ -648,8 +648,45 @@ const RAGService = (() => {
     return 3;
   }
 
+  function _getFeedbackRetrievalProfile(buId, queryInfo = {}) {
+    try {
+      if (typeof OrgIntelligenceService === 'undefined' || typeof OrgIntelligenceService.getHierarchicalFeedbackProfile !== 'function') return null;
+      const draftLens = typeof AppState !== 'undefined' && AppState?.draft?.scenarioLens && typeof AppState.draft.scenarioLens === 'object'
+        ? AppState.draft.scenarioLens
+        : null;
+      const lensFromQuery = Array.isArray(queryInfo?.lensTags) && queryInfo.lensTags.length
+        ? String(queryInfo.lensTags[0] || '').replace(/-lens$/, '')
+        : '';
+      return OrgIntelligenceService.getHierarchicalFeedbackProfile({
+        buId,
+        functionKey: String(draftLens?.functionKey || '').trim().toLowerCase(),
+        scenarioLensKey: String(draftLens?.key || lensFromQuery || '').trim().toLowerCase()
+      })?.combined || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function _feedbackBoost(indexedDoc, feedbackProfile = null) {
+    if (!feedbackProfile || typeof feedbackProfile !== 'object') return 0;
+    let boost = 0;
+    const docId = String(indexedDoc?.doc?.id || '').trim();
+    if (docId && feedbackProfile.docWeights && Object.prototype.hasOwnProperty.call(feedbackProfile.docWeights, docId)) {
+      boost += Number(feedbackProfile.docWeights[docId] || 0) * 4.5;
+    }
+    const tags = Array.isArray(indexedDoc?.tags) ? indexedDoc.tags : [];
+    tags.forEach((tag) => {
+      if (!tag) return;
+      boost += Number(feedbackProfile.docTagWeights?.[tag] || 0) * 1.4;
+    });
+    if (feedbackProfile.weakCitationPressure > 0 && docId && Number(feedbackProfile.docWeights?.[docId] || 0) < 0) {
+      boost -= Math.min(2.4, Number(feedbackProfile.weakCitationPressure || 0) * 0.08);
+    }
+    return Math.max(-10, Math.min(10, boost));
+  }
+
   // Semantic-style overlap scoring with concept and phrase expansion
-  function scoreDoc(indexedDoc, query, buId) {
+  function scoreDoc(indexedDoc, query, buId, feedbackProfile = null) {
     const queryInfo = typeof query === 'string' ? _expandQuery(query) : query;
     let score = 0;
 
@@ -683,6 +720,7 @@ const RAGService = (() => {
 
     if (indexedDoc.tags.includes('all-bu')) score += 0.75;
     if (indexedDoc.tags.includes('nist') || indexedDoc.tags.includes('iso') || indexedDoc.tags.includes('oecd') || indexedDoc.tags.includes('iec') || /tcfd|ghg protocol|cdp|ccps|api rp/.test((indexedDoc.doc.title || '').toLowerCase())) score += 0.6;
+    score += _feedbackBoost(indexedDoc, feedbackProfile);
 
     const daysSince = (Date.now() - new Date(indexedDoc.doc.lastUpdated).getTime()) / 86400000;
     score += Math.max(0, 1 - daysSince / 365);
@@ -704,9 +742,10 @@ const RAGService = (() => {
     }
 
     const queryInfo = _expandQuery(query);
+    const feedbackProfile = _getFeedbackRetrievalProfile(buId, queryInfo);
     const scored = _indexedDocs.map(indexed => ({
       ...indexed.doc,
-      _score: scoreDoc(indexed, queryInfo, buId),
+      _score: scoreDoc(indexed, queryInfo, buId, feedbackProfile),
       _relevanceReason: _buildRelevanceReasons(indexed, queryInfo, buId).join(' · ')
     }));
 

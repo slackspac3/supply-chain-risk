@@ -254,7 +254,7 @@ function getLearningStore() {
   const cache = ensureUserStateCache();
   if (cache.learningStore && typeof cache.learningStore === 'object') return cache.learningStore;
   try {
-    cache.learningStore = JSON.parse(localStorage.getItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX)) || '{"templates":{},"scenarioPatterns":[],"analystSignals":{"keptRisks":[],"removedRisks":[],"narrativeEdits":[],"rerunDeltas":[]}}');
+    cache.learningStore = JSON.parse(localStorage.getItem(buildUserStorageKey(LEARNING_STORAGE_PREFIX)) || '{"templates":{},"scenarioPatterns":[],"analystSignals":{"keptRisks":[],"removedRisks":[],"narrativeEdits":[],"rerunDeltas":[]},"aiFeedback":{"events":[]}}');
   } catch (error) {
     warnAssessmentPersistenceOnce('learning-store-read', 'getLearningStore local read failed:', error);
     cache.learningStore = {
@@ -265,6 +265,9 @@ function getLearningStore() {
         removedRisks: [],
         narrativeEdits: [],
         rerunDeltas: []
+      },
+      aiFeedback: {
+        events: []
       }
     };
   }
@@ -277,13 +280,16 @@ function saveLearningStore(store) {
     ? cloneDraftStateSnapshot(store, {
         templates: {},
         scenarioPatterns: [],
-        analystSignals: {
-          keptRisks: [],
-          removedRisks: [],
-          narrativeEdits: [],
-          rerunDeltas: []
-        }
-      })
+      analystSignals: {
+        keptRisks: [],
+        removedRisks: [],
+        narrativeEdits: [],
+        rerunDeltas: []
+      },
+      aiFeedback: {
+        events: []
+      }
+    })
     : {
         templates: {},
         scenarioPatterns: [],
@@ -292,6 +298,9 @@ function saveLearningStore(store) {
           removedRisks: [],
           narrativeEdits: [],
           rerunDeltas: []
+        },
+        aiFeedback: {
+          events: []
         }
       };
   try {

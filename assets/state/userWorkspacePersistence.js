@@ -22,6 +22,9 @@
         narrativeEdits: [],
         rerunDeltas: []
       },
+      aiFeedback: {
+        events: []
+      },
       aiMemory: {
         paramHistory: [],
         learnApplied: [],
@@ -59,6 +62,13 @@
       analystSignals: cloned.analystSignals && typeof cloned.analystSignals === 'object'
         ? { ...fallback.analystSignals, ...cloned.analystSignals }
         : fallback.analystSignals,
+      aiFeedback: cloned.aiFeedback && typeof cloned.aiFeedback === 'object'
+        ? {
+            ...fallback.aiFeedback,
+            ...cloned.aiFeedback,
+            events: Array.isArray(cloned.aiFeedback.events) ? cloned.aiFeedback.events : fallback.aiFeedback.events
+          }
+        : fallback.aiFeedback,
       aiMemory: cloned.aiMemory && typeof cloned.aiMemory === 'object'
         ? { ...fallback.aiMemory, ...cloned.aiMemory }
         : fallback.aiMemory

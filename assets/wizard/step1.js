@@ -855,6 +855,114 @@ function renderStep1AiIntakeSummary(draft = {}) {
   </div>`;
 }
 
+const STEP1_AI_FEEDBACK_REASON_OPTIONS = Object.freeze({
+  draft: [
+    { key: 'wrong-domain', label: 'Wrong domain' },
+    { key: 'too-generic', label: 'Too generic' },
+    { key: 'weak-citations', label: 'Weak citations' },
+    { key: 'useful-with-edits', label: 'Useful with edits' }
+  ],
+  shortlist: [
+    { key: 'wrong-domain', label: 'Wrong domain' },
+    { key: 'too-generic', label: 'Too generic' },
+    { key: 'missed-key-risk', label: 'Missed key risk' },
+    { key: 'included-unrelated-risks', label: 'Unrelated risks' },
+    { key: 'weak-citations', label: 'Weak citations' },
+    { key: 'useful-with-edits', label: 'Useful with edits' }
+  ]
+});
+
+function normaliseStep1AiFeedbackReason(value = '') {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function getStep1AiRuntimeMode(draft = AppState.draft) {
+  const source = String(draft?.aiQualityState || draft?.guidedDraftSource || (draft?.llmAssisted ? 'ai' : 'local')).trim().toLowerCase();
+  if (source === 'ai') return 'live_ai';
+  if (source === 'fallback') return 'fallback';
+  return 'local';
+}
+
+function getStep1AiFeedbackTargetState(target = 'draft', draft = AppState.draft) {
+  const feedback = draft?.aiFeedback && typeof draft.aiFeedback === 'object' ? draft.aiFeedback : {};
+  return feedback[target] && typeof feedback[target] === 'object' ? feedback[target] : null;
+}
+
+function buildStep1AiFeedbackScenarioFingerprint(draft = AppState.draft) {
+  return [
+    String(draft?.buId || '').trim(),
+    String(draft?.scenarioLens?.key || '').trim(),
+    String(draft?.guidedInput?.event || '').trim(),
+    String(draft?.guidedInput?.cause || '').trim(),
+    String(draft?.guidedInput?.impact || '').trim(),
+    String(draft?.enhancedNarrative || draft?.narrative || draft?.sourceNarrative || '').trim()
+  ].filter(Boolean).join(' | ').slice(0, 260);
+}
+
+function buildStep1DraftFeedbackOutputFingerprint(draft = AppState.draft) {
+  return String(draft?.guidedDraftPreview || draft?.enhancedNarrative || draft?.narrative || draft?.sourceNarrative || '').trim().slice(0, 260);
+}
+
+function buildStep1ShortlistFeedbackOutputFingerprint(riskCandidates = [], selectedRisks = []) {
+  const shown = (Array.isArray(riskCandidates) ? riskCandidates : []).map(risk => String(risk?.title || '').trim()).filter(Boolean).slice(0, 10);
+  const kept = (Array.isArray(selectedRisks) ? selectedRisks : []).map(risk => String(risk?.title || '').trim()).filter(Boolean).slice(0, 10);
+  return [`shown:${shown.join(', ')}`, `kept:${kept.join(', ')}`].join(' | ').slice(0, 260);
+}
+
+function getStep1AiFeedbackReasons(target = 'draft') {
+  return STEP1_AI_FEEDBACK_REASON_OPTIONS[target] || STEP1_AI_FEEDBACK_REASON_OPTIONS.draft;
+}
+
+function buildStep1AiFeedbackModel(target = 'draft', draft = AppState.draft, riskCandidates = [], selectedRisks = []) {
+  const saved = getStep1AiFeedbackTargetState(target, draft);
+  const source = String(draft?.aiQualityState || draft?.guidedDraftSource || (draft?.llmAssisted ? 'ai' : 'local')).trim().toLowerCase();
+  const visible = target === 'draft'
+    ? !!String(draft?.guidedDraftPreview || draft?.enhancedNarrative || draft?.narrative || '').trim() && source !== 'local'
+    : (Array.isArray(riskCandidates) ? riskCandidates : []).some(risk => !['manual', 'dry-run'].includes(String(risk?.source || '').trim().toLowerCase()));
+  if (!visible) return { visible: false };
+  return {
+    visible: true,
+    target,
+    title: target === 'draft' ? 'Rate the AI scenario draft' : 'Rate the AI risk shortlist',
+    description: target === 'draft'
+      ? 'Score how well the generated draft matches the event path you are trying to assess.'
+      : 'Score how well the generated shortlist stays in scope for this scenario.',
+    score: Number(saved?.score || 3),
+    reasons: Array.isArray(saved?.reasons) ? saved.reasons.map(normaliseStep1AiFeedbackReason).filter(Boolean) : [],
+    savedAt: Number(saved?.savedAt || 0),
+    runtimeMode: String(saved?.runtimeMode || getStep1AiRuntimeMode(draft)).trim(),
+    reasonOptions: getStep1AiFeedbackReasons(target)
+  };
+}
+
+function renderStep1AiFeedbackCard(target = 'draft', draft = AppState.draft, riskCandidates = [], selectedRisks = []) {
+  const model = buildStep1AiFeedbackModel(target, draft, riskCandidates, selectedRisks);
+  if (!model.visible) return '';
+  const savedLabel = model.savedAt
+    ? `Saved ${new Date(model.savedAt).toLocaleString([], { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric' })}`
+    : 'Not yet rated';
+  const scaleCopy = { 1: 'Poor fit', 2: 'Weak', 3: 'Mixed', 4: 'Good', 5: 'Strong' };
+  return `<div class="card wizard-ai-feedback-card mt-4" style="padding:var(--sp-4);background:var(--bg-subtle)">
+    <div class="context-panel-title">${escapeHtml(model.title)}</div>
+    <div class="form-help" style="margin-top:6px">${escapeHtml(model.description)} This improves AI for you first, then for your function, BU, and the shared platform once similar live-AI signals repeat.</div>
+    <div style="display:flex;align-items:center;gap:var(--sp-4);flex-wrap:wrap;margin-top:var(--sp-4)">
+      <label class="form-help" for="ai-feedback-score-${escapeHtml(target)}" style="margin:0;min-width:84px">Score 1-5</label>
+      <input id="ai-feedback-score-${escapeHtml(target)}" class="ai-feedback-score" data-feedback-target="${escapeHtml(target)}" type="range" min="1" max="5" step="1" value="${escapeHtml(String(model.score))}" style="flex:1;min-width:180px">
+      <strong id="ai-feedback-score-label-${escapeHtml(target)}">${escapeHtml(scaleCopy[model.score] || 'Mixed')}</strong>
+    </div>
+    <div class="citation-chips" style="margin-top:var(--sp-4)">
+      ${model.reasonOptions.map((reason) => {
+        const active = model.reasons.includes(reason.key);
+        return `<button class="btn ${active ? 'btn--secondary' : 'btn--ghost'} btn--sm ai-feedback-reason" data-feedback-target="${escapeHtml(target)}" data-feedback-reason="${escapeHtml(reason.key)}" type="button" aria-pressed="${active ? 'true' : 'false'}">${escapeHtml(reason.label)}</button>`;
+      }).join('')}
+    </div>
+    <div class="admin-inline-actions mt-4" style="align-items:center">
+      <button class="btn btn--secondary btn--sm btn-save-ai-feedback" data-feedback-target="${escapeHtml(target)}" type="button">Save feedback</button>
+      <span class="form-help" id="ai-feedback-status-${escapeHtml(target)}">${escapeHtml(savedLabel)} · ${escapeHtml(String(model.runtimeMode === 'live_ai' ? 'Live AI' : model.runtimeMode === 'fallback' ? 'Fallback guidance' : 'Local guidance'))}</span>
+    </div>
+  </div>`;
+}
+
 function getStep1ScenarioMemoryNarrative(draft = AppState.draft) {
   return String(
     draft?.enhancedNarrative
@@ -1235,7 +1343,7 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
       <div class="context-panel-title">Draft preview</div>
       ${draftPreviewStatus ? `<div class="form-help" style="margin-top:4px">${draftPreviewSource === 'ai' ? 'AI-built draft' : draftPreviewSource === 'fallback' ? 'Context-kept draft' : 'Local draft'} · ${escapeHtml(draftPreviewStatus)}</div>` : ''}
       <p class="context-panel-copy" id="guided-preview">${escapeHtml(String(draftPreview))}</p>
-    </div>` : '<div class="form-help wizard-preview-placeholder" id="guided-preview">Answer the prompts and build the draft. The platform will create a clean starting statement for you.</div>'}
+    </div>${renderStep1AiFeedbackCard('draft', draft)}` : '<div class="form-help wizard-preview-placeholder" id="guided-preview">Answer the prompts and build the draft. The platform will create a clean starting statement for you.</div>'}
   </div>`;
 }
 
@@ -1283,6 +1391,7 @@ function renderStep1ScopeBand({ draft, selectedRisks, riskCandidates, regs }) {
       <div id="selected-risks-wrap">
         ${renderSelectedRiskCards(riskCandidates, selectedRisks, regs)}
       </div>
+      ${renderStep1AiFeedbackCard('shortlist', draft, riskCandidates, selectedRisks)}
     </div>
   </section>`;
 }
@@ -3280,6 +3389,7 @@ function renderWizard1() {
   bindStep1ScenarioActions({ buList, settings, exampleModel });
   bindStep1NavigationActions({ buList, settings, wizardGeographyInput });
   bindRiskCardActions({ buList });
+  bindStep1AiFeedbackActions({ buList });
   bindStep1ScenarioCrossReferenceActions();
   bindStep1ScenarioMemoryActions();
   if (scenarioMemoryState.matches.length >= 2 && String(AppState.draft.scenarioMemoryPrecedentSignature || '').trim() !== String(scenarioMemoryState.signature || '').trim()) {
@@ -3352,6 +3462,19 @@ function getStep1RiskSignalSummary(assessmentSignals = {}) {
   });
 }
 
+function getStep1HierarchicalFeedbackProfile(assessmentSignals = {}) {
+  try {
+    if (typeof OrgIntelligenceService === 'undefined' || typeof OrgIntelligenceService.getHierarchicalFeedbackProfile !== 'function') return null;
+    return OrgIntelligenceService.getHierarchicalFeedbackProfile({
+      buId: AppState.draft?.buId || '',
+      functionKey: assessmentSignals?.scenarioLens?.functionKey || '',
+      scenarioLensKey: assessmentSignals?.scenarioLens?.key || ''
+    });
+  } catch {
+    return null;
+  }
+}
+
 function recordStep1RiskDecision(risk, action = 'keep') {
   const username = AuthService.getCurrentUser()?.username || '';
   if (!username || typeof LearningStore === 'undefined' || typeof LearningStore.recordRiskDecision !== 'function' || !risk) return;
@@ -3374,7 +3497,15 @@ function countAssessmentMatches(tokens, haystack) {
   return tokens.reduce((count, token) => count + (haystack.includes(token) ? 1 : 0), 0);
 }
 
-function scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds, feedbackSummary = null) {
+function lookupStep1FeedbackRiskWeight(feedbackProfile = null, riskTitle = '') {
+  if (!feedbackProfile || typeof feedbackProfile !== 'object' || !riskTitle) return 0;
+  const target = normaliseLearningRiskKey(riskTitle);
+  return Object.entries(feedbackProfile.riskWeights || {}).reduce((best, [title, value]) => {
+    return normaliseLearningRiskKey(title) === target ? Number(value || 0) : best;
+  }, 0);
+}
+
+function scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds, feedbackSummary = null, feedbackProfile = null) {
   let score = 0;
   const reasons = [];
   const haystack = getRiskAssessmentHaystack(risk);
@@ -3436,6 +3567,17 @@ function scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds, fee
   } else if (removedCount > keptCount) {
     score -= Math.min(5, removedCount * 1.5);
     reasons.push('Analysts in similar scenarios often remove this risk as out of scope.');
+  }
+  const sharedRiskWeight = lookupStep1FeedbackRiskWeight(feedbackProfile?.combined, risk.title);
+  if (sharedRiskWeight > 0.35) {
+    score += Math.min(4.5, sharedRiskWeight * 1.7);
+    reasons.push('Repeated live-AI feedback across similar scenarios tends to keep this risk in scope.');
+  } else if (sharedRiskWeight < -0.35) {
+    score -= Math.min(4.5, Math.abs(sharedRiskWeight) * 1.7);
+    reasons.push('Repeated live-AI feedback across similar scenarios tends to remove this risk as out of scope.');
+  }
+  if (!hasLensMatch && Number(feedbackProfile?.combined?.wrongDomainPressure || 0) > 0) {
+    score -= Math.min(2.5, Number(feedbackProfile.combined.wrongDomainPressure || 0) * 0.12);
   }
 
   const fit = selectedIds.has(risk.id)
@@ -3513,9 +3655,10 @@ function renderSelectedRiskCards(riskCandidates, selectedRisks, regulations) {
   const narrative = AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || composeStep1GuidedNarrative(AppState.draft.guidedInput, getEffectiveSettings(), AppState.draft) || '';
   const assessmentSignals = buildStep1AssessmentSignals(narrative);
   const feedbackSummary = getStep1RiskSignalSummary(assessmentSignals);
+  const hierarchicalFeedback = getStep1HierarchicalFeedbackProfile(assessmentSignals);
   const ranked = cleanedRisks
     .map(risk => {
-      const match = scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds, feedbackSummary);
+      const match = scoreRiskForCurrentAssessment(risk, assessmentSignals, selectedIds, feedbackSummary, hierarchicalFeedback);
       return { risk, match, score: match.score };
     })
     .sort((a, b) => b.score - a.score || String(a.risk.title || '').localeCompare(String(b.risk.title || '')));
@@ -3609,6 +3752,101 @@ function bindRiskCardActions({ buList = getBUList() } = {}) {
       AppState.draft.selectedRiskIds = (AppState.draft.selectedRiskIds || []).filter(id => id !== btn.dataset.riskId);
       syncRiskSelection();
       persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
+    });
+  });
+}
+
+function updateStep1AiFeedbackScoreLabel(target = 'draft', score = 3) {
+  const labelEl = document.getElementById(`ai-feedback-score-label-${target}`);
+  if (!labelEl) return;
+  const safeScore = Math.max(1, Math.min(5, Math.round(Number(score || 3))));
+  const labels = { 1: 'Poor fit', 2: 'Weak', 3: 'Mixed', 4: 'Good', 5: 'Strong' };
+  labelEl.textContent = labels[safeScore] || 'Mixed';
+}
+
+function getSelectedStep1AiFeedbackReasons(target = 'draft') {
+  return Array.from(document.querySelectorAll(`.ai-feedback-reason[data-feedback-target="${target}"][aria-pressed="true"]`))
+    .map(button => normaliseStep1AiFeedbackReason(button.dataset.feedbackReason || ''))
+    .filter(Boolean);
+}
+
+async function saveStep1AiFeedback(target = 'draft', { buList = getBUList() } = {}) {
+  const scoreEl = document.getElementById(`ai-feedback-score-${target}`);
+  if (!scoreEl) return;
+  const score = Math.max(1, Math.min(5, Math.round(Number(scoreEl.value || 3))));
+  const reasons = getSelectedStep1AiFeedbackReasons(target);
+  const username = AuthService.getCurrentUser()?.username || '';
+  const runtimeMode = getStep1AiRuntimeMode(AppState.draft);
+  const riskCandidates = getRiskCandidates();
+  const selectedRisks = getSelectedRisks();
+  const bu = (Array.isArray(buList) ? buList : []).find(item => item?.id === AppState.draft?.buId) || null;
+  const payload = {
+    target,
+    score,
+    reasons,
+    runtimeMode,
+    buId: AppState.draft?.buId || '',
+    buName: bu?.name || AppState.draft?.buName || '',
+    functionKey: AppState.draft?.scenarioLens?.functionKey || '',
+    lensKey: AppState.draft?.scenarioLens?.key || '',
+    scenarioFingerprint: buildStep1AiFeedbackScenarioFingerprint(AppState.draft),
+    outputFingerprint: target === 'draft'
+      ? buildStep1DraftFeedbackOutputFingerprint(AppState.draft)
+      : buildStep1ShortlistFeedbackOutputFingerprint(riskCandidates, selectedRisks),
+    shownRiskTitles: riskCandidates.map(risk => risk?.title || ''),
+    keptRiskTitles: selectedRisks.map(risk => risk?.title || ''),
+    removedRiskTitles: riskCandidates
+      .filter(risk => !selectedRisks.some(selected => selected?.id === risk?.id))
+      .map(risk => risk?.title || ''),
+    addedRiskTitles: selectedRisks
+      .filter(risk => String(risk?.source || '').trim().toLowerCase() === 'manual')
+      .map(risk => risk?.title || ''),
+    citations: Array.isArray(AppState.draft?.citations) ? AppState.draft.citations : [],
+    submittedBy: username
+  };
+  if (username && typeof LearningStore !== 'undefined' && typeof LearningStore.recordAiFeedback === 'function') {
+    const localEvent = LearningStore.recordAiFeedback(username, payload);
+    if (localEvent && typeof patchLearningStore === 'function' && typeof LearningStore.getLearningStore === 'function') {
+      patchLearningStore({ aiFeedback: LearningStore.getLearningStore(username).aiFeedback });
+    }
+  }
+  if (typeof OrgIntelligenceService !== 'undefined' && typeof OrgIntelligenceService.recordAiFeedback === 'function') {
+    try {
+      await OrgIntelligenceService.recordAiFeedback(payload);
+    } catch {}
+  }
+  AppState.draft.aiFeedback = {
+    ...(AppState.draft.aiFeedback && typeof AppState.draft.aiFeedback === 'object' ? AppState.draft.aiFeedback : {}),
+    [target]: {
+      score,
+      reasons,
+      runtimeMode,
+      savedAt: Date.now()
+    }
+  };
+  saveDraft();
+  UI.toast(target === 'draft' ? 'Saved scenario-draft feedback.' : 'Saved shortlist feedback.', 'success');
+  persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: false, preserveScroll: true });
+}
+
+function bindStep1AiFeedbackActions({ buList = getBUList() } = {}) {
+  document.querySelectorAll('.ai-feedback-score').forEach((input) => {
+    updateStep1AiFeedbackScoreLabel(input.dataset.feedbackTarget || 'draft', input.value);
+    input.addEventListener('input', () => {
+      updateStep1AiFeedbackScoreLabel(input.dataset.feedbackTarget || 'draft', input.value);
+    });
+  });
+  document.querySelectorAll('.ai-feedback-reason').forEach((button) => {
+    button.addEventListener('click', () => {
+      const active = button.getAttribute('aria-pressed') === 'true';
+      button.setAttribute('aria-pressed', active ? 'false' : 'true');
+      button.classList.toggle('btn--secondary', !active);
+      button.classList.toggle('btn--ghost', active);
+    });
+  });
+  document.querySelectorAll('.btn-save-ai-feedback').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await saveStep1AiFeedback(button.dataset.feedbackTarget || 'draft', { buList });
     });
   });
 }

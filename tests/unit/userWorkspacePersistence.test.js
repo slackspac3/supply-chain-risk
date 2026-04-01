@@ -20,6 +20,7 @@ test('normaliseUserWorkspaceState migrates legacy draft and assessments into bou
   assert.equal(state.draftWorkspace.draft.id, 'draft-1');
   assert.equal(state.savedAssessments.index[0].id, 'a-1');
   assert.equal(state.assessments[0].scenarioTitle, 'Assessment one');
+  assert.deepEqual(state.learningStore.aiFeedback, { events: [] });
 });
 
 test('serializeUserWorkspaceState keeps the canonical bounded sections without duplicating legacy fields', () => {

@@ -1,0 +1,85 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+function createStorage() {
+  const store = new Map();
+  return {
+    getItem(key) {
+      return store.has(key) ? store.get(key) : null;
+    },
+    setItem(key, value) {
+      store.set(key, String(value));
+    },
+    removeItem(key) {
+      store.delete(key);
+    },
+    clear() {
+      store.clear();
+    }
+  };
+}
+
+global.localStorage = createStorage();
+const LearningStore = require('../../assets/state/learningStore.js');
+
+test.beforeEach(() => {
+  global.localStorage.clear();
+});
+
+test('recordAiFeedback stores bounded structured events and builds a profile from live AI signals', () => {
+  LearningStore.recordAiFeedback('alex', {
+    target: 'shortlist',
+    score: 2,
+    runtimeMode: 'live_ai',
+    buId: 'corp-fin',
+    functionKey: 'finance',
+    lensKey: 'financial',
+    reasons: ['wrong-domain', 'included unrelated risks'],
+    shownRiskTitles: ['Counterparty default and bad-debt exposure', 'Privileged account takeover'],
+    keptRiskTitles: ['Counterparty default and bad-debt exposure'],
+    removedRiskTitles: ['Privileged account takeover'],
+    citations: [{ docId: 'doc-fin-1', tags: ['financial', 'collections'] }],
+    submittedBy: 'alex'
+  });
+  LearningStore.recordAiFeedback('alex', {
+    target: 'shortlist',
+    score: 5,
+    runtimeMode: 'live_ai',
+    buId: 'corp-fin',
+    functionKey: 'finance',
+    lensKey: 'financial',
+    reasons: ['useful-with-edits'],
+    shownRiskTitles: ['Counterparty default and bad-debt exposure', 'Receivables recovery shortfall'],
+    keptRiskTitles: ['Counterparty default and bad-debt exposure', 'Receivables recovery shortfall'],
+    citations: [{ docId: 'doc-fin-1', tags: ['financial'] }],
+    submittedBy: 'alex'
+  });
+  LearningStore.recordAiFeedback('alex', {
+    target: 'draft',
+    score: 1,
+    runtimeMode: 'fallback',
+    buId: 'corp-fin',
+    functionKey: 'finance',
+    lensKey: 'financial',
+    reasons: ['too-generic'],
+    submittedBy: 'alex'
+  });
+
+  const profile = LearningStore.getAiFeedbackProfile('alex', {
+    buId: 'corp-fin',
+    functionKey: 'finance',
+    lensKey: 'financial'
+  });
+
+  assert.equal(profile.totalEvents, 3);
+  assert.equal(profile.liveAiEvents, 2);
+  assert.equal(profile.shortlist.count, 2);
+  assert.equal(profile.runtimeCounts.fallback, 1);
+  assert.equal(profile.wrongDomainCount, 1);
+  assert.equal(profile.unrelatedRiskCount, 1);
+  assert.ok(profile.topPositiveRisks.some(item => item.title === 'Counterparty default and bad-debt exposure'));
+  assert.ok(profile.topNegativeRisks.some(item => item.title === 'Privileged account takeover'));
+  assert.ok(profile.topPositiveDocs.some(item => item.docId === 'doc-fin-1'));
+});

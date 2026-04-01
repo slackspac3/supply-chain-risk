@@ -4,6 +4,7 @@ const ORG_PATTERNS_KEY = 'risk_calculator_org_patterns';
 const ORG_CALIBRATION_KEY = 'risk_calculator_org_calibration';
 const DECISION_HISTORY_KEY = 'risk_calculator_decision_history';
 const COVERAGE_MAP_KEY = 'org_coverage_map';
+const AI_FEEDBACK_KEY = 'risk_calculator_ai_feedback';
 
 function getKvUrl() {
   return process.env.APPLE_CAT || process.env.FOO_URL_TEST || process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
@@ -86,6 +87,13 @@ function createEmptyCalibrationStore() {
   return {
     updatedAt: 0,
     scenarioTypes: {}
+  };
+}
+
+function createEmptyFeedbackStore() {
+  return {
+    updatedAt: 0,
+    events: []
   };
 }
 
@@ -240,6 +248,74 @@ function appendDecision(decisions, decision = {}) {
   return [item, ...(Array.isArray(decisions) ? decisions : [])].slice(0, 240);
 }
 
+function normaliseReasonTag(value) {
+  return toSafeString(value, 80).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function normaliseRuntimeMode(value) {
+  const raw = toSafeString(value, 40).toLowerCase();
+  if (raw === 'live_ai' || raw === 'live-ai' || raw === 'live') return 'live_ai';
+  if (raw === 'fallback' || raw === 'stub') return 'fallback';
+  return 'local';
+}
+
+function normaliseFeedbackTarget(value) {
+  return toSafeString(value, 40).toLowerCase() === 'shortlist' ? 'shortlist' : 'draft';
+}
+
+function normaliseTitleList(list, limit = 10, max = 160) {
+  return Array.from(new Set(
+    (Array.isArray(list) ? list : [])
+      .map(item => toSafeString(item, max))
+      .filter(Boolean)
+  )).slice(0, limit);
+}
+
+function normaliseCitationList(list) {
+  return (Array.isArray(list) ? list : [])
+    .map(item => ({
+      docId: toSafeString(item?.docId || item?.id, 120),
+      title: toSafeString(item?.title || item?.sourceTitle, 180),
+      tags: normaliseTitleList(item?.tags, 8, 60)
+    }))
+    .filter(item => item.docId || item.title)
+    .slice(0, 8);
+}
+
+function normaliseFeedbackEvent(event = {}, session = {}) {
+  const score = Math.max(1, Math.min(5, Math.round(Number(event.score || 0))));
+  return {
+    id: toSafeString(event.id || `feedback_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, 120),
+    target: normaliseFeedbackTarget(event.target),
+    recordedAt: Number(event.recordedAt || Date.now()),
+    runtimeMode: normaliseRuntimeMode(event.runtimeMode),
+    buId: toSafeString(event.buId, 80),
+    buName: toSafeString(event.buName, 160),
+    functionKey: toSafeString(event.functionKey, 80).toLowerCase(),
+    lensKey: normaliseScenarioKey(event.lensKey || event.scenarioLensKey || event.scenarioType || 'general'),
+    score,
+    reasons: Array.from(new Set((Array.isArray(event.reasons) ? event.reasons : []).map(normaliseReasonTag).filter(Boolean))).slice(0, 6),
+    scenarioFingerprint: toSafeString(event.scenarioFingerprint, 260),
+    outputFingerprint: toSafeString(event.outputFingerprint, 260),
+    shownRiskTitles: normaliseTitleList(event.shownRiskTitles, 10),
+    keptRiskTitles: normaliseTitleList(event.keptRiskTitles, 10),
+    removedRiskTitles: normaliseTitleList(event.removedRiskTitles, 10),
+    addedRiskTitles: normaliseTitleList(event.addedRiskTitles, 10),
+    citations: normaliseCitationList(event.citations),
+    submittedBy: toSafeUsername(event.submittedBy || session?.username)
+  };
+}
+
+function appendFeedbackEvent(store, event = {}, session = {}) {
+  const next = isPlainObject(store) ? { ...store } : createEmptyFeedbackStore();
+  next.events = Array.isArray(next.events) ? next.events.slice() : [];
+  const item = normaliseFeedbackEvent(event, session);
+  if (!item.score) return next;
+  next.events = [item, ...next.events.filter(existing => existing?.id !== item.id)].slice(0, 600);
+  next.updatedAt = Date.now();
+  return next;
+}
+
 function updateCoverageMap(map, payload = {}) {
   const next = isPlainObject(map) ? { ...map } : { updatedAt: 0, scenarioTypes: {} };
   next.scenarioTypes = isPlainObject(next.scenarioTypes) ? { ...next.scenarioTypes } : {};
@@ -302,17 +378,19 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       const session = requireSession(req, res);
       if (!session) return;
-      const [patterns, calibration, decisions, coverageMap] = await Promise.all([
+      const [patterns, calibration, decisions, coverageMap, feedback] = await Promise.all([
         readJsonKey(ORG_PATTERNS_KEY, []),
         readJsonKey(ORG_CALIBRATION_KEY, createEmptyCalibrationStore()),
         readJsonKey(DECISION_HISTORY_KEY, []),
-        readJsonKey(COVERAGE_MAP_KEY, { updatedAt: 0, scenarioTypes: {} })
+        readJsonKey(COVERAGE_MAP_KEY, { updatedAt: 0, scenarioTypes: {} }),
+        readJsonKey(AI_FEEDBACK_KEY, createEmptyFeedbackStore())
       ]);
       res.status(200).json({
         patterns: Array.isArray(patterns) ? patterns : [],
         calibration: isPlainObject(calibration) ? calibration : createEmptyCalibrationStore(),
         decisions: Array.isArray(decisions) ? decisions : [],
-        coverageMap: isPlainObject(coverageMap) ? coverageMap : { updatedAt: 0, scenarioTypes: {} }
+        coverageMap: isPlainObject(coverageMap) ? coverageMap : { updatedAt: 0, scenarioTypes: {} },
+        feedback: isPlainObject(feedback) ? feedback : createEmptyFeedbackStore()
       });
       return;
     }
@@ -351,6 +429,13 @@ module.exports = async function handler(req, res) {
         const nextDecisions = appendDecision(decisions, decision);
         await writeJsonKey(DECISION_HISTORY_KEY, nextDecisions);
         res.status(200).json({ ok: true, decisions: nextDecisions });
+        return;
+      }
+      if (type === 'record_feedback') {
+        const feedback = await readJsonKey(AI_FEEDBACK_KEY, createEmptyFeedbackStore());
+        const nextFeedback = appendFeedbackEvent(feedback, body.feedback || {}, session);
+        await writeJsonKey(AI_FEEDBACK_KEY, nextFeedback);
+        res.status(200).json({ ok: true, feedback: nextFeedback });
         return;
       }
       sendApiError(res, 400, 'VALIDATION_ERROR', 'Unsupported type.');

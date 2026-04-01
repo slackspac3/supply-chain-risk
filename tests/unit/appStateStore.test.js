@@ -23,6 +23,9 @@ const expectedLearningStore = {
     removedRisks: [],
     narrativeEdits: [],
     rerunDeltas: []
+  },
+  aiFeedback: {
+    events: []
   }
 };
 

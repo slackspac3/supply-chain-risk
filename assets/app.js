@@ -79,6 +79,9 @@ function buildDefaultLearningStoreState() {
       narrativeEdits: [],
       rerunDeltas: []
     },
+    aiFeedback: {
+      events: []
+    },
     aiMemory: {
       paramHistory: [],
       learnApplied: [],
@@ -8089,6 +8092,22 @@ function renderHelpPage() {
               tone: 'trust',
               title: 'Practical rule for pilot and staging',
               body: 'If AI quality matters for the current session, confirm the live path first. If the platform says local fallback guidance is active, do not treat the AI output as equivalent to a verified live run.'
+            })}
+          `
+        }),
+        renderHelpDisclosure('context', {
+          title: 'How feedback improves AI over time',
+          summary: 'Ratings improve retrieval and ranking in tiers; they do not instantly retrain the model.',
+          body: `
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>What you rate</strong><p>In Step 1, rate the generated scenario draft and generated shortlist on a 1-5 scale, then add short reason tags if the issue was wrong domain, weak citations, missed risks, unrelated risks, or generic wording.</p></div>
+              <div class="help-mini-card"><strong>What changes first</strong><p>Your own repeated feedback shapes your personal guidance first. When similar live-AI signals repeat across users, the same pattern can start shaping function, BU, and wider platform behaviour.</p></div>
+              <div class="help-mini-card"><strong>What the platform learns</strong><p>The app uses repeated signals to improve retrieval relevance, shortlist ordering, and prompt/context priors. It does not treat every single rating as instant model retraining.</p></div>
+            </div>
+            ${renderHelpCallout({
+              tone: 'best',
+              title: 'Important guardrail',
+              body: 'Live-AI feedback and fallback-mode feedback are tracked separately. Fallback keeps the workflow moving, but it does not automatically become shared pilot-quality learning for everyone.'
             })}
           `
         })

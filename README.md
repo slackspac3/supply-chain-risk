@@ -188,6 +188,48 @@ The intended operating loop is:
 
 This keeps the benchmark grounded by a stable gold set while still using AI as a semantic checker and user behaviour as a source of new benchmark cases.
 
+## AI Feedback Learning Loop
+
+The product now includes a structured Step 1 AI feedback loop for:
+- the generated scenario draft
+- the generated risk shortlist
+
+Current behavior:
+- users can rate each on a 1-5 scale
+- users can attach concise reason tags such as:
+  - wrong domain
+  - too generic
+  - missed key risk
+  - unrelated risks
+  - weak citations
+  - useful with edits
+- feedback is stored with the active runtime mode:
+  - `live_ai`
+  - `fallback`
+  - `local`
+
+How that feedback improves the platform:
+- individual user signals apply first and immediately
+- repeated live-AI signals can then shape:
+  - function-level priors
+  - BU-level priors
+  - global shared priors
+- those priors are used to improve:
+  - Step 1 shortlist ordering
+  - RAG document weighting
+  - prompt/context priors in `LLMService`
+
+Important guardrails:
+- fallback feedback is tracked separately from live-AI feedback
+- local fallback continuity does not automatically become shared pilot-quality learning
+- repeated shared patterns are promoted upward only after enough corroborating live-AI signals
+- this is not direct online model retraining
+- the current system improves retrieval, ranking, and prompt assembly first; curated offline review is still the path for benchmark and model-training updates
+
+Practical implication:
+- better-quality repeated feedback should make similar scenarios land more cleanly for the same user first
+- then for the wider function, BU, and platform once the signal is strong enough
+
 ## Product Quality Highlights
 
 Current productization work now includes:

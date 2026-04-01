@@ -39,6 +39,9 @@ const learningStore = {
     removedRisks: [],
     narrativeEdits: [],
     rerunDeltas: []
+  },
+  aiFeedback: {
+    events: []
   }
 };
 

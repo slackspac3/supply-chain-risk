@@ -7,11 +7,15 @@ const LearningStore = (() => {
     narrativeEdits: [],
     rerunDeltas: []
   };
+  const DEFAULT_AI_FEEDBACK = {
+    events: []
+  };
 
   const DEFAULT_STORE = {
     templates: {},
     scenarioPatterns: [],
-    analystSignals: DEFAULT_ANALYST_SIGNALS
+    analystSignals: DEFAULT_ANALYST_SIGNALS,
+    aiFeedback: DEFAULT_AI_FEEDBACK
   };
 
   function _normalizeUsername(username) {
@@ -31,6 +35,9 @@ const LearningStore = (() => {
         removedRisks: [],
         narrativeEdits: [],
         rerunDeltas: []
+      },
+      aiFeedback: {
+        events: []
       }
     };
   }
@@ -49,6 +56,91 @@ const LearningStore = (() => {
     };
   }
 
+  function _normaliseReasonTag(value = '') {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60);
+  }
+
+  function _normaliseFeedbackTitleList(list = [], limit = 10, max = 160) {
+    return Array.from(new Set(
+      (Array.isArray(list) ? list : [])
+        .map(item => _normaliseText(item, max))
+        .filter(Boolean)
+    )).slice(0, limit);
+  }
+
+  function _normaliseFeedbackCitationList(list = []) {
+    return (Array.isArray(list) ? list : [])
+      .map(item => ({
+        docId: _normaliseText(item?.docId || item?.id || '', 120),
+        title: _normaliseText(item?.title || item?.sourceTitle || '', 180),
+        tags: _normaliseFeedbackTitleList(item?.tags, 8, 60)
+      }))
+      .filter(item => item.docId || item.title)
+      .slice(0, 8);
+  }
+
+  function _normaliseRuntimeMode(value = '') {
+    const raw = String(value || '').trim().toLowerCase();
+    if (raw === 'live_ai' || raw === 'live-ai' || raw === 'live') return 'live_ai';
+    if (raw === 'fallback' || raw === 'stub') return 'fallback';
+    return 'local';
+  }
+
+  function _normaliseFeedbackTarget(value = '') {
+    return String(value || '').trim().toLowerCase() === 'shortlist' ? 'shortlist' : 'draft';
+  }
+
+  function _clampScore(value) {
+    const score = Number(value);
+    if (!Number.isFinite(score)) return 0;
+    return Math.max(1, Math.min(5, Math.round(score)));
+  }
+
+  function _normaliseAiFeedbackEvent(payload = {}) {
+    const target = _normaliseFeedbackTarget(payload?.target);
+    const score = _clampScore(payload?.score);
+    return {
+      id: _normaliseText(payload?.id || _generateId('feedback'), 120),
+      target,
+      recordedAt: Number(payload?.recordedAt || Date.now()),
+      runtimeMode: _normaliseRuntimeMode(payload?.runtimeMode),
+      buId: _normaliseText(payload?.buId || '', 64),
+      functionKey: _inferFunctionKey(payload),
+      lensKey: _normaliseLensKey(payload),
+      score,
+      reasons: Array.from(new Set(
+        (Array.isArray(payload?.reasons) ? payload.reasons : [])
+          .map(_normaliseReasonTag)
+          .filter(Boolean)
+      )).slice(0, 6),
+      scenarioFingerprint: _normaliseText(payload?.scenarioFingerprint || '', 260),
+      outputFingerprint: _normaliseText(payload?.outputFingerprint || '', 260),
+      shownRiskTitles: _normaliseFeedbackTitleList(payload?.shownRiskTitles, 10),
+      keptRiskTitles: _normaliseFeedbackTitleList(payload?.keptRiskTitles, 10),
+      removedRiskTitles: _normaliseFeedbackTitleList(payload?.removedRiskTitles, 10),
+      addedRiskTitles: _normaliseFeedbackTitleList(payload?.addedRiskTitles, 10),
+      citations: _normaliseFeedbackCitationList(payload?.citations),
+      submittedBy: _normalizeUsername(payload?.submittedBy || '')
+    };
+  }
+
+  function _normaliseAiFeedbackSection(section) {
+    const source = section && typeof section === 'object' ? section : {};
+    return {
+      events: Array.isArray(source.events)
+        ? source.events
+            .map(_normaliseAiFeedbackEvent)
+            .filter(item => item.score >= 1 && item.score <= 5)
+            .slice(0, 120)
+        : []
+    };
+  }
+
   function _normalizeStore(store) {
     const source = store && typeof store === 'object' ? store : {};
     const templates = source.templates && typeof source.templates === 'object'
@@ -58,7 +150,8 @@ const LearningStore = (() => {
       ? source.scenarioPatterns
       : [];
     const analystSignals = _normaliseAnalystSignals(source.analystSignals);
-    return { templates, scenarioPatterns, analystSignals };
+    const aiFeedback = _normaliseAiFeedbackSection(source.aiFeedback);
+    return { templates, scenarioPatterns, analystSignals, aiFeedback };
   }
 
   function _generateId(prefix) {
@@ -192,6 +285,146 @@ const LearningStore = (() => {
     const safeKey = _normaliseText(key || '', 180);
     if (!safeKey) return;
     target[safeKey] = Number(target[safeKey] || 0) + 1;
+  }
+
+  function _incrementWeightedMapValue(target, key, amount = 0, max = 180) {
+    const safeKey = _normaliseText(key || '', max);
+    if (!safeKey || !Number.isFinite(amount) || amount === 0) return;
+    target[safeKey] = Number(target[safeKey] || 0) + amount;
+  }
+
+  function _feedbackMatches(event = {}, filters = {}) {
+    if (_signalMatches(event, filters) === false) return false;
+    const target = _normaliseFeedbackTarget(filters?.target || '');
+    if (filters?.target && event.target !== target) return false;
+    const runtimeModes = Array.isArray(filters?.runtimeModes) && filters.runtimeModes.length
+      ? filters.runtimeModes.map(_normaliseRuntimeMode)
+      : [];
+    if (runtimeModes.length && !runtimeModes.includes(_normaliseRuntimeMode(event.runtimeMode))) return false;
+    return true;
+  }
+
+  function _scoreDelta(score) {
+    return (_clampScore(score) - 3) / 2;
+  }
+
+  function _buildEmptyAiFeedbackProfile() {
+    return {
+      totalEvents: 0,
+      liveAiEvents: 0,
+      distinctUsers: 0,
+      runtimeCounts: {
+        live_ai: 0,
+        fallback: 0,
+        local: 0
+      },
+      draft: {
+        count: 0,
+        averageScore: 0,
+        totalScore: 0,
+        reasons: {}
+      },
+      shortlist: {
+        count: 0,
+        averageScore: 0,
+        totalScore: 0,
+        reasons: {}
+      },
+      riskWeights: {},
+      docWeights: {},
+      docTagWeights: {},
+      wrongDomainCount: 0,
+      weakCitationCount: 0,
+      missedRiskCount: 0,
+      unrelatedRiskCount: 0,
+      usefulWithEditsCount: 0,
+      latestAt: 0,
+      topPositiveRisks: [],
+      topNegativeRisks: [],
+      topPositiveDocs: [],
+      topNegativeDocs: []
+    };
+  }
+
+  function _finaliseAiFeedbackProfile(profile = {}) {
+    const next = profile && typeof profile === 'object' ? profile : _buildEmptyAiFeedbackProfile();
+    if (next.draft.count) {
+      next.draft.averageScore = Number((next.draft.totalScore / next.draft.count).toFixed(2));
+    }
+    if (next.shortlist.count) {
+      next.shortlist.averageScore = Number((next.shortlist.totalScore / next.shortlist.count).toFixed(2));
+    }
+    next.topPositiveRisks = Object.entries(next.riskWeights || {})
+      .filter(([, value]) => Number(value) > 0.35)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([title, weight]) => ({ title, weight: Number(weight.toFixed(2)) }));
+    next.topNegativeRisks = Object.entries(next.riskWeights || {})
+      .filter(([, value]) => Number(value) < -0.35)
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([title, weight]) => ({ title, weight: Number(weight.toFixed(2)) }));
+    next.topPositiveDocs = Object.entries(next.docWeights || {})
+      .filter(([, value]) => Number(value) > 0.35)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([docId, weight]) => ({ docId, weight: Number(weight.toFixed(2)) }));
+    next.topNegativeDocs = Object.entries(next.docWeights || {})
+      .filter(([, value]) => Number(value) < -0.35)
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([docId, weight]) => ({ docId, weight: Number(weight.toFixed(2)) }));
+    return next;
+  }
+
+  function _buildAiFeedbackProfile(events = []) {
+    const profile = _buildEmptyAiFeedbackProfile();
+    const submitters = new Set();
+    (Array.isArray(events) ? events : []).forEach(event => {
+      if (!event || !_clampScore(event.score)) return;
+      profile.totalEvents += 1;
+      profile.latestAt = Math.max(profile.latestAt, Number(event.recordedAt || 0));
+      const runtimeMode = _normaliseRuntimeMode(event.runtimeMode);
+      profile.runtimeCounts[runtimeMode] = Number(profile.runtimeCounts[runtimeMode] || 0) + 1;
+      if (runtimeMode === 'live_ai') profile.liveAiEvents += 1;
+      if (event.submittedBy) submitters.add(event.submittedBy);
+      const bucket = event.target === 'shortlist' ? profile.shortlist : profile.draft;
+      bucket.count += 1;
+      bucket.totalScore += Number(event.score || 0);
+      (Array.isArray(event.reasons) ? event.reasons : []).forEach(reason => {
+        bucket.reasons[reason] = Number(bucket.reasons[reason] || 0) + 1;
+        if (reason === 'wrong-domain') profile.wrongDomainCount += 1;
+        if (reason === 'weak-citations') profile.weakCitationCount += 1;
+        if (reason === 'missed-key-risk') profile.missedRiskCount += 1;
+        if (reason === 'included-unrelated-risks') profile.unrelatedRiskCount += 1;
+        if (reason === 'useful-with-edits') profile.usefulWithEditsCount += 1;
+      });
+      if (runtimeMode !== 'live_ai') return;
+      const baseDelta = _scoreDelta(event.score);
+      const draftWeight = event.target === 'draft' ? 0.9 : 0.45;
+      const shortlistWeight = event.target === 'shortlist' ? 0.95 : 0.3;
+      (Array.isArray(event.citations) ? event.citations : []).forEach((citation) => {
+        const docDelta = baseDelta * (event.target === 'shortlist' ? 1.25 : 1);
+        _incrementWeightedMapValue(profile.docWeights, citation.docId || citation.title, docDelta, 120);
+        (Array.isArray(citation.tags) ? citation.tags : []).forEach((tag) => {
+          _incrementWeightedMapValue(profile.docTagWeights, tag, docDelta * 0.65, 60);
+        });
+      });
+      (Array.isArray(event.shownRiskTitles) ? event.shownRiskTitles : []).forEach((title) => {
+        _incrementWeightedMapValue(profile.riskWeights, title, baseDelta * shortlistWeight);
+      });
+      (Array.isArray(event.keptRiskTitles) ? event.keptRiskTitles : []).forEach((title) => {
+        _incrementWeightedMapValue(profile.riskWeights, title, 0.7 + Math.max(0, baseDelta) * 0.8);
+      });
+      (Array.isArray(event.removedRiskTitles) ? event.removedRiskTitles : []).forEach((title) => {
+        _incrementWeightedMapValue(profile.riskWeights, title, -0.85 + Math.min(0, baseDelta) * 0.6);
+      });
+      (Array.isArray(event.addedRiskTitles) ? event.addedRiskTitles : []).forEach((title) => {
+        _incrementWeightedMapValue(profile.riskWeights, title, 0.55 + draftWeight * Math.max(0, baseDelta));
+      });
+    });
+    profile.distinctUsers = submitters.size;
+    return _finaliseAiFeedbackProfile(profile);
   }
 
   function getLearningStore(username) {
@@ -449,6 +682,33 @@ const LearningStore = (() => {
     };
   }
 
+  function recordAiFeedback(username, payload = {}) {
+    try {
+      const store = getLearningStore(username);
+      const event = _normaliseAiFeedbackEvent({
+        ...payload,
+        submittedBy: payload?.submittedBy || username
+      });
+      if (!event.score) return null;
+      const nextFeedback = _normaliseAiFeedbackSection(store.aiFeedback);
+      nextFeedback.events = _appendSignal(nextFeedback.events, event, 120);
+      store.aiFeedback = nextFeedback;
+      saveLearningStore(username, store);
+      return event;
+    } catch {
+      return null;
+    }
+  }
+
+  function getAiFeedbackEvents(username, filters = {}) {
+    const events = _normaliseAiFeedbackSection(getLearningStore(username).aiFeedback).events;
+    return events.filter(event => _feedbackMatches(event, filters));
+  }
+
+  function getAiFeedbackProfile(username, filters = {}) {
+    return _buildAiFeedbackProfile(getAiFeedbackEvents(username, filters));
+  }
+
   return {
     getLearningStore,
     saveLearningStore,
@@ -462,6 +722,11 @@ const LearningStore = (() => {
     recordRiskDecision,
     recordNarrativeEdit,
     recordRerunDelta,
-    getRiskSignalSummary
+    getRiskSignalSummary,
+    recordAiFeedback,
+    getAiFeedbackEvents,
+    getAiFeedbackProfile
   };
 })();
+
+if (typeof module !== 'undefined') module.exports = LearningStore;

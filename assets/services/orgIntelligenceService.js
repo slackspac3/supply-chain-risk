@@ -7,6 +7,7 @@ const OrgIntelligenceService = (() => {
     calibration: { updatedAt: 0, scenarioTypes: {} },
     decisions: [],
     coverageMap: { updatedAt: 0, scenarioTypes: {} },
+    feedback: { updatedAt: 0, events: [] },
     updatedAt: 0
   });
   const RANGE_PREFIXES = ['tef', 'threatCap', 'controlStr', 'ir', 'bi', 'db', 'rl', 'tp', 'rc', 'vuln'];
@@ -35,6 +36,7 @@ const OrgIntelligenceService = (() => {
         calibration: { updatedAt: 0, scenarioTypes: {} },
         decisions: [],
         coverageMap: { updatedAt: 0, scenarioTypes: {} },
+        feedback: { updatedAt: 0, events: [] },
         updatedAt: 0
       });
       const parsed = JSON.parse(raw);
@@ -45,6 +47,7 @@ const OrgIntelligenceService = (() => {
         calibration: { updatedAt: 0, scenarioTypes: {} },
         decisions: [],
         coverageMap: { updatedAt: 0, scenarioTypes: {} },
+        feedback: { updatedAt: 0, events: [] },
         updatedAt: 0
       });
     }
@@ -134,6 +137,64 @@ const OrgIntelligenceService = (() => {
     };
   }
 
+  function _normaliseReasonTag(value = '') {
+    return _safeText(value, 80).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  function _normaliseRuntimeMode(value = '') {
+    const raw = _safeText(value, 40).toLowerCase();
+    if (raw === 'live_ai' || raw === 'live-ai' || raw === 'live') return 'live_ai';
+    if (raw === 'fallback' || raw === 'stub') return 'fallback';
+    return 'local';
+  }
+
+  function _normaliseFeedbackTarget(value = '') {
+    return _safeText(value, 40).toLowerCase() === 'shortlist' ? 'shortlist' : 'draft';
+  }
+
+  function _normaliseFeedbackTitleList(list = [], limit = 10, max = 160) {
+    return Array.from(new Set(
+      (Array.isArray(list) ? list : [])
+        .map(item => _safeText(item, max))
+        .filter(Boolean)
+    )).slice(0, limit);
+  }
+
+  function _normaliseFeedbackCitationList(list = []) {
+    return (Array.isArray(list) ? list : [])
+      .map(item => ({
+        docId: _safeText(item?.docId || item?.id || '', 120),
+        title: _safeText(item?.title || item?.sourceTitle || '', 180),
+        tags: _normaliseFeedbackTitleList(item?.tags, 8, 60)
+      }))
+      .filter(item => item.docId || item.title)
+      .slice(0, 8);
+  }
+
+  function _normaliseFeedbackEvent(event = {}) {
+    const score = Math.max(1, Math.min(5, Math.round(Number(event.score || 0))));
+    return {
+      id: _safeText(event.id || `feedback_${Date.now()}`, 120),
+      target: _normaliseFeedbackTarget(event.target),
+      recordedAt: Number(event.recordedAt || Date.now()),
+      runtimeMode: _normaliseRuntimeMode(event.runtimeMode),
+      buId: _safeText(event.buId, 80),
+      buName: _safeText(event.buName, 160),
+      functionKey: _safeText(event.functionKey, 80).toLowerCase(),
+      lensKey: _normaliseScenarioKey(event.lensKey || event.scenarioLensKey || event.scenarioType || 'general'),
+      score,
+      reasons: Array.from(new Set((Array.isArray(event.reasons) ? event.reasons : []).map(_normaliseReasonTag).filter(Boolean))).slice(0, 6),
+      scenarioFingerprint: _safeText(event.scenarioFingerprint, 260),
+      outputFingerprint: _safeText(event.outputFingerprint, 260),
+      shownRiskTitles: _normaliseFeedbackTitleList(event.shownRiskTitles, 10),
+      keptRiskTitles: _normaliseFeedbackTitleList(event.keptRiskTitles, 10),
+      removedRiskTitles: _normaliseFeedbackTitleList(event.removedRiskTitles, 10),
+      addedRiskTitles: _normaliseFeedbackTitleList(event.addedRiskTitles, 10),
+      citations: _normaliseFeedbackCitationList(event.citations),
+      submittedBy: _safeText(event.submittedBy, 120).toLowerCase()
+    };
+  }
+
   function _normaliseState(state) {
     const source = state && typeof state === 'object' ? state : {};
     return {
@@ -155,6 +216,14 @@ const OrgIntelligenceService = (() => {
               : {}
           }
         : { updatedAt: 0, scenarioTypes: {} },
+      feedback: source.feedback && typeof source.feedback === 'object'
+        ? {
+            updatedAt: Number(source.feedback.updatedAt || 0),
+            events: Array.isArray(source.feedback.events)
+              ? source.feedback.events.map(_normaliseFeedbackEvent).filter(item => item.score >= 1 && item.score <= 5).slice(0, 600)
+              : []
+          }
+        : { updatedAt: 0, events: [] },
       updatedAt: Number(source.updatedAt || 0)
     };
   }
@@ -188,6 +257,7 @@ const OrgIntelligenceService = (() => {
         calibration: payload.calibration || { updatedAt: 0, scenarioTypes: {} },
         decisions: payload.decisions || [],
         coverageMap: payload.coverageMap || { updatedAt: 0, scenarioTypes: {} },
+        feedback: payload.feedback || { updatedAt: 0, events: [] },
         updatedAt: Date.now()
       });
     }).catch(() => getCachedState()).finally(() => {
@@ -462,6 +532,320 @@ const OrgIntelligenceService = (() => {
       updatedAt: Date.now()
     });
     return _post('record_decision', { decision });
+  }
+
+  async function recordAiFeedback(payload = {}) {
+    const event = _normaliseFeedbackEvent({
+      ...payload,
+      submittedBy: payload?.submittedBy || (typeof AuthService !== 'undefined' ? AuthService.getCurrentUser()?.username || '' : '')
+    });
+    if (!event.score) return null;
+    const cached = getCachedState();
+    const currentFeedback = cached.feedback && typeof cached.feedback === 'object'
+      ? {
+          updatedAt: Number(cached.feedback.updatedAt || 0),
+          events: Array.isArray(cached.feedback.events) ? cached.feedback.events.slice() : []
+        }
+      : { updatedAt: 0, events: [] };
+    const nextFeedback = {
+      updatedAt: Date.now(),
+      events: [event, ...currentFeedback.events.filter(item => item?.id !== event.id)].slice(0, 600)
+    };
+    _saveCache({
+      ...cached,
+      feedback: nextFeedback,
+      updatedAt: Date.now()
+    });
+    return _post('record_feedback', { feedback: event });
+  }
+
+  function _feedbackMatches(event = {}, filters = {}) {
+    const buId = _safeText(filters?.buId || filters?.businessUnitId, 80);
+    const functionKey = _safeText(filters?.functionKey, 80).toLowerCase();
+    const lensKey = _normaliseScenarioKey(filters?.scenarioLensKey || filters?.scenarioLens?.key || filters?.lensKey || '');
+    const target = _normaliseFeedbackTarget(filters?.target || '');
+    const runtimeModes = Array.isArray(filters?.runtimeModes) && filters.runtimeModes.length
+      ? filters.runtimeModes.map(_normaliseRuntimeMode)
+      : [];
+    if (buId && String(event?.buId || '').trim() && String(event.buId).trim() !== buId) return false;
+    if (functionKey && String(event?.functionKey || '').trim().toLowerCase() && String(event.functionKey).trim().toLowerCase() !== functionKey) return false;
+    if (lensKey && String(event?.lensKey || '').trim().toLowerCase() && String(event.lensKey).trim().toLowerCase() !== lensKey) return false;
+    if (filters?.target && event.target !== target) return false;
+    if (runtimeModes.length && !runtimeModes.includes(_normaliseRuntimeMode(event.runtimeMode))) return false;
+    return true;
+  }
+
+  function _incrementWeightedMapValue(target, key, amount = 0, max = 180) {
+    const safeKey = _safeText(key || '', max);
+    if (!safeKey || !Number.isFinite(amount) || amount === 0) return;
+    target[safeKey] = Number(target[safeKey] || 0) + amount;
+  }
+
+  function _createEmptyFeedbackProfile() {
+    return {
+      totalEvents: 0,
+      liveAiEvents: 0,
+      distinctUsers: 0,
+      runtimeCounts: { live_ai: 0, fallback: 0, local: 0 },
+      draft: { count: 0, totalScore: 0, averageScore: 0, reasons: {} },
+      shortlist: { count: 0, totalScore: 0, averageScore: 0, reasons: {} },
+      riskWeights: {},
+      docWeights: {},
+      docTagWeights: {},
+      wrongDomainCount: 0,
+      weakCitationCount: 0,
+      missedRiskCount: 0,
+      unrelatedRiskCount: 0,
+      usefulWithEditsCount: 0,
+      latestAt: 0,
+      topPositiveRisks: [],
+      topNegativeRisks: [],
+      topPositiveDocs: [],
+      topNegativeDocs: []
+    };
+  }
+
+  function _feedbackScoreDelta(score) {
+    return (Math.max(1, Math.min(5, Math.round(Number(score || 0)))) - 3) / 2;
+  }
+
+  function _buildFeedbackProfile(events = []) {
+    const profile = _createEmptyFeedbackProfile();
+    const submitters = new Set();
+    (Array.isArray(events) ? events : []).forEach(event => {
+      if (!event?.score) return;
+      profile.totalEvents += 1;
+      profile.latestAt = Math.max(profile.latestAt, Number(event.recordedAt || 0));
+      const runtimeMode = _normaliseRuntimeMode(event.runtimeMode);
+      profile.runtimeCounts[runtimeMode] = Number(profile.runtimeCounts[runtimeMode] || 0) + 1;
+      if (runtimeMode === 'live_ai') profile.liveAiEvents += 1;
+      if (event.submittedBy) submitters.add(event.submittedBy);
+      const bucket = event.target === 'shortlist' ? profile.shortlist : profile.draft;
+      bucket.count += 1;
+      bucket.totalScore += Number(event.score || 0);
+      (Array.isArray(event.reasons) ? event.reasons : []).forEach(reason => {
+        bucket.reasons[reason] = Number(bucket.reasons[reason] || 0) + 1;
+        if (reason === 'wrong-domain') profile.wrongDomainCount += 1;
+        if (reason === 'weak-citations') profile.weakCitationCount += 1;
+        if (reason === 'missed-key-risk') profile.missedRiskCount += 1;
+        if (reason === 'included-unrelated-risks') profile.unrelatedRiskCount += 1;
+        if (reason === 'useful-with-edits') profile.usefulWithEditsCount += 1;
+      });
+      if (runtimeMode !== 'live_ai') return;
+      const baseDelta = _feedbackScoreDelta(event.score);
+      const draftWeight = event.target === 'draft' ? 0.9 : 0.45;
+      const shortlistWeight = event.target === 'shortlist' ? 0.95 : 0.3;
+      (Array.isArray(event.citations) ? event.citations : []).forEach((citation) => {
+        const docDelta = baseDelta * (event.target === 'shortlist' ? 1.25 : 1);
+        _incrementWeightedMapValue(profile.docWeights, citation.docId || citation.title, docDelta, 120);
+        (Array.isArray(citation.tags) ? citation.tags : []).forEach((tag) => {
+          _incrementWeightedMapValue(profile.docTagWeights, tag, docDelta * 0.65, 60);
+        });
+      });
+      (Array.isArray(event.shownRiskTitles) ? event.shownRiskTitles : []).forEach((title) => {
+        _incrementWeightedMapValue(profile.riskWeights, title, baseDelta * shortlistWeight);
+      });
+      (Array.isArray(event.keptRiskTitles) ? event.keptRiskTitles : []).forEach((title) => {
+        _incrementWeightedMapValue(profile.riskWeights, title, 0.7 + Math.max(0, baseDelta) * 0.8);
+      });
+      (Array.isArray(event.removedRiskTitles) ? event.removedRiskTitles : []).forEach((title) => {
+        _incrementWeightedMapValue(profile.riskWeights, title, -0.85 + Math.min(0, baseDelta) * 0.6);
+      });
+      (Array.isArray(event.addedRiskTitles) ? event.addedRiskTitles : []).forEach((title) => {
+        _incrementWeightedMapValue(profile.riskWeights, title, 0.55 + draftWeight * Math.max(0, baseDelta));
+      });
+    });
+    profile.distinctUsers = submitters.size;
+    if (profile.draft.count) {
+      profile.draft.averageScore = Number((profile.draft.totalScore / profile.draft.count).toFixed(2));
+    }
+    if (profile.shortlist.count) {
+      profile.shortlist.averageScore = Number((profile.shortlist.totalScore / profile.shortlist.count).toFixed(2));
+    }
+    profile.topPositiveRisks = Object.entries(profile.riskWeights)
+      .filter(([, value]) => Number(value) > 0.35)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([title, weight]) => ({ title, weight: Number(weight.toFixed(2)) }));
+    profile.topNegativeRisks = Object.entries(profile.riskWeights)
+      .filter(([, value]) => Number(value) < -0.35)
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([title, weight]) => ({ title, weight: Number(weight.toFixed(2)) }));
+    profile.topPositiveDocs = Object.entries(profile.docWeights)
+      .filter(([, value]) => Number(value) > 0.35)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([docId, weight]) => ({ docId, weight: Number(weight.toFixed(2)) }));
+    profile.topNegativeDocs = Object.entries(profile.docWeights)
+      .filter(([, value]) => Number(value) < -0.35)
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([docId, weight]) => ({ docId, weight: Number(weight.toFixed(2)) }));
+    return profile;
+  }
+
+  function _buildInactiveFeedbackProfile(label = '') {
+    return {
+      active: false,
+      label,
+      minEvents: 0,
+      minUsers: 0,
+      profile: _createEmptyFeedbackProfile()
+    };
+  }
+
+  function _buildTierProfile(events = [], { label = '', minEvents = 0, minUsers = 0 } = {}) {
+    const profile = _buildFeedbackProfile(events);
+    const active = profile.liveAiEvents >= minEvents && profile.distinctUsers >= minUsers;
+    return {
+      active,
+      label,
+      minEvents,
+      minUsers,
+      profile
+    };
+  }
+
+  function _mergeFeedbackTier(combined, tierProfile, weight = 1) {
+    const source = tierProfile?.profile;
+    if (!tierProfile?.active || !source || !Number.isFinite(weight) || weight <= 0) return combined;
+    combined.activeTiers.push(tierProfile.label || 'tier');
+    combined.draftPressure += ((Number(source.draft.averageScore || 3) - 3) * weight);
+    combined.shortlistPressure += ((Number(source.shortlist.averageScore || 3) - 3) * weight);
+    combined.wrongDomainPressure += Number(source.wrongDomainCount || 0) * weight;
+    combined.weakCitationPressure += Number(source.weakCitationCount || 0) * weight;
+    combined.missedRiskPressure += Number(source.missedRiskCount || 0) * weight;
+    combined.unrelatedRiskPressure += Number(source.unrelatedRiskCount || 0) * weight;
+    Object.entries(source.riskWeights || {}).forEach(([title, value]) => {
+      _incrementWeightedMapValue(combined.riskWeights, title, Number(value || 0) * weight);
+    });
+    Object.entries(source.docWeights || {}).forEach(([docId, value]) => {
+      _incrementWeightedMapValue(combined.docWeights, docId, Number(value || 0) * weight, 120);
+    });
+    Object.entries(source.docTagWeights || {}).forEach(([tag, value]) => {
+      _incrementWeightedMapValue(combined.docTagWeights, tag, Number(value || 0) * weight, 60);
+    });
+    Object.entries(source.draft.reasons || {}).forEach(([reason, count]) => {
+      _incrementWeightedMapValue(combined.reasonWeights, `draft:${reason}`, Number(count || 0) * weight, 80);
+    });
+    Object.entries(source.shortlist.reasons || {}).forEach(([reason, count]) => {
+      _incrementWeightedMapValue(combined.reasonWeights, `shortlist:${reason}`, Number(count || 0) * weight, 80);
+    });
+    return combined;
+  }
+
+  function _finaliseCombinedFeedback(combined = {}) {
+    const next = combined && typeof combined === 'object' ? combined : {
+      activeTiers: [],
+      riskWeights: {},
+      docWeights: {},
+      docTagWeights: {},
+      reasonWeights: {},
+      draftPressure: 0,
+      shortlistPressure: 0,
+      wrongDomainPressure: 0,
+      weakCitationPressure: 0,
+      missedRiskPressure: 0,
+      unrelatedRiskPressure: 0
+    };
+    next.preferredRiskTitles = Object.entries(next.riskWeights || {})
+      .filter(([, value]) => Number(value) > 0.35)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([title, weight]) => ({ title, weight: Number(weight.toFixed(2)) }));
+    next.avoidRiskTitles = Object.entries(next.riskWeights || {})
+      .filter(([, value]) => Number(value) < -0.35)
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([title, weight]) => ({ title, weight: Number(weight.toFixed(2)) }));
+    next.preferredDocIds = Object.entries(next.docWeights || {})
+      .filter(([, value]) => Number(value) > 0.35)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([docId, weight]) => ({ docId, weight: Number(weight.toFixed(2)) }));
+    next.avoidDocIds = Object.entries(next.docWeights || {})
+      .filter(([, value]) => Number(value) < -0.35)
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([docId, weight]) => ({ docId, weight: Number(weight.toFixed(2)) }));
+    next.topIssues = Object.entries(next.reasonWeights || {})
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 5)
+      .map(([reason, weight]) => ({ reason, weight: Number(weight.toFixed(2)) }));
+    return next;
+  }
+
+  function getFeedbackEvents(filters = {}) {
+    const cached = getCachedState();
+    return (cached.feedback?.events || []).filter(event => _feedbackMatches(event, filters));
+  }
+
+  function getHierarchicalFeedbackProfile(context = {}) {
+    const username = typeof AuthService !== 'undefined' && typeof AuthService.getCurrentUser === 'function'
+      ? AuthService.getCurrentUser()?.username || ''
+      : '';
+    const filters = {
+      buId: context.buId || context.businessUnitId || '',
+      functionKey: context.functionKey || context.scenarioLens?.functionKey || '',
+      scenarioLensKey: context.scenarioLensKey || context.scenarioLens?.key || context.lensKey || ''
+    };
+    const orgEvents = getFeedbackEvents({ scenarioLensKey: filters.scenarioLensKey });
+    const userProfile = username
+      && typeof LearningStore !== 'undefined'
+      && typeof LearningStore.getAiFeedbackProfile === 'function'
+      ? {
+          active: true,
+          label: 'user',
+          minEvents: 0,
+          minUsers: 0,
+          profile: LearningStore.getAiFeedbackProfile(username, filters)
+        }
+      : _buildInactiveFeedbackProfile('user');
+    const functionProfile = filters.functionKey
+      ? _buildTierProfile(orgEvents.filter(event => _feedbackMatches(event, { ...filters, buId: '', functionKey: filters.functionKey })), {
+          label: 'function',
+          minEvents: 3,
+          minUsers: 2
+        })
+      : _buildInactiveFeedbackProfile('function');
+    const businessUnitProfile = filters.buId
+      ? _buildTierProfile(orgEvents.filter(event => _feedbackMatches(event, { ...filters, buId: filters.buId, functionKey: '' })), {
+          label: 'business-unit',
+          minEvents: 4,
+          minUsers: 2
+        })
+      : _buildInactiveFeedbackProfile('business-unit');
+    const globalProfile = _buildTierProfile(orgEvents.filter(event => _feedbackMatches(event, { scenarioLensKey: filters.scenarioLensKey })), {
+      label: 'global',
+      minEvents: 8,
+      minUsers: 4
+    });
+    const combined = _finaliseCombinedFeedback([
+      { profile: globalProfile.profile, active: globalProfile.active, label: 'global', weight: 1 },
+      { profile: businessUnitProfile.profile, active: businessUnitProfile.active, label: 'business-unit', weight: 1.15 },
+      { profile: functionProfile.profile, active: functionProfile.active, label: 'function', weight: 1.1 },
+      { profile: userProfile.profile, active: userProfile.active, label: 'user', weight: 1.25 }
+    ].reduce((acc, item) => _mergeFeedbackTier(acc, item, item.weight), {
+      activeTiers: [],
+      riskWeights: {},
+      docWeights: {},
+      docTagWeights: {},
+      reasonWeights: {},
+      draftPressure: 0,
+      shortlistPressure: 0,
+      wrongDomainPressure: 0,
+      weakCitationPressure: 0,
+      missedRiskPressure: 0,
+      unrelatedRiskPressure: 0
+    }));
+    return {
+      user: userProfile,
+      function: functionProfile,
+      businessUnit: businessUnitProfile,
+      global: globalProfile,
+      combined
+    };
   }
 
   function _getLocalPatterns(limit = 20, buId = '') {
@@ -787,7 +1171,10 @@ const OrgIntelligenceService = (() => {
     refresh,
     recordCompletedAssessment,
     recordReviewDecision,
+    recordAiFeedback,
     getMergedScenarioPatterns,
+    getFeedbackEvents,
+    getHierarchicalFeedbackProfile,
     buildGhostDraftSuggestion,
     applyGhostDraftToDraft,
     getCalibrationProfile,

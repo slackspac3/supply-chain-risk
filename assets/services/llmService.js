@@ -1817,6 +1817,65 @@ ${businessUnit.selectedDepartmentContext}` : ''
     ].filter(Boolean).join('\n');
   }
 
+  function _getAiFeedbackLearningProfile({ buId = '', functionKey = '', scenarioLensKey = '' } = {}) {
+    try {
+      if (typeof OrgIntelligenceService === 'undefined' || typeof OrgIntelligenceService.getHierarchicalFeedbackProfile !== 'function') return null;
+      return OrgIntelligenceService.getHierarchicalFeedbackProfile({
+        buId,
+        functionKey,
+        scenarioLensKey
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  function _buildFeedbackLearningPromptBlock(profile = null) {
+    const combined = profile?.combined;
+    if (!combined || !Array.isArray(combined.activeTiers) || !combined.activeTiers.length) {
+      return 'Feedback priors:\n- No proven live-AI feedback priors are active for this scenario yet.';
+    }
+    const issueLabel = (value = '') => String(value || '').replace(/^(draft|shortlist):/, '').replace(/-/g, ' ');
+    return [
+      'Feedback priors from repeated live-AI feedback:',
+      `- Active tiers: ${combined.activeTiers.join(', ')}`,
+      `- Draft pressure: ${combined.draftPressure < -0.25 ? 'tighten and stay closer to the user event path' : combined.draftPressure > 0.25 ? 'current draft patterns are generally landing well' : 'neutral'}`,
+      `- Shortlist pressure: ${combined.shortlistPressure < -0.25 ? 'be more selective and avoid off-path risks' : combined.shortlistPressure > 0.25 ? 'current shortlist patterns are generally landing well' : 'neutral'}`,
+      combined.wrongDomainPressure > 0 ? '- Repeated failure mode: domain drift. Keep the explicit user event path above profile, compliance, and cyber context.' : '',
+      combined.weakCitationPressure > 0 ? '- Repeated failure mode: weak citations. Prefer documents that directly match the event path and avoid decorative references.' : '',
+      combined.preferredRiskTitles?.length ? `- Frequently retained risks in similar scenarios: ${combined.preferredRiskTitles.map(item => item.title).join(', ')}` : '',
+      combined.avoidRiskTitles?.length ? `- Frequently removed risks in similar scenarios: ${combined.avoidRiskTitles.map(item => item.title).join(', ')}` : '',
+      combined.topIssues?.length ? `- Common review issues to avoid: ${combined.topIssues.map(item => issueLabel(item.reason)).join(', ')}` : '',
+      '- Use these priors to refine ranking and wording only. They must not override an explicit user event path.'
+    ].filter(Boolean).join('\n');
+  }
+
+  function _lookupFeedbackRiskWeight(feedbackProfile = null, title = '') {
+    if (!feedbackProfile || typeof feedbackProfile !== 'object' || !title) return 0;
+    const target = _normaliseText(title || '', 180).toLowerCase();
+    return Object.entries(feedbackProfile.riskWeights || {}).reduce((best, [key, value]) => {
+      return _normaliseText(key || '', 180).toLowerCase() === target ? Number(value || 0) : best;
+    }, 0);
+  }
+
+  function _rerankRisksWithFeedback(risks = [], feedbackProfile = null) {
+    const combined = feedbackProfile?.combined;
+    if (!combined || !Array.isArray(risks) || !risks.length) return Array.isArray(risks) ? risks : [];
+    return risks
+      .map((risk, index) => {
+        const weight = _lookupFeedbackRiskWeight(combined, risk?.title || '');
+        const confidence = String(risk?.confidence || '').trim().toLowerCase();
+        const confidenceScore = confidence === 'high' ? 1.2 : confidence === 'medium' ? 0.5 : confidence === 'low' ? -0.2 : 0;
+        return {
+          risk,
+          index,
+          score: weight * 1.9 + confidenceScore
+        };
+      })
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map(item => item.risk);
+  }
+
   function _isScenarioTextCoherent(text = '', {
     seedNarrative = '',
     guidedInput = {},
@@ -3148,6 +3207,11 @@ ${businessUnit.selectedDepartmentContext}` : ''
       scenarioLensHint: buContext?.scenarioLensHint
     });
     const classification = contextResolution.classification;
+    const feedbackProfile = _getAiFeedbackLearningProfile({
+      buId: buContext?.id || buContext?.buId || '',
+      functionKey: contextResolution?.lens?.functionKey || buContext?.selectedDepartmentKey || '',
+      scenarioLensKey: contextResolution?.lens?.key || classification?.key || ''
+    });
     if (aiUnavailable) {
       await new Promise(r => setTimeout(r, 2200 + Math.random() * 800));
     }
@@ -3214,6 +3278,7 @@ Geography: ${buContext?.geography || 'Unknown'}
 Benchmark strategy: ${buContext?.benchmarkStrategy || 'Prefer GCC and UAE references, then fall back to best global data with clear explanation.'}
 Context applicability resolution:
 ${_buildContextResolutionPromptBlock(contextResolution)}
+${_buildFeedbackLearningPromptBlock(feedbackProfile)}
 Relevant citations:
 ${_buildCitationPromptBlock(retrievedDocs)}
 
@@ -3474,6 +3539,11 @@ Return only the refined scenario narrative text.`;
       scenarioLensHint: input.scenarioLensHint
     });
     const classification = contextResolution.classification;
+    const feedbackProfile = _getAiFeedbackLearningProfile({
+      buId: input.businessUnit?.id || input.businessUnit?.buId || '',
+      functionKey: contextResolution?.lens?.functionKey || input.businessUnit?.selectedDepartmentKey || '',
+      scenarioLensKey: contextResolution?.lens?.key || classification?.key || ''
+    });
     const fallbackScenarioExpansion = _buildScenarioExpansion({ ...input, classification });
     if (aiUnavailable) {
       await new Promise(r => setTimeout(r, 1400 + Math.random() * 600));
@@ -3532,6 +3602,7 @@ Guided intake: ${JSON.stringify(input.guidedInput || {})}
 Benchmark strategy: ${input.adminSettings?.benchmarkStrategy || ''}
 Context applicability resolution:
 ${_buildContextResolutionPromptBlock(contextResolution)}
+${_buildFeedbackLearningPromptBlock(feedbackProfile)}
 Register metadata: ${input.registerMeta ? JSON.stringify(input.registerMeta) : '(none)'}
 
 Risk statement:
@@ -3610,12 +3681,12 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
               && ['Primary lens', 'Scenario draft', 'Shortlist fit'].includes(String(check?.label || ''))
             ));
           const coherenceFallback = candidateAlignment.score < 65 || hasCriticalAlignmentIssue || !summaryCoherent || !linkAnalysisCoherent;
-          const coherentRiskTitles = _filterScenarioRelevantRisks(candidateResult.risks, {
+          const coherentRiskTitles = _rerankRisksWithFeedback(_filterScenarioRelevantRisks(candidateResult.risks, {
             seedNarrative: input.riskStatement || input.registerText || '',
             guidedInput: input.guidedInput,
             classification,
             fallbackRisks: fallbackScenarioExpansion.riskTitles
-          });
+          }), feedbackProfile);
           const coherentSummary = (!summaryCoherent || coherenceFallback)
             ? _buildRiskContextSummary({
                 classification,

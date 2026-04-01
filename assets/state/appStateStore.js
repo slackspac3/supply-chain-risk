@@ -17,6 +17,9 @@
           removedRisks: [],
           narrativeEdits: [],
           rerunDeltas: []
+        },
+        aiFeedback: {
+          events: []
         }
       },
       draft: null,
