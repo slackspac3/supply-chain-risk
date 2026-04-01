@@ -399,7 +399,13 @@ npm run check:syntax
 npm run test:unit
 npm run check:smoke
 npm run test:e2e:smoke
+node scripts/readme-scan.js
 ```
+
+Repository consistency scan:
+- `node scripts/readme-scan.js`
+- verifies expected file structure, config pins, package scripts, FAIR engine markers, role/review states, feedback-learning tags, evidence-contract fields, export seams, API security markers, eval harness presence, and pilot seed data
+- use it when updating the README, release docs, repo layout, or other documented platform contracts
 
 Full pilot release gate:
 

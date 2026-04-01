@@ -394,6 +394,7 @@ const LearningStore = (() => {
       (Array.isArray(event.reasons) ? event.reasons : []).forEach(reason => {
         bucket.reasons[reason] = Number(bucket.reasons[reason] || 0) + 1;
         if (reason === 'wrong-domain') profile.wrongDomainCount += 1;
+        if (reason === 'too-generic') {}
         if (reason === 'weak-citations') profile.weakCitationCount += 1;
         if (reason === 'missed-key-risk') profile.missedRiskCount += 1;
         if (reason === 'included-unrelated-risks') profile.unrelatedRiskCount += 1;
