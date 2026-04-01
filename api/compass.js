@@ -1,44 +1,9 @@
 const { requireSession } = require('./_apiAuth');
-const { get: kvGet, set: kvSet } = require('./_kvStore');
-
-async function checkRateLimit(key, maxPerMinute = 20) {
-  const kvKey = 'ratelimit::' + key;
-  const windowMs = 60000;
-  const now = Date.now();
-  let entry = { count: 0, reset: now + windowMs };
-  try {
-    const raw = await kvGet(kvKey);
-    if (raw) entry = JSON.parse(raw);
-    if (now > entry.reset) entry = { count: 0, reset: now + windowMs };
-  } catch {}
-  entry.count += 1;
-  try {
-    const ttl = Math.ceil((entry.reset - now) / 1000) + 5;
-    void ttl;
-    await kvSet(kvKey, JSON.stringify(entry));
-  } catch {}
-  return entry.count <= maxPerMinute
-    ? null
-    : Math.ceil((entry.reset - now) / 1000);
-}
+const { applyCorsHeaders, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
+const { checkRateLimit } = require('./_rateLimit');
 
 function getRateLimitKey(req, session) {
   return `${String(session?.username || 'anonymous').trim().toLowerCase()}::${String(req.socket?.remoteAddress || 'unknown')}`;
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseRequestBody(req) {
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body || '{}');
-    } catch {
-      return null;
-    }
-  }
-  return req.body ?? {};
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
@@ -55,14 +20,12 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const compassApiUrl = process.env.COMPASS_API_URL || 'https://api.core42.ai/v1/chat/completions';
   const compassModel = process.env.COMPASS_MODEL || 'gpt-5.1';
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-session-token');
-  res.setHeader('Vary', 'Origin');
+  applyCorsHeaders(req, res, {
+    methods: 'POST,OPTIONS',
+    headers: 'content-type,x-session-token'
+  });
 
   if (req.method === 'OPTIONS') {
     res.status(204).end();
@@ -86,7 +49,7 @@ module.exports = async function handler(req, res) {
   }
 
   const origin = req.headers.origin;
-  if (!origin || origin === 'null' || origin !== allowedOrigin) {
+  if (!origin || !isAllowedOrigin(origin)) {
     res.status(403).json({ error: 'Origin not allowed' });
     return;
   }
@@ -94,10 +57,12 @@ module.exports = async function handler(req, res) {
   const session = requireSession(req, res);
   if (!session) return;
 
-  const retryAfterSeconds = await checkRateLimit(getRateLimitKey(req, session));
-  if (retryAfterSeconds) {
-    res.setHeader('Retry-After', String(retryAfterSeconds));
-    res.status(429).json({ error: 'Rate limit exceeded' });
+  const rateLimit = await checkRateLimit(getRateLimitKey(req, session), { maxPerWindow: 20, windowMs: 60000 });
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+    res.status(rateLimit.unavailable ? 503 : 429).json({
+      error: rateLimit.unavailable ? 'Request throttling is temporarily unavailable' : 'Rate limit exceeded'
+    });
     return;
   }
 

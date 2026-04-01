@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const { appendAuditEvent, verifySessionToken } = require('./_audit');
-const { sendApiError, requireSession, sendConflictError } = require('./_apiAuth');
+const { isRequestSecretValid, sendApiError, requireSession, sendConflictError } = require('./_apiAuth');
+const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
+const { get: kvGet, getKvConfig, set: kvSet } = require('./_kvStore');
 
 const SETTINGS_KEY = process.env.SETTINGS_STORE_KEY || 'risk_calculator_settings';
 const DEFAULT_TYPICAL_DEPARTMENTS = [
@@ -19,57 +21,13 @@ const DEFAULT_TYPICAL_DEPARTMENTS = [
 ];
 const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || '';
 
-function isPlainObject(value) {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseRequestBody(req) {
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body || '{}');
-    } catch {
-      return null;
-    }
-  }
-  return req.body ?? {};
-}
-
-function getKvUrl() {
-  return process.env.APPLE_CAT || process.env.FOO_URL_TEST || process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
-}
-
-function getKvToken() {
-  return process.env.BANANA_DOG || process.env.FOO_TOKEN_TEST || process.env.RC_USER_STORE_TOKEN || process.env.USER_STORE_KV_TOKEN || process.env.KV_REST_API_TOKEN || '';
-}
-
-async function runKvCommand(command) {
-  const url = getKvUrl();
-  const token = getKvToken();
-  if (!url || !token) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(command),
-      signal: controller.signal
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || `KV request failed with HTTP ${res.status}`);
-    }
-    return res.json();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function hasWritableKv() {
-  return !!(getKvUrl() && getKvToken());
+  try {
+    return !!getKvConfig();
+  } catch (error) {
+    console.error('api/settings.hasWritableKv failed to resolve KV config:', error);
+    return false;
+  }
 }
 
 function getDefaultSettings() {
@@ -126,12 +84,12 @@ function normaliseSettings(settings = {}) {
 }
 
 async function readSettings() {
-  const response = await runKvCommand(['GET', SETTINGS_KEY]);
-  const raw = response?.result;
+  const raw = await kvGet(SETTINGS_KEY);
   if (!raw) return getDefaultSettings();
   try {
     return normaliseSettings(JSON.parse(raw));
-  } catch {
+  } catch (error) {
+    console.error('api/settings.readSettings failed to parse stored settings payload:', error);
     return getDefaultSettings();
   }
 }
@@ -168,7 +126,7 @@ async function writeSettings(settings, expectedMeta = {}) {
       updatedAt: Date.now()
     }
   });
-  await runKvCommand(['SET', SETTINGS_KEY, JSON.stringify(next)]);
+  await kvSet(SETTINGS_KEY, JSON.stringify(next));
   return {
     ok: true,
     conflict: false,
@@ -177,7 +135,7 @@ async function writeSettings(settings, expectedMeta = {}) {
 }
 
 function isAdminSecretValid(req) {
-  return !!ADMIN_API_SECRET && req.headers['x-admin-secret'] === ADMIN_API_SECRET;
+  return isRequestSecretValid(req, 'x-admin-secret', ADMIN_API_SECRET);
 }
 
 function stableSortById(items = []) {
@@ -289,13 +247,11 @@ function canBuAdminWriteSettings(currentSettings, proposedSettings, session) {
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const body = parseRequestBody(req);
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-admin-secret,x-session-token');
-  res.setHeader('Vary', 'Origin');
+  applyCorsHeaders(req, res, {
+    methods: 'GET,PUT,OPTIONS',
+    headers: 'content-type,x-admin-secret,x-session-token'
+  });
 
   if (req.method === 'OPTIONS') {
     res.status(204).end();
@@ -303,7 +259,7 @@ module.exports = async function handler(req, res) {
   }
 
   const origin = req.headers.origin;
-  if (origin && origin !== allowedOrigin) {
+  if (origin && !isAllowedOrigin(origin)) {
     sendApiError(res, 403, 'FORBIDDEN', 'Request origin is not allowed.');
     return;
   }
@@ -333,6 +289,10 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'PUT') {
+      if (getUnexpectedFields(body, ['audit', 'expectedMeta', 'settings']).length) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the settings request.');
+        return;
+      }
       const bodyStr = JSON.stringify(body || {});
       if (bodyStr.length > 500000) {
         sendApiError(res, 413, 'PAYLOAD_TOO_LARGE', 'Request body too large');

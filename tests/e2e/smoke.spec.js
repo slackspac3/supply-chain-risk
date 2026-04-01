@@ -10,6 +10,24 @@ function buildSession(user, apiSessionToken = 'test-session-token') {
   };
 }
 
+function buildSeededUserSettings(overrides = {}) {
+  return {
+    ...overrides,
+    onboardedAt: '2026-03-17T00:00:00.000Z',
+    _overrideKeys: [],
+    userProfile: {
+      fullName: 'Alex Trafton',
+      jobTitle: 'Risk Manager',
+      businessUnit: 'G42',
+      department: 'Security',
+      focusAreas: ['Resilience'],
+      preferredOutputs: 'Executive summaries',
+      workingContext: 'Support regulated services.',
+      ...overrides.userProfile
+    }
+  };
+}
+
 async function seedAuthenticatedUser(page, {
   username = 'alex.trafton',
   displayName = 'Alex Trafton',
@@ -422,8 +440,8 @@ test('pressing Enter signs in and opens the personal workspace', async ({ page }
       username: 'alex.trafton',
       displayName: 'Alex Trafton',
       role: 'user',
-      businessUnitEntityId: '',
-      departmentEntityId: ''
+      businessUnitEntityId: 'bu-digital-platforms',
+      departmentEntityId: 'dept-security'
     },
     userState: {
       userSettings: {
@@ -451,9 +469,14 @@ test('pressing Enter signs in and opens the personal workspace', async ({ page }
     await page.getByLabel(/username/i).fill('alex.trafton');
     await page.getByLabel(/password/i).fill('secret');
     await page.getByLabel(/password/i).press('Enter');
+    await expect(page.getByRole('heading', { name: /PoC data warning/i })).toBeVisible();
+    await expect(page.getByText(/Do not enter real company data/i)).toBeVisible();
+    await page.getByRole('button', { name: /I Understand/i }).click();
     await expect(page).toHaveURL(/#\/dashboard$/);
-    await expect(page.getByText(/personal workspace/i)).toBeVisible();
-    await expect(page.locator('#btn-dashboard-new-assessment')).toBeVisible();
+    await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
+    await expect(
+      page.getByText(/personal workspace/i).or(page.getByRole('heading', { name: /let the platform know who you are/i }))
+    ).toBeVisible();
   });
 });
 
@@ -644,19 +667,7 @@ test('personal settings shows the pilot release stamp', async ({ page }) => {
 });
 
 test('help page renders and opens key workflow guidance without crashing', async ({ page }) => {
-  const seededUserSettings = {
-    userProfile: {
-      fullName: 'Alex Trafton',
-      jobTitle: 'Risk Manager',
-      businessUnit: 'G42',
-      department: 'Security',
-      focusAreas: ['Resilience'],
-      preferredOutputs: 'Executive summaries',
-      workingContext: 'Support regulated services.'
-    },
-    onboardedAt: '2026-03-17T00:00:00.000Z',
-    _overrideKeys: []
-  };
+  const seededUserSettings = buildSeededUserSettings();
   await seedAuthenticatedUser(page, { userSettings: seededUserSettings });
   await mockSharedApis(page, {
     settings: {
@@ -685,6 +696,126 @@ test('help page renders and opens key workflow guidance without crashing', async
     await expect(page.getByText(/primary grounding/i)).toBeVisible();
     await page.getByRole('button', { name: /^Shortcuts$/ }).first().click();
     await expect(page.getByRole('heading', { name: /desktop shortcuts/i })).toBeVisible();
+  });
+});
+
+test('standard user help stays focused on the personal workspace', async ({ page }) => {
+  const seededUserSettings = buildSeededUserSettings();
+  await seedAuthenticatedUser(page, { userSettings: seededUserSettings });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/help', async () => {
+    await expect(page.getByText(/^Standard user$/)).toBeVisible();
+    await expect(page.getByText(/your standard user view/i)).toBeVisible();
+    await expect(page.getByText(/open personal settings/i)).toBeVisible();
+    await expect(page.getByText(/Focus admin user search/i)).toHaveCount(0);
+  });
+});
+
+test('function admin help reflects owned function access', async ({ page }) => {
+  const seededUserSettings = buildSeededUserSettings({
+    userProfile: {
+      businessUnitEntityId: 'bu-digital',
+      departmentEntityId: 'dept-security',
+      businessUnit: 'Digital Services',
+      department: 'Security Operations'
+    }
+  });
+  await seedAuthenticatedUser(page, {
+    username: 'safiya.ops',
+    displayName: 'Safiya Ops',
+    role: 'function_admin',
+    userSettings: seededUserSettings
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [
+        { id: 'bu-digital', name: 'Digital Services', type: 'business_unit', ownerUsername: 'someone.else' },
+        { id: 'dept-security', name: 'Security Operations', type: 'Department / Function', parentId: 'bu-digital', ownerUsername: 'safiya.ops' }
+      ],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/help', async () => {
+    await expect(page.getByText(/^Function admin$/)).toBeVisible();
+    await expect(page.getByText(/your function admin view/i)).toBeVisible();
+    await expect(page.getByText('Security Operations', { exact: true })).toBeVisible();
+    await expect(page.getByText(/open your settings and managed context/i)).toBeVisible();
+    await expect(page.getByText(/Focus admin user search/i)).toHaveCount(0);
+  });
+});
+
+test('business unit admin help reflects business unit oversight access', async ({ page }) => {
+  const seededUserSettings = buildSeededUserSettings({
+    userProfile: {
+      businessUnitEntityId: 'bu-digital',
+      businessUnit: 'Digital Services'
+    }
+  });
+  await seedAuthenticatedUser(page, {
+    username: 'omar.bu',
+    displayName: 'Omar BU',
+    role: 'bu_admin',
+    userSettings: seededUserSettings
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [
+        { id: 'bu-digital', name: 'Digital Services', type: 'business_unit', ownerUsername: 'omar.bu' },
+        { id: 'dept-risk', name: 'Risk Operations', type: 'department', parentId: 'bu-digital', ownerUsername: 'someone.else' }
+      ],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/help', async () => {
+    await expect(page.getByText(/^BU admin$/)).toBeVisible();
+    await expect(page.getByText(/your business-unit admin view/i)).toBeVisible();
+    await expect(page.getByText('Digital Services', { exact: true })).toBeVisible();
+    await expect(page.getByText(/open your settings and managed context/i)).toBeVisible();
+    await expect(page.getByText(/Focus admin user search/i)).toHaveCount(0);
   });
 });
 

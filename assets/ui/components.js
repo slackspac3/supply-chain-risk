@@ -3,6 +3,28 @@
  */
 
 const UI = (() => {
+  function safeHtml(value = '') {
+    return typeof escapeHtml === 'function'
+      ? escapeHtml(String(value || ''))
+      : String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+  }
+
+  function safeHref(value = '') {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    try {
+      const url = new URL(raw, window.location.origin);
+      return ['http:', 'https:', 'mailto:'].includes(url.protocol) ? url.toString() : '';
+    } catch {
+      return '';
+    }
+  }
+
   function iconTokenForLabel(label = '') {
     const text = String(label || '').toLowerCase();
     if (/action|next|priority|decision/.test(text)) return '▸';
@@ -24,7 +46,7 @@ const UI = (() => {
     const icons = { success: '○', danger: '△', warning: '◌', info: '·' };
     const el = document.createElement('div');
     el.className = `toast toast--${type}`;
-    el.innerHTML = `<span class="toast-icon" aria-hidden="true">${icons[type] || '·'}</span><span class="toast-msg">${message}</span><span class="toast-progress" aria-hidden="true"></span>`;
+    el.innerHTML = `<span class="toast-icon" aria-hidden="true">${icons[type] || '·'}</span><span class="toast-msg">${safeHtml(message)}</span><span class="toast-progress" aria-hidden="true"></span>`;
     container.appendChild(el);
     setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 320); }, duration);
   }
@@ -37,7 +59,7 @@ const UI = (() => {
     backdrop.innerHTML = `
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="modal-header">
-          <h3 class="modal-title" id="modal-title">${title}</h3>
+          <h3 class="modal-title" id="modal-title">${safeHtml(title)}</h3>
           ${closeBtn}
         </div>
         <div class="modal-body">${body}</div>
@@ -64,17 +86,18 @@ const UI = (() => {
 
   // ─── Citation Modal ───────────────────────────────────────
   function citationModal(doc) {
+    const safeUrl = safeHref(doc.url && doc.url !== '#/admin/docs' ? doc.url : '');
     modal({
       title: `Source: ${doc.title}`,
       body: `
         <div style="margin-bottom:12px">
-          <span class="badge badge--neutral">${doc.lastUpdated || 'Unknown date'}</span>
-          ${doc.sourceType ? `<span class="badge badge--gold" style="margin-left:4px">${doc.sourceType}</span>` : ''}
-          ${(doc.tags || []).map(t => `<span class="badge badge--primary" style="margin-left:4px">${t}</span>`).join('')}
+          <span class="badge badge--neutral">${safeHtml(doc.lastUpdated || 'Unknown date')}</span>
+          ${doc.sourceType ? `<span class="badge badge--gold" style="margin-left:4px">${safeHtml(doc.sourceType)}</span>` : ''}
+          ${(doc.tags || []).map(t => `<span class="badge badge--primary" style="margin-left:4px">${safeHtml(t)}</span>`).join('')}
         </div>
-        ${doc.relevanceReason ? `<div class="form-help" style="margin-bottom:12px">Why this source was used: ${doc.relevanceReason}</div>` : ''}
-        <p style="line-height:1.8; font-size:0.9rem; color: var(--text-secondary)">${doc.excerpt || doc.contentExcerpt || 'No excerpt available.'}</p>
-        ${doc.url && doc.url !== '#/admin/docs' ? `<div style="margin-top:16px"><a href="${doc.url}" target="_blank" class="btn btn--secondary btn--sm">Open document</a></div>` : ''}
+        ${doc.relevanceReason ? `<div class="form-help" style="margin-bottom:12px">Why this source was used: ${safeHtml(doc.relevanceReason)}</div>` : ''}
+        <p style="line-height:1.8; font-size:0.9rem; color: var(--text-secondary)">${safeHtml(doc.excerpt || doc.contentExcerpt || 'No excerpt available.')}</p>
+        ${safeUrl ? `<div style="margin-top:16px"><a href="${safeHtml(safeUrl)}" rel="noopener noreferrer" target="_blank" class="btn btn--secondary btn--sm">Open document</a></div>` : ''}
       `
     });
   }

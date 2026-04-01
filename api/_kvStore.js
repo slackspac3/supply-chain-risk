@@ -68,9 +68,15 @@ async function setex(key, ttlSeconds, value) {
   if (ttl) {
     try {
       return await runKvCommand(['SETEX', key, ttl, value]);
-    } catch {}
+    } catch (error) {
+      console.error('api/_kvStore.setex falling back to SET after SETEX failure:', error);
+    }
   }
   return set(key, value);
 }
 
-module.exports = { get, set, setex };
+async function del(key) {
+  return runKvCommand(['DEL', key]);
+}
+
+module.exports = { del, get, getKvConfig, set, setex };

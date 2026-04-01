@@ -1,50 +1,8 @@
+const crypto = require('crypto');
 const REVIEW_QUEUE_KEY = 'risk_calculator_review_queue';
 const { sendApiError, requireSession } = require('./_apiAuth');
-
-function getKvUrl() {
-  return process.env.APPLE_CAT || process.env.FOO_URL_TEST || process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
-}
-
-function getKvToken() {
-  return process.env.BANANA_DOG || process.env.FOO_TOKEN_TEST || process.env.RC_USER_STORE_TOKEN || process.env.USER_STORE_KV_TOKEN || process.env.KV_REST_API_TOKEN || '';
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseRequestBody(req) {
-  if (typeof req.body === 'string') {
-    try { return JSON.parse(req.body || '{}'); } catch { return null; }
-  }
-  return req.body ?? {};
-}
-
-async function runKvCommand(command) {
-  const url = getKvUrl();
-  const token = getKvToken();
-  if (!url || !token) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(command),
-      signal: controller.signal
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `KV request failed with HTTP ${response.status}`);
-    }
-    return response.json();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
+const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
+const { get: kvGet, set: kvSet } = require('./_kvStore');
 
 function normaliseQueueArray(value) {
   return Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
@@ -52,17 +10,17 @@ function normaliseQueueArray(value) {
 
 async function readQueue() {
   try {
-    const response = await runKvCommand(['GET', REVIEW_QUEUE_KEY]);
-    const raw = response?.result;
+    const raw = await kvGet(REVIEW_QUEUE_KEY);
     if (!raw) return [];
     return normaliseQueueArray(JSON.parse(raw));
-  } catch {
+  } catch (error) {
+    console.error('api/review-queue.readQueue failed to parse stored review queue:', error);
     return [];
   }
 }
 
 async function writeQueue(arr) {
-  await runKvCommand(['SET', REVIEW_QUEUE_KEY, JSON.stringify(normaliseQueueArray(arr))]);
+  await kvSet(REVIEW_QUEUE_KEY, JSON.stringify(normaliseQueueArray(arr)));
 }
 
 function toSafeString(value) {
@@ -83,7 +41,7 @@ function buildReviewItem(assessment = {}) {
   const eventLoss = isPlainObject(results.eventLoss) ? results.eventLoss : {};
   const ale = isPlainObject(results.ale) ? results.ale : {};
   return {
-    id: `rq_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    id: `rq_${crypto.randomUUID()}`,
     assessmentId: toSafeString(assessment.id),
     submittedBy: toSafeUsername(assessment.submittedBy),
     submittedAt: Date.now(),
@@ -104,13 +62,11 @@ function buildReviewItem(assessment = {}) {
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const body = parseRequestBody(req);
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-session-token');
-  res.setHeader('Vary', 'Origin');
+  applyCorsHeaders(req, res, {
+    methods: 'GET,POST,PATCH,OPTIONS',
+    headers: 'content-type,x-session-token'
+  });
 
   if (req.method === 'OPTIONS') {
     res.status(204).end();
@@ -118,7 +74,7 @@ module.exports = async function handler(req, res) {
   }
 
   const origin = req.headers.origin;
-  if (origin && origin !== allowedOrigin) {
+  if (origin && !isAllowedOrigin(origin)) {
     sendApiError(res, 403, 'FORBIDDEN', 'Request origin is not allowed.');
     return;
   }
@@ -147,6 +103,10 @@ module.exports = async function handler(req, res) {
     if (req.method === 'POST') {
       const session = requireSession(req, res);
       if (!session) return;
+      if (getUnexpectedFields(body, ['assessment']).length) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the review submission.');
+        return;
+      }
       const assessment = isPlainObject(body.assessment) ? body.assessment : null;
       if (!assessment) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'assessment payload is required.');
@@ -174,6 +134,10 @@ module.exports = async function handler(req, res) {
     if (req.method === 'PATCH') {
       const session = requireSession(req, res, { roles: ['admin', 'bu_admin'] });
       if (!session) return;
+      if (getUnexpectedFields(body, ['escalatedTo', 'id', 'reviewNote', 'reviewStatus', 'reviewedBy']).length) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the review update.');
+        return;
+      }
       const reviewId = toSafeString(body.id);
       const reviewStatus = toSafeString(body.reviewStatus).toLowerCase();
       const validStatuses = new Set(['approved', 'changes_requested', 'escalated']);
@@ -208,6 +172,7 @@ module.exports = async function handler(req, res) {
 
     sendApiError(res, 405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
   } catch (error) {
-    sendApiError(res, 500, 'REVIEW_QUEUE_ERROR', error?.message || 'The review queue could not be processed.');
+    console.error('Review queue request failed.', error);
+    sendApiError(res, 500, 'REVIEW_QUEUE_ERROR', 'The review queue could not be processed.');
   }
 };

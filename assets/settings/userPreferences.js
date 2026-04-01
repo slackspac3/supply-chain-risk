@@ -527,7 +527,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     companyRefinementHistoryEl.innerHTML = companyRefinementHistory.map(entry => `
       <div class="card" style="padding:var(--sp-3);background:${entry.role === 'user' ? 'var(--bg-canvas)' : 'rgba(244,193,90,.08)'};border-color:${entry.role === 'user' ? 'var(--border-subtle)' : 'rgba(244,193,90,.18)'}">
         <div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${entry.role === 'user' ? 'Your prompt' : 'AI update'}</div>
-        <div class="context-panel-copy" style="margin-top:6px">${entry.text}</div>
+        <div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(entry.text || ''))}</div>
       </div>`).join('');
   }
 
@@ -536,7 +536,7 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
     const preferredDepartmentId = profile.departmentEntityId;
     const fallbackDepartmentId = departments.some(entity => entity.id === preferredDepartmentId) ? preferredDepartmentId : (departments[0]?.id || '');
     departmentEl.innerHTML = departments.length
-      ? departments.map(entity => `<option value="${entity.id}" ${entity.id === fallbackDepartmentId ? 'selected' : ''}>${entity.name}</option>`).join('')
+      ? departments.map(entity => `<option value="${escapeHtml(String(entity.id || ''))}" ${entity.id === fallbackDepartmentId ? 'selected' : ''}>${escapeHtml(String(entity.name || 'Unnamed entity'))}</option>`).join('')
       : '<option value="">No functions configured yet</option>';
     departmentEl.disabled = !departments.length || !(capability.canManageBusinessUnit && !capability.canManageDepartment);
   }

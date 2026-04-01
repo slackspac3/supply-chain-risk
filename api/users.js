@@ -1,8 +1,9 @@
 const crypto = require('crypto');
-const { appendAuditEvent } = require('./_audit');
-const { sendApiError, resolveAdminActor, requireSession } = require('./_apiAuth');
+const { appendAuditEvent, getSessionSigningSecret } = require('./_audit');
+const { isRequestSecretValid, sendApiError, resolveAdminActor, requireSession } = require('./_apiAuth');
 const { validatePasswordPolicy, generateStrongPassword } = require('./_passwordPolicy');
-const { get: kvGet, set: kvSet } = require('./_kvStore');
+const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
+const { del: kvDel, get: kvGet, getKvConfig, set: kvSet } = require('./_kvStore');
 
 const DEFAULT_ACCOUNTS = [];
 const PASSWORD_HASH_VERSION = 'scrypt-v1';
@@ -13,7 +14,8 @@ function getBootstrapAccounts() {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map(normaliseAccount).filter(account => account.username && hasStoredCredential(account)) : [];
-  } catch {
+  } catch (error) {
+    console.error('api/users.getBootstrapAccounts failed to parse bootstrap accounts:', error);
     return [];
   }
 }
@@ -31,29 +33,11 @@ const LOGIN_BACKOFF_STEPS_MS = [
   30 * 60 * 1000,
   60 * 60 * 1000
 ];
-
-function isPlainObject(value) {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseRequestBody(req) {
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body || '{}');
-    } catch {
-      return null;
-    }
-  }
-  return req.body ?? {};
-}
-
-function getKvUrl() {
-  return process.env.APPLE_CAT || process.env.FOO_URL_TEST || process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
-}
-
-function getKvToken() {
-  return process.env.BANANA_DOG || process.env.FOO_TOKEN_TEST || process.env.RC_USER_STORE_TOKEN || process.env.USER_STORE_KV_TOKEN || process.env.KV_REST_API_TOKEN || '';
-}
+const RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS = 60;
+const LOGIN_FIELDS = ['action', 'password', 'username'];
+const ACCOUNT_FIELDS = ['businessUnitEntityId', 'departmentEntityId', 'displayName', 'password', 'role', 'username'];
+const PATCH_FIELDS = ['action', 'updates', 'username'];
+const UPDATE_FIELDS = ['businessUnitEntityId', 'departmentEntityId', 'displayName', 'role'];
 
 function normaliseAccount(account = {}) {
   return {
@@ -119,15 +103,20 @@ function verifyAccountPassword(account = {}, password = '') {
         matched: crypto.timingSafeEqual(storedHash, suppliedHash),
         needsUpgrade: false
       };
-    } catch {
+    } catch (error) {
+      console.error('api/users.verifyAccountPassword failed to verify a stored hash:', error);
       return { matched: false, needsUpgrade: false };
     }
   }
-  const matched = !!normalised.password && normalised.password === suppliedPassword;
+  const storedPassword = Buffer.from(String(normalised.password || ''), 'utf8');
+  const candidatePassword = Buffer.from(suppliedPassword, 'utf8');
+  const matchedLegacy = storedPassword.length > 0
+    && storedPassword.length === candidatePassword.length
+    && crypto.timingSafeEqual(storedPassword, candidatePassword);
   return {
-    matched,
+    matched: matchedLegacy,
     // Legacy plaintext credentials are upgraded after a successful login.
-    needsUpgrade: matched
+    needsUpgrade: matchedLegacy
   };
 }
 
@@ -142,7 +131,7 @@ function sanitiseAccount(account = {}) {
 }
 
 function isAdminSecretValid(req) {
-  return !!ADMIN_API_SECRET && req.headers['x-admin-secret'] === ADMIN_API_SECRET;
+  return isRequestSecretValid(req, 'x-admin-secret', ADMIN_API_SECRET);
 }
 
 function canSelfUpdateAccount(session, username) {
@@ -155,7 +144,7 @@ function encodeTokenSegment(value) {
 }
 
 function createSessionToken(account) {
-  const signingSecret = process.env.SESSION_SIGNING_SECRET || ADMIN_API_SECRET || getKvToken() || '';
+  const signingSecret = getSessionSigningSecret();
   if (!signingSecret) throw new Error('Session signing secret is not configured.');
   const payload = JSON.stringify({
     username: account.username,
@@ -178,13 +167,17 @@ function getLoginThrottleKey(req, username) {
 async function checkLoginThrottle(key) {
   try {
     const raw = await kvGet(LOGIN_ATTEMPT_PREFIX + key);
-    if (!raw) return null;
+    if (!raw) return { blocked: false, retryAfterSeconds: 0, unavailable: false };
     const entry = JSON.parse(raw);
-    if (Date.now() > Number(entry.lockUntil || 0)) return null;
-    return Math.ceil((Number(entry.lockUntil || 0) - Date.now()) / 1000);
+    if (Date.now() > Number(entry.lockUntil || 0)) return { blocked: false, retryAfterSeconds: 0, unavailable: false };
+    return {
+      blocked: true,
+      retryAfterSeconds: Math.max(1, Math.ceil((Number(entry.lockUntil || 0) - Date.now()) / 1000)),
+      unavailable: false
+    };
   } catch (error) {
-    console.warn('checkLoginThrottle failed open:', error?.message || error);
-    return null;
+    console.error('checkLoginThrottle failed closed:', error);
+    return { blocked: true, retryAfterSeconds: RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS, unavailable: true };
   }
 }
 
@@ -212,8 +205,10 @@ async function recordLoginAttempt(key, failed) {
       entry = { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
     }
     await kvSet(LOGIN_ATTEMPT_PREFIX + key, JSON.stringify(entry));
+    return true;
   } catch (error) {
-    console.warn('recordLoginAttempt failed open:', error?.message || error);
+    console.error('recordLoginAttempt failed closed:', error);
+    return false;
   }
 }
 
@@ -223,42 +218,30 @@ async function clearLoginAttempts(key) {
       LOGIN_ATTEMPT_PREFIX + key,
       JSON.stringify({ count: 0, firstAttemptAt: 0, lockUntil: 0 })
     );
+    return true;
   } catch (error) {
-    console.warn('clearLoginAttempts failed open:', error?.message || error);
+    console.error('clearLoginAttempts failed closed:', error);
+    return false;
   }
-}
-
-async function runKvCommand(command) {
-  const url = getKvUrl();
-  const token = getKvToken();
-  if (!url || !token) return null;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(command)
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `KV request failed with HTTP ${res.status}`);
-  }
-  return res.json();
 }
 
 function hasWritableKv() {
-  return !!(getKvUrl() && getKvToken());
+  try {
+    return !!getKvConfig();
+  } catch (error) {
+    console.error('api/users.hasWritableKv failed to resolve KV config:', error);
+    return false;
+  }
 }
 
 async function readAccounts() {
-  const response = await runKvCommand(['GET', USERS_KEY]);
-  const raw = response?.result;
+  const raw = await kvGet(USERS_KEY);
   if (!raw) return getBootstrapAccounts();
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) && parsed.length ? parsed.map(normaliseAccount) : getBootstrapAccounts();
-  } catch {
+  } catch (error) {
+    console.error('api/users.readAccounts failed to parse stored accounts:', error);
     return getBootstrapAccounts();
   }
 }
@@ -268,7 +251,7 @@ async function writeAccounts(accounts) {
     throw new Error('Shared user store is not writable. Configure the shared store environment variables in Vercel.');
   }
   const storedAccounts = accounts.map(prepareAccountForStorage);
-  await runKvCommand(['SET', USERS_KEY, JSON.stringify(storedAccounts)]);
+  await kvSet(USERS_KEY, JSON.stringify(storedAccounts));
   return storedAccounts.map(normaliseAccount);
 }
 
@@ -279,17 +262,19 @@ function buildUserStateKey(username = '') {
 
 async function deleteUserState(username) {
   if (!hasWritableKv()) return;
-  await runKvCommand(['DEL', buildUserStateKey(username)]);
+  await kvDel(buildUserStateKey(username));
+}
+
+function hasUnexpectedFields(payload, allowedFields = []) {
+  return getUnexpectedFields(payload, allowedFields).length > 0;
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const body = parseRequestBody(req);
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-admin-secret,x-session-token');
-  res.setHeader('Vary', 'Origin');
+  applyCorsHeaders(req, res, {
+    methods: 'GET,POST,PATCH,OPTIONS',
+    headers: 'content-type,x-admin-secret,x-session-token'
+  });
 
   if (req.method === 'OPTIONS') {
     res.status(204).end();
@@ -297,7 +282,7 @@ module.exports = async function handler(req, res) {
   }
 
   const origin = req.headers.origin;
-  if (origin && origin !== allowedOrigin) {
+  if (origin && !isAllowedOrigin(origin)) {
     sendApiError(res, 403, 'FORBIDDEN', 'Request origin is not allowed.');
     return;
   }
@@ -334,21 +319,33 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'POST') {
       if (body.action === 'login') {
+        if (hasUnexpectedFields(body, LOGIN_FIELDS)) {
+          sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the login request.');
+          return;
+        }
         const username = String(body.username || '').trim().toLowerCase();
         const password = String(body.password || '');
         const throttleKey = getLoginThrottleKey(req, username);
-        const retryAfterSeconds = await checkLoginThrottle(throttleKey);
-        if (retryAfterSeconds) {
+        const throttleState = await checkLoginThrottle(throttleKey);
+        if (throttleState.blocked) {
           await appendAuditEvent({
             category: 'auth',
-            eventType: 'login_rate_limited',
+            eventType: throttleState.unavailable ? 'login_rate_limit_unavailable' : 'login_rate_limited',
             actorUsername: username || 'unknown',
             actorRole: 'anonymous',
             status: 'blocked',
             source: 'server',
-            details: { retryAfterSeconds }
+            details: { retryAfterSeconds: throttleState.retryAfterSeconds }
           });
-          sendApiError(res, 429, 'ACCOUNT_LOCKED', 'Too many login attempts. Please wait and try again.', { retryAfterSeconds });
+          sendApiError(
+            res,
+            throttleState.unavailable ? 503 : 429,
+            throttleState.unavailable ? 'RATE_LIMIT_UNAVAILABLE' : 'ACCOUNT_LOCKED',
+            throttleState.unavailable
+              ? 'Login is temporarily unavailable. Please try again shortly.'
+              : 'Too many login attempts. Please wait and try again.',
+            { retryAfterSeconds: throttleState.retryAfterSeconds }
+          );
           return;
         }
         const accounts = await readAccounts();
@@ -358,8 +355,14 @@ module.exports = async function handler(req, res) {
         });
         const matched = matchIndex > -1 ? accounts[matchIndex] : null;
         if (!matched) {
-          await recordLoginAttempt(throttleKey, true);
-          const retryAfterSeconds = await checkLoginThrottle(throttleKey);
+          const recorded = await recordLoginAttempt(throttleKey, true);
+          if (!recorded) {
+            sendApiError(res, 503, 'RATE_LIMIT_UNAVAILABLE', 'Login is temporarily unavailable. Please try again shortly.', {
+              retryAfterSeconds: RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS
+            });
+            return;
+          }
+          const nextThrottle = await checkLoginThrottle(throttleKey);
           await appendAuditEvent({
             category: 'auth',
             eventType: 'login_failure',
@@ -367,12 +370,17 @@ module.exports = async function handler(req, res) {
             actorRole: 'anonymous',
             status: 'failed',
             source: 'server',
-            details: retryAfterSeconds ? { retryAfterSeconds } : {}
+            details: nextThrottle.blocked ? { retryAfterSeconds: nextThrottle.retryAfterSeconds } : {}
           });
           sendApiError(res, 401, 'INVALID_CREDENTIALS', 'Invalid username or password.');
           return;
         }
-        await clearLoginAttempts(throttleKey);
+        if (!(await clearLoginAttempts(throttleKey))) {
+          sendApiError(res, 503, 'RATE_LIMIT_UNAVAILABLE', 'Login is temporarily unavailable. Please try again shortly.', {
+            retryAfterSeconds: RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS
+          });
+          return;
+        }
         const verification = verifyAccountPassword(matched, password);
         if (verification.needsUpgrade && hasWritableKv()) {
           const upgradedAccounts = accounts.slice();
@@ -399,9 +407,17 @@ module.exports = async function handler(req, res) {
         return;
       }
 
+      if (hasUnexpectedFields(body, ['account'])) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the account request.');
+        return;
+      }
       const accounts = await readAccounts();
       if (!isPlainObject(body.account || {})) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Account payload is required.');
+        return;
+      }
+      if (hasUnexpectedFields(body.account, ACCOUNT_FIELDS)) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the account payload.');
         return;
       }
       const account = normaliseAccount(body.account || {});
@@ -431,8 +447,16 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
+      if (hasUnexpectedFields(body, PATCH_FIELDS)) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the user update request.');
+        return;
+      }
       const username = String(body.username || '').trim().toLowerCase();
       const updates = isPlainObject(body.updates || {}) ? body.updates : {};
+      if (hasUnexpectedFields(updates, UPDATE_FIELDS)) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the user update payload.');
+        return;
+      }
       const accounts = await readAccounts();
       const index = accounts.findIndex(account => account.username === username);
       if (index < 0) {

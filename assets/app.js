@@ -2013,18 +2013,26 @@ function cancelSimulationState(message = 'Cancellation requested…') {
 }
 
 function openShortcutHelpModal() {
+  const currentUser = AuthService.getCurrentUser();
+  const isAdmin = currentUser?.role === 'admin';
+  const settings = !isAdmin ? getUserSettings() : null;
+  const nonAdminCapability = currentUser && !isAdmin
+    ? getNonAdminCapabilityState(currentUser, settings, getAdminSettings())
+    : null;
+  const roleSummary = isAdmin
+    ? 'Global admin'
+    : nonAdminCapability?.canManageBusinessUnit
+      ? 'BU admin'
+      : nonAdminCapability?.canManageDepartment
+        ? 'Function admin'
+        : 'Standard user';
+  const helpAudience = getHelpAudienceModel({ currentUser, isAdmin, nonAdminCapability, roleSummary });
   UI.modal({
     title: 'Desktop shortcuts',
     body: `<div style="display:grid;gap:var(--sp-3)">
       <div class="context-panel-copy">These shortcuts are desktop-only and are ignored while you are typing in a field.</div>
-      <div class="grid-2">
-        <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + N</strong><div class="form-help" style="margin-top:6px">Start a new assessment</div></div>
-        <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + R</strong><div class="form-help" style="margin-top:6px">Resume your current draft</div></div>
-        <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + S</strong><div class="form-help" style="margin-top:6px">Open personal settings</div></div>
-        <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + 1 / 2 / 3</strong><div class="form-help" style="margin-top:6px">Switch results tabs</div></div>
-        <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + F</strong><div class="form-help" style="margin-top:6px">Focus admin user search</div></div>
-        <div class="card" style="padding:var(--sp-4);background:var(--bg-canvas)"><strong>Alt/Option + /</strong><div class="form-help" style="margin-top:6px">Open this shortcuts guide</div></div>
-      </div>
+      ${renderHelpShortcutCards(helpAudience.shortcutCards)}
+      <div class="form-help">${escapeHtml(String(helpAudience.shortcutHint || 'These shortcuts are available only when the matching control is visible in your current workspace.'))}</div>
     </div>`
   });
 }
@@ -3668,13 +3676,13 @@ function renderCompanyStructureSummary(structure = []) {
               <div class="org-related-card org-related-card--compact org-theme--department">
                 <div class="org-related-card__head">
                   <div>
-                    <div class="org-related-card__title">${node.name}</div>
-                    <div class="form-help">${node.departmentRelationshipType || 'In-house'} · ${ownerLabel} · ${contextSummary ? 'Saved context' : 'No saved context'}</div>
+                    <div class="org-related-card__title">${escapeHtml(String(node.name || 'Unnamed department'))}</div>
+                    <div class="form-help">${escapeHtml(String(node.departmentRelationshipType || 'In-house'))} · ${escapeHtml(String(ownerLabel || 'No owner'))} · ${contextSummary ? 'Saved context' : 'No saved context'}</div>
                   </div>
                   <div class="flex items-center gap-3" style="flex-wrap:wrap">
-                    <button class="btn btn--ghost btn--sm org-entity-context" data-org-id="${node.id}" type="button">Context</button>
-                    <button class="btn btn--ghost btn--sm org-entity-edit" data-org-id="${node.id}" type="button">Edit</button>
-                    <button class="btn btn--ghost btn--sm org-entity-delete" data-org-id="${node.id}" type="button">Remove</button>
+                    <button class="btn btn--ghost btn--sm org-entity-context" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Context</button>
+                    <button class="btn btn--ghost btn--sm org-entity-edit" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Edit</button>
+                    <button class="btn btn--ghost btn--sm org-entity-delete" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Remove</button>
                   </div>
                 </div>
               </div>`;
@@ -3692,21 +3700,21 @@ function renderCompanyStructureSummary(structure = []) {
         <details class="org-accordion ${getOrgEntityThemeClass(node.type)}" ${depth < 1 ? 'open' : ''} style="margin-left:${depth * 16}px">
           <summary class="org-accordion__summary">
             <div class="org-accordion__identity">
-              <span class="badge badge--gold">${node.type}</span>
-              <strong>${node.name}</strong>
+              <span class="badge badge--gold">${escapeHtml(String(node.type || 'Entity'))}</span>
+              <strong>${escapeHtml(String(node.name || 'Unnamed entity'))}</strong>
             </div>
             <div class="org-accordion__meta">
               <span class="form-help">${getEntityLayerById(settings, node.id)?.contextSummary ? 'Saved context' : 'No saved context'}</span>
-              <button class="btn btn--secondary btn--sm org-entity-add-department org-summary-action" data-org-id="${node.id}" type="button">Add Function</button>
-              <button class="btn btn--ghost btn--sm org-entity-context org-summary-action" data-org-id="${node.id}" type="button">Context</button>
-              <button class="btn btn--ghost btn--sm org-entity-edit org-summary-action" data-org-id="${node.id}" type="button">Edit</button>
+              <button class="btn btn--secondary btn--sm org-entity-add-department org-summary-action" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Add Function</button>
+              <button class="btn btn--ghost btn--sm org-entity-context org-summary-action" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Context</button>
+              <button class="btn btn--ghost btn--sm org-entity-edit org-summary-action" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Edit</button>
             </div>
           </summary>
           <div class="org-accordion__body">
             <div class="org-accordion__toolbar">
-              <div class="form-help">${getEntityLineageLabel(structure, node.id) || node.name}</div>
+              <div class="form-help">${escapeHtml(String(getEntityLineageLabel(structure, node.id) || node.name || 'Unnamed entity'))}</div>
             </div>
-            <div class="org-accordion__snapshot">${contextSummary}</div>
+            <div class="org-accordion__snapshot">${escapeHtml(String(contextSummary || ''))}</div>
             ${renderDepartmentList(node)}
             ${childMarkup ? `
               <div class="org-accordion__section">
@@ -7734,6 +7742,42 @@ function renderLogin() {
     UI.toast(sessionNotice, 'warning', 5000);
   }
 
+  function showPocUsageNotice() {
+    return new Promise((resolve) => {
+      const fallbackMessage = 'PoC only. Do not use real data. Create dummy scenarios only and avoid real company names. Use generic terms such as "supplier", "customer", or "business unit".';
+      if (!UI || typeof UI.modal !== 'function') {
+        window.alert(fallbackMessage);
+        resolve();
+        return;
+      }
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const dialog = UI.modal({
+        title: 'PoC data warning',
+        body: `
+          <div style="display:flex;flex-direction:column;gap:var(--sp-4)">
+            <p class="help-body-copy" style="margin:0">This platform is still a proof of concept. Do not enter real company data, customer data, incident details, or other live sensitive information.</p>
+            <div class="help-mini-grid">
+              <div class="help-mini-card"><strong>Use dummy scenarios</strong><p>Create example scenarios only. Keep them illustrative rather than operationally real.</p></div>
+              <div class="help-mini-card"><strong>Keep names generic</strong><p>Use neutral terms such as <strong>supplier</strong>, <strong>customer</strong>, <strong>business unit</strong>, or <strong>service provider</strong> instead of real company names.</p></div>
+            </div>
+            <div class="banner banner--warning" role="alert"><span class="banner-icon">△</span><span class="banner-text">Treat this environment as a PoC sandbox, not as a live production record.</span></div>
+          </div>
+        `,
+        footer: `<button class="btn btn--primary" id="btn-poc-login-ack" type="button">I Understand</button>`,
+        onClose: finish
+      });
+      document.getElementById('btn-poc-login-ack')?.addEventListener('click', () => {
+        finish();
+        dialog.close();
+      });
+    });
+  }
+
   const login = async () => {
     const username = document.getElementById('login-user').value;
     const pw = document.getElementById('login-pass').value;
@@ -7741,6 +7785,7 @@ function renderLogin() {
     if (result.success) {
       await loadSharedUserState(result.user.username);
       activateAuthenticatedState();
+      await showPocUsageNotice();
       UI.toast(`Logged in as ${result.user.displayName}.`, 'success');
       if (userNeedsOrganisationSelection(AuthService.getCurrentUser())) {
         renderLogin();
@@ -7916,6 +7961,264 @@ function renderHelpSection({
   </section>`;
 }
 
+function renderHelpMiniCards(cards = []) {
+  return `<div class="help-mini-grid">
+    ${cards.map(card => `<div class="help-mini-card"><strong>${escapeHtml(String(card.title || 'Item'))}</strong><p>${escapeHtml(String(card.body || ''))}</p></div>`).join('')}
+  </div>`;
+}
+
+function renderHelpShortcutCards(cards = []) {
+  return `<div class="help-shortcut-grid">
+    ${cards.map(card => `<div class="help-shortcut-card"><strong>${escapeHtml(String(card.keys || 'Shortcut'))}</strong><span>${escapeHtml(String(card.label || 'Action'))}</span></div>`).join('')}
+  </div>`;
+}
+
+function getHelpAudienceModel({
+  currentUser = AuthService.getCurrentUser(),
+  isAdmin = currentUser?.role === 'admin',
+  nonAdminCapability = null,
+  roleSummary = ''
+} = {}) {
+  const roleMode = isAdmin
+    ? 'global_admin'
+    : nonAdminCapability?.canManageBusinessUnit && nonAdminCapability?.canManageDepartment
+      ? 'bu_and_function'
+      : nonAdminCapability?.canManageBusinessUnit
+        ? 'bu_admin'
+        : nonAdminCapability?.canManageDepartment
+          ? 'function_admin'
+          : 'standard_user';
+  const businessUnitName = String(
+    nonAdminCapability?.managedBusiness?.name
+    || nonAdminCapability?.selectedBusiness?.name
+    || 'your business unit'
+  );
+  const functionName = String(
+    nonAdminCapability?.managedDepartment?.name
+    || nonAdminCapability?.selectedDepartment?.name
+    || 'your function'
+  );
+  const baseShortcuts = [
+    { keys: 'Alt/Option + N', label: 'Start a new assessment' },
+    { keys: 'Alt/Option + R', label: 'Resume your current draft' },
+    { keys: 'Alt/Option + 1 / 2 / 3', label: 'Switch results tabs' },
+    { keys: 'Alt/Option + /', label: 'Open the shortcuts overlay' }
+  ];
+
+  if (roleMode === 'global_admin') {
+    return {
+      roleMode,
+      roleSummary: roleSummary || 'Global admin',
+      navCopy: 'Use this guide as a platform-workbench reference: keep organisation structure, defaults, access, documents, and AI readiness aligned for everyone else.',
+      heroCopy: 'This guide is tailored to the global admin workbench. It focuses on the controls you can actually use: keep the platform baseline current, verify pilot AI readiness, and maintain the context and documents that shape downstream drafting and review.',
+      overviewAudienceCopy: 'This workspace is for the people shaping how the platform behaves for everyone else, not just for drafting one assessment at a time.',
+      overviewUseCase: 'A global admin needs to verify pilot AI readiness, update the document library, and adjust shared context before BU teams start a new round of assessments.',
+      contextExample: 'If the global baseline says the organisation runs regulated digital services in the UAE, that governed context can shape downstream drafting and evidence priorities before a BU adds its own overlay.',
+      pilotReadinessBody: 'Use Admin > System Access to verify the live path before demos, pilot reviews, or sign-off sessions where AI quality matters. If the current session is in local fallback, treat it as continuity support and not as pilot-quality AI.',
+      feedbackChangeBody: 'Repeated live-AI feedback can eventually influence the global baseline, but only after enough corroborating signals and review. The global layer should stay conservative because it affects every user.',
+      dashboardPurpose: 'Use Platform Home as the admin front door, then move into the admin console only when you need to change structure, defaults, access, or AI readiness.',
+      dashboardBestUse: 'Open the next admin workbench that needs attention, or preview the user workspace only when you need to understand the downstream impact of an admin change.',
+      stepChips: ['Platform Home', 'Step 1', 'Step 2', 'Step 3', 'Review & Run', 'Results', 'Admin'],
+      stepFinalCards: [
+        { title: 'Review & Run', body: 'Use this to challenge assumptions before a scenario becomes a shared reference point.' },
+        { title: 'Results', body: 'Read the executive story first, then validate the technical detail and evidence layers if you need to defend the result.' },
+        { title: 'Admin Console', body: 'Keep organisation structure, platform defaults, governance inputs, and the document library current because they shape what everyone else sees.' },
+        { title: 'Pilot AI Readiness', body: 'Verify the live AI path before sessions where AI quality matters. Local fallback should remain honest and calm, but not mistaken for pilot sign-off quality.' }
+      ],
+      shortcutCards: [
+        { keys: 'Alt/Option + N', label: 'Start a new assessment' },
+        { keys: 'Alt/Option + 1 / 2 / 3', label: 'Switch results tabs' },
+        { keys: 'Alt/Option + F', label: 'Focus admin user search' },
+        { keys: 'Alt/Option + /', label: 'Open the shortcuts overlay' }
+      ],
+      shortcutHint: 'The admin shortcut list stays focused on the platform workbench and review surfaces available in the admin experience.',
+      roleSectionIntro: 'This section is tuned to the admin workbench rather than the end-user workflow.',
+      roleSectionChips: ['Platform baseline', 'AI readiness', 'Downstream impact'],
+      roleDisclosures: [
+        {
+          title: 'Your global admin view',
+          summary: 'Use admin space as the governed workbench for everyone else.',
+          body: `<p class="help-body-copy">Keep organisation structure, company context, platform defaults, governance inputs, access, and the document library current. These settings shape how the AI drafts, how grounded the output can become, and what downstream users inherit.</p>`
+        },
+        {
+          title: 'What to avoid in this role',
+          summary: 'Do not use the admin workbench as a substitute for the normal assessment workflow.',
+          body: `<p class="help-body-copy">Use preview and oversight to understand the downstream impact of changes, but keep direct assessment work in the user workflow unless you are deliberately testing that experience.</p>`
+        }
+      ]
+    };
+  }
+
+  if (roleMode === 'bu_and_function') {
+    return {
+      roleMode,
+      roleSummary: roleSummary || 'BU and function leadership view',
+      navCopy: 'Use this guide as an oversight reference: review what needs attention across the business unit, keep the owned function context current, and challenge results before escalation.',
+      heroCopy: `This guide is tailored to the oversight workspace you actually have. It focuses on reviewing what needs attention across ${businessUnitName}, keeping ${functionName} current, and using results, reassessment, and evidence well before management decisions are made.`,
+      overviewAudienceCopy: `This workspace is for people who need both a business-unit view and a function-level view, so the guidance should help you move between oversight and owned execution without losing focus.`,
+      overviewUseCase: `A leader needs to understand whether a service disruption affects ${businessUnitName} broadly, what it means for ${functionName} directly, and whether the current controls or response need escalation now.`,
+      contextExample: `Because both ${businessUnitName} and ${functionName} context are retained, the app can surface the operating assumptions, regulations, and control patterns that matter across both layers earlier in the draft.`,
+      pilotReadinessBody: 'Global admins verify the live path in Admin > System Access. If a step says local fallback guidance is active, treat it as continuity support and not as sign-off-quality AI for your oversight decisions.',
+      feedbackChangeBody: 'Your repeated feedback improves your own workflow first. When similar live-AI patterns repeat across other users, the same signal can later influence your function, your business unit, and the wider platform.',
+      dashboardPurpose: `Use the active queue as an oversight lane for ${businessUnitName} first, then keep the owned function context for ${functionName} current before new work starts.`,
+      dashboardBestUse: `Open the next item that needs review, revisit the reassessment lane when assumptions drift, and start new work only when a fresh issue clearly belongs in your owned scope.`,
+      stepChips: ['Dashboard', 'Step 1', 'Step 2', 'Step 3', 'Review & Run', 'Results', 'Settings'],
+      stepFinalCards: [
+        { title: 'Review & Run', body: 'Challenge the assumptions that most affect the business-unit decision and the owned-function response before you run.' },
+        { title: 'Results', body: 'Use the executive view for the BU decision first, then open technical detail only when you need to validate evidence or ranges.' },
+        { title: 'Managed Context In Settings', body: `Keep both ${businessUnitName} and ${functionName} context current because they shape future drafts, review guidance, and inherited assumptions.` },
+        { title: 'Watchlist And Reassessment', body: 'Use the watchlist and reassessment lane to keep important scenarios current instead of letting stale results drift.' }
+      ],
+      shortcutCards: [
+        ...baseShortcuts.slice(0, 2),
+        { keys: 'Alt/Option + S', label: 'Open your settings and managed context' },
+        ...baseShortcuts.slice(2)
+      ],
+      shortcutHint: 'These shortcuts stay focused on the oversight workspace and managed context available to your role.',
+      roleSectionIntro: 'This section is tailored to the combination of oversight and owned-function access available in your current workspace.',
+      roleSectionChips: ['Oversight', 'Managed context', 'Reassessment'],
+      roleDisclosures: [
+        {
+          title: 'Your oversight and function view',
+          summary: 'Move between BU oversight and owned-function action without losing the thread.',
+          body: `<p class="help-body-copy">Prioritise queue items that need review across <strong>${escapeHtml(businessUnitName)}</strong>, then keep the owned context for <strong>${escapeHtml(functionName)}</strong> current so new assessments stay grounded. Use the executive result for the BU decision first, then decide whether the owned function needs a more direct follow-up action.</p>`
+        },
+        {
+          title: 'What still sits outside your access',
+          summary: 'Global defaults, platform-wide access, and the admin workbench remain separate.',
+          body: `<p class="help-body-copy">Use the settings and oversight tools you own in the workspace. Platform-wide defaults, system access controls, and the admin console still sit with the global admin role unless they deliberately delegate or test them with you.</p>`
+        }
+      ]
+    };
+  }
+
+  if (roleMode === 'bu_admin') {
+    return {
+      roleMode,
+      roleSummary: roleSummary || 'BU admin',
+      navCopy: 'Use this guide as a business-unit oversight reference: review what needs attention, keep BU context current, and decide when scenarios need escalation or reassessment.',
+      heroCopy: `This guide is tailored to the business-unit workspace you actually have. It focuses on reviewing the live queue for ${businessUnitName}, keeping the BU and function context aligned, and using results, reassessment, and evidence well before management decisions are made.`,
+      overviewAudienceCopy: `This workspace is for people responsible for the quality of context and decision support across ${businessUnitName}, not just for drafting one scenario at a time.`,
+      overviewUseCase: `A BU owner wants to understand whether a supplier or resilience issue is becoming material for ${businessUnitName}, which assumptions matter most, and whether the next step is treatment, escalation, or a scheduled reassessment.`,
+      contextExample: `Because ${businessUnitName} context is retained, the app can surface the operating assumptions, geography, regulations, and control themes that matter to that business unit earlier in the draft and results.`,
+      pilotReadinessBody: 'Global admins verify the live path in Admin > System Access. If your current step says local fallback guidance is active, treat it as continuity support and not as pilot-quality AI for BU sign-off.',
+      feedbackChangeBody: 'Your repeated feedback improves your own workflow first. When similar live-AI patterns repeat across other users, the same signal can later influence your business unit and the wider platform.',
+      dashboardPurpose: `Use the active queue as the primary review lane for ${businessUnitName}, then keep the business-unit and function context aligned before new work starts.`,
+      dashboardBestUse: 'Open the next item that needs review, use the watchlist and reassessment lane to keep important scenarios current, and start a new assessment only when a new issue clearly needs its own decision path.',
+      stepChips: ['Dashboard', 'Step 1', 'Step 2', 'Step 3', 'Review & Run', 'Results', 'Settings'],
+      stepFinalCards: [
+        { title: 'Review & Run', body: 'Challenge the assumptions that most affect the business-unit decision before you run.' },
+        { title: 'Results', body: 'Use the executive result to decide whether the business unit needs review, escalation, or treatment now, then open technical detail only when you need to validate drivers or evidence.' },
+        { title: 'Managed Context In Settings', body: `Keep ${businessUnitName} context and the function summaries beneath it current so downstream drafting and review stay grounded.` },
+        { title: 'Watchlist And Reassessment', body: 'Use the watchlist and reassessment lane to keep important scenarios current instead of letting stale results drift.' }
+      ],
+      shortcutCards: [
+        ...baseShortcuts.slice(0, 2),
+        { keys: 'Alt/Option + S', label: 'Open your settings and managed context' },
+        ...baseShortcuts.slice(2)
+      ],
+      shortcutHint: 'These shortcuts stay focused on the business-unit workspace and managed context available to your role.',
+      roleSectionIntro: 'This section is tailored to the business-unit oversight access available in your current workspace.',
+      roleSectionChips: ['Business-unit view', 'Managed context', 'Reassessment'],
+      roleDisclosures: [
+        {
+          title: 'Your business-unit admin view',
+          summary: 'Use the workspace as an oversight lane for the business unit, not as a generic reporting page.',
+          body: `<p class="help-body-copy">Prioritise queue items that need review across <strong>${escapeHtml(businessUnitName)}</strong>, keep business-unit context aligned, and use the watchlist and reassessment lane to keep important scenarios current. Open technical detail only when you need to validate the drivers, ranges, or evidence behind a management decision.</p>`
+        },
+        {
+          title: 'What still sits outside your access',
+          summary: 'Global defaults and the platform workbench remain separate.',
+          body: `<p class="help-body-copy">Use the settings and oversight tools you own in the workspace. Platform-wide defaults, system access controls, and the admin console still sit with the global admin role unless they deliberately delegate or test them with you.</p>`
+        }
+      ]
+    };
+  }
+
+  if (roleMode === 'function_admin') {
+    return {
+      roleMode,
+      roleSummary: roleSummary || 'Function admin',
+      navCopy: 'Use this guide as a function-oversight reference: review what needs attention, keep owned context current, and challenge results before escalation.',
+      heroCopy: `This guide is tailored to the function workspace you actually have. It focuses on reviewing what needs attention for ${functionName}, keeping the owned context current, and using results, reassessment, and evidence well before escalation or treatment decisions are made.`,
+      overviewAudienceCopy: `This workspace is for people who own a function or department context and need to keep assessments credible for ${functionName}.`,
+      overviewUseCase: `A function owner wants to understand whether a control or resilience issue could push ${functionName} outside tolerance, what assumptions are carrying the result, and what the function should do next.`,
+      contextExample: `Because ${functionName} context is retained, the app can surface the controls, operating assumptions, and regulations most relevant to that function earlier in the draft and results.`,
+      pilotReadinessBody: 'Global admins verify the live path in Admin > System Access. If your current step says local fallback guidance is active, treat it as continuity support and not as sign-off-quality AI for function-level review.',
+      feedbackChangeBody: 'Your repeated feedback improves your own workflow first. When similar live-AI patterns repeat across other users, the same signal can later influence your function, your business unit, and the wider platform.',
+      dashboardPurpose: `Use the active queue as the primary review lane for ${functionName}, then keep the owned function context current before new work starts.`,
+      dashboardBestUse: 'Open the next function-level item that needs review, revisit the reassessment lane when assumptions drift, and start a new assessment only when a fresh issue clearly belongs to the function you own.',
+      stepChips: ['Dashboard', 'Step 1', 'Step 2', 'Step 3', 'Review & Run', 'Results', 'Settings'],
+      stepFinalCards: [
+        { title: 'Review & Run', body: 'Challenge the assumptions that most affect the function-level decision before you run.' },
+        { title: 'Results', body: 'Use the executive result to decide what the function needs to do now, then open technical detail only when you need to validate drivers, ranges, or evidence.' },
+        { title: 'Managed Context In Settings', body: `Keep ${functionName} context current because it shapes how future drafts, evidence cues, and review guidance land for your team.` },
+        { title: 'Watchlist And Reassessment', body: 'Use the watchlist and reassessment lane to keep important function scenarios current instead of letting stale results drift.' }
+      ],
+      shortcutCards: [
+        ...baseShortcuts.slice(0, 2),
+        { keys: 'Alt/Option + S', label: 'Open your settings and managed context' },
+        ...baseShortcuts.slice(2)
+      ],
+      shortcutHint: 'These shortcuts stay focused on the function workspace and managed context available to your role.',
+      roleSectionIntro: 'This section is tailored to the function-level access available in your current workspace.',
+      roleSectionChips: ['Function ownership', 'Managed context', 'Review lane'],
+      roleDisclosures: [
+        {
+          title: 'Your function admin view',
+          summary: 'Use the workspace as a function review lane, not as a generic dashboard.',
+          body: `<p class="help-body-copy">Prioritise the assessments that need attention for <strong>${escapeHtml(functionName)}</strong>, keep the owned context current in settings, and use the executive result first when deciding what the function needs to do next. Open technical detail only when you need to validate ranges, evidence, or assumptions.</p>`
+        },
+        {
+          title: 'When to involve BU or global admins',
+          summary: 'Escalate when the issue or context change is broader than the owned function.',
+          body: `<p class="help-body-copy">If the scenario crosses function boundaries, needs business-unit escalation, or depends on platform-wide defaults, document the function view clearly and then involve the relevant BU or global admin rather than trying to force the issue through function-only context.</p>`
+        }
+      ]
+    };
+  }
+
+  return {
+    roleMode,
+    roleSummary: roleSummary || 'Standard user',
+    navCopy: 'Use this guide as a working reference for the assessment flow you can actually run: start, refine, estimate, review, and export.',
+    heroCopy: 'This guide is tailored to the standard-user workspace. It focuses on the actions you can actually take directly: build one clear scenario, check confidence and evidence, and hand off decisions with a clean management story.',
+    overviewAudienceCopy: 'This workspace is for people drafting, refining, and explaining a scenario they directly support.',
+    overviewUseCase: 'A risk analyst wants to understand whether a supplier insolvency could create a material exposure, what assumptions are carrying the estimate, and whether the escalation case is strong enough to share.',
+    contextExample: 'If your saved context says you support regulated digital services in the UAE, the app will surface geography, regulatory, resilience, and customer-impact considerations earlier than it would for a non-regulated internal-only service.',
+    pilotReadinessBody: 'Admins verify the live path in Admin > System Access. If your current step says local fallback guidance is active, treat it as continuity support and ask for a verified live session when AI quality matters.',
+    feedbackChangeBody: 'Your repeated feedback shapes your own guidance first. When similar live-AI patterns repeat across other users, the same signal can later influence function, BU, and wider platform behaviour.',
+    dashboardPurpose: 'Know what to do next. Resume your draft or open the latest result that needs your attention before starting something new.',
+    dashboardBestUse: 'Resume your current draft, reopen a result that needs explanation, or start a new assessment when you have one real scenario to work through.',
+    stepChips: ['Dashboard', 'Step 1', 'Step 2', 'Step 3', 'Review & Run', 'Results', 'Settings'],
+    stepFinalCards: [
+      { title: 'Review & Run', body: 'Challenge the assumptions that matter most, then run. Do not turn this into another writing stage.' },
+      { title: 'Results', body: 'Read the executive story first, then open technical detail only when you need to explain or challenge the result.' },
+      { title: 'Personal Settings', body: 'Use settings to shape how the assistant helps you and to keep your personal working context current.' }
+    ],
+    shortcutCards: [
+      ...baseShortcuts.slice(0, 2),
+      { keys: 'Alt/Option + S', label: 'Open personal settings' },
+      ...baseShortcuts.slice(2)
+    ],
+    shortcutHint: 'These shortcuts stay focused on the personal workspace available to your role.',
+    roleSectionIntro: 'This section is tailored to the standard-user workflow rather than the admin or oversight workbench.',
+    roleSectionChips: ['Your workflow', 'Personal settings', 'Escalation path'],
+    roleDisclosures: [
+      {
+        title: 'Your standard user view',
+        summary: 'Draft, estimate, review, and escalate with evidence.',
+        body: `<p class="help-body-copy">Focus on getting one good scenario through the workflow, using your settings to shape how the assistant helps you, and escalating results only after checking confidence, evidence posture, and whether the story is clear enough for someone else to challenge.</p>`
+      },
+      {
+        title: 'What stays outside your current access',
+        summary: 'Managed BU/function context and the admin workbench remain separate.',
+        body: `<p class="help-body-copy">Use the workflow and personal settings you own directly. Business-unit context, function context, system access checks, and the admin console are maintained by the relevant owners and global admins rather than by the standard-user workspace.</p>`
+      }
+    ]
+  };
+}
+
 function bindHelpPageInteractions(root = document) {
   root.querySelectorAll('[data-help-target]').forEach(button => {
     if (button.dataset.helpBound === 'true') return;
@@ -7958,6 +8261,7 @@ function renderHelpPage() {
       : nonAdminCapability?.canManageDepartment
         ? 'Function admin'
         : 'Standard user';
+  const helpAudience = getHelpAudienceModel({ currentUser, isAdmin, nonAdminCapability, roleSummary });
 
   const sections = [
     renderHelpSection({
@@ -7972,14 +8276,14 @@ function renderHelpPage() {
           summary: 'What it handles, who it is for, and what you get out at the end.',
           open: true,
           body: `
-            <p class="help-body-copy">This platform is for structured risk decisions, not generic brainstorming. It supports standard users, function owners, BU admins, and global admins who need a shared way to draft scenarios, estimate loss, review evidence strength, and export decision-ready outputs.</p>
-            <div class="help-mini-grid">
-              <div class="help-mini-card"><strong>Good fit</strong><p>Cyber, resilience, vendor, control-failure, disruption, compliance, and third-party scenarios where management needs a defendable view of exposure and next steps.</p></div>
-              <div class="help-mini-card"><strong>What you get</strong><p>A structured scenario, a plain-language estimate, Monte Carlo output, executive and technical results, treatment comparison, and exportable decision artefacts.</p></div>
-            </div>
+            <p class="help-body-copy">This platform is for structured risk decisions, not generic brainstorming. ${escapeHtml(helpAudience.overviewAudienceCopy)}</p>
+            ${renderHelpMiniCards([
+              { title: 'Good fit', body: 'Cyber, resilience, vendor, control-failure, disruption, compliance, and third-party scenarios where management needs a defendable view of exposure and next steps.' },
+              { title: 'What you get', body: 'A structured scenario, a plain-language estimate, Monte Carlo output, executive and technical results, treatment comparison, and exportable decision artefacts.' }
+            ])}
             ${renderHelpExample({
               title: 'A realistic use case',
-              body: 'A team wants to understand whether a regulated customer platform outage driven by cloud misconfiguration is still within tolerance, what assumptions are carrying the estimate, and whether stronger controls materially improve the picture.'
+              body: helpAudience.overviewUseCase
             })}
           `
         }),
@@ -7999,6 +8303,21 @@ function renderHelpPage() {
                 'Export: create a decision memo, printable output, or other supporting artefacts.'
               ].map((step, idx) => `<div class="help-flow-step"><span>${idx + 1}</span><p>${escapeHtml(step)}</p></div>`).join('')}
             </div>
+          `
+        }),
+        renderHelpDisclosure('overview', {
+          title: 'PoC-only data handling',
+          summary: 'Use dummy scenarios and generic labels only.',
+          body: `
+            ${renderHelpMiniCards([
+              { title: 'Do use', body: 'Illustrative scenarios with generic labels such as supplier, customer, service provider, business unit, or operating site.' },
+              { title: 'Do not use', body: 'Real company names, customer names, live incident details, regulated data, or other sensitive operational information.' }
+            ])}
+            ${renderHelpCallout({
+              tone: 'mistake',
+              title: 'Practical rule',
+              body: 'Treat this environment as a PoC sandbox. Build dummy scenarios only. If you need to describe a third party, say “supplier” rather than naming the real company.'
+            })}
           `
         })
       ]
@@ -8068,14 +8387,14 @@ function renderHelpPage() {
           summary: 'AI suggests structure; grounded sources and benchmarks shape how confident to be.',
           body: `
             <p class="help-body-copy">AI in this app is assistive. It helps draft, structure, refine, and benchmark the scenario. It does not turn its own suggestions into facts. Grounding means the model can point to real context, uploaded material, retrieved references, or an explainable basis for the suggestion.</p>
-            <div class="help-mini-grid">
-              <div class="help-mini-card"><strong>Primary grounding</strong><p>The strongest named source or context basis carrying a draft or result.</p></div>
-              <div class="help-mini-card"><strong>Supporting references</strong><p>Additional retrieved or attached material that helps explain or support the current framing.</p></div>
-              <div class="help-mini-card"><strong>Provenance</strong><p>A trace of where the current wording, estimate, or assumption came from: user input, AI suggestion, benchmark, uploaded document, or inherited context.</p></div>
-            </div>
+            ${renderHelpMiniCards([
+              { title: 'Primary grounding', body: 'The strongest named source or context basis carrying a draft or result.' },
+              { title: 'Supporting references', body: 'Additional retrieved or attached material that helps explain or support the current framing.' },
+              { title: 'Provenance', body: 'A trace of where the current wording, estimate, or assumption came from: user input, AI suggestion, benchmark, uploaded document, or inherited context.' }
+            ])}
             ${renderHelpExample({
               title: 'How company context shapes output',
-              body: 'If the company brief says the business operates regulated digital services in the UAE, the app will tend to surface geography, regulatory, resilience, and customer-impact considerations earlier than it would for a non-regulated internal-only service.'
+              body: helpAudience.contextExample
             })}
           `
         }),
@@ -8083,11 +8402,11 @@ function renderHelpPage() {
           title: 'How live AI and fallback behave in pilot',
           summary: 'Pilot-quality AI requires a verified live path; fallback keeps the workflow moving but should be treated differently.',
           body: `
-            <div class="help-mini-grid">
-              <div class="help-mini-card"><strong>Live AI verified</strong><p>Use this state when the active runtime has been checked successfully in <strong>Admin &gt; System Access</strong>. This is the right state for pilot-quality AI review, provided the evidence and assumptions still hold up.</p></div>
-              <div class="help-mini-card"><strong>Local fallback active</strong><p>The workflow still continues, but the draft or guidance was assembled locally rather than from the live model. Treat this as continuity support, not as pilot-quality AI sign-off.</p></div>
-              <div class="help-mini-card"><strong>Who checks it</strong><p>Admins should use the <strong>Pilot AI readiness</strong> card and <strong>Test Connection</strong> in System Access. End users should expect calmer in-step wording if live AI is not configured for the current session.</p></div>
-            </div>
+            ${renderHelpMiniCards([
+              { title: 'Live AI verified', body: 'Use this state when the active runtime has been checked successfully in Admin > System Access. This is the right state for pilot-quality AI review, provided the evidence and assumptions still hold up.' },
+              { title: 'Local fallback active', body: 'The workflow still continues, but the draft or guidance was assembled locally rather than from the live model. Treat this as continuity support, not as pilot-quality AI sign-off.' },
+              { title: 'Who checks it', body: helpAudience.pilotReadinessBody }
+            ])}
             ${renderHelpCallout({
               tone: 'trust',
               title: 'Practical rule for pilot and staging',
@@ -8099,11 +8418,11 @@ function renderHelpPage() {
           title: 'How feedback improves AI over time',
           summary: 'Ratings improve retrieval and ranking in tiers; they do not instantly retrain the model.',
           body: `
-            <div class="help-mini-grid">
-              <div class="help-mini-card"><strong>What you rate</strong><p>In Step 1, rate the generated scenario draft and generated shortlist on a 1-5 scale, then add short reason tags if the issue was wrong domain, weak citations, missed risks, unrelated risks, or generic wording.</p></div>
-              <div class="help-mini-card"><strong>What changes first</strong><p>Your own repeated feedback shapes your personal guidance first. When similar live-AI signals repeat across users, the same pattern can start shaping function, BU, and wider platform behaviour.</p></div>
-              <div class="help-mini-card"><strong>What the platform learns</strong><p>The app uses repeated signals to improve retrieval relevance, shortlist ordering, and prompt/context priors. It does not treat every single rating as instant model retraining.</p></div>
-            </div>
+            ${renderHelpMiniCards([
+              { title: 'What you rate', body: 'In Step 1, rate the generated scenario draft and generated shortlist on a 1-5 scale, then add short reason tags if the issue was wrong domain, weak citations, missed risks, unrelated risks, or generic wording.' },
+              { title: 'What changes first', body: helpAudience.feedbackChangeBody },
+              { title: 'What the platform learns', body: 'The app uses repeated signals to improve retrieval relevance, shortlist ordering, and prompt/context priors. It does not treat every single rating as instant model retraining.' }
+            ])}
             ${renderHelpCallout({
               tone: 'trust',
               title: 'What this does not mean',
@@ -8160,17 +8479,17 @@ function renderHelpPage() {
       title: 'How to use the main steps well',
       summary: 'Step-by-step help',
       intro: 'Each screen has one main job. Use the deeper detail only when it helps the current task.',
-      chips: ['Dashboard', 'Step 1', 'Step 2', 'Step 3', 'Review & Run', 'Results', 'Settings', 'Admin'],
+      chips: helpAudience.stepChips,
       disclosures: [
         renderHelpDisclosure('steps', {
           title: 'Dashboard',
           summary: 'Start, resume, review, and keep an eye on what needs attention.',
           body: `
-            <p class="help-body-copy"><strong>Purpose:</strong> know what to do next. Use the live work lane first, the watchlist second, and history last.</p>
+            <p class="help-body-copy"><strong>Purpose:</strong> ${escapeHtml(helpAudience.dashboardPurpose)}</p>
             <p class="help-body-copy"><strong>Common mistake:</strong> treating the dashboard as a reporting page. It is a front door and oversight lane, not the place to inspect every detail.</p>
             ${renderHelpExample({
               title: 'Best use',
-              body: 'Resume a live draft, open a result that needs review, or start a guided assessment only when there is no urgent queue item competing.'
+              body: helpAudience.dashboardBestUse
             })}
           `
         }),
@@ -8203,12 +8522,7 @@ function renderHelpPage() {
           title: 'Review & Run, Results, Settings, and Admin',
           summary: 'How to use the final stages and role-specific controls well.',
           body: `
-            <div class="help-mini-grid">
-              <div class="help-mini-card"><strong>Review & Run</strong><p>Challenge the assumptions that matter most, then run. Do not turn this into another writing stage.</p></div>
-              <div class="help-mini-card"><strong>Results</strong><p>Read the executive story first, then challenge the technical detail, then export only after confidence and evidence feel good enough.</p></div>
-              <div class="help-mini-card"><strong>Personal Settings</strong><p>Use this to shape how the assistant helps you and to maintain context you own. Keep optional overlays secondary.</p></div>
-              <div class="help-mini-card"><strong>Admin</strong><p>Use admin screens as workbenches, not dashboards. Keep the organisation, defaults, governance, and document library current because they shape downstream suggestions.</p></div>
-            </div>
+            ${renderHelpMiniCards(helpAudience.stepFinalCards)}
           `
         })
       ]
@@ -8321,17 +8635,10 @@ function renderHelpPage() {
           summary: 'The same shortcuts shown in the in-app overlay.',
           open: true,
           body: `
-            <div class="help-shortcut-grid">
-              <div class="help-shortcut-card"><strong>Alt/Option + N</strong><span>Start a new assessment</span></div>
-              <div class="help-shortcut-card"><strong>Alt/Option + R</strong><span>Resume your current draft</span></div>
-              <div class="help-shortcut-card"><strong>Alt/Option + S</strong><span>Open personal settings</span></div>
-              <div class="help-shortcut-card"><strong>Alt/Option + 1 / 2 / 3</strong><span>Switch results tabs</span></div>
-              <div class="help-shortcut-card"><strong>Alt/Option + F</strong><span>Focus admin user search</span></div>
-              <div class="help-shortcut-card"><strong>Alt/Option + /</strong><span>Open the shortcuts overlay</span></div>
-            </div>
+            ${renderHelpShortcutCards(helpAudience.shortcutCards)}
             <div class="flex items-center gap-3" style="margin-top:var(--sp-4);flex-wrap:wrap">
               <button type="button" class="btn btn--secondary btn--sm" data-open-shortcuts-help>Open shortcuts overlay</button>
-              <span class="form-help">Drafts and settings save automatically. Watch the save and sync cues rather than repeatedly hunting for a manual save button.</span>
+              <span class="form-help">${escapeHtml(helpAudience.shortcutHint)} Drafts and settings save automatically. Watch the save and sync cues rather than repeatedly hunting for a manual save button.</span>
             </div>
           `
         })
@@ -8341,31 +8648,14 @@ function renderHelpPage() {
       id: 'roles',
       title: 'Role-specific help',
       summary: 'What good use looks like by role',
-      intro: 'Different roles should use the platform differently. The best use of the product depends on what you own and what decisions you support.',
-      chips: ['Standard user', 'Function admin', 'BU admin', 'Global admin'],
-      disclosures: [
-        renderHelpDisclosure('roles', {
-          title: 'Standard user',
-          summary: 'Draft, estimate, review, and escalate with evidence.',
-          body: `
-            <p class="help-body-copy">Focus on getting one good scenario through the workflow, using your settings to shape how the assistant helps you, and escalating results only after checking confidence and evidence posture.</p>
-          `
-        }),
-        renderHelpDisclosure('roles', {
-          title: 'Function admin and BU admin',
-          summary: 'Use the workspace as an oversight console, not as a general dashboard.',
-          body: `
-            <p class="help-body-copy">Prioritise queue items that need review, maintain the context you own, and use the dashboard watchlist and reassessment lane to keep important scenarios current. Keep owned context more up to date than optional personal overlays.</p>
-          `
-        }),
-        renderHelpDisclosure('roles', {
-          title: 'Global admin',
-          summary: 'Maintain the platform workbench that shapes everyone else’s output.',
-          body: `
-            <p class="help-body-copy">Keep the organisation structure, platform defaults, governance inputs, company context, and document library current. These settings influence how the AI drafts, what guidance users see, and how grounded the output can become.</p>
-          `
-        })
-      ]
+      intro: helpAudience.roleSectionIntro,
+      chips: helpAudience.roleSectionChips,
+      disclosures: helpAudience.roleDisclosures.map((disclosure, index) => renderHelpDisclosure('roles', {
+        title: disclosure.title,
+        summary: disclosure.summary,
+        open: index === 0,
+        body: disclosure.body
+      }))
     })
   ];
 
@@ -8375,9 +8665,9 @@ function renderHelpPage() {
         <aside class="help-nav card">
           <div class="help-nav__kicker">Help</div>
           <div class="help-nav__title">Risk Intelligence guide</div>
-          <div class="help-nav__copy">Follow the product flow, jump to what you need, and open deeper detail only when it helps the current task.</div>
+          <div class="help-nav__copy">${escapeHtml(helpAudience.navCopy)}</div>
           <div class="help-nav__role">
-            <span class="badge badge--neutral">${escapeHtml(roleSummary)}</span>
+            <span class="badge badge--neutral">${escapeHtml(helpAudience.roleSummary)}</span>
             <span class="form-help">Tailored for the current product state</span>
           </div>
           <div class="help-nav__links">
@@ -8401,7 +8691,7 @@ function renderHelpPage() {
               <div>
                 <div class="help-hero__kicker">Help and FAQ</div>
                 <h1 class="help-hero__title" data-page-focus>Use the platform well without learning the whole model first.</h1>
-                <p class="help-hero__copy">This guide is structured around the actual workflow in the current app: start, refine, estimate, run, review, and export. It explains what the platform is doing, what you should do, what strong input looks like, and how to know when the result is strong enough to use.</p>
+                <p class="help-hero__copy">${escapeHtml(helpAudience.heroCopy)}</p>
               </div>
               <div class="help-hero__actions">
                 <button type="button" class="btn btn--secondary" data-open-shortcuts-help>Shortcuts</button>

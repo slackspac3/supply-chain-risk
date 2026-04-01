@@ -27,15 +27,15 @@ const AdminUserAccountsSection = (() => {
             ${managedAccounts.length ? managedAccounts.map(account => {
               const departmentsForAccount = getDepartmentEntities(companyStructure, account.businessUnitEntityId || '');
               return `
-              <tr class="managed-account-row" data-username="${account.username}">
+              <tr class="managed-account-row" data-username="${escapeHtml(String(account.username || ''))}">
                 <td>
                   <div class="table-primary-cell">
-                    <strong>${account.displayName}</strong>
-                    <span><code>${account.username}</code></span>
+                    <strong>${escapeHtml(String(account.displayName || 'User'))}</strong>
+                    <span><code>${escapeHtml(String(account.username || ''))}</code></span>
                   </div>
                 </td>
                 <td>
-                  <select class="form-select form-select--sm account-role-select" data-username="${account.username}">
+                  <select class="form-select form-select--sm account-role-select" data-username="${escapeHtml(String(account.username || ''))}">
                     <option value="user" ${account.role === 'user' ? 'selected' : ''}>Standard user</option>
                     <option value="bu_admin" ${account.role === 'bu_admin' ? 'selected' : ''}>BU admin</option>
                     <option value="function_admin" ${account.role === 'function_admin' ? 'selected' : ''}>Function admin</option>
@@ -43,26 +43,26 @@ const AdminUserAccountsSection = (() => {
                 </td>
                 <td>
                   <div class="table-scope-stack">
-                    <select class="form-select form-select--sm account-bu-select" data-username="${account.username}">
+                    <select class="form-select form-select--sm account-bu-select" data-username="${escapeHtml(String(account.username || ''))}">
                       <option value="">Choose BU</option>
-                      ${companyEntities.map(entity => `<option value="${entity.id}" ${entity.id === (account.businessUnitEntityId || '') ? 'selected' : ''}>${entity.name}</option>`).join('')}
+                      ${companyEntities.map(entity => `<option value="${escapeHtml(String(entity.id || ''))}" ${entity.id === (account.businessUnitEntityId || '') ? 'selected' : ''}>${escapeHtml(String(entity.name || 'Unnamed entity'))}</option>`).join('')}
                     </select>
-                    <select class="form-select form-select--sm account-department-select" data-username="${account.username}">
+                    <select class="form-select form-select--sm account-department-select" data-username="${escapeHtml(String(account.username || ''))}">
                       <option value="">${account.role === 'bu_admin' ? 'Optional for BU admin' : 'Choose function'}</option>
-                      ${departmentsForAccount.map(entity => `<option value="${entity.id}" ${entity.id === (account.departmentEntityId || '') ? 'selected' : ''}>${entity.name}</option>`).join('')}
+                      ${departmentsForAccount.map(entity => `<option value="${escapeHtml(String(entity.id || ''))}" ${entity.id === (account.departmentEntityId || '') ? 'selected' : ''}>${escapeHtml(String(entity.name || 'Unnamed entity'))}</option>`).join('')}
                     </select>
                   </div>
                 </td>
-                <td><code>${AppState.adminVisiblePasswords[account.username] || 'Reset to issue'}</code></td>
+                <td><code>${escapeHtml(String(AppState.adminVisiblePasswords[account.username] || 'Reset to issue'))}</code></td>
                 <td class="table-actions-cell">
                   <div class="table-actions-row">
-                    <button class="btn btn--secondary btn--sm btn-apply-user-access" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Apply Access</button>
+                    <button class="btn btn--secondary btn--sm btn-apply-user-access" data-username="${escapeHtml(String(account.username || ''))}" data-display-name="${escapeHtml(String(account.displayName || 'User'))}" type="button">Apply Access</button>
                     <details class="results-actions-disclosure dashboard-row-overflow" style="display:inline-flex">
                       <summary class="btn btn--ghost btn--sm">More</summary>
                       <div class="results-actions-disclosure-menu">
-                        <button class="btn btn--secondary btn--sm btn-reset-user-password" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset Password</button>
-                        <button class="btn btn--secondary btn--sm btn-reset-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Reset User</button>
-                        <button class="btn btn--secondary btn--sm btn-delete-user-account" data-username="${account.username}" data-display-name="${account.displayName}" type="button">Delete User</button>
+                        <button class="btn btn--secondary btn--sm btn-reset-user-password" data-username="${escapeHtml(String(account.username || ''))}" data-display-name="${escapeHtml(String(account.displayName || 'User'))}" type="button">Reset Password</button>
+                        <button class="btn btn--secondary btn--sm btn-reset-user-account" data-username="${escapeHtml(String(account.username || ''))}" data-display-name="${escapeHtml(String(account.displayName || 'User'))}" type="button">Reset User</button>
+                        <button class="btn btn--secondary btn--sm btn-delete-user-account" data-username="${escapeHtml(String(account.username || ''))}" data-display-name="${escapeHtml(String(account.displayName || 'User'))}" type="button">Delete User</button>
                       </div>
                     </details>
                   </div>
@@ -94,7 +94,7 @@ const AdminUserAccountsSection = (() => {
                 <label class="form-label" for="admin-new-user-bu">Business unit</label>
                 <select class="form-select" id="admin-new-user-bu">
                   <option value="">Choose BU</option>
-                  ${companyEntities.map(entity => `<option value="${entity.id}">${entity.name}</option>`).join('')}
+                  ${companyEntities.map(entity => `<option value="${escapeHtml(String(entity.id || ''))}">${escapeHtml(String(entity.name || 'Unnamed entity'))}</option>`).join('')}
                 </select>
               </div>
               <div class="form-group">
@@ -117,7 +117,7 @@ const AdminUserAccountsSection = (() => {
             <div class="grid-2 mt-1">
               <div class="form-group">
                 <label class="form-label" for="admin-api-secret">Admin action secret</label>
-                <input class="form-input" id="admin-api-secret" type="password" placeholder="Paste the admin action secret for this tab if needed" value="${AuthService.getAdminApiSecret() || ''}">
+                <input class="form-input" id="admin-api-secret" type="password" placeholder="Paste the admin action secret for this tab if needed" value="${escapeHtml(String(AuthService.getAdminApiSecret() || ''))}">
                 <span class="form-help">Saved only for this tab. Signed-in admin requests use the session token first and fall back to the secret only when needed.</span>
               </div>
             </div>
@@ -140,7 +140,7 @@ const AdminUserAccountsSection = (() => {
     if (!departmentEl) return;
     const departments = getDepartmentEntities(companyStructure, buId);
     const placeholder = role === 'bu_admin' ? 'Optional for BU admin' : 'Choose function';
-    departmentEl.innerHTML = `<option value="">${departments.length || role === 'bu_admin' ? placeholder : 'No functions configured'}</option>${departments.map(entity => `<option value="${entity.id}">${entity.name}</option>`).join('')}`;
+    departmentEl.innerHTML = `<option value="">${escapeHtml(String(departments.length || role === 'bu_admin' ? placeholder : 'No functions configured'))}</option>${departments.map(entity => `<option value="${escapeHtml(String(entity.id || ''))}">${escapeHtml(String(entity.name || 'Unnamed entity'))}</option>`).join('')}`;
     departmentEl.disabled = !buId || (!departments.length && role !== 'bu_admin');
   }
 
@@ -171,7 +171,7 @@ const AdminUserAccountsSection = (() => {
     const departments = getDepartmentEntities(companyStructure, buId);
     const currentValue = departmentEl.value || departmentEl.dataset.currentValue || '';
     const placeholder = role === 'bu_admin' ? 'Optional for BU admin' : 'Choose function';
-    departmentEl.innerHTML = `<option value="">${departments.length || role === 'bu_admin' ? placeholder : 'No functions configured'}</option>${departments.map(entity => `<option value="${entity.id}" ${entity.id === currentValue ? 'selected' : ''}>${entity.name}</option>`).join('')}`;
+    departmentEl.innerHTML = `<option value="">${escapeHtml(String(departments.length || role === 'bu_admin' ? placeholder : 'No functions configured'))}</option>${departments.map(entity => `<option value="${escapeHtml(String(entity.id || ''))}" ${entity.id === currentValue ? 'selected' : ''}>${escapeHtml(String(entity.name || 'Unnamed entity'))}</option>`).join('')}`;
     departmentEl.disabled = !buId || (!departments.length && role !== 'bu_admin');
     if (!departments.some(entity => entity.id === currentValue)) departmentEl.value = '';
   }

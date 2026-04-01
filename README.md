@@ -2,6 +2,12 @@
 
 Risk Intelligence Platform is an internal enterprise risk decision-support product. It combines guided scenario building, AI-assisted structuring, FAIR-style quant logic, Monte Carlo simulation, evidence-grounded retrieval, and executive-grade reporting in one role-aware workflow.
 
+Important pilot boundary:
+- this environment is still a PoC sandbox
+- do not use real company names, customer data, or live incident details
+- create dummy scenarios only
+- prefer generic labels such as `supplier`, `customer`, `service provider`, or `business unit`
+
 This repository contains:
 - the GitHub Pages frontend SPA
 - the Vercel-hosted serverless API routes used by the shared pilot environment
@@ -307,6 +313,11 @@ Primary routes:
 
 Shared backend helper:
 - [api/_kvStore.js](./api/_kvStore.js)
+- [api/_apiAuth.js](./api/_apiAuth.js)
+- [api/_audit.js](./api/_audit.js)
+- [api/_request.js](./api/_request.js)
+- [api/_rateLimit.js](./api/_rateLimit.js)
+- [api/_passwordPolicy.js](./api/_passwordPolicy.js)
 
 ### Persistence Model
 
@@ -356,9 +367,13 @@ Reference shape:
 
 That file covers the expected configuration for:
 - frontend origin
+- frontend origin allowlists
 - Compass API access
+- eval-harness Compass overrides
 - session signing
+- audit retention
 - shared KV/user store access
+- KV compatibility aliases still supported by the current codebase
 - bootstrap admin/account seeding
 
 AI environment notes:
@@ -407,6 +422,13 @@ Repository consistency scan:
 - verifies expected file structure, config pins, package scripts, FAIR engine markers, role/review states, feedback-learning tags, evidence-contract fields, export seams, API security markers, eval harness presence, and pilot seed data
 - use it when updating the README, release docs, repo layout, or other documented platform contracts
 
+Targeted security coverage now also checks:
+- signed session-token validation and tamper rejection
+- blocked origins on protected API routes
+- fail-closed throttling when the shared KV store is unavailable
+- rejected unexpected fields on sensitive auth requests
+- timing-safe admin-secret comparison paths
+
 Full pilot release gate:
 
 ```bash
@@ -426,8 +448,14 @@ This is still a pilot codebase, not a finished production security architecture,
 Current hardening includes:
 - hashed password storage and legacy upgrade path
 - session-token-based API authorization
+- timing-safe session-signature and admin-secret validation
 - role-based API protection
+- strict request parsing with unexpected-field rejection on shared API routes
+- fail-closed rate limiting and login throttling in the shared pilot environment
+- validated origin allowlists before CORS echoing
 - improved SSRF guardrails around company-context fetching
+- degraded-safe audit persistence so audit-store failures do not silently corrupt core auth responses
+- safer escaping on admin/settings surfaces that render stored names, context, and other retained content
 - central route guards
 - unit, syntax, smoke, and E2E release gating
 

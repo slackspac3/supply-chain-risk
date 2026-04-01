@@ -1,7 +1,8 @@
 const dns = require('dns').promises;
 const net = require('net');
-const { resolveAdminActor } = require('./_apiAuth');
-const { get: kvGet, set: kvSet } = require('./_kvStore');
+const { isRequestSecretValid, resolveAdminActor } = require('./_apiAuth');
+const { applyCorsHeaders, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
+const { checkRateLimit } = require('./_rateLimit');
 
 function stripHtml(html) {
   return String(html || '')
@@ -23,54 +24,20 @@ function extractLinks(html, baseUrl) {
     try {
       const url = new URL(match[1], baseUrl);
       links.push(url.toString());
-    } catch {}
+    } catch (error) {
+      console.error('api/company-context.extractLinks failed to normalise a URL:', error);
+    }
   }
   return Array.from(new Set(links));
-}
-
-async function checkRateLimit(key, maxPerMinute = 20) {
-  const kvKey = 'ratelimit::' + key;
-  const windowMs = 60000;
-  const now = Date.now();
-  let entry = { count: 0, reset: now + windowMs };
-  try {
-    const raw = await kvGet(kvKey);
-    if (raw) entry = JSON.parse(raw);
-    if (now > entry.reset) entry = { count: 0, reset: now + windowMs };
-  } catch {}
-  entry.count += 1;
-  try {
-    const ttl = Math.ceil((entry.reset - now) / 1000) + 5;
-    void ttl;
-    await kvSet(kvKey, JSON.stringify(entry));
-  } catch {}
-  return entry.count <= maxPerMinute
-    ? null
-    : Math.ceil((entry.reset - now) / 1000);
 }
 
 function getRateLimitKey(req, actor) {
   return `${String(actor?.username || 'admin').trim().toLowerCase()}::${String(req.socket?.remoteAddress || 'unknown')}`;
 }
 
-function isPlainObject(value) {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseRequestBody(req) {
-  if (typeof req.body === 'string') {
-    try {
-      return JSON.parse(req.body || '{}');
-    } catch {
-      return null;
-    }
-  }
-  return req.body ?? {};
-}
-
 function isAdminSecretValid(req) {
   const adminSecret = String(process.env.ADMIN_API_SECRET || '').trim();
-  return !!adminSecret && req.headers['x-admin-secret'] === adminSecret;
+  return isRequestSecretValid(req, 'x-admin-secret', adminSecret);
 }
 
 function isBlockedHostname(hostname = '') {
@@ -185,7 +152,8 @@ async function fetchText(url, timeoutMs = 7000, redirectCount = 0) {
 function sameHost(url, host) {
   try {
     return new URL(url).hostname === host;
-  } catch {
+  } catch (error) {
+    console.error('api/company-context.sameHost failed to parse URL:', error);
     return false;
   }
 }
@@ -206,7 +174,8 @@ function scoreCandidateUrl(url, rootUrl) {
     if (/contact|career|jobs/.test(path)) score -= 20;
     score -= Math.min(20, path.split('/').filter(Boolean).length * 2);
     return score;
-  } catch {
+  } catch (error) {
+    console.error('api/company-context.scoreCandidateUrl failed to score a URL:', error);
     return 0;
   }
 }
@@ -224,7 +193,8 @@ function describeCompanySource(url, rootUrl) {
     if (/news|newsroom|press|media|announcement/.test(path)) return 'Official company website: newsroom or announcement page';
     if (/sustainab|impact|esg/.test(path)) return 'Official company website: sustainability or public-commitment page';
     return 'Official company website: supporting context page';
-  } catch {
+  } catch (error) {
+    console.error('api/company-context.describeCompanySource failed to describe a source URL:', error);
     return 'Official company website: supporting context page';
   }
 }
@@ -232,7 +202,8 @@ function describeCompanySource(url, rootUrl) {
 function hostnameOf(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
+  } catch (error) {
+    console.error('api/company-context.hostnameOf failed to parse a URL:', error);
     return '';
   }
 }
@@ -497,7 +468,9 @@ function tryParseStructuredJson(raw) {
   for (const candidate of candidates) {
     try {
       return JSON.parse(candidate);
-    } catch {}
+    } catch (error) {
+      console.error('api/company-context.tryParseStructuredJson candidate parse failed:', error);
+    }
   }
   return null;
 }
@@ -554,7 +527,8 @@ Repair the response into the required JSON schema. Preserve company-specific mea
     if (!upstream.ok) return null;
     const payload = await upstream.json();
     return tryParseStructuredJson(payload.choices?.[0]?.message?.content || '');
-  } catch {
+  } catch (error) {
+    console.error('api/company-context.repairStructuredJson failed:', error);
     return null;
   } finally {
     clearTimeout(timeout);
@@ -584,15 +558,13 @@ function normaliseContextPayload(parsed, canonicalUrl, pages, newsItems) {
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const compassApiUrl = process.env.COMPASS_API_URL || 'https://api.core42.ai/v1/chat/completions';
   const compassModel = process.env.COMPASS_MODEL || 'gpt-5.1';
   const body = parseRequestBody(req);
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-admin-secret,x-session-token');
-  res.setHeader('Vary', 'Origin');
+  applyCorsHeaders(req, res, {
+    methods: 'POST,OPTIONS',
+    headers: 'content-type,x-admin-secret,x-session-token'
+  });
 
   if (req.method === 'OPTIONS') {
     res.status(204).end();
@@ -616,7 +588,7 @@ module.exports = async function handler(req, res) {
   }
 
   const origin = req.headers.origin;
-  if (!origin || origin === 'null' || origin !== allowedOrigin) {
+  if (!origin || !isAllowedOrigin(origin)) {
     res.status(403).json({ error: 'Origin not allowed' });
     return;
   }
@@ -627,15 +599,21 @@ module.exports = async function handler(req, res) {
   });
   if (!actor) return;
 
-  const retryAfterSeconds = await checkRateLimit(getRateLimitKey(req, actor));
-  if (retryAfterSeconds) {
-    res.setHeader('Retry-After', String(retryAfterSeconds));
-    res.status(429).json({ error: 'Rate limit exceeded' });
+  const rateLimit = await checkRateLimit(getRateLimitKey(req, actor), { maxPerWindow: 20, windowMs: 60000 });
+  if (!rateLimit.allowed) {
+    res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+    res.status(rateLimit.unavailable ? 503 : 429).json({
+      error: rateLimit.unavailable ? 'Request throttling is temporarily unavailable' : 'Rate limit exceeded'
+    });
     return;
   }
 
   if (!isPlainObject(body)) {
     res.status(400).json({ error: 'Invalid request body' });
+    return;
+  }
+  if (Object.keys(body).some((field) => field !== 'websiteUrl')) {
+    res.status(400).json({ error: 'Unexpected fields were included in the request.' });
     return;
   }
 

@@ -1,24 +1,21 @@
 const crypto = require('crypto');
+const { getKvConfig } = require('./_kvStore');
 
 const AUDIT_KEY = process.env.AUDIT_LOG_KEY || 'risk_calculator_audit_log';
 const AUDIT_CAPACITY = Number(process.env.AUDIT_LOG_CAPACITY || 200);
 
-function getKvUrl() {
-  return process.env.APPLE_CAT || process.env.FOO_URL_TEST || process.env.RC_USER_STORE_URL || process.env.USER_STORE_KV_URL || process.env.KV_REST_API_URL || '';
-}
-
-function getKvToken() {
-  return process.env.BANANA_DOG || process.env.FOO_TOKEN_TEST || process.env.RC_USER_STORE_TOKEN || process.env.USER_STORE_KV_TOKEN || process.env.KV_REST_API_TOKEN || '';
-}
-
 async function runKvCommand(command) {
-  const url = getKvUrl();
-  const token = getKvToken();
-  if (!url || !token) return null;
-  const res = await fetch(url, {
+  let config = null;
+  try {
+    config = getKvConfig();
+  } catch (error) {
+    console.error('api/_audit.runKvCommand missing KV config:', error);
+    return null;
+  }
+  const res = await fetch(config.url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${config.token}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(command)
@@ -37,7 +34,8 @@ async function readAuditLog() {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
-  } catch {
+  } catch (error) {
+    console.error('api/_audit.readAuditLog failed to parse audit log payload:', error);
     return [];
   }
 }
@@ -61,9 +59,13 @@ async function appendAuditEvent(event = {}) {
     source: event.source || 'server',
     details: event.details && typeof event.details === 'object' ? event.details : {}
   };
-  const entries = await readAuditLog();
-  entries.push(entry);
-  await writeAuditLog(entries);
+  try {
+    const entries = await readAuditLog();
+    entries.push(entry);
+    await writeAuditLog(entries);
+  } catch (error) {
+    console.error('api/_audit.appendAuditEvent failed to persist audit event:', error);
+  }
   return entry;
 }
 
@@ -91,7 +93,7 @@ function summariseAuditLog(entries = []) {
 }
 
 function getSessionSigningSecret() {
-  return process.env.SESSION_SIGNING_SECRET || process.env.ADMIN_API_SECRET || getKvToken() || '';
+  return process.env.SESSION_SIGNING_SECRET || process.env.ADMIN_API_SECRET || '';
 }
 
 function parseSessionToken(token) {
@@ -101,7 +103,10 @@ function parseSessionToken(token) {
   if (!value || !value.includes('.')) return { valid: false, reason: 'missing', payload: null };
   const [payloadPart, signature] = value.split('.', 2);
   const expected = crypto.createHmac('sha256', signingSecret).update(payloadPart).digest('base64url');
-  if (signature !== expected) return { valid: false, reason: 'invalid', payload: null };
+  const actualBuffer = Buffer.from(String(signature || ''), 'utf8');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  if (actualBuffer.length !== expectedBuffer.length) return { valid: false, reason: 'invalid', payload: null };
+  if (!crypto.timingSafeEqual(actualBuffer, expectedBuffer)) return { valid: false, reason: 'invalid', payload: null };
   try {
     const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
     if (!payload?.username) return { valid: false, reason: 'invalid', payload: null };
@@ -109,7 +114,8 @@ function parseSessionToken(token) {
       return { valid: false, reason: 'expired', payload };
     }
     return { valid: true, reason: '', payload };
-  } catch {
+  } catch (error) {
+    console.error('api/_audit.parseSessionToken failed to parse token payload:', error);
     return { valid: false, reason: 'invalid', payload: null };
   }
 }
@@ -122,6 +128,7 @@ function verifySessionToken(token) {
 module.exports = {
   AUDIT_CAPACITY,
   appendAuditEvent,
+  getSessionSigningSecret,
   parseSessionToken,
   readAuditLog,
   summariseAuditLog,

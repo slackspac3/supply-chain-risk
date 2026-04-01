@@ -11,6 +11,10 @@
  */
 
 const RAGService = (() => {
+  function _escapeRegExp(value = '') {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   let _docs = [];
   let _buData = [];
   let _indexedDocs = [];
@@ -691,7 +695,9 @@ const RAGService = (() => {
     let score = 0;
 
     (queryInfo.expandedTerms || []).forEach(term => {
-      const hits = (indexedDoc.normalizedText.match(new RegExp(`\\b${term}\\b`, 'g')) || []).length;
+      const safeTerm = _escapeRegExp(term);
+      if (!safeTerm) return;
+      const hits = (indexedDoc.normalizedText.match(new RegExp(`\\b${safeTerm}\\b`, 'g')) || []).length;
       score += hits * 1.4;
       if (indexedDoc.titleTokens.has(term)) score += 2.3;
     });

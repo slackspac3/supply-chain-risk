@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { parseSessionToken } = require('./_audit');
 
 function buildErrorPayload(code, message, extra = {}) {
@@ -22,6 +23,17 @@ function sendConflictError(res, message, extra = {}) {
     message || 'This information changed somewhere else. Reload the latest version and try again.',
     extra
   );
+}
+
+function isRequestSecretValid(req, headerName, expectedSecret) {
+  const safeHeaderName = String(headerName || '').trim().toLowerCase();
+  const provided = String(req?.headers?.[safeHeaderName] || '').trim();
+  const expected = String(expectedSecret || '').trim();
+  if (!provided || !expected) return false;
+  const providedBuffer = Buffer.from(provided, 'utf8');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  if (providedBuffer.length !== expectedBuffer.length) return false;
+  return crypto.timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
 function validateSessionFromRequest(req) {
@@ -78,6 +90,7 @@ function resolveAdminActor(req, res, { isAdminSecretValid, allowRoles = ['admin'
 
 module.exports = {
   buildErrorPayload,
+  isRequestSecretValid,
   sendApiError,
   sendConflictError,
   validateSessionFromRequest,

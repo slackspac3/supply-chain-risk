@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+
 const PASSWORD_POLICY = {
   minLength: 12
 };
@@ -18,7 +20,7 @@ function validatePasswordPolicy(password = '') {
 }
 
 function generateStrongPassword() {
-  const randomBlock = Math.floor(100000 + Math.random() * 900000);
+  const randomBlock = (crypto.randomBytes(4).readUInt32BE(0) % 900000) + 100000;
   return `PilotRisk!${randomBlock}Aa`;
 }
 

@@ -1,38 +1,26 @@
 const { appendAuditEvent, readAuditLog, summariseAuditLog } = require('./_audit');
-const { sendApiError, requireSession } = require('./_apiAuth');
+const { isRequestSecretValid, sendApiError, requireSession } = require('./_apiAuth');
+const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
 
 const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || '';
 
-function isPlainObject(value) {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function parseRequestBody(req) {
-  if (typeof req.body === 'string') {
-    try { return JSON.parse(req.body || '{}'); } catch { return null; }
-  }
-  return req.body ?? {};
-}
-
 function isAdminSecretValid(req) {
-  return !!ADMIN_API_SECRET && req.headers['x-admin-secret'] === ADMIN_API_SECRET;
+  return isRequestSecretValid(req, 'x-admin-secret', ADMIN_API_SECRET);
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://slackspac3.github.io';
   const body = parseRequestBody(req);
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-admin-secret,x-session-token');
-  res.setHeader('Vary', 'Origin');
+  applyCorsHeaders(req, res, {
+    methods: 'GET,POST,OPTIONS',
+    headers: 'content-type,x-admin-secret,x-session-token'
+  });
 
   if (req.method === 'OPTIONS') {
     res.status(204).end();
     return;
   }
   const origin = req.headers.origin;
-  if (origin && origin !== allowedOrigin) {
+  if (origin && !isAllowedOrigin(origin)) {
     sendApiError(res, 403, 'FORBIDDEN', 'Request origin is not allowed.');
     return;
   }
@@ -56,6 +44,10 @@ module.exports = async function handler(req, res) {
       return;
     }
     if (req.method === 'POST') {
+      if (getUnexpectedFields(body, ['category', 'details', 'eventType', 'source', 'status', 'target']).length) {
+        sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the audit request.');
+        return;
+      }
       const session = isAdminSecretValid(req) ? { username: 'admin', role: 'admin' } : requireSession(req, res);
       if (!session) return;
       const entry = await appendAuditEvent({
