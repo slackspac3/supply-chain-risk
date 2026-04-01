@@ -1062,6 +1062,7 @@ function renderUserDashboard() {
   const boardBriefButtonMarkup = hasVisibleBoardBriefAssessments
     ? `<button class="btn btn--secondary btn--lg" id="btn-dashboard-board-brief" aria-label="Generate Board Brief">Generate Board Brief</button>`
     : '';
+  const shouldShowOversightDirectStartAction = isOversightUser && roleFrontDoor.primaryActionLabel !== 'Start Guided Assessment';
   const boardBriefSupportMarkup = hasVisibleBoardBriefAssessments
     ? `<div class="card card--elevated dashboard-section-card dashboard-section-card--secondary" style="margin-bottom:var(--sp-4)">
         <div class="flex items-center justify-between" style="gap:var(--sp-4);flex-wrap:wrap">
@@ -1483,8 +1484,9 @@ function renderUserDashboard() {
               </div>
               <div class="dashboard-hero-actions flex items-center gap-3 mt-6" style="flex-wrap:wrap">
                 <button class="btn btn--primary btn--lg" id="btn-dashboard-new-assessment" aria-label="${roleFrontDoor.primaryActionLabel}">${roleFrontDoor.primaryActionLabel}</button>
-                <!-- Keep start-new visible for oversight users instead of burying it in the overflow menu. -->
-                <button class="btn btn--secondary btn--lg" id="btn-dashboard-new-assessment-oversight" aria-label="Start Guided Assessment">Start Guided Assessment</button>
+                ${shouldShowOversightDirectStartAction
+                  ? '<button class="btn btn--secondary btn--lg" id="btn-dashboard-new-assessment-oversight" aria-label="Start Guided Assessment">Start Guided Assessment</button>'
+                  : ''}
                 ${boardBriefButtonMarkup}
                 ${renderWorkspaceToolsMenu({ includeResumeDraft: hasDraft, includeSettings: true, useSupportIds: false, includeNewAssessment: false })}
               </div>

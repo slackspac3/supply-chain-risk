@@ -577,6 +577,50 @@ test('business-unit oversight dashboard prioritises review and context actions',
   });
 });
 
+test('function oversight dashboard does not duplicate the guided-start hero CTA when the queue is clear', async ({ page }) => {
+  const seededUserSettings = buildSeededUserSettings({
+    userProfile: {
+      businessUnitEntityId: 'bu-digital',
+      departmentEntityId: 'dept-security',
+      businessUnit: 'Digital Services',
+      department: 'Security Operations'
+    }
+  });
+  await seedAuthenticatedUser(page, {
+    username: 'safiya.ops',
+    displayName: 'Safiya Ops',
+    role: 'function_admin',
+    userSettings: seededUserSettings
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [
+        { id: 'bu-digital', name: 'Digital Services', type: 'business_unit', ownerUsername: 'someone.else' },
+        { id: 'dept-security', name: 'Security Operations', type: 'Department / Function', parentId: 'bu-digital', ownerUsername: 'safiya.ops' }
+      ],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
+    await expect(page.getByText(/function oversight workspace/i)).toBeVisible();
+    await expect(page.locator('#btn-dashboard-new-assessment')).toHaveText(/start guided assessment/i);
+    await expect(page.locator('#btn-dashboard-new-assessment-oversight')).toHaveCount(0);
+  });
+});
+
 test('first-run onboarding can launch the sample assessment path', async ({ page }) => {
   const seededUserSettings = {
     userProfile: {
