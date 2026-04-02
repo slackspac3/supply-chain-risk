@@ -1927,45 +1927,9 @@ function patchLearningStore(updates = {}) {
 }
 
 function getRelevantScenarioPatterns(buId, limit = 3) {
-  try {
-    if (typeof OrgIntelligenceService !== 'undefined' && typeof OrgIntelligenceService.getMergedScenarioPatterns === 'function') {
-      const settings = typeof getEffectiveSettings === 'function' ? getEffectiveSettings() : {};
-      const functionKey = typeof inferStep1FunctionKey === 'function'
-        ? inferStep1FunctionKey(settings, AppState.draft || {})
-        : '';
-      const merged = OrgIntelligenceService.getMergedScenarioPatterns({
-        buId,
-        functionKey,
-        scenarioLens: AppState.draft?.scenarioLens || null
-      }, limit);
-      if (merged.length) return merged.slice(0, limit);
-    }
-  } catch {}
-  try {
-    const username = AuthService.getCurrentUser()?.username || '';
-    const store = AppState.userStateCache?.learningStore || {};
-    const cachedPatterns = Array.isArray(store.scenarioPatterns)
-      ? store.scenarioPatterns
-      : [];
-    const patterns = cachedPatterns.length
-      ? cachedPatterns
-      : (() => {
-          try {
-            const parsed = JSON.parse(localStorage.getItem(
-              buildUserStorageKey(LEARNING_STORAGE_PREFIX, username)
-            ) || '{}') || {};
-            return Array.isArray(parsed.scenarioPatterns) ? parsed.scenarioPatterns : [];
-          } catch {
-            return [];
-          }
-        })();
-    return patterns
-        .filter(p => !buId || p.buId === buId)
-        .sort((a, b) => b.completedAt - a.completedAt)
-        .slice(0, limit);
-  } catch {
-    return [];
-  }
+  void buId;
+  void limit;
+  return [];
 }
 
 // Scenario patterns are persisted from the shared assessment completion seam in assets/state/assessmentState.js.
@@ -3569,30 +3533,10 @@ function launchGuidedAssessmentStart() {
   if (typeof ensureStep1ContextPrefills === 'function') {
     ensureStep1ContextPrefills(AppState.draft, settings, buList);
   }
-  let ghostSuggestion = null;
-  try {
-    if (typeof OrgIntelligenceService !== 'undefined' && typeof OrgIntelligenceService.applyGhostDraftToDraft === 'function') {
-      ghostSuggestion = OrgIntelligenceService.applyGhostDraftToDraft(AppState.draft, {
-        buId: AppState.draft?.buId || '',
-        scenarioLens: AppState.draft?.scenarioLens || null,
-        functionKey: typeof inferStep1FunctionKey === 'function'
-          ? inferStep1FunctionKey(settings, AppState.draft || {})
-          : '',
-        applicableRegulations: Array.isArray(AppState.draft?.applicableRegulations)
-          ? AppState.draft.applicableRegulations
-          : []
-      });
-    }
-  } catch (error) {
-    console.warn('Ghost drafter prefill failed:', error?.message || error);
-  }
   saveDraft();
   openDraftWorkspaceRoute();
   OrgIntelligenceService?.refresh?.().catch?.(() => {});
-  if (ghostSuggestion?.patternCount) {
-    UI.toast(`Prepared a starting point from ${ghostSuggestion.patternCount} similar assessment${ghostSuggestion.patternCount === 1 ? '' : 's'}.`, 'info', 4500);
-  }
-  return ghostSuggestion;
+  return null;
 }
 
 function launchPilotSampleAssessment() {
@@ -8712,13 +8656,23 @@ function renderExecutiveDriversSummary(drivers, assessment) {
 
 function renderAssessmentChallengeBlock(challenge) {
   if (!challenge) return '';
+  const mode = String(challenge?.mode || (challenge?.usedFallback ? 'deterministic_fallback' : '')).trim().toLowerCase() || 'live';
+  const modeTone = mode === 'deterministic_fallback' ? 'warning' : mode === 'manual' ? 'neutral' : 'success';
+  const modeLabel = mode === 'deterministic_fallback'
+    ? 'Deterministic fallback challenge'
+    : mode === 'manual'
+      ? 'Manual challenge guidance'
+      : 'Live AI challenge';
+  const modeMessage = String(challenge?.fallbackReasonMessage || challenge?.manualReasonMessage || '').trim();
   return `<div class="results-summary-card">
     <div class="results-section-heading">Challenge and validate this assessment</div>
     <div class="results-chip-block">
       <span class="badge badge--warning">${challenge.challengeLevel || 'Challenge review'}</span>
+      <span class="badge badge--${modeTone}">${modeLabel}</span>
       ${challenge.confidenceLabel ? `<span class="badge badge--neutral">${challenge.confidenceLabel}</span>` : ''}
       ${challenge.evidenceQuality ? `<span class="badge badge--gold">${challenge.evidenceQuality}</span>` : ''}
     </div>
+    ${modeMessage ? `<div class="form-help" style="margin-top:8px">${modeMessage}</div>` : ''}
     ${challenge.summary ? `<p class="results-summary-copy" style="margin-top:var(--sp-3)">${challenge.summary}</p>` : ''}
     ${challenge.weakestAssumptions?.length ? `<div class="results-driver-group"><div class="results-driver-label">Weakest assumptions</div><div class="results-summary-copy">${challenge.weakestAssumptions.map(item => `• ${item}`).join('<br>')}</div></div>` : ''}
     ${challenge.committeeQuestions?.length ? `<div class="results-driver-group" style="margin-top:var(--sp-4)"><div class="results-driver-label">What a risk committee would ask</div><div class="results-summary-copy">${challenge.committeeQuestions.map(item => `• ${item}`).join('<br>')}</div></div>` : ''}

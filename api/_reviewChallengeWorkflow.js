@@ -148,6 +148,42 @@ function buildConsensusRecommendationStub(input = {}) {
   };
 }
 
+function buildReviewerDecisionBriefStub(input = {}) {
+  const assessmentData = cleanUserFacingText(String(input?.assessmentData || '').trim(), { maxSentences: 4 });
+  const sentences = assessmentData
+    ? assessmentData.split(/(?<=[.!?])\s+/).map((item) => cleanUserFacingText(item, { maxSentences: 1 })).filter(Boolean)
+    : [];
+  return {
+    whatMatters: sentences[0] || 'The assessment still needs a concise headline risk statement before review.',
+    whatsUncertain: sentences[1] || 'The weakest assumption still needs clearer evidence before approval.',
+    whatToDo: 'Use the technical detail view to challenge the weakest assumption before approving the current position.'
+  };
+}
+
+function buildExecutiveChallengeStub(input = {}) {
+  const assumptions = Array.isArray(input?.assessmentIntelligence?.assumptions)
+    ? input.assessmentIntelligence.assumptions
+    : [];
+  const firstAssumption = assumptions[0]?.text || assumptions[0] || '';
+  const p90 = Number(input?.results?.eventLoss?.p90 || 0);
+  const weakestAssumption = cleanUserFacingText(firstAssumption || 'Recovery timing and control-performance assumptions still need direct evidence.', { maxSentences: 1 })
+    || 'Recovery timing and control-performance assumptions still need direct evidence.';
+  return {
+    challengeSummary: p90 > 0
+      ? `The assessment may be directionally useful, but the committee should challenge the assumptions carrying the ${p90.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} bad-year view before relying on it.`
+      : 'The assessment may be directionally useful, but the committee should challenge the assumptions carrying the severe-loss view before relying on it.',
+    weakestAssumption,
+    alternativeView: 'A more conservative committee view would assume slower recovery or weaker control performance until direct evidence narrows the range.',
+    confidenceVerdict: 'Likely understated',
+    oneQuestion: cleanUserFacingText(
+      input?.obligationBasis
+        ? 'Which direct evidence proves the current control and recovery assumptions still meet the obligations in scope?'
+        : 'Which direct evidence proves the current control and recovery assumptions are realistic enough for committee use?',
+      { maxSentences: 1 }
+    ) || 'Which direct evidence proves the current control and recovery assumptions are realistic enough for committee use?'
+  };
+}
+
 function normaliseReviewerBrief(parsed = {}) {
   return {
     whatMatters: cleanUserFacingText(parsed.whatMatters || '', { maxSentences: 1 }),
@@ -255,8 +291,41 @@ function hasExecutiveChallengeShape(input = {}) {
 
 async function buildReviewerDecisionBriefWorkflow(input = {}) {
   const config = getCompassProviderConfig();
+  const traceLabel = sanitizeAiText(input.traceLabel || 'Reviewer decision brief', { maxChars: 120 }) || 'Reviewer decision brief';
   const assessmentData = String(input?.assessmentData || '').trim().slice(0, 2400);
-  if (!config.proxyConfigured || !assessmentData) return null;
+  const stub = buildReviewerDecisionBriefStub(input);
+  if (!assessmentData) {
+    return {
+      mode: 'manual',
+      ...stub,
+      usedFallback: false,
+      aiUnavailable: false,
+      manualReasonCode: 'missing_assessment_data',
+      manualReasonTitle: 'Manual reviewer brief only',
+      manualReasonMessage: 'The server needs a fuller assessment summary before it can generate a reviewer brief.',
+      trace: buildTraceEntry({
+        label: traceLabel,
+        promptSummary: 'Server manual mode used for reviewer brief because assessment data was missing.',
+        response: 'The reviewer brief stayed in manual mode because the assessment summary was incomplete.'
+      })
+    };
+  }
+  if (!config.proxyConfigured) {
+    return {
+      mode: 'deterministic_fallback',
+      ...stub,
+      usedFallback: true,
+      aiUnavailable: true,
+      fallbackReasonCode: 'proxy_missing_secret',
+      fallbackReasonTitle: 'Deterministic fallback reviewer brief loaded',
+      fallbackReasonMessage: 'The hosted AI proxy is not configured, so the server used a deterministic reviewer brief instead.',
+      trace: buildTraceEntry({
+        label: traceLabel,
+        promptSummary: 'Server deterministic fallback used for reviewer brief.',
+        response: `${stub.whatMatters} ${stub.whatsUncertain} ${stub.whatToDo}`
+      })
+    };
+  }
   const preferredSection = String(input?.preferredSection || '').trim().toLowerCase();
   const preferredPrompt = preferredSection
     ? `The reviewer usually spends the most time on the ${preferredSection.replace(/-/g, ' ')} section, so make that section especially concrete and decision-useful.`
@@ -284,15 +353,33 @@ ${schema}`;
       taskName: 'repairReviewerDecisionBrief'
     });
     return {
+      mode: 'live',
       ...normaliseReviewerBrief(parsed?.parsed || {}),
+      usedFallback: false,
+      aiUnavailable: false,
       trace: buildTraceEntry({
-        label: sanitizeAiText(input.traceLabel || 'Reviewer decision brief', { maxChars: 120 }) || 'Reviewer decision brief',
+        label: traceLabel,
         promptSummary: generation.promptSummary,
         response: generation.text
       })
     };
-  } catch {
-    return null;
+  } catch (error) {
+    const normalisedError = normaliseAiError(error);
+    return {
+      mode: 'deterministic_fallback',
+      ...stub,
+      usedFallback: true,
+      aiUnavailable: true,
+      fallbackReasonCode: 'reviewer_brief_runtime_error',
+      fallbackReasonTitle: 'Deterministic fallback reviewer brief loaded',
+      fallbackReasonMessage: 'The reviewer-brief step failed at runtime, so the server used a deterministic reviewer brief instead.',
+      fallbackReasonDetail: sanitizeAiText(normalisedError?.message || '', { maxChars: 220 }),
+      trace: buildTraceEntry({
+        label: traceLabel,
+        promptSummary: 'Server deterministic fallback used after reviewer brief generation failed.',
+        response: `${stub.whatMatters} ${stub.whatsUncertain} ${stub.whatToDo}`
+      })
+    };
   }
 }
 
@@ -300,7 +387,23 @@ async function buildChallengeAssessmentWorkflow(input = {}) {
   const config = getCompassProviderConfig();
   const traceLabel = sanitizeAiText(input.traceLabel || 'Assessment challenge', { maxChars: 120 }) || 'Assessment challenge';
   if (hasExecutiveChallengeShape(input)) {
-    if (!config.proxyConfigured) return null;
+    const stub = buildExecutiveChallengeStub(input);
+    if (!config.proxyConfigured) {
+      return {
+        mode: 'deterministic_fallback',
+        ...stub,
+        usedFallback: true,
+        aiUnavailable: true,
+        fallbackReasonCode: 'proxy_missing_secret',
+        fallbackReasonTitle: 'Deterministic fallback executive challenge loaded',
+        fallbackReasonMessage: 'The hosted AI proxy is not configured, so the server used a deterministic committee challenge instead.',
+        trace: buildTraceEntry({
+          label: traceLabel,
+          promptSummary: 'Server deterministic fallback used for executive challenge.',
+          response: stub.challengeSummary
+        })
+      };
+    }
     const p90 = Number(input?.results?.eventLoss?.p90 || 0);
     const assumptions = Array.isArray(input?.assessmentIntelligence?.assumptions) ? input.assessmentIntelligence.assumptions : [];
     const obligationBasis = buildResolvedObligationPromptBlock(input?.obligationBasis || {}) || '(none)';
@@ -333,15 +436,33 @@ ${schema}`;
         taskName: 'repairChallengeAssessmentExecutive'
       });
       return {
+        mode: 'live',
         ...normaliseExecutiveChallenge(parsed?.parsed || {}),
+        usedFallback: false,
+        aiUnavailable: false,
         trace: buildTraceEntry({
           label: traceLabel,
           promptSummary: generation.promptSummary,
           response: generation.text
         })
       };
-    } catch {
-      return null;
+    } catch (error) {
+      const normalisedError = normaliseAiError(error);
+      return {
+        mode: 'deterministic_fallback',
+        ...stub,
+        usedFallback: true,
+        aiUnavailable: true,
+        fallbackReasonCode: 'executive_challenge_runtime_error',
+        fallbackReasonTitle: 'Deterministic fallback executive challenge loaded',
+        fallbackReasonMessage: 'The executive challenge step failed at runtime, so the server used a deterministic committee challenge instead.',
+        fallbackReasonDetail: sanitizeAiText(normalisedError?.message || '', { maxChars: 220 }),
+        trace: buildTraceEntry({
+          label: traceLabel,
+          promptSummary: 'Server deterministic fallback used after executive challenge generation failed.',
+          response: stub.challengeSummary
+        })
+      };
     }
   }
 
@@ -358,9 +479,13 @@ ${schema}`;
   });
   if (!config.proxyConfigured) {
     return withEvidenceMeta({
+      mode: 'deterministic_fallback',
       ...stub,
       usedFallback: true,
       aiUnavailable: true,
+      fallbackReasonCode: 'proxy_missing_secret',
+      fallbackReasonTitle: 'Deterministic fallback challenge review loaded',
+      fallbackReasonMessage: 'The hosted AI proxy is not configured, so the server used a deterministic challenge review instead.',
       trace: buildTraceEntry({
         label: traceLabel,
         promptSummary: 'Server deterministic fallback used for assessment challenge.',
@@ -419,6 +544,7 @@ Instructions:
       taskName: 'repairChallengeAssessment'
     });
     return withEvidenceMeta({
+      mode: 'live',
       ...normaliseReviewChallenge(parsed?.parsed || {}, stub),
       usedFallback: false,
       aiUnavailable: false,
@@ -430,7 +556,23 @@ Instructions:
       })
     }, evidenceMeta);
   } catch (error) {
-    throw normaliseAiError(error);
+    const normalisedError = normaliseAiError(error);
+    return withEvidenceMeta({
+      mode: 'deterministic_fallback',
+      ...stub,
+      usedFallback: true,
+      aiUnavailable: true,
+      fallbackReasonCode: 'challenge_review_runtime_error',
+      fallbackReasonTitle: 'Deterministic fallback challenge review loaded',
+      fallbackReasonMessage: 'The challenge-review step failed at runtime, so the server used a deterministic challenge review instead.',
+      fallbackReasonDetail: sanitizeAiText(normalisedError?.message || '', { maxChars: 220 }),
+      trace: buildTraceEntry({
+        label: traceLabel,
+        promptSummary: 'Server deterministic fallback used after assessment challenge generation failed.',
+        response: stub.summary,
+        sources: input.citations || []
+      })
+    }, evidenceMeta);
   }
 }
 
@@ -443,9 +585,13 @@ async function buildParameterChallengeRecordWorkflow(input = {}) {
     : ['tefLikely', 'vulnerability', 'lmLow', 'lmHigh', 'controlStrLikely'];
   if (!config.proxyConfigured) {
     return {
+      mode: 'deterministic_fallback',
       ...stub,
       usedFallback: true,
       aiUnavailable: true,
+      fallbackReasonCode: 'proxy_missing_secret',
+      fallbackReasonTitle: 'Deterministic fallback parameter challenge loaded',
+      fallbackReasonMessage: 'The hosted AI proxy is not configured, so the server used a deterministic parameter challenge instead.',
       trace: buildTraceEntry({
         label: traceLabel,
         promptSummary: 'Server deterministic fallback used for parameter challenge record.',
@@ -488,6 +634,7 @@ Allowed reviewerAdjustment.param values: ${allowedParams.join(', ')}`;
       taskName: 'repairParameterChallengeRecord'
     });
     return {
+      mode: 'live',
       ...normaliseParameterChallengeRecord(parsed?.parsed || {}, stub, allowedParams),
       usedFallback: false,
       aiUnavailable: false,
@@ -499,9 +646,13 @@ Allowed reviewerAdjustment.param values: ${allowedParams.join(', ')}`;
     };
   } catch {
     return {
+      mode: 'deterministic_fallback',
       ...stub,
       usedFallback: true,
       aiUnavailable: true,
+      fallbackReasonCode: 'parameter_challenge_runtime_error',
+      fallbackReasonTitle: 'Deterministic fallback parameter challenge loaded',
+      fallbackReasonMessage: 'The parameter-challenge step failed at runtime, so the server used a deterministic parameter challenge instead.',
       trace: buildTraceEntry({
         label: traceLabel,
         promptSummary: 'Server deterministic fallback used after parameter challenge generation failed.',
@@ -520,9 +671,13 @@ async function buildChallengeSynthesisWorkflow(input = {}) {
     : [];
   if (!config.proxyConfigured) {
     return {
+      mode: 'deterministic_fallback',
       ...stub,
       usedFallback: true,
       aiUnavailable: true,
+      fallbackReasonCode: 'proxy_missing_secret',
+      fallbackReasonTitle: 'Deterministic fallback challenge synthesis loaded',
+      fallbackReasonMessage: 'The hosted AI proxy is not configured, so the server used a deterministic challenge synthesis instead.',
       trace: buildTraceEntry({
         label: traceLabel,
         promptSummary: 'Server deterministic fallback used for challenge synthesis.',
@@ -530,7 +685,22 @@ async function buildChallengeSynthesisWorkflow(input = {}) {
       })
     };
   }
-  if (records.length < 2) return null;
+  if (records.length < 2) {
+    return {
+      mode: 'manual',
+      ...stub,
+      usedFallback: false,
+      aiUnavailable: false,
+      manualReasonCode: 'insufficient_challenge_records',
+      manualReasonTitle: 'Manual challenge synthesis only',
+      manualReasonMessage: 'At least two saved challenge records are needed before the server can synthesise them.',
+      trace: buildTraceEntry({
+        label: traceLabel,
+        promptSummary: 'Server manual mode used for challenge synthesis because there were not enough challenge records.',
+        response: 'At least two challenge records are needed before synthesis can run.'
+      })
+    };
+  }
   const schema = `{
   "overallConcern": "string",
   "revisedAleRange": "string",
@@ -568,6 +738,7 @@ Write as if advising a risk committee. Keep the total to 3 sentences.`;
       taskName: 'repairChallengeSynthesis'
     });
     return {
+      mode: 'live',
       ...normaliseChallengeSynthesis(parsed?.parsed || {}, stub),
       usedFallback: false,
       aiUnavailable: false,
@@ -579,9 +750,13 @@ Write as if advising a risk committee. Keep the total to 3 sentences.`;
     };
   } catch {
     return {
+      mode: 'deterministic_fallback',
       ...stub,
       usedFallback: true,
       aiUnavailable: true,
+      fallbackReasonCode: 'challenge_synthesis_runtime_error',
+      fallbackReasonTitle: 'Deterministic fallback challenge synthesis loaded',
+      fallbackReasonMessage: 'The challenge-synthesis step failed at runtime, so the server used a deterministic synthesis instead.',
       trace: buildTraceEntry({
         label: traceLabel,
         promptSummary: 'Server deterministic fallback used after challenge synthesis failed.',
@@ -600,9 +775,13 @@ async function buildConsensusRecommendationWorkflow(input = {}) {
     : [];
   if (!config.proxyConfigured) {
     return {
+      mode: 'deterministic_fallback',
       ...stub,
       usedFallback: true,
       aiUnavailable: true,
+      fallbackReasonCode: 'proxy_missing_secret',
+      fallbackReasonTitle: 'Deterministic fallback consensus recommendation loaded',
+      fallbackReasonMessage: 'The hosted AI proxy is not configured, so the server used a deterministic consensus recommendation instead.',
       trace: buildTraceEntry({
         label: traceLabel,
         promptSummary: 'Server deterministic fallback used for consensus recommendation.',
@@ -610,7 +789,22 @@ async function buildConsensusRecommendationWorkflow(input = {}) {
       })
     };
   }
-  if (!challenges.length) return stub;
+  if (!challenges.length) {
+    return {
+      mode: 'manual',
+      ...stub,
+      usedFallback: false,
+      aiUnavailable: false,
+      manualReasonCode: 'no_open_challenges',
+      manualReasonTitle: 'Manual consensus only',
+      manualReasonMessage: 'At least one open reviewer challenge is needed before the server can suggest a consensus path.',
+      trace: buildTraceEntry({
+        label: traceLabel,
+        promptSummary: 'Server manual mode used for consensus recommendation because there were no open reviewer challenges.',
+        response: 'At least one reviewer challenge is needed before consensus can run.'
+      })
+    };
+  }
   const allowedRefs = challenges.map((item) => String(item?.ref || '').trim()).filter(Boolean);
   const schema = `{
   "summaryBullets": ["string", "string", "string"],
@@ -664,6 +858,7 @@ Rules:
       taskName: 'repairConsensusRecommendation'
     });
     return {
+      mode: 'live',
       ...normaliseConsensusRecommendation(parsed?.parsed || {}, stub, allowedRefs),
       usedFallback: false,
       aiUnavailable: false,
@@ -675,9 +870,13 @@ Rules:
     };
   } catch {
     return {
+      mode: 'deterministic_fallback',
       ...stub,
       usedFallback: true,
       aiUnavailable: true,
+      fallbackReasonCode: 'consensus_runtime_error',
+      fallbackReasonTitle: 'Deterministic fallback consensus recommendation loaded',
+      fallbackReasonMessage: 'The consensus step failed at runtime, so the server used a deterministic consensus recommendation instead.',
       trace: buildTraceEntry({
         label: traceLabel,
         promptSummary: 'Server deterministic fallback used after consensus recommendation failed.',
@@ -691,7 +890,44 @@ async function buildReviewMediationWorkflow(input = {}) {
   const config = getCompassProviderConfig();
   const reviewerView = String(input?.reviewerView || '').trim();
   const analystView = String(input?.analystView || '').trim();
-  if (!config.proxyConfigured || !reviewerView || !analystView) return null;
+  const traceLabel = sanitizeAiText(input.traceLabel || 'Review mediation', { maxChars: 120 }) || 'Review mediation';
+  const buildManualResult = ({ code, title, message, detail = '' } = {}) => ({
+    mode: 'manual',
+    usedFallback: false,
+    aiUnavailable: code !== 'missing_positions',
+    reconciliationSummary: message || 'The mediation stayed manual because the server could not produce a live or deterministic proposal.',
+    proposedMiddleGround: title || 'Manual mediation recommended',
+    whyReasonable: detail || 'Use the reviewer note, analyst response, and current evidence to settle the disagreement manually.',
+    recommendedField: '',
+    recommendedValue: null,
+    recommendedValueLabel: '',
+    evidenceToVerify: detail || 'Review the disputed assumption, the current evidence pack, and the latest reviewer note together.',
+    continueDiscussionPrompt: 'Keep the discussion manual: restate the disputed assumption, cite the strongest evidence on each side, and agree the one fact that would resolve it.',
+    manualReasonCode: code || 'manual_review_required',
+    manualReasonTitle: title || 'Manual mediation recommended',
+    manualReasonMessage: message || 'The server could not produce a mediation proposal for this discussion.',
+    manualReasonDetail: detail,
+    trace: buildTraceEntry({
+      label: traceLabel,
+      promptSummary: 'Server manual mode used for review mediation.',
+      response: message || 'The server could not produce a mediation proposal for this discussion.'
+    })
+  });
+  if (!reviewerView || !analystView) {
+    return buildManualResult({
+      code: 'missing_positions',
+      title: 'Manual mediation only',
+      message: 'Both the reviewer view and the analyst view are needed before the server can mediate the disagreement.'
+    });
+  }
+  if (!config.proxyConfigured) {
+    return buildManualResult({
+      code: 'proxy_missing_secret',
+      title: 'Manual mediation recommended',
+      message: 'The hosted AI proxy is not configured, so this mediation discussion must stay manual for now.',
+      detail: 'Use the reviewer note, analyst response, and current evidence pack to work through the disputed assumption.'
+    });
+  }
   const fairParams = input?.fairParams || {};
   const assumptions = Array.isArray(input?.assessmentIntelligence?.assumptions) ? input.assessmentIntelligence.assumptions : [];
   const drivers = Array.isArray(input?.assessmentIntelligence?.drivers?.sensitivity) ? input.assessmentIntelligence.drivers.sensitivity : [];
@@ -734,15 +970,24 @@ ${schema}`;
       taskName: 'repairMediationAssessmentDispute'
     });
     return {
+      mode: 'live',
+      usedFallback: false,
+      aiUnavailable: false,
       ...normaliseMediation(parsed?.parsed || {}),
       trace: buildTraceEntry({
-        label: sanitizeAiText(input.traceLabel || 'Review mediation', { maxChars: 120 }) || 'Review mediation',
+        label: traceLabel,
         promptSummary: generation.promptSummary,
         response: generation.text
       })
     };
-  } catch {
-    return null;
+  } catch (error) {
+    const normalisedError = normaliseAiError(error);
+    return buildManualResult({
+      code: 'mediation_runtime_error',
+      title: 'Manual mediation recommended',
+      message: 'The AI mediation step failed at runtime, so this discussion should stay manual for now.',
+      detail: sanitizeAiText(normalisedError?.message || '', { maxChars: 220 })
+    });
   }
 }
 

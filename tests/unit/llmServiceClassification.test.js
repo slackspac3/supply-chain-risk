@@ -2,50 +2,25 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+const { loadLlmServiceContext } = require('./helpers/loadLlmServiceHarness');
 
 function loadLlmInternals() {
-  const filePath = path.resolve(__dirname, '../../assets/services/llmService.js');
-  const source = fs.readFileSync(filePath, 'utf8');
-  const instrumented = source.replace(
-    '  return {\n    buildGuidedScenarioDraft,',
-    '  globalThis.__llmInternals = { _classifyScenario, _extractRiskCandidates, _evaluateGuidedDraftCandidate, _filterPromptIdeaCandidates, _buildContextPromptBlock, _buildScenarioContextResolution };\n\n  return {\n    buildGuidedScenarioDraft,'
-  );
-  assert.notEqual(instrumented, source, 'Failed to instrument llmService internals for test access');
-
-  const noopStorage = {
-    getItem() { return null; },
-    setItem() {},
-    removeItem() {}
-  };
-
-  const context = {
-    console,
-    Date,
-    JSON,
-    Math,
-    URL,
-    setTimeout,
-    clearTimeout,
-    AbortController,
-    sessionStorage: noopStorage,
-    localStorage: noopStorage,
-    window: {
-      location: { origin: 'http://127.0.0.1:8080' },
-      _lastRagSources: []
-    },
-    fetch: async () => {
+  let instrumentedSuccessfully = false;
+  const context = loadLlmServiceContext({
+    origin: 'http://127.0.0.1:8080',
+    fetchImpl: async () => {
       throw new Error('fetch should not be called in llmServiceClassification.test.js');
     },
-    AIGuardrails: null,
-    BenchmarkService: {},
-    logAuditEvent: async () => {}
-  };
-
-  vm.createContext(context);
-  vm.runInContext(instrumented, context, { filename: 'llmService.js' });
+    transformLlmService(source) {
+      const instrumented = source.replace(
+        '  return {\n    buildGuidedScenarioDraft,',
+        '  globalThis.__llmInternals = { _classifyScenario, _extractRiskCandidates, _evaluateGuidedDraftCandidate, _filterPromptIdeaCandidates, _buildContextPromptBlock, _buildScenarioContextResolution, _getAiFeedbackLearningProfile, _rerankRisksWithFeedback };\n\n  return {\n    buildGuidedScenarioDraft,'
+      );
+      instrumentedSuccessfully = instrumented !== source;
+      return instrumented;
+    }
+  });
+  assert.equal(instrumentedSuccessfully, true, 'Failed to instrument llmService internals for test access');
   return context.__llmInternals;
 }
 
@@ -231,4 +206,31 @@ test('buildScenarioContextResolution carries resolved obligations as approved co
     resolution.applies.some((item) => item.kind === 'obligations'),
     true
   );
+});
+
+test('browser-side learning profile lookup is disabled for authoritative inference use', async () => {
+  const internals = loadLlmInternals();
+  const profile = await internals._getAiFeedbackLearningProfile({
+    businessUnitId: 'g42',
+    functionKey: 'technology',
+    scenarioLensKey: 'cyber'
+  });
+
+  assert.equal(profile, null);
+});
+
+test('browser-side risk reranking is neutralized when learning authority moved server-side', () => {
+  const internals = loadLlmInternals();
+  const risks = [
+    { title: 'Generic service instability' },
+    { title: 'Privileged account compromise' }
+  ];
+
+  const reranked = internals._rerankRisksWithFeedback(risks, {
+    combined: {
+      riskWeights: { 'Privileged account compromise': 2 }
+    }
+  });
+
+  assert.deepEqual(reranked, risks);
 });

@@ -2,45 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+const { loadLlmService } = require('./helpers/loadLlmServiceHarness');
 
 function loadService({ origin = 'https://slackspac3.github.io', fetchImpl } = {}) {
-  const filePath = path.resolve(__dirname, '../../assets/services/llmService.js');
-  const source = `${fs.readFileSync(filePath, 'utf8')}\n;globalThis.__llmService = LLMService;`;
-  const noopStorage = {
-    getItem() { return null; },
-    setItem() {},
-    removeItem() {}
-  };
-  const context = {
-    console,
-    Date,
-    JSON,
-    Math,
-    URL,
-    setTimeout,
-    clearTimeout,
-    AbortController,
-    sessionStorage: noopStorage,
-    localStorage: noopStorage,
-    window: {
-      location: { origin, hostname: new URL(origin).hostname },
-      _lastRagSources: []
-    },
-    fetch: fetchImpl,
-    AuthService: {
-      getApiSessionToken: () => 'session-token'
-    },
-    AIGuardrails: null,
-    BenchmarkService: {},
-    logAuditEvent: async () => {}
-  };
-
-  vm.createContext(context);
-  vm.runInContext(source, context, { filename: 'llmService.js' });
-  return context.__llmService;
+  return loadLlmService({ origin, fetchImpl });
 }
 
 test('analyseRiskRegister uses the server register-analysis endpoint and stores returned trace in runtime memory', async () => {

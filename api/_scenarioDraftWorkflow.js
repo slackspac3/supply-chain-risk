@@ -2,6 +2,7 @@
 
 const { getCompassProviderConfig } = require('./_aiRuntime');
 const { buildTraceEntry, callAi, parseOrRepairStructuredJson, runStructuredQualityGate, sanitizeAiText } = require('./_aiOrchestrator');
+const { buildFeedbackLearningPromptBlock, resolveHierarchicalFeedbackProfile, rerankRiskCardsWithFeedback } = require('./_learningAuthority');
 
 function normaliseSentenceKey(sentence = '') {
   return String(sentence || '')
@@ -1143,7 +1144,7 @@ function buildAiAlignment(input = {}, result = {}, {
   };
 }
 
-function buildServerFallbackResult(input = {}, { aiUnavailable = false, traceLabel = 'Step 1 guided draft' } = {}) {
+function buildServerFallbackResult(input = {}, { aiUnavailable = false, feedbackProfile = null, traceLabel = 'Step 1 guided draft' } = {}) {
   const seedNarrative = cleanUserFacingText(cleanScenarioSeed(input.riskStatement || ''), { maxSentences: 5 });
   const classification = classifyScenario(seedNarrative, {
     guidedInput: input.guidedInput,
@@ -1163,6 +1164,7 @@ function buildServerFallbackResult(input = {}, { aiUnavailable = false, traceLab
     adminSettings: input.adminSettings,
     userProfile: input.adminSettings?.userProfileSummary
   });
+  const fallbackRisks = rerankRiskCardsWithFeedback(fallbackScenarioExpansion.riskTitles, feedbackProfile);
   const result = withEvidenceMeta({
     mode: 'deterministic_fallback',
     seedNarrative,
@@ -1173,7 +1175,7 @@ function buildServerFallbackResult(input = {}, { aiUnavailable = false, traceLab
     summary: fallbackScenarioExpansion.summary,
     linkAnalysis: buildRiskContextLinkAnalysis({
       classification,
-      riskTitles: fallbackScenarioExpansion.riskTitles
+      riskTitles: fallbackRisks
     }),
     workflowGuidance: [
       'Confirm the scenario wording in plain English before moving on.',
@@ -1183,8 +1185,8 @@ function buildServerFallbackResult(input = {}, { aiUnavailable = false, traceLab
     benchmarkBasis: 'This Step 1 draft is in deterministic server fallback mode. Treat it as a bounded working draft until live AI is available again.',
     scenarioLens: buildScenarioLens(classification),
     structuredScenario: buildStructuredScenario(input, classification),
-    risks: fallbackScenarioExpansion.riskTitles,
-    regulations: Array.from(new Set([...(Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []), ...fallbackScenarioExpansion.riskTitles.flatMap((risk) => risk.regulations || [])].map(String).filter(Boolean))),
+    risks: fallbackRisks,
+    regulations: Array.from(new Set([...(Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []), ...fallbackRisks.flatMap((risk) => risk.regulations || [])].map(String).filter(Boolean))),
     citations: Array.isArray(input.citations) ? input.citations : [],
     usedFallback: true,
     aiUnavailable,
@@ -1227,9 +1229,15 @@ function normaliseScenarioDraftCandidate(parsed = {}, fallback = {}, input = {},
 
 async function buildGuidedScenarioDraftWorkflow(input = {}) {
   const traceLabel = sanitizeAiText(input.traceLabel || 'Step 1 guided draft', { maxChars: 120 }) || 'Step 1 guided draft';
+  const feedbackProfile = await resolveHierarchicalFeedbackProfile({
+    username: input.session?.username || '',
+    buId: input.businessUnit?.id || input.businessUnit?.buId || '',
+    functionKey: input.businessUnit?.selectedDepartmentKey || input.businessUnit?.functionKey || '',
+    scenarioLensKey: input.scenarioLensHint || ''
+  });
   const config = getCompassProviderConfig();
   if (!config.proxyConfigured) {
-    return buildServerFallbackResult(input, { aiUnavailable: true, traceLabel });
+    return buildServerFallbackResult(input, { aiUnavailable: true, feedbackProfile, traceLabel });
   }
 
   const seedNarrative = cleanUserFacingText(cleanScenarioSeed(input.riskStatement || ''), { maxSentences: 5 });
@@ -1323,9 +1331,13 @@ Retrieved references:
 ${buildCitationPromptBlock(input.citations || [])}
 
 If you are unsure, stay closer to the user's explicit event wording than to adjacent profile, compliance, or technology context.`;
+  const feedbackPromptBlock = buildFeedbackLearningPromptBlock(feedbackProfile);
+  const learningAwareUserPrompt = `${userPrompt}
+
+${feedbackPromptBlock}`;
 
   try {
-    const generation = await callAi(systemPrompt, userPrompt, {
+    const generation = await callAi(systemPrompt, learningAwareUserPrompt, {
       taskName: 'guidedScenarioDraft',
       temperature: 0.2,
       maxCompletionTokens: 2200,
@@ -1385,12 +1397,14 @@ If you are unsure, stay closer to the user's explicit event wording than to adja
       businessUnit: input.businessUnit
     });
     const useFallbackNarrative = !selectedDraft.accepted;
+    const rerankedCandidateRisks = rerankRiskCardsWithFeedback(candidate.risks, feedbackProfile);
+    const rerankedFallbackRisks = rerankRiskCardsWithFeedback(fallbackScenarioExpansion.riskTitles, feedbackProfile);
     const finalNarrative = useFallbackNarrative
       ? fallbackScenarioExpansion.scenarioExpansion
       : (selectedDraft.narrative || candidate.draftNarrative || fallbackScenarioExpansion.scenarioExpansion);
-    const finalRisks = useFallbackNarrative || !candidate.risks.length
-      ? fallbackScenarioExpansion.riskTitles
-      : candidate.risks;
+    const finalRisks = useFallbackNarrative || !rerankedCandidateRisks.length
+      ? rerankedFallbackRisks
+      : rerankedCandidateRisks;
     const result = withEvidenceMeta({
       mode: useFallbackNarrative ? 'deterministic_fallback' : 'live',
       seedNarrative,
@@ -1431,7 +1445,7 @@ If you are unsure, stay closer to the user's explicit event wording than to adja
     return result;
   } catch (error) {
     console.warn('buildGuidedScenarioDraftWorkflow server fallback:', error.message);
-    return buildServerFallbackResult(input, { aiUnavailable: true, traceLabel });
+    return buildServerFallbackResult(input, { aiUnavailable: true, feedbackProfile, traceLabel });
   }
 }
 

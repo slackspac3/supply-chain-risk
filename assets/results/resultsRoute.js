@@ -1558,6 +1558,11 @@ function normaliseParameterChallengeRecords(assessment = {}) {
             rationale: String(item.reviewerAdjustment.rationale || '').trim()
           }
         : null,
+      mode: String(item.mode || '').trim().toLowerCase(),
+      usedFallback: item.usedFallback === true,
+      aiUnavailable: item.aiUnavailable === true,
+      fallbackReasonMessage: String(item.fallbackReasonMessage || '').trim(),
+      manualReasonMessage: String(item.manualReasonMessage || '').trim(),
       createdAt: Number(item.createdAt || 0),
       appliedAt: Number(item.appliedAt || 0)
     }))
@@ -1676,7 +1681,12 @@ function normaliseConsensusPath(assessment = {}) {
     projectedAleRange: String(path.projectedAleRange || '').trim(),
     baseAleRange: String(path.baseAleRange || '').trim(),
     adjustedAleRange: String(path.adjustedAleRange || '').trim(),
-    appliedAt: Number(path.appliedAt || 0)
+    appliedAt: Number(path.appliedAt || 0),
+    mode: String(path.mode || '').trim().toLowerCase(),
+    usedFallback: path.usedFallback === true,
+    aiUnavailable: path.aiUnavailable === true,
+    fallbackReasonMessage: String(path.fallbackReasonMessage || '').trim(),
+    manualReasonMessage: String(path.manualReasonMessage || '').trim()
   };
 }
 
@@ -1684,6 +1694,11 @@ function renderConsensusPathPanel(assessment = {}) {
   const openRecords = getOpenParameterChallengeRecords(assessment);
   if (!openRecords.length) return '';
   const consensus = normaliseConsensusPath(assessment);
+  const consensusMode = consensus ? getReviewerWorkflowModePresentation(consensus, {
+    liveLabel: 'Live AI consensus',
+    fallbackLabel: 'Deterministic fallback consensus',
+    manualLabel: 'Manual consensus guidance'
+  }) : null;
   return `<section class="results-section-stack" id="results-consensus-path-panel">
     <div class="card card--elevated" style="padding:var(--sp-5);background:var(--bg-canvas)">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap">
@@ -1691,6 +1706,14 @@ function renderConsensusPathPanel(assessment = {}) {
           <div class="results-driver-label">Consensus path</div>
           <div class="context-panel-title" style="margin-top:8px">Minimum adjustment path across the current reviewer challenges.</div>
           <div class="form-help" style="margin-top:6px">${consensus ? 'Toggle which reviewer adjustments to accept, then preview the projected ALE before you rerun.' : 'Run Find Consensus to pressure-test the smallest combined adjustment path across the current open challenges.'}</div>
+          ${consensus ? `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            ${renderReviewerWorkflowModeBadge(consensus, {
+              liveLabel: 'Live AI consensus',
+              fallbackLabel: 'Deterministic fallback consensus',
+              manualLabel: 'Manual consensus guidance'
+            })}
+            ${consensusMode?.message ? `<span class="form-help">${escapeHtml(consensusMode.message)}</span>` : ''}
+          </div>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${consensus?.createdAt ? `<span class="badge badge--neutral">${escapeHtml(new Date(consensus.createdAt).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' }))}</span>` : ''}
@@ -1784,12 +1807,25 @@ function renderParameterChallengeRecordCard(record = {}, { showApplyAction = tru
   const createdLabel = record?.createdAt
     ? new Date(record.createdAt).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })
     : 'Saved now';
+  const modeMeta = getReviewerWorkflowModePresentation(record, {
+    liveLabel: 'Live AI challenge',
+    fallbackLabel: 'Deterministic fallback challenge',
+    manualLabel: 'Manual challenge guidance'
+  });
   return `<article class="card card--elevated" style="padding:var(--sp-5);background:var(--bg-canvas)">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap">
       <div>
         ${typeof UI.sectionEyebrow === 'function' ? UI.sectionEyebrow(record.parameterLabel || 'Challenge record') : ''}
         <div class="context-panel-title" style="margin-top:${typeof UI.sectionEyebrow === 'function' ? '10px' : '0'}">${escapeHtml(String(record.parameterLabel || 'Challenge record'))}</div>
         <div class="form-help" style="margin-top:6px">${escapeHtml(String(record.currentValueLabel || 'Current value not recorded'))}</div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${renderReviewerWorkflowModeBadge(record, {
+            liveLabel: 'Live AI challenge',
+            fallbackLabel: 'Deterministic fallback challenge',
+            manualLabel: 'Manual challenge guidance'
+          })}
+          ${modeMeta.message ? `<span class="form-help">${escapeHtml(modeMeta.message)}</span>` : ''}
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="badge badge--neutral">${escapeHtml(createdLabel)}</span>
@@ -1822,7 +1858,12 @@ function normaliseChallengeSynthesis(assessment = {}) {
     createdAt: Number(synthesis.createdAt || 0),
     overallConcern: String(synthesis.overallConcern || '').trim(),
     revisedAleRange: String(synthesis.revisedAleRange || '').trim(),
-    keyEvidence: String(synthesis.keyEvidence || '').trim()
+    keyEvidence: String(synthesis.keyEvidence || '').trim(),
+    mode: String(synthesis.mode || '').trim().toLowerCase(),
+    usedFallback: synthesis.usedFallback === true,
+    aiUnavailable: synthesis.aiUnavailable === true,
+    fallbackReasonMessage: String(synthesis.fallbackReasonMessage || '').trim(),
+    manualReasonMessage: String(synthesis.manualReasonMessage || '').trim()
   };
 }
 
@@ -1853,6 +1894,11 @@ function renderChallengeSynthesisCard(assessment) {
     ? new Date(synthesis.createdAt).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })
     : '';
   const showRequestButton = records.length >= 2 && synthesis && currentUsername && currentUsername !== String(assessment?.submittedBy || '').trim().toLowerCase();
+  const synthesisMode = synthesis ? getReviewerWorkflowModePresentation(synthesis, {
+    liveLabel: 'Live AI synthesis',
+    fallbackLabel: 'Deterministic fallback synthesis',
+    manualLabel: 'Manual synthesis guidance'
+  }) : null;
   return `<section class="results-section-stack">
     ${isAnalystTarget ? `<div class="card card--elevated" style="padding:var(--sp-4);background:var(--bg-elevated);border-left:3px solid var(--color-accent-300)">
       <div class="results-driver-label">Analyst response requested</div>
@@ -1864,6 +1910,14 @@ function renderChallengeSynthesisCard(assessment) {
           <div class="results-driver-label">Reviewer Consensus View (AI Synthesised)</div>
           <div class="context-panel-title" style="margin-top:8px">One dissenting view across all saved reviewer challenges.</div>
           <div class="form-help" style="margin-top:6px">${records.length >= 2 ? `${records.length} challenge records are included in this synthesis.` : 'A synthesis will appear once at least two challenge records exist.'}</div>
+          ${synthesis ? `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            ${renderReviewerWorkflowModeBadge(synthesis, {
+              liveLabel: 'Live AI synthesis',
+              fallbackLabel: 'Deterministic fallback synthesis',
+              manualLabel: 'Manual synthesis guidance'
+            })}
+            ${synthesisMode?.message ? `<span class="form-help">${escapeHtml(synthesisMode.message)}</span>` : ''}
+          </div>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${createdLabel ? `<span class="badge badge--neutral">${escapeHtml(createdLabel)}</span>` : ''}
@@ -2301,6 +2355,11 @@ function openParameterChallengeModal({
             technicalInputs
           )
         },
+        mode: String(result?.mode || '').trim().toLowerCase(),
+        usedFallback: result?.usedFallback === true,
+        aiUnavailable: result?.aiUnavailable === true,
+        fallbackReasonMessage: String(result?.fallbackReasonMessage || '').trim(),
+        manualReasonMessage: String(result?.manualReasonMessage || '').trim(),
         createdAt: Date.now(),
         appliedAt: 0
       };
@@ -2312,7 +2371,12 @@ function openParameterChallengeModal({
         ].slice(0, 12)
       }));
       modal?.close?.();
-      UI.toast('Challenge record saved.', 'success');
+      const toastMeta = buildReviewerWorkflowSuccessToast(result, {
+        live: 'Challenge record saved.',
+        deterministicFallback: 'Deterministic fallback challenge record saved. Review it before applying the adjustment.',
+        manual: 'Manual challenge guidance saved. Review it before applying any change.'
+      });
+      UI.toast(toastMeta.copy, toastMeta.tone, 5000);
       renderResults(id || assessment.id, isShared || assessment._shared);
     } catch (error) {
       console.error('generateParameterChallengeRecord failed:', error);
@@ -3276,6 +3340,73 @@ function renderAssessmentChallengeDisclosure() {
   </details>`;
 }
 
+function normaliseReviewerWorkflowMode(result = {}) {
+  const mode = String(result?.mode || '').trim().toLowerCase();
+  if (mode === 'live' || mode === 'deterministic_fallback' || mode === 'manual') return mode;
+  if (result?.usedFallback) return 'deterministic_fallback';
+  if (result?.aiUnavailable) return 'manual';
+  return 'live';
+}
+
+function getReviewerWorkflowModePresentation(result = {}, {
+  liveLabel = 'Live AI',
+  fallbackLabel = 'Deterministic fallback',
+  manualLabel = 'Manual guidance'
+} = {}) {
+  const mode = normaliseReviewerWorkflowMode(result);
+  if (mode === 'deterministic_fallback') {
+    return {
+      mode,
+      tone: 'warning',
+      label: fallbackLabel,
+      message: String(result?.fallbackReasonMessage || '').trim()
+    };
+  }
+  if (mode === 'manual') {
+    return {
+      mode,
+      tone: 'neutral',
+      label: manualLabel,
+      message: String(result?.manualReasonMessage || '').trim()
+    };
+  }
+  return {
+    mode: 'live',
+    tone: 'success',
+    label: liveLabel,
+    message: ''
+  };
+}
+
+function renderReviewerWorkflowModeBadge(result = {}, labels = {}) {
+  const modeMeta = getReviewerWorkflowModePresentation(result, labels);
+  return `<span class="badge badge--${modeMeta.tone}">${escapeHtml(String(modeMeta.label || 'Live AI'))}</span>`;
+}
+
+function buildReviewerWorkflowSuccessToast(result = {}, {
+  live,
+  deterministicFallback,
+  manual
+} = {}) {
+  const modeMeta = getReviewerWorkflowModePresentation(result);
+  if (modeMeta.mode === 'deterministic_fallback') {
+    return {
+      tone: 'warning',
+      copy: deterministicFallback || 'Deterministic fallback guidance loaded. Review before using it.'
+    };
+  }
+  if (modeMeta.mode === 'manual') {
+    return {
+      tone: 'info',
+      copy: manual || 'Manual guidance loaded. Continue without treating it as live AI output.'
+    };
+  }
+  return {
+    tone: 'success',
+    copy: live || 'Live AI guidance loaded.'
+  };
+}
+
 function renderAssessmentChallengeResult(result = {}) {
   const verdict = String(result?.confidenceVerdict || 'Challenged');
   const verdictTone = verdict.includes('Reasonable')
@@ -3283,9 +3414,22 @@ function renderAssessmentChallengeResult(result = {}) {
     : verdict.includes('understated')
       ? 'warning'
       : 'danger';
+  const modeMeta = getReviewerWorkflowModePresentation(result, {
+    liveLabel: 'Live AI challenge',
+    fallbackLabel: 'Deterministic fallback challenge',
+    manualLabel: 'Manual challenge guidance'
+  });
   return `<div class="challenge-card">
-    <div class="challenge-verdict badge badge--${verdictTone}">${escapeHtml(verdict)}</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div class="challenge-verdict badge badge--${verdictTone}">${escapeHtml(verdict)}</div>
+      ${renderReviewerWorkflowModeBadge(result, {
+        liveLabel: 'Live AI challenge',
+        fallbackLabel: 'Deterministic fallback challenge',
+        manualLabel: 'Manual challenge guidance'
+      })}
+    </div>
     <p class="challenge-summary">${escapeHtml(String(result?.challengeSummary || ''))}</p>
+    ${modeMeta.message ? `<div class="form-help">${escapeHtml(modeMeta.message)}</div>` : ''}
     <div class="challenge-grid">
       <div>
         <div class="challenge-label">Weakest assumption</div>
@@ -3377,6 +3521,11 @@ function orderReviewerBriefSections(preferredSection, sections = []) {
 
 function renderReviewerBriefResultRows(result = {}, assessment) {
   const preferredSection = getReviewerPreferredSection(getReviewerBriefScenarioType(assessment));
+  const modeMeta = getReviewerWorkflowModePresentation(result, {
+    liveLabel: 'Live AI brief',
+    fallbackLabel: 'Deterministic fallback brief',
+    manualLabel: 'Manual reviewer brief'
+  });
   const sections = orderReviewerBriefSections(preferredSection, [
     { key: 'what-matters', label: 'What matters', text: String(result?.whatMatters || '').trim(), tone: 'results-driver-label' },
     {
@@ -3388,6 +3537,14 @@ function renderReviewerBriefResultRows(result = {}, assessment) {
     { key: 'what-to-do', label: 'What to do', text: String(result?.whatToDo || '').trim() }
   ]).filter(section => section.text);
   return `<div class="reviewer-brief-grid">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      ${renderReviewerWorkflowModeBadge(result, {
+        liveLabel: 'Live AI brief',
+        fallbackLabel: 'Deterministic fallback brief',
+        manualLabel: 'Manual reviewer brief'
+      })}
+      ${modeMeta.message ? `<span class="form-help">${escapeHtml(modeMeta.message)}</span>` : ''}
+    </div>
     ${sections.map(section => `<article class="reviewer-brief-row" data-reviewer-brief-row="${escapeHtml(section.key)}">
       <div class="reviewer-brief-row__head">
         ${typeof UI.sectionEyebrow === 'function' ? UI.sectionEyebrow(section.label) : `<span class="ui-eyebrow"><span class="ui-eyebrow-mark" aria-hidden="true">◦</span><span>${escapeHtml(section.label)}</span></span>`}
@@ -3591,16 +3748,22 @@ function renderResultsMetricExplainerPanel(model) {
 }
 
 function renderReviewMediationResult(result = {}) {
+  const modeMeta = getReviewerWorkflowModePresentation(result, {
+    liveLabel: 'Live AI mediation',
+    fallbackLabel: 'Deterministic fallback mediation',
+    manualLabel: 'Manual mediation guidance'
+  });
   const proposedValue = String(result?.recommendedValueLabel || '').trim();
   return `<div class="meeting-room-result">
     <div class="meeting-room-result__head">
       <div>
-        <div class="meeting-room-result__label">AI mediation summary</div>
+        <div class="meeting-room-result__label">${escapeHtml(modeMeta.label)}</div>
         <strong>${escapeHtml(String(result?.proposedMiddleGround || 'Proposed middle ground'))}</strong>
       </div>
       ${proposedValue ? `<span class="badge badge--warning">${escapeHtml(proposedValue)}</span>` : '<span class="badge badge--neutral">No single number change</span>'}
     </div>
     <p class="meeting-room-result__copy">${escapeHtml(String(result?.reconciliationSummary || ''))}</p>
+    ${modeMeta.message ? `<div class="form-help" style="margin-top:8px">${escapeHtml(modeMeta.message)}</div>` : ''}
     <div class="meeting-room-result__grid">
       <div>
         <div class="meeting-room-result__section">Why this is reasonable</div>
@@ -3612,7 +3775,7 @@ function renderReviewMediationResult(result = {}) {
       </div>
     </div>
     <div class="meeting-room-result__actions">
-      <button type="button" class="btn btn--primary btn--sm" id="btn-accept-mediation">Accept proposal</button>
+      ${modeMeta.mode === 'manual' ? '' : '<button type="button" class="btn btn--primary btn--sm" id="btn-accept-mediation">Accept proposal</button>'}
       <button type="button" class="btn btn--secondary btn--sm" id="btn-revise-mediation">Revise manually</button>
       <button type="button" class="btn btn--ghost btn--sm" id="btn-continue-mediation">Continue discussion</button>
     </div>
@@ -4006,9 +4169,20 @@ function bindResultsInteractions({
             meetInTheMiddleAleRange: String(result?.meetInTheMiddleAleRange || '').trim(),
             projectedAleRange: String(projectedPreview?.projectedAleRange || analysis.baseAleRange || '').trim(),
             baseAleRange: String(analysis.baseAleRange || '').trim(),
-            adjustedAleRange: String(analysis.adjustedAleRange || '').trim()
+            adjustedAleRange: String(analysis.adjustedAleRange || '').trim(),
+            mode: String(result?.mode || '').trim().toLowerCase(),
+            usedFallback: result?.usedFallback === true,
+            aiUnavailable: result?.aiUnavailable === true,
+            fallbackReasonMessage: String(result?.fallbackReasonMessage || '').trim(),
+            manualReasonMessage: String(result?.manualReasonMessage || '').trim()
           }
         }));
+        const toastMeta = buildReviewerWorkflowSuccessToast(result, {
+          live: 'Consensus recommendation loaded.',
+          deterministicFallback: 'Deterministic fallback consensus recommendation loaded. Review it before applying the path.',
+          manual: 'Manual consensus guidance loaded. Review it before applying any path.'
+        });
+        UI.toast(toastMeta.copy, toastMeta.tone, 5000);
         renderResults(latest.id, isShared || latest._shared);
       } catch (error) {
         console.error('generateConsensusRecommendation failed:', error);
@@ -4124,9 +4298,20 @@ function bindResultsInteractions({
             overallConcern: String(result?.overallConcern || '').trim(),
             revisedAleRange: String(result?.revisedAleRange || '').trim(),
             keyEvidence: String(result?.keyEvidence || '').trim(),
+            mode: String(result?.mode || '').trim().toLowerCase(),
+            usedFallback: result?.usedFallback === true,
+            aiUnavailable: result?.aiUnavailable === true,
+            fallbackReasonMessage: String(result?.fallbackReasonMessage || '').trim(),
+            manualReasonMessage: String(result?.manualReasonMessage || '').trim(),
             createdAt: Date.now()
           }
         }));
+        const toastMeta = buildReviewerWorkflowSuccessToast(result, {
+          live: 'Challenge synthesis loaded.',
+          deterministicFallback: 'Deterministic fallback challenge synthesis loaded. Review it before using it in committee discussion.',
+          manual: 'Manual synthesis guidance loaded. Add more challenge records or continue manually.'
+        });
+        UI.toast(toastMeta.copy, toastMeta.tone, 5000);
         renderResults(latest.id, isShared || latest._shared);
       } catch (error) {
         console.error('generateChallengeSynthesis failed:', error);
@@ -4274,7 +4459,12 @@ function bindResultsInteractions({
           ...current,
           reviewerBrief: nextBrief
         }));
-        UI.toast('Reviewer brief generated.', 'success');
+        const toastMeta = buildReviewerWorkflowSuccessToast(result, {
+          live: 'Reviewer brief generated.',
+          deterministicFallback: 'Deterministic fallback reviewer brief loaded. Review it before using it in committee discussion.',
+          manual: 'Manual reviewer brief guidance loaded.'
+        });
+        UI.toast(toastMeta.copy, toastMeta.tone, 5000);
         renderResults(assessment.id, isShared || assessment._shared);
         return;
       }
@@ -4291,7 +4481,12 @@ function bindResultsInteractions({
           });
         });
       }
-      UI.toast('Reviewer brief generated.', 'success');
+      const toastMeta = buildReviewerWorkflowSuccessToast(result, {
+        live: 'Reviewer brief generated.',
+        deterministicFallback: 'Deterministic fallback reviewer brief loaded. Review it before using it in committee discussion.',
+        manual: 'Manual reviewer brief guidance loaded.'
+      });
+      UI.toast(toastMeta.copy, toastMeta.tone, 5000);
     } catch (error) {
       console.error('generateReviewerDecisionBrief failed:', error);
       button.disabled = false;
@@ -4383,7 +4578,24 @@ function bindResultsInteractions({
         }
       }));
       if (resultHost) resultHost.innerHTML = renderReviewMediationResult(result);
-      if (statusEl) statusEl.textContent = 'Mediation complete. Review the proposed middle ground below.';
+      const modeMeta = getReviewerWorkflowModePresentation(result, {
+        liveLabel: 'Live AI mediation',
+        fallbackLabel: 'Deterministic fallback mediation',
+        manualLabel: 'Manual mediation guidance'
+      });
+      if (statusEl) {
+        statusEl.textContent = modeMeta.mode === 'manual'
+          ? 'Manual mediation guidance loaded. Continue the discussion using the prompts below.'
+          : modeMeta.mode === 'deterministic_fallback'
+            ? 'Deterministic fallback mediation loaded. Review the proposed middle ground below.'
+            : 'Mediation complete. Review the proposed middle ground below.';
+      }
+      const toastMeta = buildReviewerWorkflowSuccessToast(result, {
+        live: 'Review mediation loaded.',
+        deterministicFallback: 'Deterministic fallback mediation loaded. Review it before applying any compromise.',
+        manual: 'Manual mediation guidance loaded. Continue the discussion without treating it as live AI output.'
+      });
+      UI.toast(toastMeta.copy, toastMeta.tone, 5000);
       renderResults(id, isShared || assessment._shared);
     } catch (error) {
       console.error('AI mediation failed:', error);
@@ -4554,7 +4766,12 @@ function bindResultsInteractions({
         }
       }));
       if (!next) throw new Error('Could not update the saved assessment.');
-      UI.toast(result.usedFallback ? 'Fallback challenge review loaded. Review the suggested questions and evidence gaps.' : 'Suggested challenge review loaded.', result.usedFallback ? 'warning' : 'success', 5000);
+      const toastMeta = buildReviewerWorkflowSuccessToast(result, {
+        live: 'Live AI challenge review loaded.',
+        deterministicFallback: 'Deterministic fallback challenge review loaded. Review the suggested questions and evidence gaps.',
+        manual: 'Manual challenge guidance loaded. Review the suggested next questions and continue manually.'
+      });
+      UI.toast(toastMeta.copy, toastMeta.tone, 5000);
       renderResults(assessment.id, isShared || assessment._shared);
     } catch (error) {
       if (status) status.textContent = 'Challenge review could not be generated.';

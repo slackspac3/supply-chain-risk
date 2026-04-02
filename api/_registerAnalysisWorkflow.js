@@ -2,6 +2,7 @@
 
 const { getCompassProviderConfig } = require('./_aiRuntime');
 const { buildTraceEntry, callAi, normaliseAiError, parseOrRepairStructuredJson, runStructuredQualityGate, sanitizeAiText } = require('./_aiOrchestrator');
+const { buildFeedbackLearningPromptBlock, resolveHierarchicalFeedbackProfile, rerankRiskCardsWithFeedback } = require('./_learningAuthority');
 const { workflowUtils } = require('./_scenarioDraftWorkflow');
 
 const {
@@ -119,7 +120,7 @@ function toRegisterAnalysisQualityCandidate(candidate = {}) {
   };
 }
 
-function buildFallbackRegisterResult(input = {}, { aiUnavailable = false, fallbackReason = null, traceLabel = 'Step 1 register analysis' } = {}) {
+function buildFallbackRegisterResult(input = {}, { aiUnavailable = false, fallbackReason = null, feedbackProfile = null, traceLabel = 'Step 1 register analysis' } = {}) {
   const evidenceMeta = buildEvidenceMeta({
     citations: input.citations || [],
     businessUnit: input.businessUnit,
@@ -132,7 +133,7 @@ function buildFallbackRegisterResult(input = {}, { aiUnavailable = false, fallba
     adminSettings: input.adminSettings
   });
   const lines = extractRegisterLines(input.registerText || '');
-  const risks = lines.slice(0, 15).map((line, index) => ({
+  const extractedRisks = lines.slice(0, 15).map((line, index) => ({
     id: `register-risk-${index + 1}`,
     title: line.replace(/^[-*]\s*/, ''),
     category: 'Register',
@@ -141,6 +142,7 @@ function buildFallbackRegisterResult(input = {}, { aiUnavailable = false, fallba
     source: 'register',
     regulations: (Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []).slice(0, 3)
   }));
+  const risks = rerankRiskCardsWithFeedback(extractedRisks, feedbackProfile);
   const result = withEvidenceMeta({
     mode: 'deterministic_fallback',
     summary: `Analysed ${lines.length} register entr${lines.length === 1 ? 'y' : 'ies'} and extracted ${risks.length} candidate risks.`,
@@ -171,11 +173,18 @@ function buildFallbackRegisterResult(input = {}, { aiUnavailable = false, fallba
 
 async function buildRegisterAnalysisWorkflow(input = {}) {
   const traceLabel = sanitizeAiText(input.traceLabel || 'Step 1 register analysis', { maxChars: 120 }) || 'Step 1 register analysis';
+  const feedbackProfile = await resolveHierarchicalFeedbackProfile({
+    username: input.session?.username || '',
+    buId: input.businessUnit?.id || input.businessUnit?.buId || '',
+    functionKey: input.businessUnit?.selectedDepartmentKey || input.businessUnit?.functionKey || '',
+    scenarioLensKey: input.businessUnit?.scenarioLensHint || input.registerMeta?.scenarioLensKey || ''
+  });
   const config = getCompassProviderConfig();
   if (!config.proxyConfigured) {
     return buildFallbackRegisterResult(input, {
       aiUnavailable: true,
       fallbackReason: classifyRegisterFallbackReason(new Error('Hosted AI proxy is not configured.')),
+      feedbackProfile,
       traceLabel
     });
   }
@@ -250,7 +259,9 @@ Instructions:
 - include workflow guidance that tells a non-risk practitioner what to do after extraction
 
 Evidence quality context:
-${truncateText(evidenceMeta.promptBlock || '', 240)}`;
+${truncateText(evidenceMeta.promptBlock || '', 240)}
+
+${buildFeedbackLearningPromptBlock(feedbackProfile)}`;
 
   try {
     const generation = await callAi(systemPrompt, userPrompt, {
@@ -296,6 +307,11 @@ ${truncateText(evidenceMeta.promptBlock || '', 240)}`;
       console.warn('register analysis quality gate fallback:', qualityGateError.message);
     }
 
+    candidate = {
+      ...candidate,
+      risks: rerankRiskCardsWithFeedback(candidate.risks, feedbackProfile)
+    };
+
     return withEvidenceMeta({
       mode: 'live',
       ...candidate,
@@ -321,6 +337,7 @@ ${truncateText(evidenceMeta.promptBlock || '', 240)}`;
     return buildFallbackRegisterResult(input, {
       aiUnavailable,
       fallbackReason,
+      feedbackProfile,
       traceLabel
     });
   }

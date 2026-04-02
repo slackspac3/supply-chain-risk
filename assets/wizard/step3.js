@@ -351,51 +351,7 @@ function renderStep3SmartPrefillChip(field, suggestion, historyCount) {
 }
 
 function renderSmartPrefillBand(draft, isAdv) {
-  ensureSmartPrefillStyles();
-  const state = getStep3SmartPrefillState(draft);
-  const history = getStep3MatchingSmartPrefillHistory(draft);
-  state.scenarioType = getStep3SmartPrefillScenarioType(draft);
-  state.historyCount = history.length;
-  if (state.dismissed || history.length < 3) return '';
-  const visibleFields = getStep3VisibleSmartPrefillFields(draft, isAdv);
-  const headline = visibleFields.every(field => getStep3SmartPrefillAcceptanceMeta(field).label === 'Based on your past decisions')
-    ? 'Based on your past decisions'
-    : 'AI Pre-Fill Suggestion';
-  if (state.status === 'empty' || state.status === 'error') return '';
-  if ((state.status === 'loading' || state.status === 'idle') && !state.suggestion) {
-    return `<div class="card card--elevated anim-fade-in smart-prefill-band" id="smart-prefill-band">
-      <div class="smart-prefill-head">
-        <div>
-          <div class="context-panel-title">${headline}</div>
-          <p class="context-panel-copy" style="margin-top:var(--sp-2)">Checking ${history.length} similar completed assessments from this browser to suggest a better starting point for the estimate.</p>
-        </div>
-        <div class="smart-prefill-actions">
-          <span class="badge badge--neutral">Adjusted from your history</span>
-          <button class="btn btn--ghost btn--sm" id="btn-smart-prefill-dismiss" type="button">Dismiss</button>
-        </div>
-      </div>
-      <div class="form-help">Suggestions appear only when at least 3 similar completed assessments exist for the same scenario family.</div>
-    </div>`;
-  }
-  return `<div class="card card--elevated anim-fade-in smart-prefill-band" id="smart-prefill-band">
-    <div class="smart-prefill-head">
-      <div>
-        <div class="context-panel-title">${headline}</div>
-        <p class="context-panel-copy" style="margin-top:var(--sp-2)">These suggested starting values were prepared from ${history.length} similar completed assessments in this browser and tuned against the current scenario summary.</p>
-      </div>
-      <div class="smart-prefill-actions">
-        <span class="badge badge--neutral">Adjusted from your history</span>
-        <button class="btn btn--secondary btn--sm" id="btn-smart-prefill-apply-all" type="button">Apply All</button>
-        <button class="btn btn--ghost btn--sm" id="btn-smart-prefill-collapse" type="button">${state.collapsed ? 'Expand' : 'Collapse'}</button>
-        <button class="btn btn--ghost btn--sm" id="btn-smart-prefill-dismiss" type="button">Dismiss</button>
-      </div>
-    </div>
-    <div id="smart-prefill-body" ${state.collapsed ? 'class="hidden"' : ''}>
-      <div class="smart-prefill-chip-list">
-        ${visibleFields.map(field => renderStep3SmartPrefillChip(field, state.suggestion, history.length)).join('')}
-      </div>
-    </div>
-  </div>`;
+  return '';
 }
 
 function applyStep3SmartPrefillField(field, suggestion, draft, isAdv) {
@@ -442,41 +398,11 @@ function applyStep3SmartPrefillField(field, suggestion, draft, isAdv) {
 async function requestStep3SmartPrefillIfNeeded(draft, isAdv) {
   const state = getStep3SmartPrefillState(draft);
   const scenarioType = getStep3SmartPrefillScenarioType(draft);
-  if (state.scenarioType && state.scenarioType !== scenarioType) {
-    resetStep3SmartPrefillState(state, scenarioType);
-  }
-  state.scenarioType = scenarioType;
-  const history = getStep3MatchingSmartPrefillHistory(draft);
-  state.historyCount = history.length;
-  if (state.dismissed || history.length < 3 || state.status === 'loading' || state.status === 'empty' || state.status === 'error' || hasStep3UserEditedCoreFields(draft)) return;
-  if (state.status === 'ready' && state.suggestion) return;
-  const scenarioSummary = buildStep3SmartPrefillScenarioSummary(draft);
-  if (!scenarioSummary) {
-    state.status = 'empty';
-    return;
-  }
-  state.status = 'loading';
-  renderWizard3();
-  try {
-    const suggestion = await LLMService.suggestSmartParamPrefill({
-      scenarioType,
-      scenarioSummary,
-      history,
-      priorMessages: getStep3PriorMessages()
-    });
-    if (!suggestion) {
-      state.status = 'empty';
-      state.suggestion = null;
-    } else {
-      state.status = 'ready';
-      state.suggestion = suggestion;
-      state.collapsed = false;
-    }
-  } catch {
-    state.status = 'error';
-    state.suggestion = null;
-  }
-  renderWizard3();
+  resetStep3SmartPrefillState(state, scenarioType);
+  state.status = 'empty';
+  state.suggestion = null;
+  state.historyCount = 0;
+  return null;
 }
 
 function getStep3FieldRationaleMap(draft) {
@@ -1770,9 +1696,6 @@ function _ensureDraftFairParamsSeeded(draft) {
   assignRange('rl', loss.regulatoryLegal, defaults.regulatoryLegal, { min: 0, likely: 80000, max: 800000 });
   assignRange('tp', loss.thirdPartyLiability, defaults.thirdPartyLiability, { min: 0, likely: 50000, max: 400000 });
   assignRange('rc', loss.reputationContract, defaults.reputationContract, { min: 50000, likely: 200000, max: 1200000 });
-  if (typeof OrgIntelligenceService !== 'undefined' && typeof OrgIntelligenceService.applyCalibrationToDraft === 'function') {
-    OrgIntelligenceService.applyCalibrationToDraft(draft);
-  }
 
   if ((!draft.benchmarkReferences || !draft.benchmarkReferences.length) && benchmarkCandidates.length) {
     draft.benchmarkReferences = BenchmarkService.buildReferenceList(benchmarkCandidates);
@@ -2079,7 +2002,7 @@ function renderWizard3() {
           ${renderOrgCalibrationBand(draft)}
           ${renderEstimateScopeSummaryBand(draft)}
           ${renderQuantReadinessScoreCard(draft, validation)}
-          ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="wizard-premium-head"><div><div class="context-panel-title">Current assessment baseline</div><p class="context-panel-copy">You are working from <strong>${escapeHtml(baselineTitle || 'the original assessment')}</strong>. Adjust the assumptions below to reflect stronger prevention, faster response, or lower disruption impact, then rerun to compare the new result against the current baseline.</p></div><span class="badge badge--gold">Treatment lane</span></div><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Try stronger controls</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="detection-response">Try faster detection</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="resilience">Try lower disruption impact</button></div><div class="form-group" style="margin-top:16px"><label class="form-label" for="treatment-improvement-request">Describe the better outcome you want to test</label><textarea class="form-textarea" id="treatment-improvement-request" rows="3" placeholder="e.g. stronger privileged-access controls, faster containment, better resilience, lower business disruption">${draft.treatmentImprovementRequest || ''}</textarea><span class="form-help">Describe the improvement in plain language and let AI adjust the copied baseline values before you simulate the new case.</span></div><div class="flex items-center gap-3" style="margin-top:12px;flex-wrap:wrap"><button class="btn btn--secondary" id="btn-treatment-ai-assist" type="button">AI Assist This Better Outcome</button><span class="form-help" id="treatment-improvement-status">These are quick starting points. You can still adjust every number manually before rerunning the analysis.</span></div></div>` : ''}
+          ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="wizard-premium-head"><div><div class="context-panel-title">Current assessment baseline</div><p class="context-panel-copy">You are working from <strong>${escapeHtml(baselineTitle || 'the original assessment')}</strong>. Adjust the assumptions below to reflect stronger prevention, faster response, or lower disruption impact, then rerun to compare the new result against the current baseline.</p></div><span class="badge badge--gold">Treatment lane</span></div><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Try stronger controls</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="detection-response">Try faster detection</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="resilience">Try lower disruption impact</button></div><div class="form-group" style="margin-top:16px"><label class="form-label" for="treatment-improvement-request">Describe the better outcome you want to test</label><textarea class="form-textarea" id="treatment-improvement-request" rows="3" placeholder="e.g. stronger privileged-access controls, faster containment, better resilience, lower business disruption">${draft.treatmentImprovementRequest || ''}</textarea><span class="form-help">Describe the improvement in plain language and let AI adjust the copied baseline values before you simulate the new case.</span></div><div class="flex items-center gap-3" style="margin-top:12px;flex-wrap:wrap"><button class="btn btn--secondary" id="btn-treatment-ai-assist" type="button">AI Assist This Better Outcome</button><span class="form-help" id="treatment-improvement-status">${escapeHtml(getStep3TreatmentAssistStatusCopy(draft))}</span></div></div>` : ''}
           ${renderSmartPrefillBand(draft, isAdv)}
 
           <section class="wizard-ia-section anim-fade-in">
@@ -2237,6 +2160,7 @@ function renderWizard3() {
       collectFairParams();
       if (input.id === 'treatment-improvement-request') {
         AppState.draft.treatmentImprovementRequest = input.value;
+        AppState.draft.treatmentSuggestionMode = '';
       }
       markDraftDirty();
       scheduleDraftAutosave();
@@ -2263,6 +2187,7 @@ function renderWizard3() {
   }
   document.querySelectorAll('.treatment-prompt-chip').forEach(button => {
     button.addEventListener('click', () => {
+      AppState.draft.treatmentSuggestionMode = '';
       applyTreatmentPrompt(button.dataset.treatmentPrompt);
       renderWizard3();
       UI.toast('Treatment prompt applied. Review the numbers and rerun the scenario.', 'success');
@@ -2312,7 +2237,9 @@ function renderWizard3() {
         citations,
         priorMessages: getStep3PriorMessages()
       });
+      const resultMode = String(result.mode || (result.usedFallback ? 'deterministic_fallback' : 'live')).trim().toLowerCase();
       applySuggestedTreatmentInputs(result.suggestedInputs || {});
+      AppState.draft.treatmentSuggestionMode = resultMode;
       AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : (AppState.draft.workflowGuidance || []);
       AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis || '';
       AppState.draft.inputRationale = result.inputRationale || AppState.draft.inputRationale || null;
@@ -2327,10 +2254,13 @@ function renderWizard3() {
       AppState.draft.learningNote = result.changesSummary || result.summary || '';
       saveDraft();
       renderWizard3();
-      if (result.aiUnavailable) {
-        renderStep3AiUnavailableBanner(() => document.getElementById('btn-treatment-ai-assist')?.click());
-      }
-      UI.toast(result.usedFallback ? 'A fallback suggested better-outcome draft was loaded. Review the numbers before rerunning.' : 'A suggested better-outcome draft was loaded. Review the numbers before rerunning.', result.usedFallback ? 'warning' : 'success', 5000);
+      UI.toast(
+        resultMode === 'deterministic_fallback'
+          ? 'A deterministic fallback better-outcome draft was loaded. Review the numbers before rerunning.'
+          : 'A live AI better-outcome draft was loaded. Review the numbers before rerunning.',
+        resultMode === 'deterministic_fallback' ? 'warning' : 'success',
+        5000
+      );
     } catch (error) {
       if (error?.code === 'LLM_UNAVAILABLE') {
         if (statusEl) statusEl.textContent = `${getStep3AiUnavailableMessage()} Keep the current values or try again.`;
@@ -2376,6 +2306,17 @@ function lossRow(prefix, label, min, likely, max, tooltip) {
 
 function clearStep3AiUnavailableBanner() {
   document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
+}
+
+function getStep3TreatmentAssistStatusCopy(draft = AppState.draft) {
+  const mode = String(draft?.treatmentSuggestionMode || '').trim().toLowerCase();
+  if (mode === 'live') {
+    return 'Live AI adjusted the copied baseline values. You can still fine-tune every number manually before rerunning.';
+  }
+  if (mode === 'deterministic_fallback') {
+    return 'Deterministic fallback adjusted the copied baseline values. Review the numbers before rerunning.';
+  }
+  return 'These are quick starting points. You can still adjust every number manually before rerunning the analysis.';
 }
 
 function getStep3AiUnavailableMessage() {

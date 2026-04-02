@@ -74,6 +74,7 @@ module.exports = async function handler(req, res) {
   }
 
   const input = {
+    session,
     riskStatement: typeof body.riskStatement === 'string' ? body.riskStatement : '',
     guidedInput: isPlainObject(body.guidedInput) ? body.guidedInput : {},
     scenarioLensHint: body.scenarioLensHint,

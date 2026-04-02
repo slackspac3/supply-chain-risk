@@ -932,9 +932,6 @@ const OrgIntelligenceService = (() => {
   }
 
   function getHierarchicalFeedbackProfile(context = {}) {
-    const username = typeof AuthService !== 'undefined' && typeof AuthService.getCurrentUser === 'function'
-      ? AuthService.getCurrentUser()?.username || ''
-      : '';
     const filters = {
       buId: context.buId || context.businessUnitId || '',
       functionKey: context.functionKey || context.scenarioLens?.functionKey || '',
@@ -942,17 +939,7 @@ const OrgIntelligenceService = (() => {
     };
     const thresholds = getFeedbackTierThresholds(context.settings || null);
     const orgEvents = getFeedbackEvents({ scenarioLensKey: filters.scenarioLensKey });
-    const userProfile = username
-      && typeof LearningStore !== 'undefined'
-      && typeof LearningStore.getAiFeedbackProfile === 'function'
-      ? {
-          active: true,
-          label: 'user',
-          minEvents: 0,
-          minUsers: 0,
-          profile: LearningStore.getAiFeedbackProfile(username, filters)
-        }
-      : _buildInactiveFeedbackProfile('user');
+    const userProfile = _buildInactiveFeedbackProfile('user');
     const functionProfile = filters.functionKey
       ? _buildTierProfile(orgEvents.filter(event => _feedbackMatches(event, { ...filters, buId: '', functionKey: filters.functionKey })), {
           label: 'function',
@@ -1001,15 +988,7 @@ const OrgIntelligenceService = (() => {
   }
 
   function _getLocalPatterns(limit = 20, buId = '') {
-    try {
-      const username = typeof AuthService !== 'undefined' && typeof AuthService.getCurrentUser === 'function'
-        ? AuthService.getCurrentUser()?.username || ''
-        : '';
-      if (!username || typeof LearningStore === 'undefined' || typeof LearningStore.getScenarioPatterns !== 'function') return [];
-      return LearningStore.getScenarioPatterns(username, buId, limit).map(_normalisePattern);
-    } catch {
-      return [];
-    }
+    return [];
   }
 
   function _patternTokens(pattern = {}) {

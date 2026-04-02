@@ -96,8 +96,12 @@ function buildTimer(fastTimers = true) {
 }
 
 function loadBrowserLlmService(options = {}) {
-  const llmServicePath = path.resolve(__dirname, '../../../assets/services/llmService.js');
-  const source = `${fs.readFileSync(llmServicePath, 'utf8')}\nmodule.exports = LLMService;\n`;
+  const servicePaths = [
+    path.resolve(__dirname, '../../../assets/services/aiTraceRuntime.js'),
+    path.resolve(__dirname, '../../../assets/services/aiStatusClient.js'),
+    path.resolve(__dirname, '../../../assets/services/aiWorkflowClient.js'),
+    path.resolve(__dirname, '../../../assets/services/llmService.js')
+  ];
   const timers = buildTimer(options.fastTimers !== false);
   const context = {
     module: { exports: {} },
@@ -129,7 +133,8 @@ function loadBrowserLlmService(options = {}) {
     process,
     window: {
       location: {
-        origin: options.origin || 'https://risk-calculator-eight.vercel.app'
+        origin: options.origin || 'https://risk-calculator-eight.vercel.app',
+        hostname: new URL(options.origin || 'https://risk-calculator-eight.vercel.app').hostname
       },
       _lastRagSources: []
     },
@@ -152,8 +157,12 @@ function loadBrowserLlmService(options = {}) {
   };
   context.global = context;
   context.globalThis = context;
-  vm.runInNewContext(source, context, {
-    filename: llmServicePath
+  servicePaths.forEach((servicePath) => {
+    const isLlmService = servicePath.endsWith(`${path.sep}llmService.js`);
+    const source = `${fs.readFileSync(servicePath, 'utf8')}${isLlmService ? '\nmodule.exports = LLMService;\n' : '\n'}`;
+    vm.runInNewContext(source, context, {
+      filename: servicePath
+    });
   });
   return context.module.exports;
 }

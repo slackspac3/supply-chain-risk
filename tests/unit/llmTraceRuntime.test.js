@@ -2,18 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+const { loadLlmServiceContext } = require('./helpers/loadLlmServiceHarness');
 
 function loadTraceRuntime() {
-  const filePath = path.resolve(__dirname, '../../assets/services/llmService.js');
-  const source = fs.readFileSync(filePath, 'utf8');
-  const instrumented = `${source.replace(
-    '  return {\n    buildGuidedScenarioDraft,',
-    '  globalThis.__llmTraceInternals = { _storeAiTraceEntry, _readAiTrace };\n\n  return {\n    buildGuidedScenarioDraft,'
-  )}\n;globalThis.__llmService = LLMService;`;
-
   const forbiddenStorage = {
     getItem() {
       throw new Error('trace runtime test should not read browser storage');
@@ -26,31 +17,20 @@ function loadTraceRuntime() {
     }
   };
 
-  const context = {
-    console,
-    Date,
-    JSON,
-    Math,
-    URL,
-    setTimeout,
-    clearTimeout,
-    AbortController,
-    sessionStorage: forbiddenStorage,
-    localStorage: forbiddenStorage,
-    window: {
-      location: { origin: 'https://slackspac3.github.io', hostname: 'slackspac3.github.io' },
-      _lastRagSources: []
-    },
-    fetch: async () => {
+  const context = loadLlmServiceContext({
+    origin: 'https://slackspac3.github.io',
+    fetchImpl: async () => {
       throw new Error('fetch should not be called in llmTraceRuntime.test.js');
     },
-    AIGuardrails: null,
-    BenchmarkService: {},
-    logAuditEvent: async () => {}
-  };
-
-  vm.createContext(context);
-  vm.runInContext(instrumented, context, { filename: 'llmService.js' });
+    sessionStorage: forbiddenStorage,
+    localStorage: forbiddenStorage,
+    transformLlmService(source) {
+      return source.replace(
+        '  return {\n    buildGuidedScenarioDraft,',
+        '  globalThis.__llmTraceInternals = { _storeAiTraceEntry, _readAiTrace };\n\n  return {\n    buildGuidedScenarioDraft,'
+      );
+    }
+  });
   return {
     service: context.__llmService,
     internals: context.__llmTraceInternals

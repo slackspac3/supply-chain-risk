@@ -14,7 +14,6 @@ const LLMService = (() => {
   const AI_TIMEOUT_MS = 30000;
   const AI_QUALITY_GATE_MAX_PROMPT_CHARS = 22000;
   const AI_QUALITY_GATE_MAX_COMPLETION_TOKENS = 2200;
-  const AI_STATUS_CACHE_TTL_MS = 30000;
 
   function _guardrails() {
     return typeof AIGuardrails === 'object' && AIGuardrails ? AIGuardrails : null;
@@ -58,87 +57,34 @@ const LLMService = (() => {
   }
 
   const AI_TRACE_LIMIT = 20;
-  let _aiTraceEntries = [];
-
-  function _safeTraceText(value = '', maxChars = 16000) {
-    return String(value || '').trim().slice(0, Math.max(0, Number(maxChars || 0) || 0));
-  }
-
-  function _normaliseTraceSources(sources = []) {
-    return (Array.isArray(sources) ? sources : [])
-      .filter(Boolean)
-      .map((item) => ({
-        title: _safeTraceText(item?.title || item?.label || item?.sourceTitle || 'Untitled source', 160),
-        url: _safeTraceText(item?.url || '', 400),
-        sourceType: _safeTraceText(item?.sourceType || '', 80),
-        relevanceReason: _safeTraceText(item?.relevanceReason || '', 240)
-      }))
-      .filter((item) => item.title);
-  }
+  const _traceRuntime = typeof AiTraceRuntime !== 'undefined'
+    && AiTraceRuntime
+    && typeof AiTraceRuntime.createRuntime === 'function'
+      ? AiTraceRuntime.createRuntime({ traceLimit: AI_TRACE_LIMIT })
+      : null;
 
   function _readAiTrace() {
-    return Array.isArray(_aiTraceEntries) ? _aiTraceEntries.slice() : [];
+    return _traceRuntime ? _traceRuntime.readEntries() : [];
   }
 
   function _writeAiTrace(entries = []) {
-    _aiTraceEntries = (Array.isArray(entries) ? entries : [])
-      .filter(Boolean)
-      .slice(-AI_TRACE_LIMIT);
+    if (_traceRuntime) _traceRuntime.writeEntries(entries);
   }
 
-  function _storeAiTraceEntry({ label = '', promptSummary = '', response = '', sources = [] } = {}) {
-    const safeLabel = String(label || '').trim();
-    if (!safeLabel) return null;
-    const entry = {
-      id: `trace_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      label: safeLabel,
-      timestamp: Date.now(),
-      promptSummary: _safeTraceText(promptSummary, 12000),
-      response: _safeTraceText(response, 20000),
-      sources: _normaliseTraceSources(sources)
-    };
-    const next = _readAiTrace();
-    next.push(entry);
-    if (next.length > AI_TRACE_LIMIT) {
-      next.splice(0, next.length - AI_TRACE_LIMIT);
-    }
-    _writeAiTrace(next);
-    return entry;
+  function _storeAiTraceEntry(entry = {}) {
+    return _traceRuntime ? _traceRuntime.storeEntry(entry) : null;
   }
 
   function _getTraceSources(options = {}) {
-    const explicitSources = _normaliseTraceSources(options.traceSources || []);
-    if (explicitSources.length) return explicitSources;
-    try {
-      const windowSources = typeof window !== 'undefined' ? window._lastRagSources : [];
-      return _normaliseTraceSources(windowSources || []);
-    } catch {
-      return [];
-    }
+    return _traceRuntime ? _traceRuntime.resolveTraceSources(options) : [];
   }
 
   function _buildTracePromptSummary(promptPayload = {}) {
-    const priorMessages = Array.isArray(promptPayload.priorMessages) ? promptPayload.priorMessages : [];
-    const priorSummary = priorMessages.length
-      ? `Prior messages: ${priorMessages.map((item) => `${item.role}: ${item.content}`).join(' | ')}`
-      : '';
-    return _safeTraceText([
-      `System: ${promptPayload.systemPrompt || ''}`,
-      priorSummary,
-      `User: ${promptPayload.userPrompt || ''}`
-    ].filter(Boolean).join('\n\n'), 12000);
+    return _traceRuntime ? _traceRuntime.buildPromptSummary(promptPayload) : '';
   }
 
   function getLatestTrace(label = '') {
-    const safeLabel = String(label || '').trim();
-    const entries = _readAiTrace();
-    if (!safeLabel) return entries[entries.length - 1] || null;
-    for (let index = entries.length - 1; index >= 0; index -= 1) {
-      if (String(entries[index]?.label || '').trim() === safeLabel) {
-        return entries[index];
-      }
-    }
-    return null;
+    return _traceRuntime ? _traceRuntime.getLatestTrace(label) : null;
   }
 
   function _buildSourceBasis({ evidenceMeta = {}, citations = [], uploadedDocumentName = '', fallbackUsed = false } = {}) {
@@ -188,37 +134,6 @@ const LLMService = (() => {
   let _compassApiUrl = DEFAULT_COMPASS_API_URL;
   let _compassModel = DEFAULT_COMPASS_MODEL;
   let _compassApiKey = '';
-  let _cachedServerAiStatus = null;
-  let _serverAiStatusPromise = null;
-
-  function _getAiStatusUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/status');
-      } else {
-        url.pathname = '/api/ai/status';
-      }
-      url.search = '';
-      return url.toString();
-    } catch {
-      return '';
-    }
-  }
-
-  function _normaliseServerAiStatus(value = {}) {
-    return {
-      mode: String(value?.mode || 'degraded').trim() || 'degraded',
-      providerReachable: value?.providerReachable === true,
-      model: String(value?.model || DEFAULT_COMPASS_MODEL).trim() || DEFAULT_COMPASS_MODEL,
-      proxyConfigured: value?.proxyConfigured !== false,
-      checkedAt: Number(value?.checkedAt || Date.now()),
-      message: String(value?.message || '').trim()
-    };
-  }
 
   function setCompassAPIKey(key) {
     if (!_isLocalDevRuntimeConfigAllowed()) {
@@ -245,200 +160,51 @@ const LLMService = (() => {
   }
 
   function _getCompanyContextUrl() {
-    if (_isDirectCompassUrl(_compassApiUrl)) return '';
-    try {
-      const url = new URL(_compassApiUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/company-context');
-        return url.toString();
-      }
-      return new URL('/api/company-context', _compassApiUrl).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getCompanyContextUrl() : '';
   }
 
   function _getScenarioDraftUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/scenario-draft');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/scenario-draft', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getScenarioDraftUrl() : '';
   }
 
   function _getRegisterAnalysisUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/register-analysis');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/register-analysis', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getRegisterAnalysisUrl() : '';
   }
 
   function _getTreatmentSuggestionUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/treatment-suggestion');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/treatment-suggestion', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getTreatmentSuggestionUrl() : '';
   }
 
   function _getReviewerBriefUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/reviewer-brief');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/reviewer-brief', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getReviewerBriefUrl() : '';
   }
 
   function _getChallengeAssessmentUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/challenge-assessment');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/challenge-assessment', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getChallengeAssessmentUrl() : '';
   }
 
   function _getParameterChallengeUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/parameter-challenge');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/parameter-challenge', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getParameterChallengeUrl() : '';
   }
 
   function _getChallengeSynthesisUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/challenge-synthesis');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/challenge-synthesis', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getChallengeSynthesisUrl() : '';
   }
 
   function _getConsensusRecommendationUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/consensus-recommendation');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/consensus-recommendation', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getConsensusRecommendationUrl() : '';
   }
 
   function _getReviewMediationUrl() {
-    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
-      ? DEFAULT_COMPASS_API_URL
-      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
-    try {
-      const url = new URL(baseUrl);
-      if (url.pathname.endsWith('/api/compass')) {
-        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/review-mediation');
-        url.search = '';
-        return url.toString();
-      }
-      return new URL('/api/ai/review-mediation', DEFAULT_COMPASS_API_URL).toString();
-    } catch {
-      return '';
-    }
+    return _workflowClient ? _workflowClient.getReviewMediationUrl() : '';
   }
 
   async function _postServerAiWorkflow(endpoint, payload, { nullOnError = false } = {}) {
-    if (!endpoint) {
+    if (!_workflowClient) {
       if (nullOnError) return null;
-      throw new Error('AI workflow endpoint is unavailable.');
+      throw new Error('AI workflow client is unavailable.');
     }
-    const sessionToken = _getSessionToken();
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(sessionToken ? { 'x-session-token': sessionToken } : {})
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      if (nullOnError) return null;
-      const normalisedError = _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
-      throw Object.assign(new Error(normalisedError?.message || text || 'AI request failed'), {
-        code: 'LLM_UNAVAILABLE',
-        retriable: true
-      });
-    }
-    const result = await response.json();
-    if (result?.trace && typeof result.trace === 'object') {
-      _storeAiTraceEntry(result.trace);
-    }
-    return result;
+    return _workflowClient.postWorkflow(endpoint, payload, { nullOnError });
   }
 
   // Backwards-compatible alias for older setup instructions.
@@ -753,6 +519,31 @@ Return corrected JSON only.`;
     }
   }
 
+  const _workflowClient = typeof AiWorkflowClient !== 'undefined'
+    && AiWorkflowClient
+    && typeof AiWorkflowClient.createClient === 'function'
+      ? AiWorkflowClient.createClient({
+          defaultBaseUrl: DEFAULT_COMPASS_API_URL,
+          getBaseUrl: () => _compassApiUrl,
+          isDirectCompassUrl: _isDirectCompassUrl,
+          getSessionToken: _getSessionToken,
+          normaliseError: _normaliseLLMError,
+          storeTraceEntry: _storeAiTraceEntry
+        })
+      : null;
+
+  const _aiStatusClient = typeof AiStatusClient !== 'undefined'
+    && AiStatusClient
+    && typeof AiStatusClient.createClient === 'function'
+      ? AiStatusClient.createClient({
+          cacheTtlMs: 30000,
+          defaultModel: DEFAULT_COMPASS_MODEL,
+          buildStatusUrl: () => (_workflowClient ? _workflowClient.getStatusUrl() : ''),
+          getSessionToken: _getSessionToken,
+          normaliseError: _normaliseLLMError
+        })
+      : null;
+
   function getRuntimeStatus() {
     const apiUrl = String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL;
     const model = String(_compassModel || DEFAULT_COMPASS_MODEL).trim() || DEFAULT_COMPASS_MODEL;
@@ -772,49 +563,22 @@ Return corrected JSON only.`;
   }
 
   function isUsingStub() {
-    if (_cachedServerAiStatus?.mode === 'deterministic_fallback' || _cachedServerAiStatus?.mode === 'manual_only') {
+    const cachedStatus = getCachedServerAiStatus();
+    if (cachedStatus?.mode === 'deterministic_fallback' || cachedStatus?.mode === 'manual_only') {
       return true;
     }
     return getRuntimeStatus().usingStub;
   }
 
   function getCachedServerAiStatus() {
-    return _cachedServerAiStatus ? { ..._cachedServerAiStatus } : null;
+    return _aiStatusClient ? _aiStatusClient.getCachedStatus() : null;
   }
 
   async function fetchServerAiStatus({ force = false, probe = true } = {}) {
-    const cached = getCachedServerAiStatus();
-    if (!force && cached && (Date.now() - Number(cached.checkedAt || 0)) < AI_STATUS_CACHE_TTL_MS) {
-      return cached;
+    if (!_aiStatusClient) {
+      throw new Error('AI status client is unavailable.');
     }
-    if (!force && _serverAiStatusPromise) {
-      return _serverAiStatusPromise;
-    }
-    const endpoint = _getAiStatusUrl();
-    if (!endpoint) {
-      throw new Error('AI status endpoint is unavailable.');
-    }
-    const sessionToken = _getSessionToken();
-    const url = new URL(endpoint);
-    if (probe) url.searchParams.set('probe', '1');
-    _serverAiStatusPromise = (async () => {
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: sessionToken ? { 'x-session-token': sessionToken } : {}
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
-      }
-      const payload = await response.json();
-      _cachedServerAiStatus = _normaliseServerAiStatus(payload);
-      return getCachedServerAiStatus();
-    })();
-    try {
-      return await _serverAiStatusPromise;
-    } finally {
-      _serverAiStatusPromise = null;
-    }
+    return _aiStatusClient.fetchStatus({ force, probe });
   }
 
   function _normaliseScenarioHintKey(value) {
@@ -2290,22 +2054,18 @@ ${businessUnit.selectedDepartmentContext}` : ''
   }
 
   function _getAiFeedbackLearningProfile({ buId = '', functionKey = '', scenarioLensKey = '' } = {}) {
-    try {
-      if (typeof OrgIntelligenceService === 'undefined' || typeof OrgIntelligenceService.getHierarchicalFeedbackProfile !== 'function') return null;
-      return OrgIntelligenceService.getHierarchicalFeedbackProfile({
-        buId,
-        functionKey,
-        scenarioLensKey
-      });
-    } catch {
-      return null;
-    }
+    // Server-owned workflows resolve learning profiles server-side. The browser no longer
+    // computes or applies authoritative feedback priors for inference quality.
+    void buId;
+    void functionKey;
+    void scenarioLensKey;
+    return null;
   }
 
   function _buildFeedbackLearningPromptBlock(profile = null) {
     const combined = profile?.combined;
     if (!combined || !Array.isArray(combined.activeTiers) || !combined.activeTiers.length) {
-      return 'Feedback priors:\n- No proven live-AI feedback priors are active for this scenario yet.';
+      return 'Feedback priors:\n- No browser-applied learning priors are active. Server-owned workflows resolve any approved learning influence.';
     }
     const issueLabel = (value = '') => String(value || '').replace(/^(draft|shortlist):/, '').replace(/-/g, ' ');
     return [
@@ -2378,30 +2138,9 @@ ${businessUnit.selectedDepartmentContext}` : ''
     });
   }
 
-  function _lookupFeedbackRiskWeight(feedbackProfile = null, title = '') {
-    if (!feedbackProfile || typeof feedbackProfile !== 'object' || !title) return 0;
-    const target = _normaliseText(title || '', 180).toLowerCase();
-    return Object.entries(feedbackProfile.riskWeights || {}).reduce((best, [key, value]) => {
-      return _normaliseText(key || '', 180).toLowerCase() === target ? Number(value || 0) : best;
-    }, 0);
-  }
-
   function _rerankRisksWithFeedback(risks = [], feedbackProfile = null) {
-    const combined = feedbackProfile?.combined;
-    if (!combined || !Array.isArray(risks) || !risks.length) return Array.isArray(risks) ? risks : [];
-    return risks
-      .map((risk, index) => {
-        const weight = _lookupFeedbackRiskWeight(combined, risk?.title || '');
-        const confidence = String(risk?.confidence || '').trim().toLowerCase();
-        const confidenceScore = confidence === 'high' ? 1.2 : confidence === 'medium' ? 0.5 : confidence === 'low' ? -0.2 : 0;
-        return {
-          risk,
-          index,
-          score: weight * 1.9 + confidenceScore
-        };
-      })
-      .sort((a, b) => b.score - a.score || a.index - b.index)
-      .map(item => item.risk);
+    void feedbackProfile;
+    return Array.isArray(risks) ? risks : [];
   }
 
   function _isScenarioTextCoherent(text = '', {
@@ -3359,39 +3098,18 @@ ${businessUnit.selectedDepartmentContext}` : ''
   }
 
   async function buildGuidedScenarioDraft(input = {}) {
-    const endpoint = _getScenarioDraftUrl();
-    if (!endpoint) {
-      throw new Error('Guided scenario draft endpoint is unavailable.');
-    }
-    const sessionToken = _getSessionToken();
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(sessionToken ? { 'x-session-token': sessionToken } : {})
-      },
-      body: JSON.stringify({
-        riskStatement: typeof input.riskStatement === 'string' ? input.riskStatement : '',
-        guidedInput: input?.guidedInput && typeof input.guidedInput === 'object' ? input.guidedInput : {},
-        scenarioLensHint: input.scenarioLensHint,
-        businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
-        geography: typeof input.geography === 'string' ? input.geography : '',
-        applicableRegulations: Array.isArray(input.applicableRegulations) ? input.applicableRegulations : [],
-        citations: Array.isArray(input.citations) ? input.citations : [],
-        adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
-        traceLabel: typeof input.traceLabel === 'string' ? input.traceLabel : '',
-        priorMessages: Array.isArray(input.priorMessages) ? input.priorMessages : []
-      })
+    return _postServerAiWorkflow(_getScenarioDraftUrl(), {
+      riskStatement: typeof input.riskStatement === 'string' ? input.riskStatement : '',
+      guidedInput: input?.guidedInput && typeof input.guidedInput === 'object' ? input.guidedInput : {},
+      scenarioLensHint: input.scenarioLensHint,
+      businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
+      geography: typeof input.geography === 'string' ? input.geography : '',
+      applicableRegulations: Array.isArray(input.applicableRegulations) ? input.applicableRegulations : [],
+      citations: Array.isArray(input.citations) ? input.citations : [],
+      adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
+      traceLabel: typeof input.traceLabel === 'string' ? input.traceLabel : '',
+      priorMessages: Array.isArray(input.priorMessages) ? input.priorMessages : []
     });
-    if (!response.ok) {
-      const text = await response.text();
-      throw _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
-    }
-    const result = await response.json();
-    if (result?.trace && typeof result.trace === 'object') {
-      _storeAiTraceEntry(result.trace);
-    }
-    return result;
   }
 
   async function suggestGuidedPromptIdeas(input = {}) {
@@ -4461,38 +4179,17 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
   }
 
   async function analyseRiskRegister(input) {
-    const endpoint = _getRegisterAnalysisUrl();
-    if (!endpoint) {
-      throw new Error('Register analysis endpoint is unavailable.');
-    }
-    const sessionToken = _getSessionToken();
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(sessionToken ? { 'x-session-token': sessionToken } : {})
-      },
-      body: JSON.stringify({
-        registerText: typeof input?.registerText === 'string' ? input.registerText : '',
-        registerMeta: input?.registerMeta && typeof input.registerMeta === 'object' ? input.registerMeta : null,
-        businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
-        geography: typeof input?.geography === 'string' ? input.geography : '',
-        applicableRegulations: Array.isArray(input?.applicableRegulations) ? input.applicableRegulations : [],
-        adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
-        priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : [],
-        traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : '',
-        citations: Array.isArray(input?.citations) ? input.citations : []
-      })
+    return _postServerAiWorkflow(_getRegisterAnalysisUrl(), {
+      registerText: typeof input?.registerText === 'string' ? input.registerText : '',
+      registerMeta: input?.registerMeta && typeof input.registerMeta === 'object' ? input.registerMeta : null,
+      businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
+      geography: typeof input?.geography === 'string' ? input.geography : '',
+      applicableRegulations: Array.isArray(input?.applicableRegulations) ? input.applicableRegulations : [],
+      adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
+      priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : [],
+      traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : '',
+      citations: Array.isArray(input?.citations) ? input.citations : []
     });
-    if (!response.ok) {
-      const text = await response.text();
-      throw _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
-    }
-    const result = await response.json();
-    if (result?.trace && typeof result.trace === 'object') {
-      _storeAiTraceEntry(result.trace);
-    }
-    return result;
   }
 
   async function buildCompanyContext(websiteUrl) {
@@ -4955,40 +4652,15 @@ ${evidenceMeta.promptBlock}`;
   }
 
   async function suggestTreatmentImprovement(input = {}) {
-    const endpoint = _getTreatmentSuggestionUrl();
-    if (!endpoint) {
-      throw new Error('Treatment suggestion endpoint is unavailable.');
-    }
-    const sessionToken = _getSessionToken();
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(sessionToken ? { 'x-session-token': sessionToken } : {})
-      },
-      body: JSON.stringify({
-        baselineAssessment: input?.baselineAssessment && typeof input.baselineAssessment === 'object' ? input.baselineAssessment : {},
-        improvementRequest: typeof input?.improvementRequest === 'string' ? input.improvementRequest : '',
-        businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
-        adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
-        citations: Array.isArray(input?.citations) ? input.citations : [],
-        priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : [],
-        traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
-      })
+    return _postServerAiWorkflow(_getTreatmentSuggestionUrl(), {
+      baselineAssessment: input?.baselineAssessment && typeof input.baselineAssessment === 'object' ? input.baselineAssessment : {},
+      improvementRequest: typeof input?.improvementRequest === 'string' ? input.improvementRequest : '',
+      businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
+      adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
+      citations: Array.isArray(input?.citations) ? input.citations : [],
+      priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : [],
+      traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
     });
-    if (!response.ok) {
-      const text = await response.text();
-      const normalisedError = _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
-      throw Object.assign(new Error(normalisedError?.message || text || 'AI request failed'), {
-        code: 'LLM_UNAVAILABLE',
-        retriable: true
-      });
-    }
-    const result = await response.json();
-    if (result?.trace && typeof result.trace === 'object') {
-      _storeAiTraceEntry(result.trace);
-    }
-    return result;
   }
 
   async function challengeAssessment(input = {}) {

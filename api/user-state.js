@@ -237,3 +237,4 @@ module.exports = async function handler(req, res) {
 module.exports.normaliseState = normaliseState;
 module.exports.writeUserState = writeUserState;
 module.exports.patchUserState = patchUserState;
+module.exports.readUserState = readUserState;

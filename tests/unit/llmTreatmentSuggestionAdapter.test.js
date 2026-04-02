@@ -2,45 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+const { loadLlmService } = require('./helpers/loadLlmServiceHarness');
 
 function loadService({ origin = 'https://slackspac3.github.io', fetchImpl } = {}) {
-  const filePath = path.resolve(__dirname, '../../assets/services/llmService.js');
-  const source = `${fs.readFileSync(filePath, 'utf8')}\n;globalThis.__llmService = LLMService;`;
-  const noopStorage = {
-    getItem() { return null; },
-    setItem() {},
-    removeItem() {}
-  };
-  const context = {
-    console,
-    Date,
-    JSON,
-    Math,
-    URL,
-    setTimeout,
-    clearTimeout,
-    AbortController,
-    sessionStorage: noopStorage,
-    localStorage: noopStorage,
-    window: {
-      location: { origin, hostname: new URL(origin).hostname },
-      _lastRagSources: []
-    },
-    fetch: fetchImpl,
-    AuthService: {
-      getApiSessionToken: () => 'session-token'
-    },
-    AIGuardrails: null,
-    BenchmarkService: {},
-    logAuditEvent: async () => {}
-  };
-
-  vm.createContext(context);
-  vm.runInContext(source, context, { filename: 'llmService.js' });
-  return context.__llmService;
+  return loadLlmService({ origin, fetchImpl });
 }
 
 test('suggestTreatmentImprovement uses the server treatment-suggestion endpoint and stores returned trace in runtime memory', async () => {
@@ -51,6 +16,7 @@ test('suggestTreatmentImprovement uses the server treatment-suggestion endpoint 
       return {
         ok: true,
         json: async () => ({
+          mode: 'live',
           summary: 'Server-owned treatment suggestion',
           suggestedInputs: {
             TEF: { min: 1, likely: 2, max: 3 },
@@ -86,6 +52,7 @@ test('suggestTreatmentImprovement uses the server treatment-suggestion endpoint 
   assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/treatment-suggestion');
   assert.equal(fetchCalls[0].options.method, 'POST');
   assert.equal(fetchCalls[0].options.headers['x-session-token'], 'session-token');
+  assert.equal(result.mode, 'live');
   assert.equal(typeof result.suggestedInputs?.TEF?.likely, 'number');
   assert.equal(service.getLatestTrace('Step 3 treatment suggestion')?.response, 'Server returned treatment suggestion');
 });
@@ -99,6 +66,7 @@ test('suggestTreatmentImprovement still uses the server treatment-suggestion end
       return {
         ok: true,
         json: async () => ({
+          mode: 'deterministic_fallback',
           summary: 'Fallback treatment suggestion',
           usedFallback: true,
           suggestedInputs: {

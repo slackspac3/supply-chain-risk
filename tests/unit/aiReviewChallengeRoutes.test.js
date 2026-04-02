@@ -112,7 +112,7 @@ test.afterEach(() => {
   global.fetch = originalFetch;
 });
 
-test('reviewer-brief route returns null when hosted AI proxy is not configured', async () => {
+test('reviewer-brief route returns deterministic fallback when hosted AI proxy is not configured', async () => {
   global.fetch = async (url) => {
     if (String(url).includes('/kv')) {
       return { ok: true, json: async () => ({ result: null }) };
@@ -129,7 +129,10 @@ test('reviewer-brief route returns null when hosted AI proxy is not configured',
   }), res);
 
   assert.equal(res.statusCode, 200);
-  assert.equal(res.payload, null);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
+  assert.equal(res.payload.usedFallback, true);
+  assert.equal(res.payload.aiUnavailable, true);
+  assert.match(String(res.payload.whatMatters || ''), /assessment|risk/i);
 });
 
 test('reviewer-brief route orchestrates live reviewer brief generation server-side', async () => {
@@ -150,11 +153,12 @@ test('reviewer-brief route orchestrates live reviewer brief generation server-si
   }), res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'live');
   assert.equal(res.payload.whatMatters, 'The current risk remains above the board attention threshold.');
   assert.equal(String(res.payload.trace?.label || ''), 'Reviewer decision brief');
 });
 
-test('challenge-assessment route keeps executive-mode no-AI semantics but returns deterministic fallback for review mode', async () => {
+test('challenge-assessment route returns deterministic fallback for executive and review modes when hosted AI is unavailable', async () => {
   global.fetch = async (url) => {
     if (String(url).includes('/kv')) {
       return { ok: true, json: async () => ({ result: null }) };
@@ -174,7 +178,10 @@ test('challenge-assessment route keeps executive-mode no-AI semantics but return
   }), executiveRes);
 
   assert.equal(executiveRes.statusCode, 200);
-  assert.equal(executiveRes.payload, null);
+  assert.equal(executiveRes.payload.mode, 'deterministic_fallback');
+  assert.equal(executiveRes.payload.usedFallback, true);
+  assert.equal(executiveRes.payload.aiUnavailable, true);
+  assert.match(String(executiveRes.payload.challengeSummary || ''), /committee should challenge/i);
 
   const reviewRes = createRes();
   await handler(buildRequest({
@@ -193,6 +200,7 @@ test('challenge-assessment route keeps executive-mode no-AI semantics but return
   }), reviewRes);
 
   assert.equal(reviewRes.statusCode, 200);
+  assert.equal(reviewRes.payload.mode, 'deterministic_fallback');
   assert.equal(reviewRes.payload.usedFallback, true);
   assert.equal(reviewRes.payload.aiUnavailable, true);
   assert.equal(String(reviewRes.payload.trace?.label || ''), 'Assessment challenge');
@@ -221,6 +229,7 @@ test('challenge-assessment route orchestrates live executive challenge generatio
   }), res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'live');
   assert.equal(res.payload.confidenceVerdict, 'Likely understated');
   assert.equal(String(res.payload.trace?.label || ''), 'Assessment challenge');
 });
@@ -248,6 +257,7 @@ test('parameter-challenge route returns deterministic fallback when hosted AI pr
   }), res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
   assert.equal(res.payload.usedFallback, true);
   assert.equal(res.payload.aiUnavailable, true);
   assert.equal(Array.isArray(res.payload.analystQuestions), true);
@@ -276,6 +286,7 @@ test('challenge-synthesis route returns deterministic fallback when hosted AI pr
   }), res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
   assert.equal(res.payload.usedFallback, true);
   assert.equal(res.payload.aiUnavailable, true);
   assert.match(String(res.payload.overallConcern || ''), /reviewers/i);
@@ -309,13 +320,14 @@ test('consensus-recommendation route returns deterministic fallback when hosted 
   }), res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
   assert.equal(res.payload.usedFallback, true);
   assert.equal(res.payload.aiUnavailable, true);
   assert.deepEqual(res.payload.acceptChallenges, ['C1']);
   assert.equal(String(res.payload.trace?.label || ''), 'Consensus recommendation');
 });
 
-test('review-mediation route returns null when hosted AI proxy is not configured and live mediation when configured', async () => {
+test('review-mediation route returns manual guidance when hosted AI proxy is not configured and live mediation when configured', async () => {
   global.fetch = async (url) => {
     if (String(url).includes('/kv')) {
       return { ok: true, json: async () => ({ result: null }) };
@@ -339,7 +351,10 @@ test('review-mediation route returns null when hosted AI proxy is not configured
   }), res);
 
   assert.equal(res.statusCode, 200);
-  assert.equal(res.payload, null);
+  assert.equal(res.payload.mode, 'manual');
+  assert.equal(res.payload.usedFallback, false);
+  assert.equal(res.payload.aiUnavailable, true);
+  assert.match(String(res.payload.proposedMiddleGround || ''), /manual mediation/i);
 
   process.env.COMPASS_API_KEY = 'proxy-secret';
   process.env.COMPASS_MODEL = 'gpt-5.1';
@@ -370,6 +385,7 @@ test('review-mediation route returns null when hosted AI proxy is not configured
   }), res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'live');
   assert.equal(res.payload.recommendedField, 'controlStrLikely');
   assert.equal(String(res.payload.trace?.label || ''), 'Review mediation');
 });

@@ -398,3 +398,4 @@ module.exports = async function handler(req, res) {
 
 module.exports.normaliseSettings = normaliseSettings;
 module.exports.writeSettings = writeSettings;
+module.exports.readSettings = readSettings;

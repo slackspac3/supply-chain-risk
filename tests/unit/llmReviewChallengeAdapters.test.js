@@ -2,57 +2,24 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+const { loadLlmService } = require('./helpers/loadLlmServiceHarness');
 
 function loadService({ origin = 'https://slackspac3.github.io', fetchImpl } = {}) {
-  const filePath = path.resolve(__dirname, '../../assets/services/llmService.js');
-  const source = `${fs.readFileSync(filePath, 'utf8')}\n;globalThis.__llmService = LLMService;`;
-  const noopStorage = {
-    getItem() { return null; },
-    setItem() {},
-    removeItem() {}
-  };
-  const context = {
-    console,
-    Date,
-    JSON,
-    Math,
-    URL,
-    setTimeout,
-    clearTimeout,
-    AbortController,
-    sessionStorage: noopStorage,
-    localStorage: noopStorage,
-    window: {
-      location: { origin, hostname: new URL(origin).hostname },
-      _lastRagSources: []
-    },
-    fetch: fetchImpl,
-    AuthService: {
-      getApiSessionToken: () => 'session-token'
-    },
-    AIGuardrails: null,
-    BenchmarkService: {},
-    logAuditEvent: async () => {}
-  };
-
-  vm.createContext(context);
-  vm.runInContext(source, context, { filename: 'llmService.js' });
-  return context.__llmService;
+  return loadLlmService({ origin, fetchImpl });
 }
 
 test('reviewer/challenge methods use server endpoints and keep trace data in runtime memory', async () => {
   const fetchCalls = [];
   const queuedResults = [
     {
+      mode: 'live',
       whatMatters: 'Server-owned reviewer brief',
       whatsUncertain: 'Weakest assumption from server',
       whatToDo: 'Challenge from server',
       trace: { label: 'Reviewer decision brief', promptSummary: 'Brief prompt', response: 'Brief response' }
     },
     {
+      mode: 'deterministic_fallback',
       summary: 'Server-owned challenge review',
       challengeLevel: 'Targeted challenge recommended',
       weakestAssumptions: ['Recovery timing'],
@@ -62,6 +29,7 @@ test('reviewer/challenge methods use server endpoints and keep trace data in run
       trace: { label: 'Assessment challenge', promptSummary: 'Challenge prompt', response: 'Challenge response' }
     },
     {
+      mode: 'manual',
       reconciliationSummary: 'Server-owned mediation',
       proposedMiddleGround: 'Use a moderately slower recovery estimate.',
       whyReasonable: 'It balances the reviewer concern with current evidence.',
@@ -73,6 +41,7 @@ test('reviewer/challenge methods use server endpoints and keep trace data in run
       trace: { label: 'Review mediation', promptSummary: 'Mediation prompt', response: 'Mediation response' }
     },
     {
+      mode: 'deterministic_fallback',
       analystQuestions: ['What direct evidence supports the current parameter value?'],
       reviewerAdjustment: {
         param: 'controlStrLikely',
@@ -83,12 +52,14 @@ test('reviewer/challenge methods use server endpoints and keep trace data in run
       trace: { label: 'Parameter challenge record', promptSummary: 'Parameter prompt', response: 'Parameter response' }
     },
     {
+      mode: 'deterministic_fallback',
       overallConcern: 'Server-owned synthesis concern',
       revisedAleRange: 'Use a higher working ALE range until evidence closes the gap.',
       keyEvidence: 'Latest recovery drill pack',
       trace: { label: 'Challenge synthesis', promptSummary: 'Synthesis prompt', response: 'Synthesis response' }
     },
     {
+      mode: 'live',
       summaryBullets: ['Accept C1 first.', 'Defend C2 until stronger evidence arrives.', 'Use the projected path as the interim range.'],
       acceptChallenges: ['C1'],
       defendChallenges: ['C2'],
@@ -181,11 +152,17 @@ test('reviewer/challenge methods use server endpoints and keep trace data in run
     assert.equal(call.options.headers['x-session-token'], 'session-token');
   });
   assert.equal(reviewerBrief.whatMatters, 'Server-owned reviewer brief');
+  assert.equal(reviewerBrief.mode, 'live');
   assert.equal(challenge.summary, 'Server-owned challenge review');
+  assert.equal(challenge.mode, 'deterministic_fallback');
+  assert.equal(mediation.mode, 'manual');
   assert.equal(mediation.recommendedField, 'controlStrLikely');
   assert.equal(parameterChallenge.reviewerAdjustment.param, 'controlStrLikely');
+  assert.equal(parameterChallenge.mode, 'deterministic_fallback');
   assert.equal(synthesis.overallConcern, 'Server-owned synthesis concern');
+  assert.equal(synthesis.mode, 'deterministic_fallback');
   assert.deepEqual(consensus.acceptChallenges, ['C1']);
+  assert.equal(consensus.mode, 'live');
   assert.equal(service.getLatestTrace('Reviewer decision brief')?.response, 'Brief response');
   assert.equal(service.getLatestTrace('Assessment challenge')?.response, 'Challenge response');
   assert.equal(service.getLatestTrace('Review mediation')?.response, 'Mediation response');
@@ -203,6 +180,7 @@ test('reviewer/challenge methods still use server endpoints even when local-dev 
       return {
         ok: true,
         json: async () => ({
+          mode: 'deterministic_fallback',
           summaryBullets: ['Fallback path'],
           acceptChallenges: [],
           defendChallenges: [],

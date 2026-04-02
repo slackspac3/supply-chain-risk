@@ -139,11 +139,12 @@ function buildFallbackTreatmentSuggestionResult(input = {}, {
   });
   const stub = buildTreatmentImprovementStub(input);
   return withEvidenceMeta({
+    mode: 'deterministic_fallback',
     ...stub,
     usedFallback: true,
     aiUnavailable,
     fallbackReasonCode: fallbackReason?.code || 'server_treatment_fallback',
-    fallbackReasonTitle: fallbackReason?.title || 'Fallback treatment suggestion loaded',
+    fallbackReasonTitle: fallbackReason?.title || 'Deterministic fallback treatment suggestion loaded',
     fallbackReasonMessage: fallbackReason?.message || 'The server used a deterministic future-state suggestion instead of live AI for this better-outcome case.',
     fallbackReasonDetail: fallbackReason?.detail || '',
     trace: buildTraceEntry({
@@ -165,20 +166,20 @@ function classifyTreatmentFallbackReason(error = null) {
   if (!safeMessage) {
     return withDetail({
       code: 'no_ai_response',
-      title: 'Fallback treatment suggestion loaded',
+      title: 'Deterministic fallback treatment suggestion loaded',
       message: 'The server did not receive a usable AI response, so it used deterministic future-state adjustments instead.'
     }, 'No response content was returned.');
   }
   if (/Hosted AI proxy is not configured|Missing COMPASS_API_KEY secret/i.test(safeMessage)) {
     return withDetail({
       code: 'proxy_missing_secret',
-      title: 'Fallback treatment suggestion loaded',
+      title: 'Deterministic fallback treatment suggestion loaded',
       message: 'The hosted AI proxy is not configured, so the server used deterministic future-state adjustments instead.'
     }, 'The proxy is missing its Compass configuration.');
   }
   return withDetail({
     code: 'ai_runtime_error',
-    title: 'Fallback treatment suggestion loaded',
+    title: 'Deterministic fallback treatment suggestion loaded',
     message: 'The AI treatment-suggestion step failed at runtime, so the server used deterministic future-state adjustments instead.'
   }, safeMessage);
 }
@@ -301,6 +302,7 @@ ${truncateText(evidenceMeta.promptBlock || '', 320)}`;
     });
     const candidate = normaliseTreatmentSuggestionCandidate(parsed?.parsed || {}, fallback, input);
     return withEvidenceMeta({
+      mode: 'live',
       ...candidate,
       usedFallback: false,
       aiUnavailable: false,
@@ -312,7 +314,15 @@ ${truncateText(evidenceMeta.promptBlock || '', 320)}`;
       })
     }, evidenceMeta);
   } catch (error) {
-    throw normaliseAiError(error);
+    const normalisedError = normaliseAiError(error);
+    const fallbackReason = classifyTreatmentFallbackReason(normalisedError);
+    const aiUnavailable = !/invalid_ai_output|unexpected_response_shape/i.test(String(fallbackReason.code || ''));
+    console.warn('buildTreatmentSuggestionWorkflow server fallback:', normalisedError.message);
+    return buildFallbackTreatmentSuggestionResult(input, {
+      aiUnavailable,
+      traceLabel,
+      fallbackReason
+    });
   }
 }
 

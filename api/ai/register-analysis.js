@@ -73,6 +73,7 @@ module.exports = async function handler(req, res) {
   }
 
   const input = {
+    session,
     registerText: typeof body.registerText === 'string' ? body.registerText : '',
     registerMeta: isPlainObject(body.registerMeta) ? body.registerMeta : null,
     businessUnit: isPlainObject(body.businessUnit) ? body.businessUnit : null,

@@ -976,16 +976,8 @@ function buildStep1LearnedDryRunExamples(functionKey, buId, limit = 3) {
       if (typeof getRelevantScenarioPatterns === 'function') {
         return getRelevantScenarioPatterns(buId, limit * 2);
       }
-      // Fallback: read directly from AppState cache if function
-      // not yet available (load order guard)
-      const store = AppState?.userStateCache?.learningStore || {};
-      const all = Array.isArray(store.scenarioPatterns)
-        ? store.scenarioPatterns : [];
-      return all
-        .filter(p => !buId || p.buId === buId)
-        .sort((a, b) => b.completedAt - a.completedAt)
-        .slice(0, limit * 2);
-    } catch { return []; }
+    } catch {}
+    return [];
   })();
   return patterns
     .filter(pattern => {
@@ -3989,26 +3981,13 @@ function normaliseLearningRiskKey(value) {
 }
 
 function getStep1RiskSignalSummary(assessmentSignals = {}) {
-  const username = AuthService.getCurrentUser()?.username || '';
-  if (!username || typeof LearningStore === 'undefined' || typeof LearningStore.getRiskSignalSummary !== 'function') return null;
-  return LearningStore.getRiskSignalSummary(username, {
-    buId: AppState.draft?.buId || '',
-    functionKey: assessmentSignals?.scenarioLens?.functionKey || '',
-    lensKey: assessmentSignals?.scenarioLens?.key || ''
-  });
+  void assessmentSignals;
+  return null;
 }
 
 function getStep1HierarchicalFeedbackProfile(assessmentSignals = {}) {
-  try {
-    if (typeof OrgIntelligenceService === 'undefined' || typeof OrgIntelligenceService.getHierarchicalFeedbackProfile !== 'function') return null;
-    return OrgIntelligenceService.getHierarchicalFeedbackProfile({
-      buId: AppState.draft?.buId || '',
-      functionKey: assessmentSignals?.scenarioLens?.functionKey || '',
-      scenarioLensKey: assessmentSignals?.scenarioLens?.key || ''
-    });
-  } catch {
-    return null;
-  }
+  void assessmentSignals;
+  return null;
 }
 
 function recordStep1RiskDecision(risk, action = 'keep') {

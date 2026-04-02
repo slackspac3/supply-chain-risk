@@ -108,9 +108,10 @@ test('treatment-suggestion route returns deterministic server fallback when host
   }, res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
   assert.equal(res.payload.usedFallback, true);
   assert.equal(res.payload.aiUnavailable, true);
-  assert.equal(String(res.payload.fallbackReasonTitle || ''), 'Fallback treatment suggestion loaded');
+  assert.equal(String(res.payload.fallbackReasonTitle || ''), 'Deterministic fallback treatment suggestion loaded');
   assert.equal(typeof res.payload.suggestedInputs?.TEF?.likely, 'number');
   assert.equal(String(res.payload.trace?.label || ''), 'Step 3 treatment suggestion');
 });
@@ -204,6 +205,7 @@ test('treatment-suggestion route orchestrates live generation server-side', asyn
   }, res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'live');
   assert.equal(res.payload.usedFallback, false);
   assert.equal(res.payload.aiUnavailable, false);
   assert.match(String(res.payload.summary || ''), /future-state case/i);

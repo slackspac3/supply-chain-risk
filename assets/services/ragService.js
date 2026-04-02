@@ -653,40 +653,15 @@ const RAGService = (() => {
   }
 
   function _getFeedbackRetrievalProfile(buId, queryInfo = {}) {
-    try {
-      if (typeof OrgIntelligenceService === 'undefined' || typeof OrgIntelligenceService.getHierarchicalFeedbackProfile !== 'function') return null;
-      const draftLens = typeof AppState !== 'undefined' && AppState?.draft?.scenarioLens && typeof AppState.draft.scenarioLens === 'object'
-        ? AppState.draft.scenarioLens
-        : null;
-      const lensFromQuery = Array.isArray(queryInfo?.lensTags) && queryInfo.lensTags.length
-        ? String(queryInfo.lensTags[0] || '').replace(/-lens$/, '')
-        : '';
-      return OrgIntelligenceService.getHierarchicalFeedbackProfile({
-        buId,
-        functionKey: String(draftLens?.functionKey || '').trim().toLowerCase(),
-        scenarioLensKey: String(draftLens?.key || lensFromQuery || '').trim().toLowerCase()
-      })?.combined || null;
-    } catch {
-      return null;
-    }
+    void buId;
+    void queryInfo;
+    return null;
   }
 
   function _feedbackBoost(indexedDoc, feedbackProfile = null) {
-    if (!feedbackProfile || typeof feedbackProfile !== 'object') return 0;
-    let boost = 0;
-    const docId = String(indexedDoc?.doc?.id || '').trim();
-    if (docId && feedbackProfile.docWeights && Object.prototype.hasOwnProperty.call(feedbackProfile.docWeights, docId)) {
-      boost += Number(feedbackProfile.docWeights[docId] || 0) * 4.5;
-    }
-    const tags = Array.isArray(indexedDoc?.tags) ? indexedDoc.tags : [];
-    tags.forEach((tag) => {
-      if (!tag) return;
-      boost += Number(feedbackProfile.docTagWeights?.[tag] || 0) * 1.4;
-    });
-    if (feedbackProfile.weakCitationPressure > 0 && docId && Number(feedbackProfile.docWeights?.[docId] || 0) < 0) {
-      boost -= Math.min(2.4, Number(feedbackProfile.weakCitationPressure || 0) * 0.08);
-    }
-    return Math.max(-10, Math.min(10, boost));
+    void indexedDoc;
+    void feedbackProfile;
+    return 0;
   }
 
   // Semantic-style overlap scoring with concept and phrase expansion
