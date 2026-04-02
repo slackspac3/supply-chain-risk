@@ -4764,12 +4764,14 @@ function renderResults(id, isShared) {
         display:flex; align-items:center; justify-content:space-between;
         gap:var(--sp-4); padding:var(--sp-4) var(--sp-5);
         background:#fef3c7; border:1px solid #d97706; border-radius:var(--radius-lg);
-        margin:var(--sp-4) 0; flex-wrap:wrap;
+        margin:var(--sp-4) 0; flex-wrap:wrap; color:#5b3a02;
       }
       .review-submit-banner__body { display:flex; flex-direction:column; gap:4px; font-size:14px; }
-      .review-submit-banner--submitted { background:#eff6ff; border-color:#3b82f6; }
-      .review-submit-banner--approved { background:#f0fdf4; border-color:#22c55e; }
-      .review-submit-banner--changes { background:#fef3c7; border-color:#d97706; }
+      .review-submit-banner strong,
+      .review-submit-banner span { color:inherit; }
+      .review-submit-banner--submitted { background:#eff6ff; border-color:#3b82f6; color:#1e3a8a; }
+      .review-submit-banner--approved { background:#f0fdf4; border-color:#22c55e; color:#14532d; }
+      .review-submit-banner--changes { background:#fef3c7; border-color:#d97706; color:#5b3a02; }
       .review-submit-banner--escalated { background:#f5f3ff; border-color:#7c3aed; color:#4c1d95; }
       .challenge-card { display:flex; flex-direction:column; gap:var(--sp-3); }
       .challenge-summary { font-size:14px; line-height:1.6; margin:0; }
