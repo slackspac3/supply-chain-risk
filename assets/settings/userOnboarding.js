@@ -4,7 +4,9 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
   const settings = getUserSettings();
   const companyStructure = Array.isArray(globalSettings.companyStructure) ? globalSettings.companyStructure : [];
   const companies = getCompanyEntities(companyStructure);
-  const profile = normaliseUserProfile(existingSettings.userProfile || settings.userProfile);
+  const profile = typeof reconcileUserProfileToManagedScope === 'function'
+    ? reconcileUserProfileToManagedScope(existingSettings.userProfile || settings.userProfile, AppState.currentUser, globalSettings)
+    : normaliseUserProfile(existingSettings.userProfile || settings.userProfile);
   const capability = getNonAdminCapabilityState(AppState.currentUser, settings, globalSettings);
   const draftSettings = {
     ...settings,

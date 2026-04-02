@@ -299,6 +299,22 @@ module.exports = async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
+      if (String(req.query?.view || '').trim().toLowerCase() === 'self') {
+        const session = requireSession(req, res);
+        if (!session) {
+          return;
+        }
+        const accounts = await readAccounts();
+        const account = accounts.find(item => item.username === String(session.username || '').trim().toLowerCase());
+        if (!account) {
+          sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+          return;
+        }
+        res.status(200).json({
+          user: sanitiseAccount(account)
+        });
+        return;
+      }
       const actor = resolveAdminActor(req, res, {
         isAdminSecretValid,
         allowRoles: ['admin']

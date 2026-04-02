@@ -79,6 +79,28 @@ test('extractRiskCandidates prefers operational outage risks over cyber for non-
   assert.equal(risks.some((risk) => risk.key === 'cyber'), false);
 });
 
+test('supplier delivery slippage for infrastructure deployment stays out of procurement and into delivery risk', () => {
+  const internals = loadLlmInternals();
+  const text = 'A key server supplier misses a committed delivery date, delaying planned infrastructure deployment and dependent business projects.';
+  const classification = internals._classifyScenario(text, {
+    guidedInput: {
+      event: text,
+      asset: 'Infrastructure deployment',
+      cause: 'Supplier delivery miss',
+      impact: 'Dependent business project delay'
+    }
+  });
+
+  assert.equal(classification.key, 'transformation-delivery');
+
+  const risks = internals._extractRiskCandidates(text, {
+    lensHint: { key: 'operational', label: 'Operational' }
+  });
+
+  assert.equal(risks[0]?.key, 'transformation-delivery');
+  assert.equal(risks.some((risk) => risk.key === 'procurement'), false);
+});
+
 test('evaluateGuidedDraftCandidate rejects a draft that explicitly labels the wrong lens', () => {
   const internals = loadLlmInternals();
   const candidate = internals._evaluateGuidedDraftCandidate(
@@ -90,6 +112,26 @@ test('evaluateGuidedDraftCandidate rejects a draft that explicitly labels the wr
         asset: 'Cloud system',
         cause: 'Human error',
         impact: 'Customer impact, reputational loss'
+      },
+      scenarioLensHint: { key: 'operational', label: 'Operational' }
+    }
+  );
+
+  assert.equal(candidate.accepted, false);
+  assert.equal(candidate.reason, 'explicit-lens-drift');
+});
+
+test('evaluateGuidedDraftCandidate rejects procurement framing for supplier delivery slippage', () => {
+  const internals = loadLlmInternals();
+  const candidate = internals._evaluateGuidedDraftCandidate(
+    'High-urgency Procurement scenario: A key server supplier misses a committed delivery date, delaying planned infrastructure deployment and dependent business projects. The area most exposed is the sourcing decision and contract award path. If this develops, it could create commercial overpayment and award challenge.',
+    {
+      seedNarrative: 'High-urgency Operational scenario: A key server supplier misses a committed delivery date, delaying planned infrastructure deployment and dependent business projects. The area most exposed is the delivery dependency and deployment timeline. If this develops, it could create milestone slippage and pressure on downstream business commitments.',
+      guidedInput: {
+        event: 'A key server supplier misses a committed delivery date, delaying planned infrastructure deployment and dependent business projects.',
+        asset: 'Infrastructure deployment',
+        cause: 'Supplier delivery miss',
+        impact: 'Dependent business project delay'
       },
       scenarioLensHint: { key: 'operational', label: 'Operational' }
     }

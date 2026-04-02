@@ -127,7 +127,7 @@ expect(!authServiceJs.includes('departmentEntityId: payload.departmentEntityId')
 expect(resultsRouteJs.includes('Confirm your organisation context'), 'results route is missing the updated organisation-context copy');
 expect(resultsRouteJs.includes('const canChooseDepartment = capability.canManageBusinessUnit && !capability.canManageDepartment;'), 'results route is missing the aligned BU-admin-only department chooser guard');
 expect(systemAccessSectionJs.includes('Pilot release diagnostics'), 'admin system access section is missing pilot release diagnostics');
-expect(systemAccessSectionJs.includes('Pilot AI readiness'), 'admin system access section is missing pilot AI readiness guidance');
+expect(systemAccessSectionJs.includes('Server AI status'), 'admin system access section is missing server AI status guidance');
 expect(!demoModeJs.includes("Router.navigate('/results');"), 'demo mode still navigates to the stale /results route');
 expect(appJs.includes('href="#/admin/home">Platform Home</a>'), 'admin settings hard-failure fallback no longer points to platform home');
 

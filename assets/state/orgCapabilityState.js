@@ -63,6 +63,24 @@ function resolveUserOrganisationSelection(user = AuthService.getCurrentUser(), u
   return { businessUnitEntityId, departmentEntityId };
 }
 
+function reconcileUserProfileToManagedScope(profile = {}, user = AuthService.getCurrentUser(), settings = getAdminSettings()) {
+  const safeProfile = normaliseUserProfile(profile, user);
+  if (!user || user.role === 'admin') return safeProfile;
+  const structure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
+  const selection = resolveUserOrganisationSelection(user, { userProfile: safeProfile }, settings);
+  const businessUnitEntityId = String(selection.businessUnitEntityId || safeProfile.businessUnitEntityId || '').trim();
+  const departmentEntityId = String(selection.departmentEntityId || safeProfile.departmentEntityId || '').trim();
+  const businessEntity = getEntityById(structure, businessUnitEntityId);
+  const departmentEntity = getEntityById(structure, departmentEntityId);
+  return {
+    ...safeProfile,
+    businessUnitEntityId,
+    departmentEntityId,
+    businessUnit: String(businessEntity?.name || safeProfile.businessUnit || '').trim(),
+    department: String(departmentEntity?.name || safeProfile.department || '').trim()
+  };
+}
+
 function getRoleExperienceProfile({ canManageBusinessUnit, canManageDepartment, managedBusiness, managedDepartment }) {
   if (canManageBusinessUnit && canManageDepartment) {
     return {
@@ -195,6 +213,7 @@ function renderNonAdminHowToGuide(capability = getNonAdminCapabilityState()) {
 Object.assign(window, {
   getDefaultOrgAssignmentForUser,
   getManagedAccountsForAdmin,
+  reconcileUserProfileToManagedScope,
   resolveUserOrganisationSelection,
   getNonAdminCapabilityState,
   renderNonAdminHowToGuide

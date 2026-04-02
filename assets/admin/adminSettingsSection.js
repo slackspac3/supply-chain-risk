@@ -7,7 +7,7 @@
     defaults: { title: 'Platform Defaults', description: 'Manage thresholds, escalation posture, geography, and global linked-risk fallback.' },
     governance: { title: 'Governance Inputs', description: 'Manage regulations, AI guidance, typical departments, and scoped governance overrides.' },
     feedback: { title: 'AI Feedback & Tuning', description: 'Monitor draft, shortlist, and per-risk feedback; then tune alignment, writing style, shortlist discipline, and learning sensitivity.' },
-    access: { title: 'System Access', description: 'Configure the Compass proxy, model, and session-level access controls.' },
+    access: { title: 'System Access', description: 'Review server-reported AI mode and local development overrides.' },
     users: { title: 'User Account Control', description: 'Manage shared users, roles, BU assignments, and issued passwords.' },
     audit: { title: 'Audit Log', description: 'Review short-retention PoC audit events and sign-in statistics.' }
   };

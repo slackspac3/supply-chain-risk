@@ -157,7 +157,7 @@ const AdminAiFeedbackSection = (() => {
           <span>The controls below adjust the live AI gate, shortlist selectivity, and how quickly repeated live-AI feedback promotes from user to shared tiers.</span>
         </div>
         <div class="flex items-center gap-3" style="flex-wrap:wrap">
-          <button class="btn btn--secondary" id="btn-refresh-ai-feedback-dashboard" type="button">Refresh feedback signals</button>
+          <button class="btn btn--secondary" id="btn-refresh-ai-feedback-dashboard" type="button">Refresh now</button>
           <button class="btn btn--ghost" id="btn-export-ai-feedback-dashboard" type="button">Export feedback snapshot</button>
         </div>
       </div>
@@ -313,7 +313,7 @@ const AdminAiFeedbackSection = (() => {
         UI.toast('The feedback dashboard could not be refreshed right now.', 'warning');
       } finally {
         button.disabled = false;
-        button.textContent = 'Refresh feedback signals';
+        button.textContent = 'Refresh now';
       }
     });
 

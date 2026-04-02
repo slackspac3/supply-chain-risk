@@ -44,7 +44,9 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
   }
   const globalSettings = getAdminSettings();
   const settings = existingSettings;
-  const profile = normaliseUserProfile(settings.userProfile);
+  const profile = typeof reconcileUserProfileToManagedScope === 'function'
+    ? reconcileUserProfileToManagedScope(settings.userProfile, AppState.currentUser, globalSettings)
+    : normaliseUserProfile(settings.userProfile);
   const companyStructure = Array.isArray(globalSettings.companyStructure) ? globalSettings.companyStructure : [];
   const companyOptions = getCompanyEntities(companyStructure);
   const capability = getNonAdminCapabilityState(AppState.currentUser, settings, globalSettings);

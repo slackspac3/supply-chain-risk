@@ -32,6 +32,8 @@ async function seedAuthenticatedUser(page, {
   username = 'alex.trafton',
   displayName = 'Alex Trafton',
   role = 'user',
+  businessUnitEntityId = '',
+  departmentEntityId = '',
   userSettings = null,
   adminSettings = null,
   draftRecovery = null,
@@ -52,7 +54,7 @@ async function seedAuthenticatedUser(page, {
       localStorage.setItem('rq_admin_active_section', preferredAdminSection);
     }
   }, {
-    session: buildSession({ username, displayName, role, businessUnitEntityId: '', departmentEntityId: '' }),
+    session: buildSession({ username, displayName, role, businessUnitEntityId, departmentEntityId }),
     userSettings,
     adminSettings,
     draftRecovery,
@@ -64,6 +66,7 @@ async function mockSharedApis(page, {
   loginUser = null,
   userState = null,
   settings = null,
+  aiStatus = null,
   skipUsers = false
 } = {}) {
   if (!skipUsers) await page.route('**/api/users', async route => {
@@ -118,6 +121,21 @@ async function mockSharedApis(page, {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ settings: settings || {} })
+    });
+  });
+
+  await page.route('**/api/ai/status*', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(aiStatus || {
+        mode: 'live',
+        providerReachable: true,
+        model: 'gpt-5.1',
+        proxyConfigured: true,
+        checkedAt: Date.now(),
+        message: 'Hosted AI proxy is configured and the provider responded to a server-side health check.'
+      })
     });
   });
 
@@ -804,6 +822,60 @@ test('personal settings shows the pilot release stamp', async ({ page }) => {
   });
 });
 
+test('personal settings reconciles stale saved profile scope to the current admin-managed assignment', async ({ page }) => {
+  const seededUserSettings = {
+    userProfile: {
+      fullName: 'Tarun Gupta',
+      jobTitle: 'Risk Manager',
+      businessUnit: 'G42',
+      businessUnitEntityId: 'g42',
+      department: 'Procurement',
+      departmentEntityId: 'procurement',
+      focusAreas: ['Resilience'],
+      preferredOutputs: 'Executive summaries',
+      workingContext: 'Support regulated services.'
+    },
+    geography: 'United Arab Emirates',
+    onboardedAt: '2026-03-17T00:00:00.000Z',
+    _overrideKeys: []
+  };
+  await seedAuthenticatedUser(page, {
+    username: 'tarun.gupta',
+    displayName: 'Tarun Gupta',
+    role: 'user',
+    businessUnitEntityId: 'g42',
+    departmentEntityId: 'group-technology-risk',
+    userSettings: seededUserSettings
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      applicableRegulations: ['UAE PDPL'],
+      entityContextLayers: [],
+      companyStructure: [
+        { id: 'g42', name: 'G42', type: 'Holding company', parentId: '' },
+        { id: 'procurement', name: 'Procurement', type: 'Department / function', parentId: 'g42' },
+        { id: 'group-technology-risk', name: 'Group Technology Risk', type: 'Department / function', parentId: 'g42' }
+      ],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.'
+    },
+    userState: {
+      userSettings: seededUserSettings,
+      assessments: [],
+      learningStore: { templates: {} },
+      draft: null,
+      _meta: { revision: 1, updatedAt: Date.now() }
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/settings', async () => {
+    await expect(page.locator('#user-department')).toHaveValue('group-technology-risk');
+    await expect(page.locator('#user-department')).toBeDisabled();
+    await expect(page.locator('#user-business-unit')).toHaveValue('g42');
+  });
+});
+
 test('help page renders and opens key workflow guidance without crashing', async ({ page }) => {
   const seededUserSettings = buildSeededUserSettings();
   await seedAuthenticatedUser(page, { userSettings: seededUserSettings });
@@ -1041,7 +1113,7 @@ test('admin org setup can add and save entity obligations from the tree', async 
   });
 });
 
-test('admin system access warns calmly when pilot is using local fallback AI', async ({ page }) => {
+test('admin system access reads server-reported AI mode without relying on browser verification', async ({ page }) => {
   await seedAuthenticatedUser(page, {
     username: 'admin',
     displayName: 'Global Admin',
@@ -1066,6 +1138,14 @@ test('admin system access warns calmly when pilot is using local fallback AI', a
       aiInstructions: 'Use British English.',
       benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
       typicalDepartments: ['Security']
+    },
+    aiStatus: {
+      mode: 'deterministic_fallback',
+      providerReachable: false,
+      model: 'gpt-5.1',
+      proxyConfigured: false,
+      checkedAt: Date.now(),
+      message: 'Hosted AI proxy is not configured. Supported workflows may continue with deterministic fallback or manual handling.'
     }
   });
 
@@ -1075,14 +1155,10 @@ test('admin system access warns calmly when pilot is using local fallback AI', a
       has: page.locator('.settings-section__title', { hasText: /system access/i })
     }).first();
     await accessSection.evaluate(node => { node.open = true; });
-    await page.locator('#admin-compass-url').fill('https://api.core42.ai/v1/chat/completions');
-    await page.locator('#admin-compass-key').fill('');
-    await page.locator('details.results-actions-disclosure').first().evaluate(node => { node.open = true; });
-    await page.getByRole('button', { name: /save session key/i }).click();
     const readinessPanel = page.locator('#pilot-ai-readiness-panel');
-    await expect(readinessPanel.getByText(/live ai required for pilot sign-off/i)).toBeVisible();
-    await expect(readinessPanel.getByText(/local fallback guidance/i)).toBeVisible();
-    await expect(readinessPanel.getByText(/local fallback active/i).first()).toBeVisible();
+    await expect(readinessPanel.getByText(/server ai status/i)).toBeVisible();
+    await expect(readinessPanel.getByText(/deterministic fallback/i).first()).toBeVisible();
+    await expect(readinessPanel.getByText(/hosted ai proxy is not configured/i)).toBeVisible();
   });
 });
 
@@ -1316,15 +1392,25 @@ test('wizard step 1 clear all keeps manually added risks unselected after rerend
         renderWizard1();
       }, title);
     };
+    const manualRiskCheckbox = (title) => page.locator('.risk-pick-card').filter({ hasText: title }).locator('.risk-select-checkbox');
 
     await addManualRiskCandidate('Cloud storage exposure');
     await addManualRiskCandidate('Privileged access misuse');
 
+    await expect(manualRiskCheckbox('Cloud storage exposure')).toBeChecked();
+    await expect(manualRiskCheckbox('Privileged access misuse')).toBeChecked();
     await expect(page.getByRole('button', { name: /^Clear All$/ })).toBeVisible();
     await expect(page.locator('.risk-select-checkbox:checked')).toHaveCount(2);
-    const clearAllButton = page.locator('#btn-clear-all-risks');
-    await clearAllButton.scrollIntoViewIfNeeded();
-    await clearAllButton.click({ force: true });
+    await page.getByRole('button', { name: /^Clear All$/ }).click({ force: true });
+    await expect(page.locator('.risk-select-checkbox:checked')).toHaveCount(0);
+
+    // Step 1 replaces the risk list DOM during persistAndRenderStep1, so re-query after an explicit rerender.
+    await page.evaluate(() => {
+      saveDraft?.();
+      renderWizard1?.();
+    });
+    await expect(manualRiskCheckbox('Cloud storage exposure')).not.toBeChecked();
+    await expect(manualRiskCheckbox('Privileged access misuse')).not.toBeChecked();
     await expect(page.locator('.risk-select-checkbox:checked')).toHaveCount(0);
   });
 });

@@ -14,6 +14,7 @@ const LLMService = (() => {
   const AI_TIMEOUT_MS = 30000;
   const AI_QUALITY_GATE_MAX_PROMPT_CHARS = 22000;
   const AI_QUALITY_GATE_MAX_COMPLETION_TOKENS = 2200;
+  const AI_STATUS_CACHE_TTL_MS = 30000;
 
   function _guardrails() {
     return typeof AIGuardrails === 'object' && AIGuardrails ? AIGuardrails : null;
@@ -56,8 +57,8 @@ const LLMService = (() => {
     };
   }
 
-  const AI_TRACE_STORAGE_KEY = 'rip_ai_trace';
   const AI_TRACE_LIMIT = 20;
+  let _aiTraceEntries = [];
 
   function _safeTraceText(value = '', maxChars = 16000) {
     return String(value || '').trim().slice(0, Math.max(0, Number(maxChars || 0) || 0));
@@ -76,18 +77,13 @@ const LLMService = (() => {
   }
 
   function _readAiTrace() {
-    try {
-      const parsed = JSON.parse(sessionStorage.getItem(AI_TRACE_STORAGE_KEY) || '[]');
-      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-    } catch {
-      return [];
-    }
+    return Array.isArray(_aiTraceEntries) ? _aiTraceEntries.slice() : [];
   }
 
   function _writeAiTrace(entries = []) {
-    try {
-      sessionStorage.setItem(AI_TRACE_STORAGE_KEY, JSON.stringify(entries));
-    } catch {}
+    _aiTraceEntries = (Array.isArray(entries) ? entries : [])
+      .filter(Boolean)
+      .slice(-AI_TRACE_LIMIT);
   }
 
   function _storeAiTraceEntry({ label = '', promptSummary = '', response = '', sources = [] } = {}) {
@@ -178,17 +174,65 @@ const LLMService = (() => {
     return 'https://risk-calculator-eight.vercel.app/api/compass';
   }
 
+  function _isLocalDevRuntimeConfigAllowed() {
+    try {
+      const hostname = String(window?.location?.hostname || '').trim().toLowerCase();
+      return hostname === 'localhost' || hostname === '127.0.0.1';
+    } catch {
+      return false;
+    }
+  }
+
   const DEFAULT_COMPASS_API_URL = resolveCompassApiUrl();
   const DEFAULT_COMPASS_MODEL = 'gpt-5.1';
   let _compassApiUrl = DEFAULT_COMPASS_API_URL;
   let _compassModel = DEFAULT_COMPASS_MODEL;
   let _compassApiKey = '';
+  let _cachedServerAiStatus = null;
+  let _serverAiStatusPromise = null;
+
+  function _getAiStatusUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/status');
+      } else {
+        url.pathname = '/api/ai/status';
+      }
+      url.search = '';
+      return url.toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _normaliseServerAiStatus(value = {}) {
+    return {
+      mode: String(value?.mode || 'degraded').trim() || 'degraded',
+      providerReachable: value?.providerReachable === true,
+      model: String(value?.model || DEFAULT_COMPASS_MODEL).trim() || DEFAULT_COMPASS_MODEL,
+      proxyConfigured: value?.proxyConfigured !== false,
+      checkedAt: Number(value?.checkedAt || Date.now()),
+      message: String(value?.message || '').trim()
+    };
+  }
 
   function setCompassAPIKey(key) {
+    if (!_isLocalDevRuntimeConfigAllowed()) {
+      _compassApiKey = '';
+      return;
+    }
     _compassApiKey = key || '';
   }
 
   function setCompassConfig({ apiKey, apiUrl, model } = {}) {
+    if (!_isLocalDevRuntimeConfigAllowed()) {
+      clearCompassConfig();
+      return;
+    }
     if (typeof apiKey === 'string') _compassApiKey = apiKey;
     if (typeof apiUrl === 'string' && apiUrl.trim()) _compassApiUrl = apiUrl.trim();
     if (typeof model === 'string' && model.trim()) _compassModel = model.trim();
@@ -212,6 +256,189 @@ const LLMService = (() => {
     } catch {
       return '';
     }
+  }
+
+  function _getScenarioDraftUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/scenario-draft');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/scenario-draft', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _getRegisterAnalysisUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/register-analysis');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/register-analysis', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _getTreatmentSuggestionUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/treatment-suggestion');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/treatment-suggestion', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _getReviewerBriefUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/reviewer-brief');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/reviewer-brief', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _getChallengeAssessmentUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/challenge-assessment');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/challenge-assessment', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _getParameterChallengeUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/parameter-challenge');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/parameter-challenge', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _getChallengeSynthesisUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/challenge-synthesis');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/challenge-synthesis', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _getConsensusRecommendationUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/consensus-recommendation');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/consensus-recommendation', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  function _getReviewMediationUrl() {
+    const baseUrl = _isDirectCompassUrl(_compassApiUrl)
+      ? DEFAULT_COMPASS_API_URL
+      : (String(_compassApiUrl || DEFAULT_COMPASS_API_URL).trim() || DEFAULT_COMPASS_API_URL);
+    try {
+      const url = new URL(baseUrl);
+      if (url.pathname.endsWith('/api/compass')) {
+        url.pathname = url.pathname.replace(/\/api\/compass$/, '/api/ai/review-mediation');
+        url.search = '';
+        return url.toString();
+      }
+      return new URL('/api/ai/review-mediation', DEFAULT_COMPASS_API_URL).toString();
+    } catch {
+      return '';
+    }
+  }
+
+  async function _postServerAiWorkflow(endpoint, payload, { nullOnError = false } = {}) {
+    if (!endpoint) {
+      if (nullOnError) return null;
+      throw new Error('AI workflow endpoint is unavailable.');
+    }
+    const sessionToken = _getSessionToken();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sessionToken ? { 'x-session-token': sessionToken } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      if (nullOnError) return null;
+      const normalisedError = _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
+      throw Object.assign(new Error(normalisedError?.message || text || 'AI request failed'), {
+        code: 'LLM_UNAVAILABLE',
+        retriable: true
+      });
+    }
+    const result = await response.json();
+    if (result?.trace && typeof result.trace === 'object') {
+      _storeAiTraceEntry(result.trace);
+    }
+    return result;
   }
 
   // Backwards-compatible alias for older setup instructions.
@@ -539,12 +766,55 @@ Return corrected JSON only.`;
       usingDirectCompass,
       usingProxy: !!apiUrl && !usingDirectCompass,
       usingStub,
+      localDevMode: _isLocalDevRuntimeConfigAllowed(),
       configFingerprint: [apiUrl, model, hasApiKey ? 'keyed' : 'keyless'].join('::')
     };
   }
 
   function isUsingStub() {
+    if (_cachedServerAiStatus?.mode === 'deterministic_fallback' || _cachedServerAiStatus?.mode === 'manual_only') {
+      return true;
+    }
     return getRuntimeStatus().usingStub;
+  }
+
+  function getCachedServerAiStatus() {
+    return _cachedServerAiStatus ? { ..._cachedServerAiStatus } : null;
+  }
+
+  async function fetchServerAiStatus({ force = false, probe = true } = {}) {
+    const cached = getCachedServerAiStatus();
+    if (!force && cached && (Date.now() - Number(cached.checkedAt || 0)) < AI_STATUS_CACHE_TTL_MS) {
+      return cached;
+    }
+    if (!force && _serverAiStatusPromise) {
+      return _serverAiStatusPromise;
+    }
+    const endpoint = _getAiStatusUrl();
+    if (!endpoint) {
+      throw new Error('AI status endpoint is unavailable.');
+    }
+    const sessionToken = _getSessionToken();
+    const url = new URL(endpoint);
+    if (probe) url.searchParams.set('probe', '1');
+    _serverAiStatusPromise = (async () => {
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: sessionToken ? { 'x-session-token': sessionToken } : {}
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
+      }
+      const payload = await response.json();
+      _cachedServerAiStatus = _normaliseServerAiStatus(payload);
+      return getCachedServerAiStatus();
+    })();
+    try {
+      return await _serverAiStatusPromise;
+    } finally {
+      _serverAiStatusPromise = null;
+    }
   }
 
   function _normaliseScenarioHintKey(value) {
@@ -966,6 +1236,33 @@ Return corrected JSON only.`;
         }
       ];
     }
+    if (/(supplier|vendor|third party|third-party)/.test(source)
+      && /(delivery date|delivery commitment|delay|delayed|deployment|go-live|rollout|milestone|dependent business project|dependent project|programme|program|project)/.test(source)
+      && !/procurement|sourcing|tender|bid|contract award|vendor selection|critical spend|single[- ]source|sole source|concentration/.test(source)) {
+      return [
+        {
+          key: 'transformation-delivery',
+          title: 'Programme delay from a delivery-critical supplier dependency',
+          category: 'Transformation Delivery',
+          regulations: ['ISO 31010', 'COSO ERM'],
+          description: 'A supplier delivery miss is now pushing back infrastructure deployment or other milestones that depend on the same delivery path.'
+        },
+        {
+          key: 'supply-chain',
+          title: 'Supply dependency delay affecting deployment timing',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'A late or missed supplier delivery is creating knock-on delay across downstream projects, recovery plans, or operational milestones.'
+        },
+        {
+          key: 'operational',
+          title: 'Operational slippage across dependent business projects',
+          category: 'Operational',
+          regulations: ['ISO 31000', 'ISO 22301'],
+          description: 'The immediate issue is execution delay across dependent projects and the pressure this creates on planned delivery, sequencing, and management oversight.'
+        }
+      ];
+    }
     if (/single[- ]source|sole source|supplier shortfall|supplier concentration|critical supplier/.test(source)) {
       return [
         {
@@ -1083,7 +1380,7 @@ Return corrected JSON only.`;
             headers,
             signal: controller?.signal,
             body: JSON.stringify({
-              model: _compassModel,
+              ...(_isLocalDevRuntimeConfigAllowed() ? { model: _compassModel } : {}),
               max_completion_tokens: maxCompletionTokens,
               temperature: Number(options.temperature ?? 0.3),
               messages: [
@@ -1179,7 +1476,7 @@ Return corrected JSON only.`;
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: _compassModel,
+        ...(_isLocalDevRuntimeConfigAllowed() ? { model: _compassModel } : {}),
         stream: true,
         max_completion_tokens: maxCompletionTokens,
         temperature: Number(options.temperature ?? 0.3),
@@ -2167,62 +2464,6 @@ ${businessUnit.selectedDepartmentContext}` : ''
     });
   }
 
-  function _classifyAiFallbackReason(error = null) {
-    const message = String(error?.message || error || '').trim();
-    const safeMessage = _sanitizeAiText(message, { maxChars: 220 });
-    const withDetail = (base, detail) => ({
-      ...base,
-      detail: String(detail || '').trim()
-    });
-    if (!safeMessage) {
-      return withDetail({
-        code: 'no_ai_response',
-        title: 'AI analysis unavailable',
-        message: 'The AI register-analysis service did not return a usable response, so the platform used local extraction instead.'
-      }, 'No response content was returned.');
-    }
-    if (/Missing COMPASS_API_KEY secret/i.test(safeMessage)) {
-      return withDetail({
-        code: 'proxy_missing_secret',
-        title: 'AI analysis unavailable',
-        message: 'The hosted AI proxy is missing its server-side key, so the platform used local extraction instead.'
-      }, 'The proxy is missing its Compass key.');
-    }
-    if (/Vercel proxy could not reach Compass|Compass preflight\/CORS blocked|Failed to fetch|NetworkError/i.test(safeMessage)) {
-      return withDetail({
-        code: 'proxy_unreachable',
-        title: 'AI analysis unavailable',
-        message: 'The hosted AI service could not be reached, so the platform used local extraction instead.'
-      }, safeMessage);
-    }
-    if (/Compass rejected the request|401|403/i.test(safeMessage)) {
-      return withDetail({
-        code: 'ai_access_rejected',
-        title: 'AI analysis unavailable',
-        message: 'The AI service rejected the request, so the platform used local extraction instead.'
-      }, safeMessage);
-    }
-    if (/Unexpected token|JSON|schema|parse/i.test(safeMessage)) {
-      return withDetail({
-        code: 'invalid_ai_output',
-        title: 'AI analysis incomplete',
-        message: 'The AI service returned an unusable structured response, so the platform used local extraction instead.'
-      }, safeMessage);
-    }
-    if (/response shape was not usable/i.test(safeMessage)) {
-      return withDetail({
-        code: 'unexpected_response_shape',
-        title: 'AI analysis incomplete',
-        message: 'The AI service returned an unexpected response shape, so the platform used local extraction instead.'
-      }, safeMessage);
-    }
-    return withDetail({
-      code: 'ai_runtime_error',
-      title: 'AI analysis unavailable',
-      message: 'The AI register-analysis step failed at runtime, so the platform used local extraction instead.'
-    }, safeMessage);
-  }
-
   function _collectScenarioSecondaryKeys({
     primaryKey = 'general',
     hintKey = '',
@@ -2326,16 +2567,18 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const isCompliance = n.includes('compliance') || n.includes('non-compliance') || n.includes('policy breach') || n.includes('conduct') || n.includes('ethics') || n.includes('assurance');
     const isLegalContract = n.includes('contract') || n.includes('indemnity') || n.includes('litigation') || n.includes('licensing dispute') || n.includes('intellectual property') || /\bip\b/.test(n);
     const isGeopolitical = n.includes('geopolitical') || n.includes('market access') || n.includes('sovereign') || n.includes('tariff') || n.includes('entity list') || n.includes('cross-border restriction');
-    const isSupplyChain = n.includes('supply chain') || n.includes('logistics') || n.includes('shipment') || n.includes('inventory') || n.includes('single source') || n.includes('single-source') || n.includes('upstream') || n.includes('shortfall');
+    const hasSupplierDependency = n.includes('supplier') || n.includes('vendor') || n.includes('third-party') || n.includes('third party') || n.includes('outsourc');
+    const hasDeliveryProgrammeDelay = /delivery date|delivery commitment|delay(?:ed|ing)?|deployment|go-live|rollout|milestone|dependent business project|dependent project|programme delay|program delay|project delay|dependency slip/.test(n);
+    const isSupplyChain = n.includes('supply chain') || n.includes('logistics') || n.includes('shipment') || n.includes('inventory') || n.includes('single source') || n.includes('single-source') || n.includes('upstream') || n.includes('shortfall') || (hasSupplierDependency && /delivery date|delivery commitment|shipment|logistics/.test(n));
     const isProcurement = n.includes('procurement') || n.includes('sourcing') || n.includes('tender') || n.includes('bid') || n.includes('contract award') || n.includes('vendor selection') || n.includes('critical spend') || n.includes('spend category') || n.includes('commercial category');
-    const isThirdParty = n.includes('supplier') || n.includes('vendor') || n.includes('third-party') || n.includes('third party') || n.includes('outsourc');
+    const isThirdParty = hasSupplierDependency;
     const isContinuity = n.includes('business continuity') || n.includes('disaster recovery') || n.includes('continuity') || n.includes('recovery') || n.includes('rto') || n.includes('rpo') || n.includes('crisis management');
     const isPhysicalSecurity = n.includes('physical security') || n.includes('badge control') || n.includes('visitor management') || n.includes('perimeter') || n.includes('executive protection') || n.includes('site intrusion') || n.includes('facility breach');
     const isOtResilience = /\bot\b/.test(n) || n.includes('operational technology') || n.includes('industrial control') || n.includes('ics') || n.includes('scada') || n.includes('plant network') || n.includes('site systems') || n.includes('control room');
     const isPeopleWorkforce = n.includes('workforce') || n.includes('attrition') || n.includes('fatigue') || n.includes('staffing') || n.includes('worker welfare') || n.includes('labour') || n.includes('labor') || n.includes('strike');
     const isHse = n.includes('hse') || n.includes('health and safety') || n.includes('safety') || n.includes('injury') || n.includes('environmental') || n.includes('spill') || n.includes('worker');
     const isInvestmentJv = n.includes('merger') || n.includes('acquisition') || n.includes('m&a') || n.includes('joint venture') || /\bjv\b/.test(n) || n.includes('integration thesis') || n.includes('synergy');
-    const isTransformationDelivery = n.includes('transformation delivery') || n.includes('programme delivery') || n.includes('program delivery') || n.includes('project delivery') || n.includes('go-live') || n.includes('milestone') || n.includes('benefit realisation') || n.includes('benefit realization');
+    const isTransformationDelivery = n.includes('transformation delivery') || n.includes('programme delivery') || n.includes('program delivery') || n.includes('project delivery') || n.includes('go-live') || n.includes('milestone') || n.includes('benefit realisation') || n.includes('benefit realization') || n.includes('deployment') || (hasSupplierDependency && hasDeliveryProgrammeDelay);
 
     const hintedEnterpriseMatch = {
       'ai-model-risk': isAiModel || isDataGovernance,
@@ -2976,30 +3219,6 @@ ${businessUnit.selectedDepartmentContext}` : ''
     return { accepted: true, reason: 'accepted', narrative: cleanedCandidate };
   }
 
-  function _selectGuidedDraftNarrative({
-    aiNarrative = '',
-    fallbackNarrative = '',
-    seedNarrative = '',
-    guidedInput = {},
-    scenarioLensHint = '',
-    businessUnit = null
-  } = {}) {
-    const aiCandidate = _evaluateGuidedDraftCandidate(aiNarrative, { seedNarrative, guidedInput, scenarioLensHint, businessUnit });
-    if (aiCandidate.accepted) return { narrative: aiCandidate.narrative, source: 'ai', reason: aiCandidate.reason };
-
-    const fallbackCandidate = _evaluateGuidedDraftCandidate(fallbackNarrative, { seedNarrative, guidedInput, scenarioLensHint, businessUnit });
-    if (fallbackCandidate.accepted) {
-      // If the AI rewrite drifted away from the user’s scenario, prefer the bounded local expansion instead of showing a smarter-sounding but less faithful draft.
-      return { narrative: fallbackCandidate.narrative, source: 'fallback', reason: aiCandidate.reason || fallbackCandidate.reason };
-    }
-
-    return {
-      narrative: _cleanUserFacingText(seedNarrative, { maxSentences: 5 }),
-      source: 'local',
-      reason: aiCandidate.reason || fallbackCandidate.reason || 'seed'
-    };
-  }
-
   function _getStructuredScenarioValue(structuredScenario = {}, field = '') {
     const source = structuredScenario && typeof structuredScenario === 'object' ? structuredScenario : {};
     if (field === 'primaryDriver') return _cleanUserFacingText(source.primaryDriver || source.threatCommunity || '', { maxSentences: 1, stripTrailingPeriod: true });
@@ -3140,49 +3359,39 @@ ${businessUnit.selectedDepartmentContext}` : ''
   }
 
   async function buildGuidedScenarioDraft(input = {}) {
-    const seedNarrative = _cleanUserFacingText(_cleanScenarioSeed(input.riskStatement || ''), { maxSentences: 5 });
-    const classification = _classifyScenario(seedNarrative, {
-      guidedInput: input.guidedInput,
-      businessUnit: input.businessUnit,
-      scenarioLensHint: input.scenarioLensHint
-    });
-    const fallbackScenarioExpansion = _buildScenarioExpansion({
-      ...input,
-      riskStatement: seedNarrative,
-      classification
-    });
-    const result = await enhanceRiskContext({
-      ...input,
-      riskStatement: seedNarrative,
-      scenarioLensHint: _normaliseScenarioHintKey(input.scenarioLensHint) || classification.key,
-      traceLabel: input.traceLabel || 'Step 1 guided draft'
-    });
-    const selectedDraft = _selectGuidedDraftNarrative({
-      aiNarrative: _buildEnhancedNarrative({
-        ...input,
-        riskStatement: seedNarrative
-      }, result.draftNarrative || result.enhancedStatement || ''),
-      fallbackNarrative: fallbackScenarioExpansion.scenarioExpansion,
-      seedNarrative,
-      guidedInput: input.guidedInput,
-      scenarioLensHint: input.scenarioLensHint || classification.key,
-      businessUnit: input.businessUnit
-    });
-    return {
-      ...result,
-      seedNarrative,
-      draftNarrative: selectedDraft.narrative,
-      draftNarrativeSource: selectedDraft.source,
-      draftNarrativeReason: selectedDraft.reason,
-      aiAlignment: _buildAiAlignment(input, {
-        ...result,
-        draftNarrative: selectedDraft.narrative
-      }, {
-        classification,
-        seedNarrative,
-        fallbackScenarioExpansion
+    const endpoint = _getScenarioDraftUrl();
+    if (!endpoint) {
+      throw new Error('Guided scenario draft endpoint is unavailable.');
+    }
+    const sessionToken = _getSessionToken();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sessionToken ? { 'x-session-token': sessionToken } : {})
+      },
+      body: JSON.stringify({
+        riskStatement: typeof input.riskStatement === 'string' ? input.riskStatement : '',
+        guidedInput: input?.guidedInput && typeof input.guidedInput === 'object' ? input.guidedInput : {},
+        scenarioLensHint: input.scenarioLensHint,
+        businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
+        geography: typeof input.geography === 'string' ? input.geography : '',
+        applicableRegulations: Array.isArray(input.applicableRegulations) ? input.applicableRegulations : [],
+        citations: Array.isArray(input.citations) ? input.citations : [],
+        adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
+        traceLabel: typeof input.traceLabel === 'string' ? input.traceLabel : '',
+        priorMessages: Array.isArray(input.priorMessages) ? input.priorMessages : []
       })
-    };
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
+    }
+    const result = await response.json();
+    if (result?.trace && typeof result.trace === 'object') {
+      _storeAiTraceEntry(result.trace);
+    }
+    return result;
   }
 
   async function suggestGuidedPromptIdeas(input = {}) {
@@ -3503,11 +3712,21 @@ ${schema}`;
         'This should be assessed for value erosion, management distraction, governance mismatch, and whether the investment case still holds under the revised conditions.'
       ].join(' ');
     } else if (resolvedClassificationKey === 'transformation-delivery') {
-      scenarioExpansion = [
-        _buildScenarioLead({ geography, businessUnit, asset: asset || 'the programme roadmap or delivery-critical dependency in scope', cause: cause || 'weak programme governance, ownership, or milestone control', impact: impact || 'delay, rising cost, and missed benefits', scenarioLabel: 'transformation delivery scenario' }),
-        'The most likely progression is slippage in dependencies or decision-making turning into delayed milestones, weakened confidence, and a harder path to the intended operating change.',
-        'This should be assessed for delivery pressure, benefit delay, management bandwidth, and whether the transformation is now creating operational strain while it slips.'
-      ].join(' ');
+      if (/(supplier|vendor|third party|third-party)/.test(intakeText)
+        && /(delivery date|delivery commitment|delay|delayed|deployment|go-live|rollout|milestone|dependent business project|dependent project|programme|program|project)/.test(intakeText)
+        && !/procurement|sourcing|tender|bid|contract award|vendor selection|critical spend|single[- ]source|sole source|concentration/.test(intakeText)) {
+        scenarioExpansion = [
+          _buildScenarioLead({ geography, businessUnit, asset: asset || 'the delivery-critical supplier dependency and deployment plan in scope', cause: cause || 'supplier delivery slippage against a committed milestone or deployment date', impact: impact || 'deployment delay, downstream project slippage, and pressure on business commitments', scenarioLabel: 'supplier-dependent delivery scenario' }),
+          'The most likely progression is a supplier miss pushing back deployment activity, creating knock-on delay across dependent projects, re-sequencing pressure for the programme, and harder management decisions over workaround or fallback options.',
+          'This should be assessed for milestone slippage, downstream operational impact, workaround cost, and whether a delivery dependency that looked manageable is now becoming a wider execution problem.'
+        ].join(' ');
+      } else {
+        scenarioExpansion = [
+          _buildScenarioLead({ geography, businessUnit, asset: asset || 'the programme roadmap or delivery-critical dependency in scope', cause: cause || 'weak programme governance, ownership, or milestone control', impact: impact || 'delay, rising cost, and missed benefits', scenarioLabel: 'transformation delivery scenario' }),
+          'The most likely progression is slippage in dependencies or decision-making turning into delayed milestones, weakened confidence, and a harder path to the intended operating change.',
+          'This should be assessed for delivery pressure, benefit delay, management bandwidth, and whether the transformation is now creating operational strain while it slips.'
+        ].join(' ');
+      }
     } else if (statement) {
       scenarioExpansion = [
         _buildScenarioLead({ geography, businessUnit, asset, cause, impact, scenarioLabel: 'risk scenario' }),
@@ -3982,40 +4201,6 @@ Return only the refined scenario narrative text.`;
     ].join('\n');
   }
 
-  function _normaliseRegisterAnalysisCandidate(parsed = {}) {
-    return {
-      summary: _cleanUserFacingText(parsed.summary || '', { maxSentences: 3 }),
-      linkAnalysis: _cleanUserFacingText(parsed.linkAnalysis || '', { maxSentences: 3 }),
-      workflowGuidance: _normaliseGuidance(parsed.workflowGuidance),
-      benchmarkBasis: _normaliseBenchmarkBasis(parsed.benchmarkBasis || ''),
-      risks: _normaliseRiskCards(parsed.risks).map((risk, idx) => ({
-        id: risk.id || `register-risk-${idx + 1}`,
-        title: risk.title,
-        category: risk.category || 'Register',
-        description: risk.description || 'Imported from the uploaded register for review.',
-        confidence: risk.confidence || 'medium',
-        source: risk.source || 'register',
-        regulations: risk.regulations || []
-      }))
-    };
-  }
-
-  function _toRegisterAnalysisQualityCandidate(candidate = {}) {
-    return {
-      summary: candidate.summary || '',
-      linkAnalysis: candidate.linkAnalysis || '',
-      workflowGuidance: Array.isArray(candidate.workflowGuidance) ? candidate.workflowGuidance : [],
-      benchmarkBasis: candidate.benchmarkBasis || '',
-      risks: Array.isArray(candidate.risks) ? candidate.risks.map((risk) => ({
-        title: risk.title || '',
-        category: risk.category || '',
-        description: risk.description || '',
-        confidence: risk.confidence || 'medium',
-        regulations: Array.isArray(risk.regulations) ? risk.regulations : []
-      })) : []
-    };
-  }
-
   async function enhanceRiskContext(input) {
     const aiUnavailable = isUsingStub();
     const priorPatterns = _getContextResolverPriorPatterns(input.businessUnit?.id || '');
@@ -4276,176 +4461,38 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
   }
 
   async function analyseRiskRegister(input) {
-    const aiUnavailable = isUsingStub();
-    if (aiUnavailable) {
-      await new Promise(r => setTimeout(r, 1000 + Math.random() * 500));
+    const endpoint = _getRegisterAnalysisUrl();
+    if (!endpoint) {
+      throw new Error('Register analysis endpoint is unavailable.');
     }
-    const lines = String(input.registerText || '')
-      .split(/\r?\n|;/)
-      .map(line => line.trim())
-      .filter(line => line.length > 10)
-      .slice(0, 20);
-    let fallbackReason = null;
-    const evidenceMeta = _buildEvidenceMeta({
-      citations: input.citations || [],
-      businessUnit: input.businessUnit,
-      geography: input.geography,
-      applicableRegulations: input.applicableRegulations,
-      uploadedText: input.registerText,
-      registerText: input.registerText,
-      userProfile: input.adminSettings?.userProfileSummary,
-      organisationContext: input.adminSettings?.companyStructureContext,
-      adminSettings: input.adminSettings
+    const sessionToken = _getSessionToken();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sessionToken ? { 'x-session-token': sessionToken } : {})
+      },
+      body: JSON.stringify({
+        registerText: typeof input?.registerText === 'string' ? input.registerText : '',
+        registerMeta: input?.registerMeta && typeof input.registerMeta === 'object' ? input.registerMeta : null,
+        businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
+        geography: typeof input?.geography === 'string' ? input.geography : '',
+        applicableRegulations: Array.isArray(input?.applicableRegulations) ? input.applicableRegulations : [],
+        adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
+        priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : [],
+        traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : '',
+        citations: Array.isArray(input?.citations) ? input.citations : []
+      })
     });
-    const compactRegisterText = _truncateText(input.registerText || '', 5000);
-    const compactContextSummary = _truncateText(input.businessUnit?.contextSummary || input.businessUnit?.notes || '(none)', 320);
-    const compactAdminSummary = _truncateText(input.adminSettings?.adminContextSummary || '', 220);
-    const compactUserProfile = _truncateText(input.adminSettings?.userProfileSummary || '(none)', 220);
-    const compactOrgContext = _truncateText(input.adminSettings?.companyStructureContext || '(none)', 320);
-    const compactLiveContext = _truncateText(_buildContextPromptBlock(input.adminSettings, input.businessUnit), 320);
-    if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
-      try {
-        const outputSchema = `{
-  "summary": "string",
-  "linkAnalysis": "string",
-  "workflowGuidance": ["string"],
-  "benchmarkBasis": "string",
-  "risks": [
-    { "title": "string", "category": "string", "description": "string", "confidence": "high|medium|low", "regulations": ["string"] }
-  ]
-}`;
-        const systemPrompt = `You are a senior enterprise risk analyst. You will receive a risk register that may contain multiple sheets, multiple columns, and contextual metadata. Return JSON only with this schema:
-${outputSchema}`;
-        const userPrompt = `Business unit: ${input.businessUnit?.name || 'Unknown'}
-Geography: ${input.geography || 'Unknown'}
-BU context summary: ${compactContextSummary}
-BU-specific AI guidance: ${input.businessUnit?.aiGuidance || '(none)'}
-Applicable regulations: ${(input.applicableRegulations || []).slice(0, 8).join(', ')}
-Register metadata: ${input.registerMeta ? JSON.stringify({
-  type: input.registerMeta.type,
-  extension: input.registerMeta.extension,
-  sheetSelectionMode: input.registerMeta.sheetSelectionMode,
-  sheets: input.registerMeta.sheets
-}) : '(none)'}
-Benchmark strategy: ${_truncateText(input.adminSettings?.benchmarkStrategy || 'Prefer GCC and UAE references where possible, then use best global data with clear explanation.', 180)}
-Admin context summary: ${compactAdminSummary || '(none)'}
-User profile context:
-${compactUserProfile}
-Organisation structure context:
-${compactOrgContext}
-Live scoped context:
-${compactLiveContext}
-
-Risk register content:
-${compactRegisterText || '(none)'}
-
-Instructions:
-- focus on risk rows, sheet names, and column headers; ignore generic instructional template text
-- deduplicate overlapping risks
-- produce concise risk titles suitable for selection cards
-- preserve important contextual detail in the descriptions
-- extract up to 8 material risks if the register supports them
-- For each risk, include a "confidence" field: "high", "medium", or "low". High = directly evidenced by the uploaded rows, sheet names, headers, or retrieved documents. Medium = reasonably inferred from the register context. Low = potentially relevant but speculative given the current information.
-- include workflow guidance that tells a non-risk practitioner what to do after extraction
-
-Evidence quality context:
-${_truncateText(evidenceMeta.promptBlock || '', 240)}`;
-        const raw = await _callLLM(systemPrompt, userPrompt, {
-          taskName: 'analyseRiskRegister',
-          maxCompletionTokens: 2800,
-          maxPromptChars: 9000,
-          timeoutMs: 45000,
-          priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : [],
-          traceLabel: input.traceLabel || 'Step 1 register analysis',
-          traceSources: input.citations || []
-        });
-        if (raw) {
-          const parsed = await _parseOrRepairStructuredJson(raw, outputSchema, {
-            taskName: 'repairAnalyseRiskRegister'
-          }) || {};
-          let candidateResult = _normaliseRegisterAnalysisCandidate(parsed);
-          try {
-            const qualityChecked = await _runStructuredQualityGate({
-              taskName: 'analyseRiskRegisterQualityGate',
-              schemaHint: outputSchema,
-              originalContext: [
-                `Business unit: ${input.businessUnit?.name || 'Unknown'}`,
-                `Geography: ${input.geography || 'Unknown'}`,
-                `Register metadata: ${input.registerMeta ? JSON.stringify({
-                  type: input.registerMeta.type,
-                  extension: input.registerMeta.extension,
-                  sheetSelectionMode: input.registerMeta.sheetSelectionMode,
-                  sheets: input.registerMeta.sheets
-                }) : '(none)'}`,
-                `Register text: ${compactRegisterText || '(none)'}`
-              ].join('\n'),
-              checklist: [
-                'Keep the shortlist grounded in the uploaded register rows, sheet names, and column headers.',
-                'Do not invent risks that are not supported by the uploaded material.',
-                'Remove template or instructional noise.',
-                'Keep risk titles concise and selection-card friendly.',
-                'Keep the summary and workflow guidance coherent with the extracted shortlist.'
-              ],
-              candidatePayload: _toRegisterAnalysisQualityCandidate(candidateResult),
-              traceLabel: `${input.traceLabel || 'Step 1 register analysis'} quality gate`,
-              traceSources: input.citations || []
-            });
-            if (qualityChecked) {
-              candidateResult = _normaliseRegisterAnalysisCandidate(qualityChecked);
-            }
-          } catch (qualityGateError) {
-            await _auditAiFallback('analyseRiskRegisterQualityGate', qualityGateError);
-            console.warn('analyseRiskRegister quality gate fallback:', qualityGateError.message);
-          }
-          return _decorateAiResult(_withEvidenceMeta(candidateResult, evidenceMeta), evidenceMeta, {
-            contentFields: ['summary', 'linkAnalysis', 'benchmarkBasis'],
-            fallbackUsed: false
-          });
-        }
-        fallbackReason = _classifyAiFallbackReason();
-      } catch (e) {
-        await _auditAiFallback('analyseRiskRegister', e);
-        console.warn('analyseRiskRegister fallback:', e.message);
-        const normalisedError = _normaliseLLMError(e);
-        if (_isStructuredResponseFailure(normalisedError) || _isStructuredResponseFailure(e)) {
-          fallbackReason = _classifyAiFallbackReason(normalisedError);
-        } else {
-          throw Object.assign(new Error(normalisedError?.message || e?.message || 'AI request failed'), {
-            code: 'LLM_UNAVAILABLE',
-            retriable: true,
-            originalError: e
-          });
-        }
-      }
+    if (!response.ok) {
+      const text = await response.text();
+      throw _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
     }
-    const stub = _generateRiskBuilderStub({ ...input, riskStatement: lines.slice(0, 4).join('. ') });
-    if (lines.length) {
-      stub.risks = lines.slice(0, 15).map((line, idx) => ({
-        id: `register-risk-${idx + 1}`,
-        title: line.replace(/^[-*]\s*/, ''),
-        category: 'Register',
-        description: 'Imported from uploaded risk register.',
-        source: 'register',
-        regulations: stub.regulations.slice(0, 3)
-      }));
-      stub.summary = `Analysed ${lines.length} register entr${lines.length === 1 ? 'y' : 'ies'} and extracted ${stub.risks.length} candidate risks.`;
-      stub.workflowGuidance = [
-        'Keep the risks that materially change loss, disruption, regulation, or third-party exposure.',
-        'Use linked mode when the selected risks could arise from the same underlying event or control failure.',
-        'Ask AI assist to translate the selected scope into FAIR inputs with GCC-first benchmark logic.'
-      ];
+    const result = await response.json();
+    if (result?.trace && typeof result.trace === 'object') {
+      _storeAiTraceEntry(result.trace);
     }
-    const decoratedFallback = _decorateAiResult(_withEvidenceMeta({
-      ...stub,
-      fallbackReasonCode: fallbackReason?.code || 'local_register_fallback',
-      fallbackReasonTitle: fallbackReason?.title || 'Fallback register analysis loaded',
-      fallbackReasonMessage: fallbackReason?.message || 'The platform used local extraction instead of live AI analysis for this upload.',
-      fallbackReasonDetail: fallbackReason?.detail || ''
-    }, evidenceMeta), evidenceMeta, {
-      contentFields: ['summary', 'linkAnalysis', 'benchmarkBasis'],
-      fallbackUsed: true
-    });
-    return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
+    return result;
   }
 
   async function buildCompanyContext(websiteUrl) {
@@ -4907,405 +4954,76 @@ ${evidenceMeta.promptBlock}`;
     }
   }
 
-
-  function _buildTreatmentImprovementStub(input = {}) {
-    const request = String(input.improvementRequest || '').toLowerCase();
-    const baseline = input.baselineAssessment?.fairParams || input.baselineAssessment?.results?.inputs || {};
-    const next = JSON.parse(JSON.stringify(baseline || {}));
-    const notes = [];
-    const adjust = (key, factor, floor = null, ceil = null) => {
-      const current = Number(next[key]);
-      if (!Number.isFinite(current)) return;
-      let value = current * factor;
-      if (floor != null) value = Math.max(floor, value);
-      if (ceil != null) value = Math.min(ceil, value);
-      next[key] = Number(value.toFixed(2));
-    };
-
-    if (/control|mfa|access|identity|monitor|detect|response/.test(request)) {
-      adjust('controlStrMin', 1.12, 0, 0.99);
-      adjust('controlStrLikely', 1.15, 0, 0.99);
-      adjust('controlStrMax', 1.1, 0, 0.995);
-      adjust('vulnMin', 0.9, 0.01, 1);
-      adjust('vulnLikely', 0.85, 0.01, 1);
-      adjust('vulnMax', 0.82, 0.01, 1);
-      notes.push('Control strength has been lifted to reflect stronger preventive and detective controls.');
-    }
-    if (/less exposure|lower exposure|reduc|contain|segmentation|hardening/.test(request)) {
-      adjust('threatCapMin', 0.95, 0, 1);
-      adjust('threatCapLikely', 0.92, 0, 1);
-      adjust('threatCapMax', 0.9, 0, 1);
-      adjust('vulnMin', 0.88, 0.01, 1);
-      adjust('vulnLikely', 0.82, 0.01, 1);
-      adjust('vulnMax', 0.78, 0.01, 1);
-      notes.push('Exposure has been reduced to reflect better containment and lower successful attack opportunity.');
-    }
-    if (/less financial|lower loss|cheaper|reduce cost|lower disruption|resilience|faster recovery/.test(request)) {
-      ['biMin','biLikely','biMax'].forEach((key, idx) => adjust(key, [0.75,0.7,0.68][idx], 0, null));
-      ['irMin','irLikely','irMax'].forEach((key, idx) => adjust(key, [0.9,0.88,0.86][idx], 0, null));
-      ['rcMin','rcLikely','rcMax'].forEach((key, idx) => adjust(key, [0.92,0.88,0.85][idx], 0, null));
-      notes.push('Financial and disruption losses have been reduced to reflect faster containment, better resilience, or lower downstream harm.');
-    }
-    if (/less frequent|lower frequency|rarer|harder to happen|prevent/.test(request)) {
-      ['tefMin','tefLikely','tefMax'].forEach((key, idx) => adjust(key, [0.85,0.78,0.72][idx], 0.1, null));
-      notes.push('Event frequency has been reduced to reflect lower likelihood under the improved future state.');
-    }
-    if (!notes.length) {
-      adjust('controlStrLikely', 1.08, 0, 0.99);
-      adjust('tefLikely', 0.9, 0.1, null);
-      adjust('biLikely', 0.9, 0, null);
-      notes.push('The future-state case assumes moderately stronger controls, lower event success, and better operational containment.');
-    }
-    return {
-      summary: 'The future-state case adjusts the baseline to reflect the improvement described by the user.',
-      changesSummary: notes.join(' '),
-      workflowGuidance: [
-        'Review the adjusted values and make sure they reflect a credible future state rather than an ideal one.',
-        'Focus on the one or two assumptions that would realistically improve first, then rerun the model.',
-        'Use the comparison view to judge whether the improvement meaningfully changes tolerance position.'
-      ],
-      benchmarkBasis: 'The adjusted values represent a future-state comparison case. They should reflect plausible control or resilience improvements, not best-case assumptions.',
-      inputRationale: {
-        tef: 'Frequency was reduced only where the requested improvement would plausibly lower how often the scenario succeeds.',
-        vulnerability: 'Exposure was reduced where stronger controls, better identity protection, or tighter containment were implied by the request.',
-        lossComponents: 'Loss values were reduced where the request suggests faster recovery, lower disruption, or less downstream financial impact.'
-      },
-      suggestedInputs: {
-        TEF: { min: next.tefMin, likely: next.tefLikely, max: next.tefMax },
-        controlStrength: { min: next.controlStrMin, likely: next.controlStrLikely, max: next.controlStrMax },
-        threatCapability: { min: next.threatCapMin, likely: next.threatCapLikely, max: next.threatCapMax },
-        lossComponents: {
-          incidentResponse: { min: next.irMin, likely: next.irLikely, max: next.irMax },
-          businessInterruption: { min: next.biMin, likely: next.biLikely, max: next.biMax },
-          dataBreachRemediation: { min: next.dbMin, likely: next.dbLikely, max: next.dbMax },
-          regulatoryLegal: { min: next.rlMin, likely: next.rlLikely, max: next.rlMax },
-          thirdPartyLiability: { min: next.tpMin, likely: next.tpLikely, max: next.tpMax },
-          reputationContract: { min: next.rcMin, likely: next.rcLikely, max: next.rcMax }
-        }
-      },
-      citations: input.citations || []
-    };
-  }
-
   async function suggestTreatmentImprovement(input = {}) {
-    const aiUnavailable = isUsingStub();
-    const stub = _buildTreatmentImprovementStub(input);
-    if (aiUnavailable) {
-      await new Promise(r => setTimeout(r, 900 + Math.random() * 400));
+    const endpoint = _getTreatmentSuggestionUrl();
+    if (!endpoint) {
+      throw new Error('Treatment suggestion endpoint is unavailable.');
     }
-    if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
-      try {
-        const systemPrompt = `You are a senior FAIR analyst helping a user model an improved future state. Return JSON only with this schema:
-{
-  "summary": "string",
-  "changesSummary": "string",
-  "workflowGuidance": ["string"],
-  "benchmarkBasis": "string",
-  "inputRationale": {
-    "tef": "string",
-    "vulnerability": "string",
-    "lossComponents": "string"
-  },
-  "suggestedInputs": {
-    "TEF": { "min": number, "likely": number, "max": number },
-    "controlStrength": { "min": number, "likely": number, "max": number },
-    "threatCapability": { "min": number, "likely": number, "max": number },
-    "lossComponents": {
-      "incidentResponse": { "min": number, "likely": number, "max": number },
-      "businessInterruption": { "min": number, "likely": number, "max": number },
-      "dataBreachRemediation": { "min": number, "likely": number, "max": number },
-      "regulatoryLegal": { "min": number, "likely": number, "max": number },
-      "thirdPartyLiability": { "min": number, "likely": number, "max": number },
-      "reputationContract": { "min": number, "likely": number, "max": number }
-    }
-  }
-}`;
-        const evidenceMeta = _buildEvidenceMeta({ citations: input.citations || [], businessUnit: input.businessUnit, geography: input.baselineAssessment?.geography || input.businessUnit?.geography, applicableRegulations: input.baselineAssessment?.applicableRegulations, organisationContext: input.baselineAssessment?.narrative, uploadedText: input.improvementRequest, adminSettings: input.adminSettings, userProfile: input.adminSettings?.userProfileSummary });
-        const userPrompt = `Baseline scenario title: ${input.baselineAssessment?.scenarioTitle || 'Untitled scenario'}
-Baseline narrative: ${input.baselineAssessment?.enhancedNarrative || input.baselineAssessment?.narrative || ''}
-Business unit: ${input.businessUnit?.name || 'Unknown'}
-Geography: ${input.baselineAssessment?.geography || input.businessUnit?.geography || 'Unknown'}
-User improvement request: ${input.improvementRequest || '(none)'}
-Current FAIR inputs:
-${JSON.stringify(input.baselineAssessment?.fairParams || input.baselineAssessment?.results?.inputs || {}, null, 2)}
-Relevant citations:
-${_buildCitationPromptBlock(input.citations || [])}
-Live scoped context:
-${_buildContextPromptBlock(input.adminSettings, input.businessUnit)}
-Instructions:
-- treat this as a future-state comparison case, not a rewrite of the original scenario
-- adjust only the FAIR inputs that are plausibly improved by the user's request
-- keep changes credible and proportionate
-- explain what you changed in plain language
-- prefer stronger controls, lower event frequency, lower vulnerability, or lower loss only when justified by the user's request
-
-Evidence quality context:
-${evidenceMeta.promptBlock}`;
-        const raw = await _callLLM(systemPrompt, userPrompt, {
-          taskName: 'suggestTreatmentImprovement',
-          priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : []
-        });
-        if (raw) {
-          const parsed = JSON.parse(_extractJsonFromLlmResponse(raw));
-          const ensureRange = (value, fallbackRange) => ({
-            min: value?.min ?? fallbackRange?.min ?? 0,
-            likely: value?.likely ?? fallbackRange?.likely ?? 0,
-            max: value?.max ?? fallbackRange?.max ?? 0,
-          });
-          return _decorateAiResult(_withEvidenceMeta({
-            summary: _cleanUserFacingText(parsed.summary || stub.summary || '', { maxSentences: 2 }),
-            changesSummary: _cleanUserFacingText(parsed.changesSummary || stub.changesSummary || '', { maxSentences: 3 }),
-            workflowGuidance: _normaliseGuidance(parsed.workflowGuidance?.length ? parsed.workflowGuidance : stub.workflowGuidance),
-            benchmarkBasis: _normaliseBenchmarkBasis(parsed.benchmarkBasis || stub.benchmarkBasis || ''),
-            inputRationale: _normaliseInputRationale({ ...stub.inputRationale, ...(parsed.inputRationale || {}) }),
-            suggestedInputs: {
-              TEF: ensureRange(parsed?.suggestedInputs?.TEF, stub.suggestedInputs.TEF),
-              controlStrength: ensureRange(parsed?.suggestedInputs?.controlStrength, stub.suggestedInputs.controlStrength),
-              threatCapability: ensureRange(parsed?.suggestedInputs?.threatCapability, stub.suggestedInputs.threatCapability),
-              lossComponents: {
-                incidentResponse: ensureRange(parsed?.suggestedInputs?.lossComponents?.incidentResponse, stub.suggestedInputs.lossComponents.incidentResponse),
-                businessInterruption: ensureRange(parsed?.suggestedInputs?.lossComponents?.businessInterruption, stub.suggestedInputs.lossComponents.businessInterruption),
-                dataBreachRemediation: ensureRange(parsed?.suggestedInputs?.lossComponents?.dataBreachRemediation, stub.suggestedInputs.lossComponents.dataBreachRemediation),
-                regulatoryLegal: ensureRange(parsed?.suggestedInputs?.lossComponents?.regulatoryLegal, stub.suggestedInputs.lossComponents.regulatoryLegal),
-                thirdPartyLiability: ensureRange(parsed?.suggestedInputs?.lossComponents?.thirdPartyLiability, stub.suggestedInputs.lossComponents.thirdPartyLiability),
-                reputationContract: ensureRange(parsed?.suggestedInputs?.lossComponents?.reputationContract, stub.suggestedInputs.lossComponents.reputationContract)
-              }
-            },
-            citations: input.citations || []
-          }, evidenceMeta), evidenceMeta, {
-            contentFields: ['summary', 'changesSummary', 'benchmarkBasis'],
-            fallbackUsed: false
-          });
-        }
-      } catch (error) {
-        await _auditAiFallback('suggestTreatmentImprovement', error);
-        console.warn('suggestTreatmentImprovement fallback:', error.message);
-        const normalisedError = _normaliseLLMError(error);
-        throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
-          code: 'LLM_UNAVAILABLE',
-          retriable: true,
-          originalError: error
-        });
-      }
-    }
-    const fallbackMeta = _buildEvidenceMeta({ citations: input.citations || [], businessUnit: input.businessUnit, geography: input.baselineAssessment?.geography || input.businessUnit?.geography, applicableRegulations: input.baselineAssessment?.applicableRegulations, organisationContext: input.baselineAssessment?.narrative, uploadedText: input.improvementRequest, adminSettings: input.adminSettings, userProfile: input.adminSettings?.userProfileSummary });
-    const decoratedFallback = _decorateAiResult(_withEvidenceMeta(stub, fallbackMeta), fallbackMeta, {
-      contentFields: ['summary', 'changesSummary', 'benchmarkBasis'],
-      fallbackUsed: true
+    const sessionToken = _getSessionToken();
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sessionToken ? { 'x-session-token': sessionToken } : {})
+      },
+      body: JSON.stringify({
+        baselineAssessment: input?.baselineAssessment && typeof input.baselineAssessment === 'object' ? input.baselineAssessment : {},
+        improvementRequest: typeof input?.improvementRequest === 'string' ? input.improvementRequest : '',
+        businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
+        adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
+        citations: Array.isArray(input?.citations) ? input.citations : [],
+        priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : [],
+        traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
+      })
     });
-    return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
-  }
-
-  function _buildAssessmentChallengeStub(input = {}) {
-    const confidence = input.confidence || {};
-    const assumptions = Array.isArray(input.assumptions) ? input.assumptions : [];
-    const drivers = input.drivers || { upward: [], stabilisers: [] };
-    const weakestAssumptions = assumptions.slice(0, 3).map(item => `${item.category}: ${item.text}`);
-    const committeeQuestions = [];
-    if (drivers.upward?.[0]) committeeQuestions.push(`What evidence supports the conclusion that ${drivers.upward[0].charAt(0).toLowerCase()}${drivers.upward[0].slice(1)}`);
-    if (confidence.label === 'Low confidence') committeeQuestions.push('Which ranges are still too uncertain for strong decision-making and why are they still broad?');
-    if ((input.missingInformation || []).length) committeeQuestions.push(`What missing evidence would change the assessment most: ${(input.missingInformation || []).slice(0, 2).join(' and ')}?`);
-    if (!committeeQuestions.length) committeeQuestions.push('Which one or two assumptions would most change the tolerance position if they proved wrong?');
-    const evidenceToGather = [];
-    if ((input.missingInformation || []).length) evidenceToGather.push(...input.missingInformation.slice(0, 3));
-    if (!evidenceToGather.length) {
-      evidenceToGather.push('Internal incident history or loss data for similar scenarios.');
-      evidenceToGather.push('Control evidence showing how consistently the key controls operate in practice.');
-      evidenceToGather.push('Finance or operational data to validate the biggest cost assumptions.');
+    if (!response.ok) {
+      const text = await response.text();
+      const normalisedError = _normaliseLLMError(new Error(`LLM API error ${response.status}: ${text}`));
+      throw Object.assign(new Error(normalisedError?.message || text || 'AI request failed'), {
+        code: 'LLM_UNAVAILABLE',
+        retriable: true
+      });
     }
-    const challengeLevel = confidence.label === 'Low confidence' ? 'High challenge needed' : confidence.label === 'High confidence' ? 'Moderate challenge still warranted' : 'Targeted challenge recommended';
-    return {
-      summary: confidence.label === 'Low confidence'
-        ? 'The assessment is directionally useful, but a risk committee should challenge the broadest assumptions before relying on it for strong decisions.'
-        : 'The assessment is decision-useful, but a risk committee should still test the assumptions that are driving the result most.' ,
-      challengeLevel,
-      weakestAssumptions,
-      committeeQuestions,
-      evidenceToGather,
-      reviewerGuidance: [
-        'Focus first on the assumptions most likely to move the tolerance position.',
-        'Challenge whether the cost and frequency assumptions are supported by internal evidence rather than only judgement.',
-        'Confirm that the selected regulatory and business scope still matches the scenario being discussed.'
-      ]
-    };
+    const result = await response.json();
+    if (result?.trace && typeof result.trace === 'object') {
+      _storeAiTraceEntry(result.trace);
+    }
+    return result;
   }
 
   async function challengeAssessment(input = {}) {
-    const hasExecutiveChallengeShape = !!(input && (
+    const hasExecutiveShape = !!(input && (
       Object.prototype.hasOwnProperty.call(input, 'results') ||
       Object.prototype.hasOwnProperty.call(input, 'fairParams') ||
       Object.prototype.hasOwnProperty.call(input, 'assessmentIntelligence')
     ));
-    if (hasExecutiveChallengeShape) {
-      if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return null;
-      const p90 = Number(input?.results?.eventLoss?.p90 || 0);
-      const assumptions = Array.isArray(input?.assessmentIntelligence?.assumptions)
-        ? input.assessmentIntelligence.assumptions
-        : [];
-      const obligationBasis = _buildResolvedObligationPromptBlock(input?.obligationBasis || {}, { compact: true }) || '(none)';
-      const userPrompt = [
-        `Scenario: ${String(input?.narrative || '').slice(0, 600)}`,
-        `P90 loss: ${p90.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`,
-        `Key assumptions: ${assumptions.slice(0, 3).map(item => item?.text || item).filter(Boolean).join('; ')}`,
-        `Resolved obligations: ${obligationBasis}`,
-        `Control strength: ${input?.fairParams?.controlStrLikely || 'not set'}`,
-        `TEF: ${input?.fairParams?.tefMin || ''}–${input?.fairParams?.tefMax || ''}/yr`
-      ].join('\n');
-      const systemPrompt = `You are a senior risk committee reviewer. Your job is to
-challenge this assessment - not accept it. Be constructive but skeptical.
-Return JSON only:
-{
-  "challengeSummary": "string (2-3 sentences - your overall challenge)",
-  "weakestAssumption": "string (the single assumption most likely to be wrong)",
-  "alternativeView": "string (1-2 sentences - a credible alternative read)",
-  "confidenceVerdict": "string - 'Reasonable given evidence' | 'Likely overstated' | 'Likely understated'",
-  "oneQuestion": "string - the one question you would ask before accepting this"
-}`;
-      try {
-        const raw = await _callLLM(systemPrompt, userPrompt, {
-          maxCompletionTokens: 400,
-          timeoutMs: 20000
-        });
-        if (!raw) return null;
-        const parsed = JSON.parse(_extractJsonFromLlmResponse(raw) || 'null');
-        if (!parsed || typeof parsed !== 'object') return null;
-        return {
-          challengeSummary: _cleanUserFacingText(parsed.challengeSummary || '', { maxSentences: 3 }),
-          weakestAssumption: _cleanUserFacingText(parsed.weakestAssumption || '', { maxSentences: 1 }),
-          alternativeView: _cleanUserFacingText(parsed.alternativeView || '', { maxSentences: 2 }),
-          confidenceVerdict: _cleanUserFacingText(parsed.confidenceVerdict || '', { maxSentences: 1 }),
-          oneQuestion: _cleanUserFacingText(parsed.oneQuestion || '', { maxSentences: 1 })
-        };
-      } catch {
-        return null;
-      }
-    }
-    const aiUnavailable = isUsingStub();
-    const stub = _buildAssessmentChallengeStub(input);
-    if (aiUnavailable) {
-      await new Promise(r => setTimeout(r, 700 + Math.random() * 300));
-    }
-    const evidenceMeta = _buildEvidenceMeta({
-      citations: input.citations || [],
-      businessUnit: input.businessUnit,
-      geography: input.geography,
-      applicableRegulations: input.applicableRegulations,
-      organisationContext: input.narrative,
-      uploadedText: (Array.isArray(input.assumptions) ? input.assumptions.map(item => item.text).join('\n') : ''),
-      adminSettings: input.adminSettings,
-      userProfile: input.adminSettings?.userProfileSummary
-    });
-    if (_compassApiKey || !_isDirectCompassUrl(_compassApiUrl)) {
-      try {
-        const systemPrompt = `You are a senior risk committee reviewer. Return JSON only with this schema:
-{
-  "summary": "string",
-  "challengeLevel": "string",
-  "weakestAssumptions": ["string"],
-  "committeeQuestions": ["string"],
-  "evidenceToGather": ["string"],
-  "reviewerGuidance": ["string"]
-}`;
-        const userPrompt = `Assessment title: ${input.scenarioTitle || 'Untitled assessment'}
-Business unit: ${input.businessUnit?.name || input.businessUnitName || 'Unknown'}
-Geography: ${input.geography || 'Unknown'}
-Scenario narrative: ${input.narrative || ''}
-Confidence summary: ${input.confidence?.summary || ''}
-Confidence label: ${input.confidence?.label || ''}
-Main upward drivers:
-${(input.drivers?.upward || []).map(item => `- ${item}`).join('\n')}
-Main stabilisers:
-${(input.drivers?.stabilisers || []).map(item => `- ${item}`).join('\n')}
-Assumptions:
-${(input.assumptions || []).map(item => `- ${item.category}: ${item.text}`).join('\n')}
-Missing information:
-${(input.missingInformation || []).map(item => `- ${item}`).join('\n')}
-Relevant citations:
-${_buildCitationPromptBlock(input.citations || [])}
-Live scoped context:
-${_buildContextPromptBlock(input.adminSettings, input.businessUnit)}
-Resolved obligations:
-${_buildResolvedObligationPromptBlock(input.adminSettings || input.businessUnit || {}, { compact: false }) || '(none)'}
-Instructions:
-- act like a risk committee or challenge session reviewer
-- do not restate the full scenario
-- identify the assumptions most worth challenging
-- propose the questions a committee would ask
-- suggest the evidence that would most improve confidence
-- keep the tone practical, concise, and decision-oriented
-
-Evidence quality context:
-${evidenceMeta.promptBlock}`;
-        const raw = await _callLLM(systemPrompt, userPrompt, { taskName: 'challengeAssessment' });
-        if (raw) {
-          const parsed = JSON.parse(_extractJsonFromLlmResponse(raw));
-          return _decorateAiResult(_withEvidenceMeta({
-            summary: _cleanUserFacingText(parsed.summary || stub.summary || '', { maxSentences: 3 }),
-            challengeLevel: _cleanUserFacingText(parsed.challengeLevel || stub.challengeLevel || '', { maxSentences: 1 }),
-            weakestAssumptions: (Array.isArray(parsed.weakestAssumptions) ? parsed.weakestAssumptions : stub.weakestAssumptions).slice(0, 4).map(item => _cleanUserFacingText(item || '', { maxSentences: 1 })),
-            committeeQuestions: (Array.isArray(parsed.committeeQuestions) ? parsed.committeeQuestions : stub.committeeQuestions).slice(0, 4).map(item => _cleanUserFacingText(item || '', { maxSentences: 1 })),
-            evidenceToGather: (Array.isArray(parsed.evidenceToGather) ? parsed.evidenceToGather : stub.evidenceToGather).slice(0, 4).map(item => _cleanUserFacingText(item || '', { maxSentences: 1 })),
-            reviewerGuidance: _normaliseGuidance(Array.isArray(parsed.reviewerGuidance) && parsed.reviewerGuidance.length ? parsed.reviewerGuidance : stub.reviewerGuidance)
-          }, evidenceMeta), evidenceMeta, {
-            contentFields: ['summary', 'challengeLevel'],
-            fallbackUsed: false
-          });
-        }
-      } catch (error) {
-        await _auditAiFallback('challengeAssessment', error);
-        console.warn('challengeAssessment fallback:', error.message);
-        const normalisedError = _normaliseLLMError(error);
-        throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
-          code: 'LLM_UNAVAILABLE',
-          retriable: true,
-          originalError: error
-        });
-      }
-    }
-    const decoratedFallback = _decorateAiResult(_withEvidenceMeta(stub, evidenceMeta), evidenceMeta, {
-      contentFields: ['summary', 'challengeLevel'],
-      fallbackUsed: true
-    });
-    return aiUnavailable ? { ...decoratedFallback, aiUnavailable: true } : decoratedFallback;
+    return _postServerAiWorkflow(_getChallengeAssessmentUrl(), {
+      scenarioTitle: typeof input?.scenarioTitle === 'string' ? input.scenarioTitle : '',
+      narrative: typeof input?.narrative === 'string' ? input.narrative : '',
+      geography: typeof input?.geography === 'string' ? input.geography : '',
+      businessUnitName: typeof input?.businessUnitName === 'string' ? input.businessUnitName : '',
+      businessUnit: input?.businessUnit && typeof input.businessUnit === 'object' ? input.businessUnit : null,
+      adminSettings: input?.adminSettings && typeof input.adminSettings === 'object' ? input.adminSettings : {},
+      confidence: input?.confidence && typeof input.confidence === 'object' ? input.confidence : {},
+      drivers: input?.drivers && typeof input.drivers === 'object' ? input.drivers : {},
+      assumptions: Array.isArray(input?.assumptions) ? input.assumptions : [],
+      missingInformation: Array.isArray(input?.missingInformation) ? input.missingInformation : [],
+      applicableRegulations: Array.isArray(input?.applicableRegulations) ? input.applicableRegulations : [],
+      citations: Array.isArray(input?.citations) ? input.citations : [],
+      results: input?.results && typeof input.results === 'object' ? input.results : {},
+      fairParams: input?.fairParams && typeof input.fairParams === 'object' ? input.fairParams : {},
+      assessmentIntelligence: input?.assessmentIntelligence && typeof input.assessmentIntelligence === 'object' ? input.assessmentIntelligence : {},
+      obligationBasis: input?.obligationBasis && typeof input.obligationBasis === 'object' ? input.obligationBasis : {},
+      traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
+    }, { nullOnError: hasExecutiveShape });
   }
 
   async function generateReviewerDecisionBrief(input = {}) {
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return null;
-    const assessmentData = String(input?.assessmentData || '').trim().slice(0, 2400);
-    if (!assessmentData) return null;
-    const preferredSection = String(input?.preferredSection || '').trim().toLowerCase();
-    const preferredPrompt = preferredSection
-      ? `The reviewer usually spends the most time on the ${preferredSection.replace(/-/g, ' ')} section, so make that section especially concrete and decision-useful.`
-      : '';
-    const systemPrompt = `You are a risk reviewer at a large technology company. You have 30 seconds to decide whether to approve, challenge, or escalate this assessment. Generate a structured brief with exactly three sections:
-WHAT MATTERS: [1 sentence - the headline risk and magnitude]
-WHAT'S UNCERTAIN: [1 sentence - the weakest assumption]
-WHAT TO DO: [1 sentence - approve / challenge parameter X / escalate]
-
-Return JSON only with this schema:
-{
-  "whatMatters": "string",
-  "whatsUncertain": "string",
-  "whatToDo": "string"
-}`;
-    const userPrompt = `${preferredPrompt ? `${preferredPrompt}\n\n` : ''}Assessment data:\n${assessmentData}`;
-    try {
-      const raw = await _callLLM(systemPrompt, userPrompt, {
-        taskName: 'generateReviewerDecisionBrief',
-        maxCompletionTokens: 220,
-        timeoutMs: 12000
-      });
-      if (!raw) return null;
-      const parsed = JSON.parse(_extractJsonFromLlmResponse(raw) || 'null');
-      if (!parsed || typeof parsed !== 'object') return null;
-      return {
-        whatMatters: _cleanUserFacingText(parsed.whatMatters || '', { maxSentences: 1 }),
-        whatsUncertain: _cleanUserFacingText(parsed.whatsUncertain || '', { maxSentences: 1 }),
-        whatToDo: _cleanUserFacingText(parsed.whatToDo || '', { maxSentences: 1 })
-      };
-    } catch {
-      return null;
-    }
+    return _postServerAiWorkflow(_getReviewerBriefUrl(), {
+      assessmentData: typeof input?.assessmentData === 'string' ? input.assessmentData : '',
+      preferredSection: typeof input?.preferredSection === 'string' ? input.preferredSection : '',
+      traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
+    }, { nullOnError: true });
   }
 
   function _buildPortfolioExecutiveBriefStub(input = {}) {
@@ -5420,371 +5138,57 @@ ${schema}`;
   }
 
   async function mediateAssessmentDispute(input = {}) {
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return null;
-    const reviewerView = String(input?.reviewerView || '').trim();
-    const analystView = String(input?.analystView || '').trim();
-    if (!reviewerView || !analystView) return null;
-    const fairParams = input?.fairParams || {};
-    const assumptions = Array.isArray(input?.assessmentIntelligence?.assumptions)
-      ? input.assessmentIntelligence.assumptions
-      : [];
-    const drivers = Array.isArray(input?.assessmentIntelligence?.drivers?.sensitivity)
-      ? input.assessmentIntelligence.drivers.sensitivity
-      : [];
-    const citations = Array.isArray(input?.citations) ? input.citations.slice(0, 4) : [];
-    const systemPrompt = `You are an AI mediation assistant for enterprise risk reviews.
-Resolve focused disagreements between the analyst and the reviewer. Be constructive, specific, and concise.
-Return JSON only with this schema:
-{
-  "reconciliationSummary": "string (2-3 sentences summarising the disagreement and proposed middle ground)",
-  "proposedMiddleGround": "string (1-2 sentences with the compromise position)",
-  "whyReasonable": "string (1-2 sentences explaining why the compromise is defensible)",
-  "recommendedField": "string (fair parameter field name like controlStrLikely, tefLikely, biLikely, rlLikely, or empty string if no single field should change)",
-  "recommendedValue": "number or null",
-  "recommendedValueLabel": "string (plain-English phrasing for the proposed value or position)",
-  "evidenceToVerify": "string (the single best evidence item to verify next)",
-  "continueDiscussionPrompt": "string (one precise follow-up question if the disagreement is still unresolved)"
-}`;
-    const userPrompt = [
-      `Scenario: ${String(input?.narrative || '').slice(0, 700)}`,
-      `Scenario lens: ${String(input?.scenarioLens?.label || input?.scenarioLens?.key || 'general')}`,
-      `Disputed focus: ${String(input?.disputedFocus || 'Overall assessment').slice(0, 120)}`,
-      `Reviewer view: ${reviewerView}`,
-      `Analyst view: ${analystView}`,
-      `Current P90 event loss: ${Number(input?.results?.eventLoss?.p90 || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`,
-      `Current ALE mean: ${Number(input?.results?.ale?.mean || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`,
-      `Current control strength likely: ${fairParams?.controlStrLikely ?? 'not set'}`,
-      `Current TEF likely: ${fairParams?.tefLikely ?? 'not set'}`,
-      `Key assumptions: ${assumptions.slice(0, 3).map(item => item?.text || item).filter(Boolean).join('; ') || 'Not stated'}`,
-      `Top drivers: ${drivers.slice(0, 3).map(item => `${item?.label || 'Driver'} - ${item?.why || ''}`).filter(Boolean).join('; ') || 'Not stated'}`,
-      `Relevant evidence: ${citations.map(item => item?.title || item?.sourceTitle || '').filter(Boolean).join('; ') || 'No named evidence provided'}`
-    ].join('\n');
-    try {
-      const raw = await _callLLM(systemPrompt, userPrompt, {
-        maxCompletionTokens: 420,
-        timeoutMs: 20000
-      });
-      if (!raw) return null;
-      const parsed = JSON.parse(_extractJsonFromLlmResponse(raw) || 'null');
-      if (!parsed || typeof parsed !== 'object') return null;
-      const allowedFieldPattern = /^(tef|threatCap|controlStr|vuln|ir|bi|db|rl|tp|rc)(Min|Likely|Max)$/;
-      const recommendedField = allowedFieldPattern.test(String(parsed.recommendedField || '').trim())
-        ? String(parsed.recommendedField || '').trim()
-        : '';
-      const rawValue = parsed.recommendedValue;
-      const recommendedValue = rawValue == null || rawValue === ''
-        ? null
-        : Number(rawValue);
-      return {
-        reconciliationSummary: _cleanUserFacingText(parsed.reconciliationSummary || '', { maxSentences: 3 }),
-        proposedMiddleGround: _cleanUserFacingText(parsed.proposedMiddleGround || '', { maxSentences: 2 }),
-        whyReasonable: _cleanUserFacingText(parsed.whyReasonable || '', { maxSentences: 2 }),
-        recommendedField,
-        recommendedValue: Number.isFinite(recommendedValue) ? recommendedValue : null,
-        recommendedValueLabel: _cleanUserFacingText(parsed.recommendedValueLabel || '', { maxSentences: 1 }),
-        evidenceToVerify: _cleanUserFacingText(parsed.evidenceToVerify || '', { maxSentences: 1 }),
-        continueDiscussionPrompt: _cleanUserFacingText(parsed.continueDiscussionPrompt || '', { maxSentences: 1 })
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  function _buildParameterChallengeStub(input = {}) {
-    const parameterLabel = String(input?.parameterLabel || 'parameter').trim();
-    const currentValueLabel = String(input?.currentValueLabel || input?.currentValue || '').trim();
-    const concern = String(input?.reviewerConcern || '').trim();
-    const concernLower = concern.toLowerCase();
-    const parameterKey = String(input?.parameterKey || '').trim();
-    const numericValue = Number(input?.currentValue);
-    const adjustmentDirection = /too low|understat|optimistic|higher|increase|more severe|too weak|not enough/i.test(concernLower)
-      ? 'up'
-      : /too high|overstat|conservative|lower|decrease|too strong/i.test(concernLower)
-        ? 'down'
-        : (parameterKey === 'controlStrLikely' ? 'down' : 'up');
-    const questions = [
-      `What direct evidence supports keeping ${parameterLabel} at ${currentValueLabel || 'the current value'}?`,
-      `Which internal record, test result, or source would satisfy the reviewer if you defend this ${parameterLabel.toLowerCase()} estimate?`,
-      parameterKey === 'lmLow' || parameterKey === 'lmHigh'
-        ? 'Which loss component is doing most of the work in this range, and do you have finance or operations evidence for it?'
-        : parameterKey === 'controlStrLikely'
-          ? 'What control test, operating evidence, or recent incident data shows the current control strength is realistic?'
-          : 'What evidence would make you revise this estimate instead of defending it?'
-    ].filter(Boolean).slice(0, 3);
-    let suggestedValue = Number.isFinite(numericValue) ? numericValue : 0;
-    if (Number.isFinite(numericValue)) {
-      if (parameterKey === 'controlStrLikely') {
-        suggestedValue = adjustmentDirection === 'up'
-          ? Math.min(0.99, numericValue + 0.08)
-          : Math.max(0.01, numericValue - 0.08);
-      } else if (parameterKey === 'vulnerability') {
-        suggestedValue = adjustmentDirection === 'up'
-          ? Math.min(0.99, numericValue + 0.08)
-          : Math.max(0.01, numericValue - 0.08);
-      } else {
-        const factor = adjustmentDirection === 'up' ? 1.12 : 0.9;
-        suggestedValue = numericValue * factor;
-      }
-    }
-    return {
-      analystQuestions: questions,
-      reviewerAdjustment: {
-        param: parameterKey || parameterLabel,
-        suggestedValue: Number.isFinite(suggestedValue) ? Number(suggestedValue.toFixed(parameterKey === 'lmLow' || parameterKey === 'lmHigh' ? 0 : 2)) : numericValue,
-        aleImpact: adjustmentDirection === 'up'
-          ? 'ALE would likely move upward unless the analyst can narrow the evidence base and defend the current estimate.'
-          : 'ALE would likely move downward if the reviewer concern is accepted without new evidence.',
-        rationale: concern
-          ? `This is the smallest directional adjustment that reflects the reviewer concern: ${concern}`
-          : `This is the smallest directional adjustment that reflects a cautious reviewer challenge to ${parameterLabel.toLowerCase()}.`
-      }
-    };
+    return _postServerAiWorkflow(_getReviewMediationUrl(), {
+      narrative: typeof input?.narrative === 'string' ? input.narrative : '',
+      fairParams: input?.fairParams && typeof input.fairParams === 'object' ? input.fairParams : {},
+      results: input?.results && typeof input.results === 'object' ? input.results : {},
+      assessmentIntelligence: input?.assessmentIntelligence && typeof input.assessmentIntelligence === 'object' ? input.assessmentIntelligence : {},
+      reviewerView: typeof input?.reviewerView === 'string' ? input.reviewerView : '',
+      analystView: typeof input?.analystView === 'string' ? input.analystView : '',
+      disputedFocus: typeof input?.disputedFocus === 'string' ? input.disputedFocus : '',
+      scenarioLens: input?.scenarioLens && typeof input.scenarioLens === 'object' ? input.scenarioLens : {},
+      citations: Array.isArray(input?.citations) ? input.citations : [],
+      traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
+    }, { nullOnError: true });
   }
 
   async function generateParameterChallengeRecord(input = {}) {
-    const stub = _buildParameterChallengeStub(input);
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return stub;
-    const parameterLabel = String(input?.parameterLabel || 'Parameter').trim();
-    const currentValueLabel = String(input?.currentValueLabel || input?.currentValue || '').trim();
-    const scenarioSummary = String(input?.scenarioSummary || '').trim().slice(0, 900);
-    const reviewerConcern = String(input?.reviewerConcern || '').trim().slice(0, 1000);
-    const allowedParams = Array.isArray(input?.allowedParams)
-      ? input.allowedParams.map(item => String(item || '').trim()).filter(Boolean)
-      : ['tefLikely', 'vulnerability', 'lmLow', 'lmHigh', 'controlStrLikely'];
-    const currentAle = String(input?.currentAle || '').trim();
-    const schema = `{
-  "analystQuestions": ["string"],
-  "reviewerAdjustment": {
-    "param": "string",
-    "suggestedValue": "number",
-    "aleImpact": "string",
-    "rationale": "string"
-  }
-}`;
-    const systemPrompt = `A reviewer has challenged a key parameter in a quantified risk assessment.
-Generate two outputs:
-A) For the ANALYST: 1-3 specific questions they must answer to defend or revise the estimate. Be precise about what evidence would satisfy the reviewer.
-B) For the REVIEWER: the minimum parameter adjustment that would reflect the concern if the analyst cannot provide new evidence. Show the impact on ALE.
-
-Return JSON only with this schema:
-${schema}
-
-Allowed reviewerAdjustment.param values: ${allowedParams.join(', ')}`;
-    const userPrompt = [
-      `Parameter challenged: ${parameterLabel}`,
-      `Current value: ${currentValueLabel}`,
-      currentAle ? `Current ALE: ${currentAle}` : '',
-      `Scenario summary: ${scenarioSummary}`,
-      `Reviewer concern: ${reviewerConcern}`
-    ].filter(Boolean).join('\n');
-    try {
-      const raw = await _callLLM(systemPrompt, userPrompt, {
-        taskName: 'generateParameterChallengeRecord',
-        maxCompletionTokens: 500,
-        timeoutMs: 16000
-      });
-      if (!raw) return stub;
-      const parsed = await _parseOrRepairStructuredJson(raw, schema, {
-        taskName: 'repairParameterChallengeRecord'
-      });
-      const analystQuestions = (Array.isArray(parsed?.analystQuestions) ? parsed.analystQuestions : stub.analystQuestions)
-        .map(item => _cleanUserFacingText(item || '', { maxSentences: 1 }))
-        .filter(Boolean)
-        .slice(0, 3);
-      const adjustment = parsed?.reviewerAdjustment && typeof parsed.reviewerAdjustment === 'object'
-        ? parsed.reviewerAdjustment
-        : stub.reviewerAdjustment;
-      return {
-        analystQuestions: analystQuestions.length ? analystQuestions : stub.analystQuestions,
-        reviewerAdjustment: {
-          param: String(adjustment?.param || stub.reviewerAdjustment.param || '').trim() || stub.reviewerAdjustment.param,
-          suggestedValue: Number.isFinite(Number(adjustment?.suggestedValue))
-            ? Number(adjustment.suggestedValue)
-            : stub.reviewerAdjustment.suggestedValue,
-          aleImpact: _cleanUserFacingText(adjustment?.aleImpact || stub.reviewerAdjustment.aleImpact || '', { maxSentences: 1 }) || stub.reviewerAdjustment.aleImpact,
-          rationale: _cleanUserFacingText(adjustment?.rationale || stub.reviewerAdjustment.rationale || '', { maxSentences: 2 }) || stub.reviewerAdjustment.rationale
-        }
-      };
-    } catch {
-      return stub;
-    }
-  }
-
-  function _buildChallengeSynthesisStub(input = {}) {
-    const records = Array.isArray(input?.records) ? input.records : [];
-    const overallConcern = records.length
-      ? `Reviewers are consistently challenging ${String(records[0]?.parameter || 'the current assumptions').toLowerCase()} and the overall severity looks more exposed than the base case suggests.`
-      : 'Reviewers are questioning whether the current estimate is too optimistic overall.';
-    const revisedAleRange = String(input?.baseAleRange || '').trim()
-      ? `A prudent committee view would treat the outcome as materially higher than the current ${String(input.baseAleRange).trim()} planning range until the challenged assumptions are defended.`
-      : 'A prudent committee view would treat the annual loss range as materially higher until the challenged assumptions are defended.';
-    const keyEvidence = 'The single best way to resolve most of these challenges is to produce one current evidence pack that proves the disputed control performance and loss-range assumptions together.';
-    return {
-      overallConcern,
-      revisedAleRange,
-      keyEvidence
-    };
+    return _postServerAiWorkflow(_getParameterChallengeUrl(), {
+      parameterKey: typeof input?.parameterKey === 'string' ? input.parameterKey : '',
+      parameterLabel: typeof input?.parameterLabel === 'string' ? input.parameterLabel : '',
+      currentValue: input?.currentValue,
+      currentValueLabel: typeof input?.currentValueLabel === 'string' ? input.currentValueLabel : '',
+      scenarioSummary: typeof input?.scenarioSummary === 'string' ? input.scenarioSummary : '',
+      reviewerConcern: typeof input?.reviewerConcern === 'string' ? input.reviewerConcern : '',
+      currentAle: typeof input?.currentAle === 'string' ? input.currentAle : '',
+      allowedParams: Array.isArray(input?.allowedParams) ? input.allowedParams : [],
+      traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
+    });
   }
 
   async function generateChallengeSynthesis(input = {}) {
-    const stub = _buildChallengeSynthesisStub(input);
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return stub;
-    const records = Array.isArray(input?.records)
-      ? input.records.filter(item => item && typeof item === 'object').slice(0, 8)
-      : [];
-    if (records.length < 2) return null;
-    const schema = `{
-  "overallConcern": "string",
-  "revisedAleRange": "string",
-  "keyEvidence": "string"
-}`;
-    const systemPrompt = `A risk assessment has received separate parameter challenges from reviewers.
-Synthesise them into one coherent alternative view for a risk committee.
-
-Return JSON only with this schema:
-${schema}
-
-Requirements:
-- overallConcern: one sentence on the reviewer's combined concern
-- revisedAleRange: one sentence stating the revised ALE range or direction implied by the combined challenges
-- keyEvidence: one sentence naming the single most useful new evidence item to resolve most of the challenge
-
-Write as if advising a risk committee. Keep the total to 3 sentences.`;
-    const userPrompt = JSON.stringify({
-      scenarioTitle: String(input?.scenarioTitle || '').trim(),
-      scenarioSummary: String(input?.scenarioSummary || '').trim().slice(0, 1200),
-      currentAleRange: String(input?.baseAleRange || '').trim(),
-      challenges: records.map(item => ({
-        parameter: String(item?.parameter || '').trim(),
-        concern: String(item?.concern || '').trim(),
-        reviewerAdjustment: item?.reviewerAdjustment || {}
-      }))
-    }, null, 2);
-    try {
-      const raw = await _callLLM(systemPrompt, userPrompt, {
-        taskName: 'generateChallengeSynthesis',
-        maxCompletionTokens: 260,
-        timeoutMs: 14000
-      });
-      if (!raw) return stub;
-      const parsed = await _parseOrRepairStructuredJson(raw, schema, {
-        taskName: 'repairChallengeSynthesis'
-      });
-      return {
-        overallConcern: _cleanUserFacingText(parsed?.overallConcern || '', { maxSentences: 1 }) || stub.overallConcern,
-        revisedAleRange: _cleanUserFacingText(parsed?.revisedAleRange || '', { maxSentences: 1 }) || stub.revisedAleRange,
-        keyEvidence: _cleanUserFacingText(parsed?.keyEvidence || '', { maxSentences: 1 }) || stub.keyEvidence
-      };
-    } catch {
-      return stub;
-    }
-  }
-
-  function _buildConsensusRecommendationStub(input = {}) {
-    const challenges = Array.isArray(input?.challenges) ? input.challenges : [];
-    const acceptable = challenges
-      .filter(item => Math.abs(Number(item?.impactPct || 0)) <= 15)
-      .map(item => String(item?.ref || '').trim())
-      .filter(Boolean);
-    const defend = challenges
-      .filter(item => !acceptable.includes(String(item?.ref || '').trim()))
-      .map(item => String(item?.ref || '').trim())
-      .filter(Boolean);
-    const meetInMiddleAleRange = String(input?.projectedAleRange || input?.adjustedAleRange || input?.originalAleRange || '').trim()
-      || 'Use the projected consensus path as the working annual loss range until new evidence closes the challenge.';
-    const headline = challenges.length
-      ? `Accept the smaller committee adjustments first, then defend the changes that would materially reshape the current result without new evidence.`
-      : 'Accept the smallest defensible reviewer adjustments first, then defend the assumptions that would materially change the outcome.';
-    const defendLine = defend.length
-      ? `Defend ${defend.join(', ')} unless the reviewer can show stronger evidence, because those changes would move the outcome materially beyond the current management read.`
-      : 'Defend any remaining large-impact changes until stronger evidence shows the base case is too optimistic.';
-    const consensusLine = `A workable middle ground is ${meetInMiddleAleRange}.`;
-    return {
-      summaryBullets: [headline, defendLine, consensusLine],
-      acceptChallenges: acceptable,
-      defendChallenges: defend,
-      meetInTheMiddleAleRange: meetInMiddleAleRange
-    };
+    return _postServerAiWorkflow(_getChallengeSynthesisUrl(), {
+      scenarioTitle: typeof input?.scenarioTitle === 'string' ? input.scenarioTitle : '',
+      scenarioSummary: typeof input?.scenarioSummary === 'string' ? input.scenarioSummary : '',
+      baseAleRange: typeof input?.baseAleRange === 'string' ? input.baseAleRange : '',
+      records: Array.isArray(input?.records) ? input.records : [],
+      traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
+    }, { nullOnError: true });
   }
 
   async function generateConsensusRecommendation(input = {}) {
-    const stub = _buildConsensusRecommendationStub(input);
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return stub;
-    const challenges = Array.isArray(input?.challenges)
-      ? input.challenges.filter(item => item && typeof item === 'object').slice(0, 8)
-      : [];
-    if (!challenges.length) return stub;
-    const allowedRefs = challenges.map(item => String(item?.ref || '').trim()).filter(Boolean);
-    const schema = `{
-  "summaryBullets": ["string", "string", "string"],
-  "acceptChallenges": ["${allowedRefs[0] || 'C1'}"],
-  "defendChallenges": ["${allowedRefs[1] || 'C2'}"],
-  "meetInTheMiddleAleRange": "string"
-}`;
-    const systemPrompt = `An analyst's assessment has reviewer challenges.
-Original parameters: current estimate.
-Original ALE: current estimate.
-If all reviewer adjustments applied: adjusted estimate.
-Adjusted ALE: adjusted estimate.
-
-Generate a consensus recommendation:
-- Which adjustments should the analyst accept? (small ALE impact)
-- Which should they defend? (large ALE impact, needs evidence)
-- What is the "meet in the middle" ALE range both sides could accept?
-
-Return JSON only with this schema:
-${schema}
-
-Rules:
-- Use only the supplied challenge refs in acceptChallenges and defendChallenges.
-- Write exactly 3 direct bullets for a risk committee.
-- Put the committee-friendly projected range in meetInTheMiddleAleRange.`;
-    const userPrompt = JSON.stringify({
-      scenarioTitle: String(input?.scenarioTitle || '').trim(),
-      scenarioSummary: String(input?.scenarioSummary || '').trim().slice(0, 1000),
-      originalAleRange: String(input?.originalAleRange || '').trim(),
-      adjustedAleRange: String(input?.adjustedAleRange || '').trim(),
-      projectedAleRange: String(input?.projectedAleRange || '').trim(),
+    return _postServerAiWorkflow(_getConsensusRecommendationUrl(), {
+      scenarioTitle: typeof input?.scenarioTitle === 'string' ? input.scenarioTitle : '',
+      scenarioSummary: typeof input?.scenarioSummary === 'string' ? input.scenarioSummary : '',
+      originalAleRange: typeof input?.originalAleRange === 'string' ? input.originalAleRange : '',
+      adjustedAleRange: typeof input?.adjustedAleRange === 'string' ? input.adjustedAleRange : '',
+      projectedAleRange: typeof input?.projectedAleRange === 'string' ? input.projectedAleRange : '',
       aleChangePct: Number(input?.aleChangePct || 0),
-      originalParameters: input?.originalParameters || {},
-      adjustedParameters: input?.adjustedParameters || {},
-      challenges: challenges.map(item => ({
-        ref: String(item?.ref || '').trim(),
-        parameter: String(item?.parameter || '').trim(),
-        concern: String(item?.concern || '').trim(),
-        proposedValue: String(item?.proposedValue || '').trim(),
-        impactPct: Number(item?.impactPct || 0),
-        aleImpact: String(item?.aleImpact || '').trim()
-      }))
-    }, null, 2);
-    try {
-      const raw = await _callLLM(systemPrompt, userPrompt, {
-        taskName: 'generateConsensusRecommendation',
-        maxCompletionTokens: 320,
-        timeoutMs: 14000
-      });
-      if (!raw) return stub;
-      const parsed = await _parseOrRepairStructuredJson(raw, schema, {
-        taskName: 'repairConsensusRecommendation'
-      });
-      const cleanRefs = values => (Array.isArray(values) ? values : [])
-        .map(item => String(item || '').trim())
-        .filter(item => allowedRefs.includes(item));
-      const summaryBullets = (Array.isArray(parsed?.summaryBullets) ? parsed.summaryBullets : stub.summaryBullets)
-        .map(item => _cleanUserFacingText(item || '', { maxSentences: 1 }))
-        .filter(Boolean)
-        .slice(0, 3);
-      const acceptChallenges = cleanRefs(parsed?.acceptChallenges);
-      const defendChallenges = cleanRefs(parsed?.defendChallenges).filter(item => !acceptChallenges.includes(item));
-      return {
-        summaryBullets: summaryBullets.length ? summaryBullets : stub.summaryBullets,
-        acceptChallenges: acceptChallenges.length ? acceptChallenges : stub.acceptChallenges,
-        defendChallenges: defendChallenges.length ? defendChallenges : stub.defendChallenges,
-        meetInTheMiddleAleRange: _cleanUserFacingText(parsed?.meetInTheMiddleAleRange || '', { maxSentences: 1 }) || stub.meetInTheMiddleAleRange
-      };
-    } catch {
-      return stub;
-    }
+      originalParameters: input?.originalParameters && typeof input.originalParameters === 'object' ? input.originalParameters : {},
+      adjustedParameters: input?.adjustedParameters && typeof input.adjustedParameters === 'object' ? input.adjustedParameters : {},
+      challenges: Array.isArray(input?.challenges) ? input.challenges : [],
+      traceLabel: typeof input?.traceLabel === 'string' ? input.traceLabel : ''
+    });
   }
 
   function _buildAssessmentVersionNarrativeStub(input = {}) {
@@ -6345,6 +5749,13 @@ Keep the numbers realistic, internally ordered, and anchored to the user's own h
   }
 
   async function testCompassConnection() {
+    if (!_isLocalDevRuntimeConfigAllowed()) {
+      const status = await fetchServerAiStatus({ force: true, probe: true });
+      if (status.mode === 'live') {
+        return { status: 'ok', provider: 'server_proxy', message: status.message || 'Hosted AI proxy is live.' };
+      }
+      throw new Error(status.message || 'Hosted AI is not currently in live mode.');
+    }
     if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
       throw new Error('No Compass API key configured for this session.');
     }
@@ -6395,7 +5806,10 @@ Keep the numbers realistic, internally ordered, and anchored to the user's own h
     suggestSmartParamPrefill,
     getLatestTrace,
     getRuntimeStatus,
+    getCachedServerAiStatus,
+    fetchServerAiStatus,
     isUsingStub,
+    isLocalDevRuntimeConfigAllowed: _isLocalDevRuntimeConfigAllowed,
     testCompassConnection,
     setCompassAPIKey,
     setCompassConfig,

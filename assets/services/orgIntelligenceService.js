@@ -2,6 +2,7 @@
 
 const OrgIntelligenceService = (() => {
   const CACHE_KEY = 'rq_org_intelligence_cache';
+  const DEFAULT_ORG_INTELLIGENCE_API_URL = resolveOrgIntelligenceApiUrl('/api/org-intelligence');
   const DEFAULT_AI_FEEDBACK_TUNING = Object.freeze({
     alignmentPriority: 'strict',
     draftStyle: 'executive-brief',
@@ -25,6 +26,12 @@ const OrgIntelligenceService = (() => {
   ]);
   let _memoryState = _clone(DEFAULT_STATE);
   let _refreshPromise = null;
+
+  function resolveOrgIntelligenceApiUrl(path) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    if (origin && origin.includes('vercel.app')) return `${origin}${path}`;
+    return `https://risk-calculator-eight.vercel.app${path}`;
+  }
 
   function _clone(value, fallback = null) {
     try {
@@ -279,12 +286,16 @@ const OrgIntelligenceService = (() => {
     return token ? { 'x-session-token': token } : {};
   }
 
+  function _getApiUrl() {
+    return DEFAULT_ORG_INTELLIGENCE_API_URL;
+  }
+
   async function refresh(force = false) {
     const cached = getCachedState();
     const freshEnough = !force && cached.updatedAt && (Date.now() - cached.updatedAt) < 60_000;
     if (freshEnough) return cached;
     if (_refreshPromise) return _refreshPromise;
-    _refreshPromise = fetch('/api/org-intelligence', {
+    _refreshPromise = fetch(_getApiUrl(), {
       headers: _buildHeaders()
     }).then(async response => {
       if (!response.ok) throw new Error('Org intelligence unavailable');
@@ -305,7 +316,7 @@ const OrgIntelligenceService = (() => {
 
   async function _post(type, payload = {}) {
     try {
-      const response = await fetch('/api/org-intelligence', {
+      const response = await fetch(_getApiUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

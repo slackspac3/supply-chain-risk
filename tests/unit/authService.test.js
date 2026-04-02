@@ -30,7 +30,7 @@ function createMemoryStorage(seed = {}) {
   };
 }
 
-function loadAuthService({ sessionSeed = {}, localSeed = {} } = {}) {
+function loadAuthService({ sessionSeed = {}, localSeed = {}, fetchImpl = null } = {}) {
   const filePath = path.resolve(__dirname, '../../assets/services/authService.js');
   const source = `${fs.readFileSync(filePath, 'utf8')}\nmodule.exports = AuthService;\n`;
   const sessionStorage = createMemoryStorage(sessionSeed);
@@ -40,10 +40,10 @@ function loadAuthService({ sessionSeed = {}, localSeed = {} } = {}) {
     exports: {},
     console,
     URL,
-    fetch: async () => ({
+    fetch: fetchImpl || (async () => ({
       ok: true,
-      json: async () => ({ users: [] })
-    }),
+      text: async () => JSON.stringify({ accounts: [] })
+    })),
     window: {
       location: {
         origin: 'http://127.0.0.1:8080'
@@ -103,4 +103,47 @@ test('logout clears session-scoped trust and preview state without removing unre
   assert.equal(localStorage.getItem('rq_auth_accounts_cache'), null);
   assert.equal(localStorage.getItem('rq_admin_api_secret'), null);
   assert.equal(localStorage.getItem('persistent_user_data'), 'keep-me');
+});
+
+test('init refreshes the current user scope from the server session view', async () => {
+  const sessionUser = {
+    username: 'tarun.gupta',
+    displayName: 'Tarun Gupta',
+    role: 'user',
+    businessUnitEntityId: 'g42',
+    departmentEntityId: 'procurement'
+  };
+  const { AuthService, localStorage } = loadAuthService({
+    sessionSeed: {
+      rq_auth_session: JSON.stringify({
+        authenticated: true,
+        ts: Date.now(),
+        user: sessionUser,
+        apiSessionToken: 'session-token',
+        context: {}
+      })
+    },
+    fetchImpl: async (url) => ({
+      ok: true,
+      text: async () => JSON.stringify(
+        String(url).includes('?view=self')
+          ? {
+              user: {
+                username: 'tarun.gupta',
+                displayName: 'Tarun Gupta',
+                role: 'user',
+                businessUnitEntityId: 'g42',
+                departmentEntityId: 'group-technology-risk'
+              }
+            }
+          : { accounts: [] }
+      )
+    })
+  });
+
+  await AuthService.init();
+
+  assert.equal(AuthService.getCurrentUser()?.departmentEntityId, 'group-technology-risk');
+  const cachedAccounts = JSON.parse(localStorage.getItem('rq_auth_accounts_cache') || '[]');
+  assert.equal(cachedAccounts[0]?.departmentEntityId, 'group-technology-risk');
 });

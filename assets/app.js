@@ -172,6 +172,17 @@ function isPilotOrStagingRelease() {
   return channel === 'pilot' || channel === 'staging';
 }
 
+function isLocalDevAiRuntimeConfigAllowed() {
+  try {
+    return typeof LLMService !== 'undefined'
+      && LLMService
+      && typeof LLMService.isLocalDevRuntimeConfigAllowed === 'function'
+      && LLMService.isLocalDevRuntimeConfigAllowed();
+  } catch {
+    return false;
+  }
+}
+
 function formatRelativePilotTime(timestamp, fallback = 'just now') {
   const safeTimestamp = Number(timestamp || 0);
   if (!safeTimestamp) return fallback;
@@ -2539,6 +2550,97 @@ async function loadSharedUserState(username = AuthService.getCurrentUser()?.user
   return window.AppSharedStateClient.loadSharedUserState(username);
 }
 
+const SERVER_CONTEXT_REFRESH_THROTTLE_MS = 15 * 1000;
+let _serverContextRefreshInFlight = null;
+let _lastServerContextRefreshAt = 0;
+let _serverContextRefreshBound = false;
+
+function buildManagedAccessSignature(user = AuthService.getCurrentUser()) {
+  return [
+    String(user?.username || '').trim().toLowerCase(),
+    String(user?.role || '').trim().toLowerCase(),
+    String(user?.businessUnitEntityId || '').trim(),
+    String(user?.departmentEntityId || '').trim()
+  ].join('|');
+}
+
+async function refreshAuthenticatedContextFromServer(options = {}) {
+  const currentUser = AuthService.getCurrentUser();
+  if (!currentUser?.username) return false;
+
+  const force = options.force === true;
+  const allowWorkspaceReload = options.allowWorkspaceReload !== false && !AppState.draftDirty && !AppState.userStateSyncInFlight;
+  const shouldRerender = options.rerender !== false && allowWorkspaceReload;
+  const now = Date.now();
+
+  if (!force && _serverContextRefreshInFlight) return _serverContextRefreshInFlight;
+  if (!force && now - _lastServerContextRefreshAt < SERVER_CONTEXT_REFRESH_THROTTLE_MS) return false;
+
+  const beforeSignature = buildManagedAccessSignature(currentUser);
+  const beforeSettingsRevision = Number(AppState.adminSettingsCache?._meta?.revision || 0);
+  const beforeStateRevision = Number(AppState.userStateCache?._meta?.revision || 0);
+
+  _serverContextRefreshInFlight = (async () => {
+    let scopeChanged = false;
+    let settingsChanged = false;
+    let stateChanged = false;
+    try {
+      try {
+        if (typeof AuthService.refreshCurrentSessionUser === 'function') {
+          await AuthService.refreshCurrentSessionUser();
+        } else {
+          await AuthService.init();
+        }
+      } catch (error) {
+        console.warn('refreshAuthenticatedContextFromServer user refresh fallback:', error?.message || error);
+      }
+
+      try {
+        await loadSharedAdminSettings();
+      } catch (error) {
+        console.warn('refreshAuthenticatedContextFromServer admin settings fallback:', error?.message || error);
+      }
+
+      const safeUsername = String(AuthService.getCurrentUser()?.username || currentUser.username || '').trim().toLowerCase();
+      if (safeUsername && allowWorkspaceReload) {
+        try {
+          await loadSharedUserState(safeUsername);
+        } catch (error) {
+          console.warn('refreshAuthenticatedContextFromServer user state fallback:', error?.message || error);
+        }
+      }
+
+      scopeChanged = buildManagedAccessSignature(AuthService.getCurrentUser()) !== beforeSignature;
+      settingsChanged = beforeSettingsRevision !== Number(AppState.adminSettingsCache?._meta?.revision || 0);
+      stateChanged = beforeStateRevision !== Number(AppState.userStateCache?._meta?.revision || 0);
+
+      if (allowWorkspaceReload) {
+        activateAuthenticatedState();
+      } else {
+        updateAuthSessionState({ currentUser: AuthService.getCurrentUser() });
+        renderAppBar();
+      }
+
+      if (scopeChanged && !allowWorkspaceReload) {
+        UI.toast('Your admin-managed access changed on the server. Save your current work and refresh the page to apply the new scope.', 'warning', 6000);
+      } else if (scopeChanged) {
+        UI.toast('Your admin-managed access changed. The workspace has been refreshed from the server.', 'info', 5000);
+      }
+
+      if (shouldRerender && (scopeChanged || settingsChanged || stateChanged)) {
+        Router.render?.();
+      }
+
+      return scopeChanged || settingsChanged || stateChanged;
+    } finally {
+      _lastServerContextRefreshAt = Date.now();
+      _serverContextRefreshInFlight = null;
+    }
+  })();
+
+  return _serverContextRefreshInFlight;
+}
+
 async function handleUserStateConflict(error, retry) {
   const safeUsername = String(AuthService.getCurrentUser()?.username || AppState.userStateCache.username || '').trim().toLowerCase();
   AppState.userStateLastConflict = error;
@@ -2684,6 +2786,18 @@ function bindWorkspaceStorageSync() {
     if (!/^#\/wizard\//.test(String(window.location.hash || ''))) {
       Router.render?.();
     }
+  });
+}
+
+function bindServerContextRefresh() {
+  if (_serverContextRefreshBound || typeof window === 'undefined') return;
+  _serverContextRefreshBound = true;
+  window.addEventListener('focus', () => {
+    refreshAuthenticatedContextFromServer({ rerender: true }).catch(error => console.warn('server context refresh on focus failed:', error?.message || error));
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    refreshAuthenticatedContextFromServer({ rerender: true }).catch(error => console.warn('server context refresh on visibility failed:', error?.message || error));
   });
 }
 
@@ -3058,10 +3172,15 @@ function activateAuthenticatedState() {
   }
 
   const sessionLLM = getSessionLLMConfig();
-  if (sessionLLM.apiUrl || sessionLLM.apiKey || sessionLLM.model) {
+  if (isLocalDevAiRuntimeConfigAllowed() && (sessionLLM.apiUrl || sessionLLM.apiKey || sessionLLM.model)) {
     LLMService.setCompassConfig(sessionLLM);
   } else {
     LLMService.clearCompassConfig();
+  }
+
+  if (String(AppState.currentUser.role || '').trim().toLowerCase() === 'admin'
+    && typeof LLMService.fetchServerAiStatus === 'function') {
+    LLMService.fetchServerAiStatus({ force: false, probe: true }).catch(() => null);
   }
 
   renderAppBar();
@@ -3339,12 +3458,15 @@ function getInheritedSettingsForUserSelection(user = AuthService.getCurrentUser(
 }
 
 function buildResolvedUserSettings(saved = {}, defaults = getUserSettingsDefaults(), globalSettings = getAdminSettings()) {
+  const reconciledProfile = typeof reconcileUserProfileToManagedScope === 'function'
+    ? reconcileUserProfileToManagedScope(saved.userProfile || defaults.userProfile, AuthService.getCurrentUser(), globalSettings)
+    : normaliseUserProfile(saved.userProfile || defaults.userProfile);
   const resolved = {
     ...defaults,
     ...saved,
     ...normaliseUserGeographies(saved, globalSettings),
     applicableRegulations: Array.isArray(saved.applicableRegulations) ? saved.applicableRegulations : [...defaults.applicableRegulations],
-    userProfile: normaliseUserProfile(saved.userProfile || defaults.userProfile),
+    userProfile: reconciledProfile,
     companyContextSections: saved.companyContextSections && typeof saved.companyContextSections === 'object'
       ? saved.companyContextSections
       : defaults.companyContextSections
@@ -3362,12 +3484,15 @@ function buildResolvedUserSettings(saved = {}, defaults = getUserSettingsDefault
 }
 
 function buildStoredUserSettings(settings = {}, defaults = getUserSettingsDefaults(), globalSettings = getAdminSettings()) {
+  const reconciledProfile = typeof reconcileUserProfileToManagedScope === 'function'
+    ? reconcileUserProfileToManagedScope(settings.userProfile || defaults.userProfile, AuthService.getCurrentUser(), globalSettings)
+    : normaliseUserProfile(settings.userProfile || defaults.userProfile);
   const merged = {
     ...defaults,
     ...settings,
     ...normaliseUserGeographies(settings, globalSettings),
     applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [...defaults.applicableRegulations],
-    userProfile: normaliseUserProfile(settings.userProfile || defaults.userProfile),
+    userProfile: reconciledProfile,
     companyContextSections: settings.companyContextSections && typeof settings.companyContextSections === 'object'
       ? settings.companyContextSections
       : defaults.companyContextSections
@@ -3732,7 +3857,9 @@ function buildCurrentAIAssistContext(options = {}) {
     scenarioLens: options.scenarioLens || AppState.draft?.scenarioLens || ''
   });
   const inherited = applyResolvedObligationContextToSettings(inheritedBase, obligationContext);
-  const userProfile = normaliseUserProfile(userSettings.userProfile, user);
+  const userProfile = typeof reconcileUserProfileToManagedScope === 'function'
+    ? reconcileUserProfileToManagedScope(userSettings.userProfile, user, globalSettings)
+    : normaliseUserProfile(userSettings.userProfile, user);
   const userProfileSummary = buildUserProfileSummary(userProfile);
   const businessUnitContext = String(businessLayer?.contextSummary || buOverride?.contextSummary || businessNode?.profile || '').trim();
   const departmentContext = String(departmentLayer?.contextSummary || departmentNode?.profile || '').trim();
@@ -5596,6 +5723,13 @@ function buildLocalCompanyContextFallback(refineInput = {}) {
 
 function getAdminLLMConfig() {
   const saved = getSessionLLMConfig();
+  if (!isLocalDevAiRuntimeConfigAllowed()) {
+    return {
+      apiUrl: DEFAULT_COMPASS_PROXY_URL,
+      model: 'gpt-5.1',
+      apiKey: ''
+    };
+  }
   const apiUrlEl = document.getElementById('admin-compass-url');
   const modelEl = document.getElementById('admin-compass-model');
   const apiKeyEl = document.getElementById('admin-compass-key');
@@ -5607,6 +5741,14 @@ function getAdminLLMConfig() {
 }
 
 function getSessionLLMConfig() {
+  const defaultConfig = {
+    apiUrl: DEFAULT_COMPASS_PROXY_URL,
+    model: 'gpt-5.1',
+    apiKey: ''
+  };
+  if (!isLocalDevAiRuntimeConfigAllowed()) {
+    return defaultConfig;
+  }
   try {
     const storageKey = buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX);
     const localConfig = JSON.parse(localStorage.getItem(storageKey) || 'null') || null;
@@ -5624,14 +5766,25 @@ function getSessionLLMConfig() {
         sessionStorage.setItem(storageKey, JSON.stringify(config));
       } catch {}
     }
-    return config;
+    return {
+      apiUrl: config.apiUrl || defaultConfig.apiUrl,
+      model: config.model || defaultConfig.model,
+      apiKey: config.apiKey || ''
+    };
   } catch {
-    return {};
+    return defaultConfig;
   }
 }
 
 function saveSessionLLMConfig(config) {
   const storageKey = buildUserStorageKey(SESSION_LLM_STORAGE_PREFIX);
+  if (!isLocalDevAiRuntimeConfigAllowed()) {
+    try {
+      localStorage.removeItem(storageKey);
+      sessionStorage.removeItem(storageKey);
+    } catch {}
+    return;
+  }
   try {
     localStorage.setItem(storageKey, JSON.stringify(config));
     sessionStorage.setItem(storageKey, JSON.stringify(config));
@@ -5673,6 +5826,17 @@ function clearPilotAiExpectationWarning(username = getCurrentUserOrThrow().usern
 }
 
 function getAiUnavailableMessage() {
+  const cachedStatus = typeof LLMService !== 'undefined'
+    && LLMService
+    && typeof LLMService.getCachedServerAiStatus === 'function'
+    ? LLMService.getCachedServerAiStatus()
+    : null;
+  if (cachedStatus?.mode === 'deterministic_fallback') {
+    return 'Hosted AI is not configured right now. Continuity fallback may still support some workflows.';
+  }
+  if (cachedStatus?.mode === 'blocked' || cachedStatus?.mode === 'degraded') {
+    return 'Hosted AI is temporarily unavailable right now.';
+  }
   const runtimeStatus = typeof LLMService !== 'undefined' && LLMService && typeof LLMService.getRuntimeStatus === 'function'
     ? LLMService.getRuntimeStatus()
     : {
@@ -5687,20 +5851,22 @@ function getAiUnavailableMessage() {
   return 'AI assistance is temporarily unavailable.';
 }
 
-function maybeWarnPilotAiExpectation() {
+async function maybeWarnPilotAiExpectation() {
   try {
     const user = AppState.currentUser || AuthService.getCurrentUser();
     if (!user?.username || String(user.role || '').trim().toLowerCase() !== 'admin') return;
     if (!isPilotOrStagingRelease()) return;
-    const runtimeStatus = typeof LLMService !== 'undefined' && LLMService && typeof LLMService.getRuntimeStatus === 'function'
-      ? LLMService.getRuntimeStatus()
+    const status = typeof LLMService !== 'undefined'
+      && LLMService
+      && typeof LLMService.fetchServerAiStatus === 'function'
+      ? await LLMService.fetchServerAiStatus({ force: false, probe: true })
       : null;
-    if (!runtimeStatus?.usingStub) return;
+    if (!status || status.mode === 'live') return;
     const warningKey = buildUserStorageKey(SESSION_PILOT_AI_WARNING_STORAGE_PREFIX, user.username);
     if (sessionStorage.getItem(warningKey) === '1') return;
     sessionStorage.setItem(warningKey, '1');
     UI.toast(
-      'Pilot channel is running without live AI. Local fallback guidance is active. Check System Access before AI sign-off.',
+      String(status.message || 'Pilot channel is not currently in live AI mode. Check System Access before AI sign-off.'),
       'warning',
       7000
     );
@@ -6488,6 +6654,17 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         driver: 'client insolvency, delayed collections, or weak visibility over concentration and recovery risk',
         impact: 'bad debt write-off, cashflow strain, and pressure on provisioning and reporting judgement',
         followOn: 'Once a major client fails, management usually has to move quickly on collections strategy, provisioning, legal recovery options, and wider concentration exposure.'
+      };
+    }
+    if (/(supplier|vendor|third[- ]party|third party)/.test(text)
+      && /(delivery date|delivery commitment|delay|delayed|deployment|go-live|rollout|milestone|dependent business project|dependent project|programme|program|project)/.test(text)
+      && !/(procurement|sourcing|tender|bid|contract award|vendor selection|critical spend|award decision|single[- ]source|sole source|supplier concentration)/.test(text)) {
+      return {
+        positioning: 'This points to a supplier-dependency and delivery issue rather than a weak sourcing-governance or contract-award decision.',
+        affected: 'the infrastructure deployment, milestone plan, and dependent business projects waiting on the supplier delivery path',
+        driver: 'supplier delivery slippage, weak contingency planning, or late visibility over a dependency that matters to the programme',
+        impact: 'deployment delay, project slippage, workaround cost, and pressure on downstream business commitments',
+        followOn: 'Once a delivery-critical supplier slips, management usually has to decide whether to re-sequence the deployment, accelerate fallback options, or accept wider delay across dependent projects.'
       };
     }
     if (/single[- ]source|sole source|supplier shortfall|supplier concentration|critical supplier/.test(text)) {
@@ -8888,7 +9065,7 @@ function getHelpAudienceModel({
       overviewAudienceCopy: 'This workspace is for the people shaping how the platform behaves for everyone else, not just for drafting one assessment at a time.',
       overviewUseCase: 'A global admin needs to verify pilot AI readiness, update the document library, and adjust shared context before BU teams start a new round of assessments.',
       contextExample: 'If the global baseline says the organisation runs regulated digital services in the UAE, that governed context can shape downstream drafting and evidence priorities before a BU adds its own overlay.',
-      pilotReadinessBody: 'Use Admin > System Access to verify the live path before demos, pilot reviews, or sign-off sessions where AI quality matters. If the current session is in local fallback, treat it as continuity support and not as pilot-quality AI.',
+      pilotReadinessBody: 'Use Admin > System Access to check the server-reported AI mode before demos, pilot reviews, or sign-off sessions where AI quality matters. If the platform reports fallback or degraded mode, treat it as continuity support and not as pilot-quality AI.',
       feedbackChangeBody: 'Repeated live-AI feedback can eventually influence the global baseline, but only after enough corroborating signals and review. Use AI Feedback & Tuning to watch the signal quality before you let it affect everyone else.',
       dashboardPurpose: 'Use Platform Home as the admin front door, then move into the admin console only when you need to change structure, defaults, access, or AI readiness.',
       dashboardBestUse: 'Open the next admin workbench that needs attention, or preview the user workspace only when you need to understand the downstream impact of an admin change.',
@@ -8919,7 +9096,7 @@ function getHelpAudienceModel({
           title: 'A good operating rhythm for this role',
           summary: 'Verify the live path, review shared signal quality, then tune carefully.',
           body: `<div class="help-mini-grid">
-            <div class="help-mini-card"><strong>Before demos or sign-off</strong><p>Open System Access first and confirm the live AI path in the current browser session. If the platform says local fallback is active, treat the output as continuity support rather than pilot-quality AI.</p></div>
+            <div class="help-mini-card"><strong>Before demos or sign-off</strong><p>Open System Access first and confirm the server-reported AI mode. If the platform says fallback or degraded mode is active, treat the output as continuity support rather than pilot-quality AI.</p></div>
             <div class="help-mini-card"><strong>Before changing shared tuning</strong><p>Open AI Feedback &amp; Tuning and check whether the weak pattern is repeated, live-AI based, and broad enough to justify a shared change. Tune one parameter at a time.</p></div>
             <div class="help-mini-card"><strong>Before blaming the model</strong><p>Check document coverage, company context, platform defaults, and user access. Weak outputs can come from thin grounding or stale shared context as much as from prompt quality.</p></div>
           </div>`
@@ -8942,7 +9119,7 @@ function getHelpAudienceModel({
       overviewAudienceCopy: `This workspace is for people who need both a business-unit view and a function-level view, so the guidance should help you move between oversight and owned execution without losing focus.`,
       overviewUseCase: `A leader needs to understand whether a service disruption affects ${businessUnitName} broadly, what it means for ${functionName} directly, and whether the current controls or response need escalation now.`,
       contextExample: `Because both ${businessUnitName} and ${functionName} context are retained, the app can surface the operating assumptions, regulations, and control patterns that matter across both layers earlier in the draft.`,
-      pilotReadinessBody: 'Global admins verify the live path in Admin > System Access. If a step says local fallback guidance is active, treat it as continuity support and not as sign-off-quality AI for your oversight decisions.',
+      pilotReadinessBody: 'Global admins check the server-reported AI mode in Admin > System Access. If a step says fallback guidance is active, treat it as continuity support and not as sign-off-quality AI for your oversight decisions.',
       feedbackChangeBody: 'Your repeated feedback improves your own workflow first. When similar live-AI patterns repeat across other users, the same signal can later influence your function, your business unit, and the wider platform.',
       dashboardPurpose: `Use the active queue as an oversight lane for ${businessUnitName} first, then keep the owned function context for ${functionName} current before new work starts.`,
       dashboardBestUse: `Open the next item that needs review, revisit the reassessment lane when assumptions drift, and start new work only when a fresh issue clearly belongs in your owned scope.`,
@@ -8985,7 +9162,7 @@ function getHelpAudienceModel({
       overviewAudienceCopy: `This workspace is for people responsible for the quality of context and decision support across ${businessUnitName}, not just for drafting one scenario at a time.`,
       overviewUseCase: `A BU owner wants to understand whether a supplier or resilience issue is becoming material for ${businessUnitName}, which assumptions matter most, and whether the next step is treatment, escalation, or a scheduled reassessment.`,
       contextExample: `Because ${businessUnitName} context is retained, the app can surface the operating assumptions, geography, regulations, and control themes that matter to that business unit earlier in the draft and results.`,
-      pilotReadinessBody: 'Global admins verify the live path in Admin > System Access. If your current step says local fallback guidance is active, treat it as continuity support and not as pilot-quality AI for BU sign-off.',
+      pilotReadinessBody: 'Global admins check the server-reported AI mode in Admin > System Access. If your current step says fallback guidance is active, treat it as continuity support and not as pilot-quality AI for BU sign-off.',
       feedbackChangeBody: 'Your repeated feedback improves your own workflow first. When similar live-AI patterns repeat across other users, the same signal can later influence your business unit and the wider platform.',
       dashboardPurpose: `Use the active queue as the primary review lane for ${businessUnitName}, then keep the business-unit and function context aligned before new work starts.`,
       dashboardBestUse: 'Open the next item that needs review, use the watchlist and reassessment lane to keep important scenarios current, and start a new assessment only when a new issue clearly needs its own decision path.',
@@ -9028,7 +9205,7 @@ function getHelpAudienceModel({
       overviewAudienceCopy: `This workspace is for people who own a function or department context and need to keep assessments credible for ${functionName}.`,
       overviewUseCase: `A function owner wants to understand whether a control or resilience issue could push ${functionName} outside tolerance, what assumptions are carrying the result, and what the function should do next.`,
       contextExample: `Because ${functionName} context is retained, the app can surface the controls, operating assumptions, and regulations most relevant to that function earlier in the draft and results.`,
-      pilotReadinessBody: 'Global admins verify the live path in Admin > System Access. If your current step says local fallback guidance is active, treat it as continuity support and not as sign-off-quality AI for function-level review.',
+      pilotReadinessBody: 'Global admins check the server-reported AI mode in Admin > System Access. If your current step says fallback guidance is active, treat it as continuity support and not as sign-off-quality AI for function-level review.',
       feedbackChangeBody: 'Your repeated feedback improves your own workflow first. When similar live-AI patterns repeat across other users, the same signal can later influence your function, your business unit, and the wider platform.',
       dashboardPurpose: `Use the active queue as the primary review lane for ${functionName}, then keep the owned function context current before new work starts.`,
       dashboardBestUse: 'Open the next function-level item that needs review, revisit the reassessment lane when assumptions drift, and start a new assessment only when a fresh issue clearly belongs to the function you own.',
@@ -9070,7 +9247,7 @@ function getHelpAudienceModel({
     overviewAudienceCopy: 'This workspace is for people drafting, refining, and explaining a scenario they directly support.',
     overviewUseCase: 'A risk analyst wants to understand whether a supplier insolvency could create a material exposure, what assumptions are carrying the estimate, and whether the escalation case is strong enough to share.',
     contextExample: 'If your saved context says you support regulated digital services in the UAE, the app will surface geography, regulatory, resilience, and customer-impact considerations earlier than it would for a non-regulated internal-only service.',
-    pilotReadinessBody: 'Admins verify the live path in Admin > System Access. If your current step says local fallback guidance is active, treat it as continuity support and ask for a verified live session when AI quality matters.',
+    pilotReadinessBody: 'Admins check the server-reported AI mode in Admin > System Access. If your current step says fallback guidance is active, treat it as continuity support and ask for a live server mode when AI quality matters.',
     feedbackChangeBody: 'Your repeated feedback shapes your own guidance first. When similar live-AI patterns repeat across other users, the same signal can later influence function, BU, and wider platform behaviour.',
     dashboardPurpose: 'Know what to do next. Resume your draft or open the latest result that needs your attention before starting something new.',
     dashboardBestUse: 'Resume your current draft, reopen a result that needs explanation, or start a new assessment when you have one real scenario to work through.',
@@ -9287,14 +9464,14 @@ function renderHelpPage() {
           summary: 'Pilot-quality AI requires a verified live path; fallback keeps the workflow moving but should be treated differently.',
           body: `
             ${renderHelpMiniCards([
-              { title: 'Live AI verified', body: 'Use this state when the active runtime has been checked successfully in Admin > System Access. This is the right state for pilot-quality AI review, provided the evidence and assumptions still hold up.' },
-              { title: 'Local fallback active', body: 'The workflow still continues, but the draft or guidance was assembled locally rather than from the live model. Treat this as continuity support, not as pilot-quality AI sign-off.' },
+              { title: 'Live server mode', body: 'Use this state when Admin > System Access reports live mode from a server-side health check. This is the right state for pilot-quality AI review, provided the evidence and assumptions still hold up.' },
+              { title: 'Fallback or degraded mode', body: 'The workflow may still continue, but the platform is no longer reporting a live server path. Treat this as continuity support, not as pilot-quality AI sign-off.' },
               { title: 'Who checks it', body: helpAudience.pilotReadinessBody }
             ])}
             ${renderHelpCallout({
               tone: 'trust',
               title: 'Practical rule for pilot and staging',
-              body: 'If AI quality matters for the current session, confirm the live path first. If the platform says local fallback guidance is active, do not treat the AI output as equivalent to a verified live run.'
+              body: 'If AI quality matters for the current session, confirm the server-reported mode first. If the platform says fallback or degraded mode is active, do not treat the AI output as equivalent to a live server run.'
             })}
           `
         }),
@@ -9710,11 +9887,15 @@ function renderAdminSettings(activeSection = 'org') {
     businessProfile: settings.companyContextProfile || ''
   });
   const sessionLLM = getSessionLLMConfig();
+  const localDevMode = isLocalDevAiRuntimeConfigAllowed();
   const runtimeStatus = typeof LLMService !== 'undefined' && LLMService && typeof LLMService.getRuntimeStatus === 'function'
     ? LLMService.getRuntimeStatus()
     : null;
-  const activeApiUrl = String(runtimeStatus?.apiUrl || sessionLLM.apiUrl || DEFAULT_COMPASS_PROXY_URL).trim();
-  const directCompass = activeApiUrl.includes('api.core42.ai');
+  const serverStatus = typeof LLMService !== 'undefined'
+    && LLMService
+    && typeof LLMService.getCachedServerAiStatus === 'function'
+    ? LLMService.getCachedServerAiStatus()
+    : null;
   const buCount = getBUList().length;
   const docCount = getDocList().length;
   const managedAccounts = getManagedAccountsForAdmin(settings);
@@ -9741,9 +9922,10 @@ function renderAdminSettings(activeSection = 'org') {
         body: '<div class="form-help">Reload the page to restore the feedback workbench.</div>'
       });
   const systemAccessSection = AdminSystemAccessSection.renderSection({
-    directCompass,
+    localDevMode,
     sessionLLM,
-    runtimeStatus
+    runtimeStatus,
+    serverStatus
   });
   const auditCache = AppState.auditLogCache || { loaded: false, loading: false, entries: [], summary: null, error: '' };
   const auditLogSection = AdminAuditLogSection.renderSection({ auditCache });
@@ -10490,6 +10672,7 @@ async function init() {
   BenchmarkService.init(AppState.benchmarkList);
   activateAuthenticatedState();
   bindWorkspaceStorageSync();
+  bindServerContextRefresh();
 
   window.AppRoutes.register(Router);
 

@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 
 const originalEnv = {
   ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN,
+  BOOTSTRAP_ACCOUNTS_JSON: process.env.BOOTSTRAP_ACCOUNTS_JSON,
   COMPASS_API_KEY: process.env.COMPASS_API_KEY,
   KV_REST_API_URL: process.env.KV_REST_API_URL,
   KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
@@ -178,6 +179,57 @@ test('users login rejects unexpected fields in the request body', async () => {
 
   assert.equal(res.statusCode, 400);
   assert.equal(res.payload.error.code, 'VALIDATION_ERROR');
+});
+
+test('users self view returns the latest managed scope for the authenticated session user', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  global.fetch = async (_url, options = {}) => {
+    const command = JSON.parse(options.body || '[]');
+    if (command[0] === 'GET' && command[1] === 'risk_calculator_users') {
+      return {
+        ok: true,
+        json: async () => ({
+          result: JSON.stringify([
+            {
+              username: 'tarun.gupta',
+              passwordHash: 'unused',
+              passwordSalt: 'unused',
+              passwordVersion: 'scrypt-v1',
+              displayName: 'Tarun Gupta',
+              role: 'user',
+              businessUnitEntityId: 'g42',
+              departmentEntityId: 'group-technology-risk'
+            }
+          ])
+        })
+      };
+    }
+    throw new Error(`Unexpected KV command: ${JSON.stringify(command)}`);
+  };
+  const handler = loadFresh('../../api/users');
+  const token = buildSessionToken({
+    username: 'tarun.gupta',
+    role: 'user',
+    businessUnitEntityId: 'g42',
+    departmentEntityId: 'procurement',
+    exp: Date.now() + 60_000
+  });
+  const res = createRes();
+
+  await handler({
+    method: 'GET',
+    query: { view: 'self' },
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.user.departmentEntityId, 'group-technology-risk');
 });
 
 test('timing-safe admin secret helper accepts only exact matches', () => {

@@ -149,7 +149,7 @@ function resolveApiUrl(path) {
     return accountsCache;
   }
 
-  async function requestUsers(method = 'GET', payload, { includeAdminSecret = false } = {}) {
+  async function requestUsers(method = 'GET', payload, { includeAdminSecret = false, query = '' } = {}) {
     const headers = {
       'Content-Type': 'application/json'
     };
@@ -160,7 +160,7 @@ function resolveApiUrl(path) {
     if (sessionToken) {
       headers['x-session-token'] = sessionToken;
     }
-    const res = await fetch(getUsersApiUrl(), {
+    const res = await fetch(`${getUsersApiUrl()}${query || ''}`, {
       method,
       headers,
       body: payload ? JSON.stringify(payload) : undefined
@@ -237,15 +237,36 @@ function resolveApiUrl(path) {
     return accountsCache;
   }
 
+  async function refreshCurrentSessionUser() {
+    const session = readSession();
+    if (!session?.user?.username || !session.apiSessionToken) {
+      return session?.user ? sanitiseAccount(session.user) : null;
+    }
+    const data = await requestUsers('GET', undefined, { query: '?view=self' });
+    if (!data?.user) return sanitiseAccount(session.user);
+    const nextUser = sanitiseAccount(data.user);
+    const cachedAccounts = readCachedAccounts().filter(account => account.username !== nextUser.username);
+    saveCache([...cachedAccounts, nextUser]);
+    session.user = nextUser;
+    session.ts = Date.now();
+    persistSession(session, 'session-user-refresh-write', 'AuthService session refresh write failed:');
+    return nextUser;
+  }
+
   async function init() {
     readCachedAccounts();
-    if (!isAdminAuthenticated()) {
-      return accountsCache;
-    }
+    if (!readSession()?.user) return accountsCache;
     try {
-      await refreshManagedAccounts();
+      await refreshCurrentSessionUser();
     } catch (error) {
-      console.warn('AuthService.init fallback:', error.message);
+      console.warn('AuthService.init current-user refresh fallback:', error.message);
+    }
+    if (isAdminAuthenticated()) {
+      try {
+        await refreshManagedAccounts();
+      } catch (error) {
+        console.warn('AuthService.init fallback:', error.message);
+      }
     }
     return accountsCache;
   }
@@ -289,18 +310,22 @@ function resolveApiUrl(path) {
     return `RiskUser@${String(nextNumber).padStart(2, '0')}`;
   }
 
-  function writeSession(account) {
+  function persistSession(session, warningKey = 'session-write', warningMessage = 'AuthService session write failed:') {
     try {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify({
-        authenticated: true,
-        ts: Date.now(),
-        user: sanitiseAccount(account),
-        apiSessionToken: account.apiSessionToken || '',
-        context: {}
-      }));
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
     } catch (error) {
-      warnAuthIssueOnce('session-write', 'AuthService session write failed:', error);
+      warnAuthIssueOnce(warningKey, warningMessage, error);
     }
+  }
+
+  function writeSession(account) {
+    persistSession({
+      authenticated: true,
+      ts: Date.now(),
+      user: sanitiseAccount(account),
+      apiSessionToken: account.apiSessionToken || '',
+      context: {}
+    }, 'session-write', 'AuthService session write failed:');
   }
 
   function readSession() {
@@ -402,11 +427,7 @@ function resolveApiUrl(path) {
       ...context
     };
     session.ts = Date.now();
-    try {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    } catch (error) {
-      warnAuthIssueOnce('session-context-write', 'AuthService session context write failed:', error);
-    }
+    persistSession(session, 'session-context-write', 'AuthService session context write failed:');
     return getCurrentUser();
   }
 
@@ -452,11 +473,7 @@ function resolveApiUrl(path) {
     const session = readSession();
     if (session?.user?.username === updated?.username) {
       session.user = sanitiseAccount(updated);
-      try {
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      } catch (error) {
-        warnAuthIssueOnce('session-user-refresh-write', 'AuthService session refresh write failed:', error);
-      }
+      persistSession(session, 'session-user-refresh-write', 'AuthService session refresh write failed:');
     }
     return updated ? sanitiseAccount(updated) : null;
   }
@@ -504,6 +521,7 @@ function resolveApiUrl(path) {
 
   return {
     init,
+    refreshCurrentSessionUser,
     testUsersStoreHealth,
     login,
     logout,

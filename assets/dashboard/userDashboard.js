@@ -303,7 +303,9 @@ function renderUserDashboard() {
 
   const user = AppState.currentUser || AuthService.getCurrentUser();
   const globalSettings = getAdminSettings();
-  const profile = normaliseUserProfile(settings.userProfile, user);
+  const profile = typeof reconcileUserProfileToManagedScope === 'function'
+    ? reconcileUserProfileToManagedScope(settings.userProfile, user, globalSettings)
+    : normaliseUserProfile(settings.userProfile, user);
   const capability = getNonAdminCapabilityState(user, settings, globalSettings);
   const isOversightUser = capability.canManageBusinessUnit || capability.canManageDepartment;
   const canGenerateBoardBrief = String(user?.role || '').trim().toLowerCase() === 'admin'

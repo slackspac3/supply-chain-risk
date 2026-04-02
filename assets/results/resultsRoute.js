@@ -5008,12 +5008,14 @@ function renderLoginOrganisationSelection(currentUser, existingSettings = getUse
   }
   const settings = {
     ...existingSettings,
-    userProfile: normaliseUserProfile(existingSettings.userProfile, currentUser)
+    userProfile: typeof reconcileUserProfileToManagedScope === 'function'
+      ? reconcileUserProfileToManagedScope(existingSettings.userProfile, currentUser, adminSettings)
+      : normaliseUserProfile(existingSettings.userProfile, currentUser)
   };
 
   function renderSelectionStep() {
     const departmentOptions = getDepartmentEntities(companyStructure, selectedBusinessId);
-    let selectedDepartmentId = String(settings.userProfile.departmentEntityId || selection.departmentEntityId || ownedDefault.departmentEntityId || '').trim();
+    let selectedDepartmentId = String(selection.departmentEntityId || settings.userProfile.departmentEntityId || ownedDefault.departmentEntityId || '').trim();
     if (!departmentOptions.some(option => option.id === selectedDepartmentId)) {
       selectedDepartmentId = departmentOptions.find(option => option.ownerUsername === currentUser.username)?.id || departmentOptions[0]?.id || '';
     }
