@@ -102,6 +102,11 @@ The product is assistant-driven, not chat-first. AI is used to:
 Current AI behavior:
 - the browser is now a thin client for the key AI workflows rather than the authoritative orchestration layer
 - server routes own prompt construction, structured-output repair, quality gates, readiness evaluation, and fallback policy for the main guided, register, treatment, and reviewer/challenge flows
+- client workflow requests are normalized before transport so semantically identical inputs produce a stable request shape
+- duplicate suppression now happens on both sides:
+  - the browser suppresses same-input repeat clicks and very recent identical reruns
+  - the server reuses identical in-flight work and short-lived recent results for the main AI routes
+- server AI routes now emit lightweight operational metrics for invocation volume, latency, timeout pressure, fallback/manual rate, and duplicate/cache reuse
 - wizard steps can still carry short-term runtime context memory across the draft flow
 - bounded AI rewriting is used where draft quality matters
 - explicit fallback and unavailable states are surfaced instead of silently masquerading as live AI
@@ -275,6 +280,7 @@ Current productization work now includes:
 - portfolio heat map on the dashboard
 - persisted session preferences for results tabs and boardroom mode
 - server-authoritative AI status, orchestration, fallback, and learning-profile application
+- normalized AI request shaping, duplicate suppression, and lightweight route analytics for the hosted AI paths
 - KV-backed API rate limiting and login throttling for the shared pilot environment
 
 ## Architecture
@@ -305,7 +311,7 @@ Important runtime seams:
 - dashboard rendering: [assets/dashboard/userDashboard.js](./assets/dashboard/userDashboard.js)
 - wizard steps: [assets/wizard/step1.js](./assets/wizard/step1.js), [assets/wizard/step2.js](./assets/wizard/step2.js), [assets/wizard/step3.js](./assets/wizard/step3.js)
 - LLM integration: [assets/services/llmService.js](./assets/services/llmService.js)
-- workflow transport: [assets/services/aiWorkflowClient.js](./assets/services/aiWorkflowClient.js)
+- workflow transport, payload normalization, and client duplicate suppression: [assets/services/aiWorkflowClient.js](./assets/services/aiWorkflowClient.js)
 - server-status client: [assets/services/aiStatusClient.js](./assets/services/aiStatusClient.js)
 - runtime trace store: [assets/services/aiTraceRuntime.js](./assets/services/aiTraceRuntime.js)
 - export generation: [assets/services/exportService.js](./assets/services/exportService.js)
@@ -341,10 +347,18 @@ Shared backend helper:
 - [api/_audit.js](./api/_audit.js)
 - [api/_aiRuntime.js](./api/_aiRuntime.js)
 - [api/_aiOrchestrator.js](./api/_aiOrchestrator.js)
+- [api/_aiRouteMetrics.js](./api/_aiRouteMetrics.js)
+- [api/_aiWorkflowSupport.js](./api/_aiWorkflowSupport.js)
 - [api/_learningAuthority.js](./api/_learningAuthority.js)
 - [api/_request.js](./api/_request.js)
 - [api/_rateLimit.js](./api/_rateLimit.js)
 - [api/_passwordPolicy.js](./api/_passwordPolicy.js)
+- [api/_workflowReuse.js](./api/_workflowReuse.js)
+
+Current AI runtime efficiency measures:
+- register-analysis inputs are trimmed server-side before live model use to remove empty rows, repeated headers, and noisy workbook-style columns while preserving meaningful row order
+- the main AI routes keep explicit `live`, `deterministic_fallback`, and `manual` semantics even when reuse or early-return paths are taken
+- route metrics are in-memory and aggregate-only; no prompt, payload, or user content is logged in the lightweight analytics summaries
 
 ### Persistence Model
 
