@@ -11,7 +11,7 @@ function loadLlmInternals() {
   const source = fs.readFileSync(filePath, 'utf8');
   const instrumented = source.replace(
     '  return {\n    buildGuidedScenarioDraft,',
-    '  globalThis.__llmInternals = { _classifyScenario, _extractRiskCandidates, _evaluateGuidedDraftCandidate };\n\n  return {\n    buildGuidedScenarioDraft,'
+    '  globalThis.__llmInternals = { _classifyScenario, _extractRiskCandidates, _evaluateGuidedDraftCandidate, _filterPromptIdeaCandidates };\n\n  return {\n    buildGuidedScenarioDraft,'
   );
   assert.notEqual(instrumented, source, 'Failed to instrument llmService internals for test access');
 
@@ -97,4 +97,26 @@ test('evaluateGuidedDraftCandidate rejects a draft that explicitly labels the wr
 
   assert.equal(candidate.accepted, false);
   assert.equal(candidate.reason, 'explicit-lens-drift');
+});
+
+test('filterPromptIdeaCandidates rejects AI-model drift for dark-web credential exposure', () => {
+  const internals = loadLlmInternals();
+  const ideas = internals._filterPromptIdeaCandidates([
+    {
+      label: 'Privileged credential exposure',
+      prompt: 'Privileged or administrator credentials are exposed and create a high-risk access path.'
+    },
+    {
+      label: 'Responsible AI drift',
+      prompt: 'A model governance issue creates unsafe output and conduct risk.'
+    }
+  ], {
+    sourceText: 'An Azure admin account credential were found on the darkweb',
+    classification: { key: 'identity', secondaryKeys: [] },
+    scenarioLensHint: 'identity'
+  });
+
+  const labels = ideas.map((idea) => idea.label);
+  assert.ok(labels.includes('Privileged credential exposure'));
+  assert.equal(labels.includes('Responsible AI drift'), false);
 });

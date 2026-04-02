@@ -1954,6 +1954,62 @@ ${businessUnit.selectedDepartmentContext}` : ''
     ].filter(Boolean).join('\n');
   }
 
+  function _hasAiModelSignals(text = '') {
+    return /(responsible ai|model risk|model drift|hallucination|algorithmic bias|training data|\bllm\b|\bgenai\b|\bai\b)/.test(String(text || '').toLowerCase());
+  }
+
+  function _hasIdentityTakeoverSignals(text = '') {
+    return /(account takeover|account hijack|hijack(?:ed|ing)?|mailbox|email compromise|email account|business email compromise|\bbec\b|credential|password|dark ?web|credential dump|credential leak|leaked credential|stolen credential|admin account|azure admin|tenant admin|privileged account|session hijack|executive mailbox|ceo fraud|tenant change|identity)/.test(String(text || '').toLowerCase());
+  }
+
+  function _normalisePromptIdeaCandidates(ideas = []) {
+    const seen = new Set();
+    return (Array.isArray(ideas) ? ideas : [])
+      .map((idea) => ({
+        label: _cleanUserFacingText(idea?.label || '', { maxSentences: 1, stripTrailingPeriod: true }),
+        prompt: _cleanUserFacingText(idea?.prompt || '', { maxSentences: 2 })
+      }))
+      .filter((idea) => idea.label && idea.prompt)
+      .filter((idea) => {
+        const key = `${idea.label.toLowerCase()}::${idea.prompt.toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 3);
+  }
+
+  function _filterPromptIdeaCandidates(ideas = [], {
+    sourceText = '',
+    classification = {},
+    scenarioLensHint = ''
+  } = {}) {
+    const seedText = String(sourceText || '').toLowerCase();
+    const expectedLens = _normaliseScenarioHintKey(scenarioLensHint) || _normaliseScenarioHintKey(classification?.key || '');
+    const allowedLenses = new Set([
+      expectedLens,
+      ...((Array.isArray(classification?.secondaryKeys) ? classification.secondaryKeys : []).map(_normaliseScenarioHintKey).filter(Boolean))
+    ].filter(Boolean));
+    return _normalisePromptIdeaCandidates(ideas).filter((idea) => {
+      const combined = `${idea.label} ${idea.prompt}`.toLowerCase();
+      if (!_hasAiModelSignals(seedText) && /(responsible ai|model risk|model drift|hallucination|algorithmic bias|training data|ai assistant|unsafe output)/.test(combined)) {
+        return false;
+      }
+      if (_hasIdentityTakeoverSignals(seedText) && /(contract cover|single-source|supplier|vendor|procurement|onboarding screening|responsible ai|model risk|shortfall)/.test(combined)) {
+        return false;
+      }
+      if (_hasOperationalOutageSignals(seedText) && !_hasExplicitCyberCompromiseSignals(seedText) && /(credential|account takeover|identity exposure|mailbox compromise|ransomware|responsible ai|model risk)/.test(combined)) {
+        return false;
+      }
+      const ideaLens = _classifyScenario(`${idea.label}. ${idea.prompt}`, {
+        scenarioLensHint: expectedLens
+      }).key;
+      if (!allowedLenses.size || !ideaLens || ideaLens === 'general') return true;
+      if (allowedLenses.has(ideaLens)) return true;
+      return Array.from(allowedLenses).some((lens) => _isCompatibleScenarioLens(lens, ideaLens) || _isCompatibleScenarioLens(ideaLens, lens));
+    });
+  }
+
   function _lookupFeedbackRiskWeight(feedbackProfile = null, title = '') {
     if (!feedbackProfile || typeof feedbackProfile !== 'object' || !title) return 0;
     const target = _normaliseText(title || '', 180).toLowerCase();
@@ -2148,7 +2204,28 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const mentionsCloudPlatform = n.includes('cloud') || n.includes('azure') || n.includes('aws') || n.includes('gcp') || n.includes('infrastructure') || n.includes('platform');
 
     const isRansomware = n.includes('ransomware') || n.includes('encrypt') || n.includes('ransom');
-    const isIdentity = n.includes('azure ad') || n.includes('active directory') || n.includes('entra') || n.includes('identity') || n.includes('sso') || n.includes('directory service');
+    const isIdentity = n.includes('azure ad')
+      || n.includes('active directory')
+      || n.includes('entra')
+      || n.includes('identity')
+      || n.includes('sso')
+      || n.includes('directory service')
+      || n.includes('account takeover')
+      || n.includes('account hijack')
+      || /\bhijack(?:ed|ing)?\b/.test(n)
+      || n.includes('mailbox')
+      || n.includes('email account')
+      || n.includes('email compromise')
+      || n.includes('business email compromise')
+      || n.includes('credential')
+      || n.includes('password')
+      || n.includes('dark web')
+      || n.includes('darkweb')
+      || n.includes('admin account')
+      || n.includes('azure admin')
+      || n.includes('tenant admin')
+      || n.includes('privileged account')
+      || n.includes('session hijack');
     const isPhishing = !isIdentity && (
       n.includes('phish')
       || /\bbec\b/.test(n)
@@ -3035,6 +3112,104 @@ ${businessUnit.selectedDepartmentContext}` : ''
         fallbackScenarioExpansion
       })
     };
+  }
+
+  async function suggestGuidedPromptIdeas(input = {}) {
+    const guidedInput = input?.guidedInput && typeof input.guidedInput === 'object'
+      ? input.guidedInput
+      : {};
+    const sourceText = _cleanScenarioSeed([
+      guidedInput.event,
+      guidedInput.impact,
+      guidedInput.cause,
+      guidedInput.asset,
+      input.riskStatement
+    ].filter(Boolean).join(' '));
+    const fallbackIdeas = _normalisePromptIdeaCandidates(input.fallbackSuggestions || []);
+    const classification = _classifyScenario(sourceText, {
+      guidedInput,
+      businessUnit: input.businessUnit,
+      scenarioLensHint: input.scenarioLensHint
+    });
+    if (normaliseAssessmentTokens(sourceText).length < 2) {
+      return { ideas: fallbackIdeas, usedFallback: true, aiUnavailable: isUsingStub() };
+    }
+    if (!_canUseLiveAi()) {
+      return { ideas: fallbackIdeas, usedFallback: true, aiUnavailable: true };
+    }
+
+    const feedbackProfile = _getAiFeedbackLearningProfile({
+      buId: input.businessUnit?.id || input.businessUnit?.buId || '',
+      functionKey: String(classification?.functionKey || input.businessUnit?.selectedDepartmentKey || '').trim(),
+      scenarioLensKey: classification?.key || ''
+    });
+    const tuning = _getAiFeedbackTuning();
+    const schema = `{
+  "ideas": [
+    { "label": "string", "prompt": "string" }
+  ]
+}`;
+    const systemPrompt = `You are helping a user sharpen an enterprise-risk scenario while they type.
+
+Generate 2 or 3 prompt ideas that stay in the same event path as the user's current wording.
+- do not drift into adjacent domains
+- do not add AI/model-risk suggestions unless the user explicitly mentions AI, model, assistant, LLM, unsafe output, drift, or governance
+- technical assets like cloud, Azure, systems, infrastructure, admin accounts, or email do not by themselves justify changing the scenario domain
+- if the user describes identity compromise, account takeover, mailbox compromise, leaked credentials, or dark-web credential discovery, stay in that lane
+- write labels as short chip text
+- write prompts as one-sentence scenario starters the user could click
+- return JSON only`;
+    const userPrompt = `Guided intake:
+${JSON.stringify(guidedInput)}
+
+Business unit: ${input.businessUnit?.name || 'Unknown'}
+Primary lens hint: ${_normaliseScenarioHintKey(input.scenarioLensHint) || classification.key}
+
+${_buildFeedbackLearningPromptBlock(feedbackProfile)}
+
+${_buildAiTuningPromptBlock(tuning)}
+
+Current scenario wording:
+${sourceText}
+
+Fallback local prompt ideas:
+${fallbackIdeas.length ? fallbackIdeas.map((idea) => `- ${idea.label}: ${idea.prompt}`).join('\n') : '(none)'}
+
+Return JSON only with this schema:
+${schema}`;
+    try {
+      const raw = await _callLLM(systemPrompt, userPrompt, {
+        taskName: 'suggestGuidedPromptIdeas',
+        temperature: 0.2,
+        maxPromptChars: 12000,
+        maxCompletionTokens: 300,
+        priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : [],
+        traceLabel: input.traceLabel || 'Step 1 prompt ideas'
+      });
+      if (!raw) {
+        return { ideas: fallbackIdeas, usedFallback: true };
+      }
+      const parsed = await _parseOrRepairStructuredJson(raw, schema, {
+        taskName: 'repairSuggestGuidedPromptIdeas'
+      }) || {};
+      const filteredIdeas = _filterPromptIdeaCandidates(parsed.ideas, {
+        sourceText,
+        classification,
+        scenarioLensHint: input.scenarioLensHint
+      });
+      return {
+        ideas: filteredIdeas.length ? filteredIdeas : fallbackIdeas,
+        usedFallback: !filteredIdeas.length
+      };
+    } catch (error) {
+      await _auditAiFallback('suggestGuidedPromptIdeas', error);
+      console.warn('suggestGuidedPromptIdeas fallback:', error.message);
+      return {
+        ideas: fallbackIdeas,
+        usedFallback: true,
+        aiUnavailable: true
+      };
+    }
   }
 
   function _buildScenarioExpansion(input = {}) {
@@ -6109,6 +6284,7 @@ Keep the numbers realistic, internally ordered, and anchored to the user's own h
 
   return {
     buildGuidedScenarioDraft,
+    suggestGuidedPromptIdeas,
     generateScenarioAndInputs,
     streamNarrativeRefinement,
     enhanceRiskContext,

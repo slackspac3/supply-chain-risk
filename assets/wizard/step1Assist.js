@@ -4,6 +4,7 @@
   const draftScenarioState = global.DraftScenarioState;
   const STEP1_TRACE_LABELS = {
     guidedDraft: 'Step 1 guided draft',
+    promptIdeas: 'Step 1 prompt ideas',
     intakeAssist: 'Step 1 intake assist',
     narrativeRefinement: 'Step 1 narrative refinement',
     registerAnalysis: 'Step 1 register analysis'
@@ -336,6 +337,29 @@
     }
   }
 
+  async function suggestGuidedPromptIdeas(input = {}) {
+    if (!LLMService || typeof LLMService.suggestGuidedPromptIdeas !== 'function') return null;
+    const bu = getBUList().find(b => b.id === (input?.buId || AppState.draft.buId)) || null;
+    try {
+      const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+      return await LLMService.suggestGuidedPromptIdeas({
+        riskStatement: String(input?.riskStatement || '').trim(),
+        guidedInput: input?.guidedInput && typeof input.guidedInput === 'object'
+          ? { ...input.guidedInput }
+          : {},
+        scenarioLensHint: input?.scenarioLensHint,
+        fallbackSuggestions: Array.isArray(input?.fallbackSuggestions) ? input.fallbackSuggestions : [],
+        businessUnit: aiContext.businessUnit || bu,
+        adminSettings: aiContext.adminSettings,
+        priorMessages: _getStep1PriorMessages(),
+        traceLabel: STEP1_TRACE_LABELS.promptIdeas
+      });
+    } catch (error) {
+      console.warn('suggestGuidedPromptIdeas failed:', error);
+      return null;
+    }
+  }
+
   async function runIntakeAssist() {
     _clearStep1AiUnavailableBanners();
     const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
@@ -528,6 +552,7 @@
 
   global.Step1Assist = {
     buildGuidedScenarioDraft,
+    suggestGuidedPromptIdeas,
     runIntakeAssist,
     enhanceNarrativeWithAI,
     analyseUploadedRegister,

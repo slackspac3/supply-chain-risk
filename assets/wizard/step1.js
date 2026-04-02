@@ -340,7 +340,7 @@ function inferStep1FunctionKeyFromText(text = '') {
   if (!haystack.trim()) return 'general';
   const hasOperationalOutageSignal = /(downtime|outage|service disruption|operational disruption|critical operational disruption|availability|unavailable|degrad|continuity|resilience|recovery|backlog|capacity|human error|manual error|aging infrastructure|ageing infrastructure|legacy infrastructure|platform instability|system instability|service failure|process failure)/.test(haystack);
   const hasAiModelSignal = /ai\b|model risk|responsible ai|machine learning|llm|algorithm/.test(haystack);
-  const hasExplicitCyberSignal = /(cyber|security|identity|credential|ransom|malware|phish|breach|exfil|privileged|unauthori[sz]ed|misconfig|vulnerability|token theft|session hijack|compromise)/.test(haystack);
+  const hasExplicitCyberSignal = /(cyber|security|identity|credential|ransom|malware|phish|breach|exfil|privileged|unauthori[sz]ed|misconfig|vulnerability|token theft|session hijack|compromise|account takeover|account hijack|hijack(?:ed|ing)?|mailbox|email compromise|email account|business email compromise|\bbec\b|dark ?web|credential dump|credential leak|leaked credential|stolen credential|admin account|tenant admin|azure admin|executive mailbox|ceo fraud)/.test(haystack);
   const hasTechnologyScopeSignal = /(technology|cloud|infrastructure|it\b|digital|platform|system|application|network|ot\b|ics|scada|site systems)/.test(haystack);
   if (/(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collectability|collections|cashflow|working capital|provisioning|provision)/.test(haystack)) return 'finance';
   if (/procurement|sourcing|vendor|supplier|purchase|third[- ]party|supply chain|supplier assurance|supplier due diligence/.test(haystack)) return 'procurement';
@@ -523,19 +523,50 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
     );
   }
 
+  if (/(account takeover|account hijack|hijack(?:ed|ing)?|mailbox|email compromise|email account|business email compromise|\bbec\b|session hijack)/.test(haystack)) {
+    pushSuggestion(
+      'Identity takeover',
+      'An attacker takes over a sensitive account or mailbox and uses it to access workflows, approvals, or internal communications.'
+    );
+  }
+
+  if (/(ceo|cfo|executive|leadership|finance director|mailbox|email account)/.test(haystack)
+    && /(account takeover|account hijack|hijack(?:ed|ing)?|mailbox|email compromise|business email compromise|\bbec\b)/.test(haystack)) {
+    pushSuggestion(
+      'Executive mailbox compromise',
+      'A senior executive mailbox is taken over and used to manipulate approvals, communications, or payment instructions.'
+    );
+  }
+
+  if (/(credential|password|dark ?web|credential dump|credential leak|leaked credential|stolen credential|admin account|azure admin|tenant admin|privileged account|entra|sso)/.test(haystack)) {
+    pushSuggestion(
+      'Privileged credential exposure',
+      'Privileged or administrator credentials are exposed, sold, or reused and create a high-risk access path into shared systems.'
+    );
+  }
+
+  if (/(admin account|azure admin|tenant admin|privileged account|privileged user)/.test(haystack)) {
+    pushSuggestion(
+      'Admin account takeover',
+      'An administrator account is taken over and can be used to alter controls, expand access, or disrupt recovery actions.'
+    );
+  }
+
   const hasLiveSignal = normaliseAssessmentTokens(sourceText).length >= 2;
-  const fallbackExamples = ((exampleModel && Array.isArray(exampleModel.recommendedExamples))
+  const fallbackExamples = (exampleModel && Array.isArray(exampleModel.recommendedExamples))
     ? exampleModel.recommendedExamples
-    : getStep1ExampleExperienceModel(getEffectiveSettings(), draft).recommendedExamples || [])
-    .map((example) => ({
+    : getStep1ExampleExperienceModel(getEffectiveSettings(), draft).recommendedExamples || [];
+
+  if (!hasLiveSignal && !suggestions.length) {
+    return fallbackExamples.slice(0, 3).map((example) => ({
       label: example.promptLabel,
       prompt: example.event
     }));
-
-  if (!hasLiveSignal && !suggestions.length) {
-    return fallbackExamples.slice(0, 3);
   }
-  fallbackExamples.forEach((example) => pushSuggestion(example.label, example.prompt));
+  if (suggestions.length) {
+    return suggestions.slice(0, 3);
+  }
+  fallbackExamples.forEach((example) => pushSuggestion(example.promptLabel, example.event));
   return suggestions.slice(0, 3);
 }
 
@@ -551,6 +582,163 @@ function renderStep1GuidedPromptIdeaChips(promptSuggestions = []) {
     .slice(0, 3)
     .map(prompt => `<button class="citation-chip guided-prompt-chip" data-prompt="${escapeHtml(prompt.prompt)}">${escapeHtml(prompt.label)}</button>`)
     .join('');
+}
+
+const STEP1_LIVE_PROMPT_IDEA_DEBOUNCE_MS = 900;
+const STEP1_LIVE_PROMPT_IDEA_MIN_TOKENS = 3;
+const STEP1_LIVE_PROMPT_IDEA_CACHE_LIMIT = 24;
+let _step1LivePromptIdeaDebounce = null;
+let _step1LivePromptIdeaRequestId = 0;
+let _step1LivePromptIdeaState = {
+  signature: '',
+  suggestions: [],
+  loadingSignature: '',
+  source: ''
+};
+const _step1LivePromptIdeaCache = new Map();
+
+function normaliseStep1PromptIdeaSuggestions(suggestions = []) {
+  const seen = new Set();
+  return (Array.isArray(suggestions) ? suggestions : [])
+    .map((suggestion) => ({
+      label: String(suggestion?.label || '').trim(),
+      prompt: String(suggestion?.prompt || '').trim()
+    }))
+    .filter((suggestion) => suggestion.label && suggestion.prompt)
+    .filter((suggestion) => {
+      const key = `${suggestion.label.toLowerCase()}::${suggestion.prompt.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 3);
+}
+
+function getStep1GuidedPromptIdeaSourceText(draft = AppState.draft || {}) {
+  const guidedInput = draft?.guidedInput || {};
+  return [
+    guidedInput.event,
+    guidedInput.impact,
+    guidedInput.cause,
+    guidedInput.asset,
+    guidedInput.urgency,
+    draft?.narrative,
+    draft?.enhancedNarrative,
+    draft?.sourceNarrative
+  ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function getStep1GuidedPromptIdeaSignature(draft = AppState.draft || {}) {
+  const guidedInput = draft?.guidedInput || {};
+  return [
+    String(draft?.step1Path || '').trim(),
+    String(draft?.buId || '').trim(),
+    String(draft?.scenarioLens?.key || draft?.scenarioLens || '').trim(),
+    String(guidedInput.event || '').trim(),
+    String(guidedInput.impact || '').trim(),
+    String(guidedInput.cause || '').trim(),
+    String(guidedInput.asset || '').trim(),
+    String(guidedInput.urgency || '').trim()
+  ].join('||');
+}
+
+function shouldUseStep1LivePromptIdeas(draft = AppState.draft || {}) {
+  if (String(draft?.step1Path || '').trim() !== 'guided') return false;
+  if (!window.Step1Assist || typeof window.Step1Assist.suggestGuidedPromptIdeas !== 'function') return false;
+  return normaliseAssessmentTokens(getStep1GuidedPromptIdeaSourceText(draft)).length >= STEP1_LIVE_PROMPT_IDEA_MIN_TOKENS;
+}
+
+function rememberStep1LivePromptIdeaSuggestions(signature, suggestions = [], source = 'ai') {
+  const safeSignature = String(signature || '').trim();
+  const safeSuggestions = normaliseStep1PromptIdeaSuggestions(suggestions);
+  if (!safeSignature || !safeSuggestions.length) return;
+  _step1LivePromptIdeaState = {
+    signature: safeSignature,
+    suggestions: safeSuggestions,
+    loadingSignature: '',
+    source
+  };
+  _step1LivePromptIdeaCache.delete(safeSignature);
+  _step1LivePromptIdeaCache.set(safeSignature, {
+    suggestions: safeSuggestions,
+    source
+  });
+  while (_step1LivePromptIdeaCache.size > STEP1_LIVE_PROMPT_IDEA_CACHE_LIMIT) {
+    const oldestKey = _step1LivePromptIdeaCache.keys().next().value;
+    _step1LivePromptIdeaCache.delete(oldestKey);
+  }
+}
+
+function getStep1DisplayedPromptSuggestions(draft = AppState.draft || {}, exampleModel = null) {
+  const signature = getStep1GuidedPromptIdeaSignature(draft);
+  if (signature && _step1LivePromptIdeaState.signature === signature && _step1LivePromptIdeaState.suggestions.length) {
+    return _step1LivePromptIdeaState.suggestions;
+  }
+  const cached = signature ? _step1LivePromptIdeaCache.get(signature) : null;
+  if (cached?.suggestions?.length) return cached.suggestions;
+  return buildStep1GuidedPromptSuggestions(draft, exampleModel);
+}
+
+async function refreshStep1LivePromptIdeaSuggestions({ force = false } = {}) {
+  const draft = AppState.draft || {};
+  const signature = getStep1GuidedPromptIdeaSignature(draft);
+  if (!shouldUseStep1LivePromptIdeas(draft) || !signature) {
+    _step1LivePromptIdeaState = {
+      ..._step1LivePromptIdeaState,
+      loadingSignature: ''
+    };
+    return;
+  }
+  if (!force && _step1LivePromptIdeaState.signature === signature && _step1LivePromptIdeaState.suggestions.length) return;
+  if (!force && _step1LivePromptIdeaState.loadingSignature === signature) return;
+  const cached = !force ? _step1LivePromptIdeaCache.get(signature) : null;
+  if (cached?.suggestions?.length) {
+    rememberStep1LivePromptIdeaSuggestions(signature, cached.suggestions, cached.source || 'ai');
+    updateStep1GuidedPreview();
+    return;
+  }
+
+  const localSuggestions = buildStep1GuidedPromptSuggestions(draft);
+  const sourceText = getStep1GuidedPromptIdeaSourceText(draft);
+  const settings = getEffectiveSettings();
+  const preferredLens = getStep1PreferredScenarioLens(settings, draft, sourceText);
+  const requestId = ++_step1LivePromptIdeaRequestId;
+  _step1LivePromptIdeaState = {
+    ..._step1LivePromptIdeaState,
+    loadingSignature: signature
+  };
+
+  const result = await window.Step1Assist?.suggestGuidedPromptIdeas?.({
+    buId: draft?.buId,
+    riskStatement: sourceText,
+    guidedInput: { ...(draft?.guidedInput || {}) },
+    scenarioLensHint: preferredLens,
+    fallbackSuggestions: localSuggestions
+  });
+
+  if (requestId !== _step1LivePromptIdeaRequestId) return;
+  if (getStep1GuidedPromptIdeaSignature(AppState.draft || {}) !== signature) return;
+
+  _step1LivePromptIdeaState = {
+    ..._step1LivePromptIdeaState,
+    loadingSignature: ''
+  };
+  if (!result || result.usedFallback) return;
+  const suggestions = normaliseStep1PromptIdeaSuggestions(result.ideas);
+  if (!suggestions.length) return;
+  rememberStep1LivePromptIdeaSuggestions(signature, suggestions, 'ai');
+  updateStep1GuidedPreview();
+}
+
+function scheduleStep1LivePromptIdeaRefresh({ immediate = false, force = false } = {}) {
+  window.clearTimeout(_step1LivePromptIdeaDebounce);
+  if (immediate) {
+    refreshStep1LivePromptIdeaSuggestions({ force });
+    return;
+  }
+  _step1LivePromptIdeaDebounce = window.setTimeout(() => {
+    refreshStep1LivePromptIdeaSuggestions({ force });
+  }, STEP1_LIVE_PROMPT_IDEA_DEBOUNCE_MS);
 }
 
 function getStep1AiTuningSettings() {
@@ -2922,6 +3110,12 @@ function persistAndRenderStep1({
 }
 
 function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false } = {}) {
+  window.clearTimeout(_step1LivePromptIdeaDebounce);
+  _step1LivePromptIdeaRequestId += 1;
+  _step1LivePromptIdeaState = {
+    ..._step1LivePromptIdeaState,
+    loadingSignature: ''
+  };
   const nextSeed = normaliseScenarioSeedText(nextNarrative);
   if (!nextSeed) {
     AppState.draft.guidedDraftPreview = '';
@@ -2955,7 +3149,7 @@ function updateStep1GuidedPreview() {
   }
   const promptIdeasHost = document.getElementById('guided-prompt-ideas');
   if (promptIdeasHost) {
-    promptIdeasHost.innerHTML = renderStep1GuidedPromptIdeaChips(buildStep1GuidedPromptSuggestions(AppState.draft));
+    promptIdeasHost.innerHTML = renderStep1GuidedPromptIdeaChips(getStep1DisplayedPromptSuggestions(AppState.draft));
     bindStep1PromptIdeaChips(promptIdeasHost.parentElement || document, getEffectiveSettings());
   }
 }
@@ -3205,12 +3399,14 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
       AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, composed);
       if (hadGuidedAiDraft) AppState.draft.aiQualityState = 'analyst-reshaped';
       updateStep1GuidedPreview();
+      scheduleStep1LivePromptIdeaRefresh();
       markDraftDirty();
       scheduleDraftAutosave();
       scheduleStep1ScenarioMemoryRefresh();
       scheduleStep1ScenarioCrossReferenceRefresh();
     });
     document.getElementById(`guided-${key}`)?.addEventListener('blur', () => {
+      scheduleStep1LivePromptIdeaRefresh({ immediate: true });
       scheduleStep1ScenarioMemoryRefresh({ immediate: true });
       scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true });
     });
@@ -3225,12 +3421,14 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
     AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, composed);
     if (hadGuidedAiDraft) AppState.draft.aiQualityState = 'analyst-reshaped';
     updateStep1GuidedPreview();
+    scheduleStep1LivePromptIdeaRefresh();
     markDraftDirty();
     scheduleDraftAutosave();
     scheduleStep1ScenarioMemoryRefresh();
     scheduleStep1ScenarioCrossReferenceRefresh();
   });
   document.getElementById('guided-urgency')?.addEventListener('blur', () => {
+    scheduleStep1LivePromptIdeaRefresh({ immediate: true });
     scheduleStep1ScenarioMemoryRefresh({ immediate: true });
     scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true });
   });
@@ -3335,6 +3533,7 @@ function bindStep1PromptIdeaChips(root = document, settings = getEffectiveSettin
       updateStep1GuidedPreview();
       markDraftDirty();
       scheduleDraftAutosave();
+      scheduleStep1LivePromptIdeaRefresh();
       scheduleStep1ScenarioMemoryRefresh();
       scheduleStep1ScenarioCrossReferenceRefresh();
     });
@@ -3429,7 +3628,7 @@ function renderWizard1() {
   const hasImportedSource = !!String(draft.uploadedRegisterName || draft.loadedDryRunId || '').trim()
     || (riskCandidates || []).some(risk => risk.source === 'register' || risk.source === 'ai+register' || risk.source === 'manual');
   const canContinue = !!String(draft.buId || '').trim() && (!!narrative || selectedRisks.length > 0);
-  const promptSuggestions = buildStep1GuidedPromptSuggestions(draft, exampleModel);
+  const promptSuggestions = getStep1DisplayedPromptSuggestions(draft, exampleModel);
 
   setPage(`
     <main class="page">
@@ -3487,6 +3686,9 @@ function renderWizard1() {
   bindStep1AiFeedbackActions({ buList });
   bindStep1ScenarioCrossReferenceActions();
   bindStep1ScenarioMemoryActions();
+  if (shouldUseStep1LivePromptIdeas(draft)) {
+    scheduleStep1LivePromptIdeaRefresh();
+  }
   if (scenarioMemoryState.matches.length >= 2 && String(AppState.draft.scenarioMemoryPrecedentSignature || '').trim() !== String(scenarioMemoryState.signature || '').trim()) {
     scheduleStep1ScenarioMemoryRefresh();
   }
