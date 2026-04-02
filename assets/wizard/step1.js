@@ -3603,7 +3603,6 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
     AppState.draft.buId = bu?.id || null;
     AppState.draft.buName = bu?.name || null;
     persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true });
-    scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true, force: true });
   });
 
   document.querySelectorAll('.wizard-geo-chip').forEach(button => {
@@ -3623,18 +3622,8 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
       AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, composed);
       if (hadGuidedAiDraft) AppState.draft.aiQualityState = 'analyst-reshaped';
       updateStep1GuidedPreview();
-      scheduleStep1LivePreviewRefresh();
-      scheduleStep1LivePromptIdeaRefresh();
       markDraftDirty();
       scheduleDraftAutosave();
-      scheduleStep1ScenarioMemoryRefresh();
-      scheduleStep1ScenarioCrossReferenceRefresh();
-    });
-    document.getElementById(`guided-${key}`)?.addEventListener('blur', () => {
-      scheduleStep1LivePreviewRefresh({ immediate: true });
-      scheduleStep1LivePromptIdeaRefresh({ immediate: true });
-      scheduleStep1ScenarioMemoryRefresh({ immediate: true });
-      scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true });
     });
   });
 
@@ -3647,18 +3636,8 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
     AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, composed);
     if (hadGuidedAiDraft) AppState.draft.aiQualityState = 'analyst-reshaped';
     updateStep1GuidedPreview();
-    scheduleStep1LivePreviewRefresh();
-    scheduleStep1LivePromptIdeaRefresh();
     markDraftDirty();
     scheduleDraftAutosave();
-    scheduleStep1ScenarioMemoryRefresh();
-    scheduleStep1ScenarioCrossReferenceRefresh();
-  });
-  document.getElementById('guided-urgency')?.addEventListener('blur', () => {
-    scheduleStep1LivePreviewRefresh({ immediate: true });
-    scheduleStep1LivePromptIdeaRefresh({ immediate: true });
-    scheduleStep1ScenarioMemoryRefresh({ immediate: true });
-    scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true });
   });
 
   document.getElementById('intake-risk-statement').addEventListener('input', function() {
@@ -3672,12 +3651,6 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
     clearLoadedDryRunFlag();
     markDraftDirty();
     scheduleDraftAutosave();
-    scheduleStep1ScenarioMemoryRefresh();
-    scheduleStep1ScenarioCrossReferenceRefresh();
-  });
-  document.getElementById('intake-risk-statement').addEventListener('blur', () => {
-    scheduleStep1ScenarioMemoryRefresh({ immediate: true });
-    scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true });
   });
 }
 
@@ -3695,8 +3668,6 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
       if (!example) return;
       if (hasStep1Content() && !window.confirm('Load this dry-run example and replace the current step-1 scenario draft and shortlist?')) return;
       applyDryRunScenario(example);
-      scheduleStep1ScenarioMemoryRefresh({ immediate: true });
-      scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true, force: true });
     });
   });
 
@@ -3733,7 +3704,6 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
     AppState.draft.narrative = narrative;
     AppState.draft.sourceNarrative = AppState.draft.sourceNarrative || narrative;
     persistAndRenderStep1();
-    scheduleStep1ScenarioMemoryRefresh({ immediate: true });
     UI.toast(seededCount ? `Added ${seededCount} risk${seededCount === 1 ? '' : 's'} from the scenario draft.` : 'No additional risks were generated from that draft.', seededCount ? 'success' : 'warning');
   });
 
@@ -3761,9 +3731,6 @@ function bindStep1PromptIdeaChips(root = document, settings = getEffectiveSettin
       updateStep1GuidedPreview();
       markDraftDirty();
       scheduleDraftAutosave();
-      scheduleStep1LivePromptIdeaRefresh();
-      scheduleStep1ScenarioMemoryRefresh();
-      scheduleStep1ScenarioCrossReferenceRefresh();
     });
   });
 }
@@ -3812,7 +3779,6 @@ function bindStep1NavigationActions({ buList, settings, wizardGeographyInput }) 
     AppState.draft.enhancedNarrative = AppState.draft.enhancedNarrative || AppState.draft.narrative;
     updateStep1ApplicableRegulations(buList, AppState.draft.geographies);
     syncStep1ScenarioTitle(AppState.draft.enhancedNarrative || AppState.draft.narrative || narrative);
-    scheduleStep1ScenarioCrossReferenceRefresh({ immediate: true, force: true, narrativeOverride: AppState.draft.narrative });
     saveDraft();
     Router.navigate('/wizard/2');
   });
@@ -3914,19 +3880,8 @@ function renderWizard1() {
   bindStep1AiFeedbackActions({ buList });
   bindStep1ScenarioCrossReferenceActions();
   bindStep1ScenarioMemoryActions();
-  if (shouldUseStep1LivePreview(draft)) {
-    scheduleStep1LivePreviewRefresh();
-  }
-  if (shouldUseStep1LivePromptIdeas(draft)) {
-    scheduleStep1LivePromptIdeaRefresh();
-  }
-  if (scenarioMemoryState.matches.length >= 2 && String(AppState.draft.scenarioMemoryPrecedentSignature || '').trim() !== String(scenarioMemoryState.signature || '').trim()) {
-    scheduleStep1ScenarioMemoryRefresh();
-  }
+  // Keep background Step 1 rendering local; expensive AI assists should start from explicit user actions.
   refreshStep1ScenarioCrossReferenceHost({ includeAi: false });
-  if (normaliseAssessmentTokens(getStep1ScenarioMemoryNarrative(draft)).length >= 4 && !String(AppState.draft.scenarioCrossReferenceSignature || '').trim()) {
-    scheduleStep1ScenarioCrossReferenceRefresh();
-  }
   window.Step1Assist?.mountAiTraceLinks?.();
   document.getElementById('btn-clear-ghost-draft')?.addEventListener('click', () => {
     clearGhostDraftSuggestion();
@@ -4235,25 +4190,12 @@ function bindRiskCardActions({ buList = getBUList() } = {}) {
       syncRiskSelection();
       persistAndRenderStep1({ buList, scenarioGeographies: getScenarioGeographies(), refreshRegulations: true, preserveScroll: true });
       clearTimeout(_coachDebounce);
-      _coachDebounce = setTimeout(async () => {
-        const selected = getSelectedRisks();
-        if (selected.length < 2) return;
-        const coachResult = await LLMService.coachRiskShortlist({
-          selectedRisks: selected,
-          narrative: AppState.draft.enhancedNarrative || AppState.draft.narrative || '',
-          scenarioLens: AppState.draft.scenarioLens
-        });
-        if (!coachResult) return;
-        const coachEl = document.getElementById('shortlist-coach-banner');
-        if (!coachEl) return;
-        const toneClass = coachResult.tone === 'warn' ? 'shortlist-coach--warn'
-          : coachResult.tone === 'tip' ? 'shortlist-coach--tip' : 'shortlist-coach--ok';
-        coachEl.className = 'shortlist-coach-banner ' + toneClass;
-        coachEl.innerHTML = '<span class="shortlist-coach__icon">' +
-          (coachResult.tone === 'warn' ? '⚠' : coachResult.tone === 'tip' ? '💡' : '✓') +
-          '</span><span>' + escapeHtml(coachResult.insight) + '</span>';
-        coachEl.style.display = 'flex';
-      }, 1800);
+      const coachEl = document.getElementById('shortlist-coach-banner');
+      if (coachEl) {
+        coachEl.className = 'shortlist-coach-banner';
+        coachEl.innerHTML = '';
+        coachEl.style.display = 'none';
+      }
     });
   });
   document.getElementById('btn-select-all-risks')?.addEventListener('click', () => {

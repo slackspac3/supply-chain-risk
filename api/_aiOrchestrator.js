@@ -215,7 +215,12 @@ async function callAi(systemPrompt, userPrompt, options = {}) {
   throw normaliseAiError(lastError);
 }
 
-async function repairStructuredJson(raw, schemaHint = '', { taskName = 'repairStructuredJson' } = {}) {
+async function repairStructuredJson(raw, schemaHint = '', {
+  taskName = 'repairStructuredJson',
+  timeoutMs,
+  maxCompletionTokens = 1800,
+  maxPromptChars = 14000
+} = {}) {
   const malformed = String(raw || '').trim();
   const schema = String(schemaHint || '').trim();
   if (!malformed || !schema) return null;
@@ -224,8 +229,9 @@ async function repairStructuredJson(raw, schemaHint = '', { taskName = 'repairSt
   const repaired = await callAi(repairPrompt, repairUser, {
     taskName,
     temperature: 0,
-    maxCompletionTokens: 1800,
-    maxPromptChars: 14000
+    maxCompletionTokens,
+    maxPromptChars,
+    timeoutMs
   });
   if (!repaired?.text) return null;
   return {
@@ -263,7 +269,11 @@ async function runStructuredQualityGate({
   schemaHint = '',
   originalContext = '',
   checklist = [],
-  candidatePayload = null
+  candidatePayload = null,
+  timeoutMs,
+  repairTimeoutMs,
+  maxCompletionTokens = 2200,
+  maxPromptChars = 22000
 } = {}) {
   if (!candidatePayload || !schemaHint) return null;
   const items = (Array.isArray(checklist) ? checklist : []).map((item) => sanitizeAiText(item, { maxChars: 280 })).filter(Boolean);
@@ -289,11 +299,13 @@ Return corrected JSON only.`;
   const quality = await callAi(systemPrompt, userPrompt, {
     taskName,
     temperature: 0,
-    maxCompletionTokens: 2200,
-    maxPromptChars: 22000
+    maxCompletionTokens,
+    maxPromptChars,
+    timeoutMs
   });
   const parsed = await parseOrRepairStructuredJson(quality.text, schemaHint, {
-    taskName: `${taskName}Repair`
+    taskName: `${taskName}Repair`,
+    timeoutMs: repairTimeoutMs
   });
   return {
     parsed: parsed?.parsed || null,

@@ -3,6 +3,7 @@
 const { requireSession } = require('../_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('../_request');
 const { checkRateLimit } = require('../_rateLimit');
+const { withAiRouteMetrics } = require('../_aiRouteMetrics');
 const { buildReviewerDecisionBriefWorkflow } = require('../_reviewChallengeWorkflow');
 
 const ALLOWED_FIELDS = ['assessmentData', 'preferredSection', 'traceLabel'];
@@ -28,10 +29,10 @@ module.exports = async function handler(req, res) {
   if (!isPlainObject(body)) return void res.status(400).json({ error: 'Invalid JSON body' });
   const unexpectedFields = getUnexpectedFields(body, ALLOWED_FIELDS);
   if (unexpectedFields.length) return void res.status(400).json({ error: 'Unexpected request fields', fields: unexpectedFields });
-  const result = await buildReviewerDecisionBriefWorkflow({
+  const result = await withAiRouteMetrics('reviewer-brief', () => buildReviewerDecisionBriefWorkflow({
     assessmentData: typeof body.assessmentData === 'string' ? body.assessmentData : '',
     preferredSection: typeof body.preferredSection === 'string' ? body.preferredSection : '',
     traceLabel: typeof body.traceLabel === 'string' ? body.traceLabel : ''
-  });
+  }));
   res.status(200).json(result);
 };

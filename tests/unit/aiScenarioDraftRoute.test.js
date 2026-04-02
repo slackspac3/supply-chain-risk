@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const { resetWorkflowReuseState } = require('../../api/_workflowReuse');
 
 const originalEnv = {
   ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN,
@@ -62,6 +63,53 @@ function loadFresh(modulePath) {
 test.afterEach(() => {
   restoreEnv();
   global.fetch = originalFetch;
+  resetWorkflowReuseState();
+});
+
+test('scenario-draft route returns manual mode for incomplete scenario input before any upstream AI call', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  process.env.COMPASS_API_KEY = 'proxy-secret';
+  process.env.COMPASS_MODEL = 'gpt-5.1';
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return {
+        ok: true,
+        json: async () => ({ result: null })
+      };
+    }
+    throw new Error(`Unexpected fetch in manual scenario-draft test: ${url}`);
+  };
+
+  const handler = loadFresh('../../api/ai/scenario-draft');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const res = createRes();
+
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      riskStatement: 'Outage'
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'manual');
+  assert.equal(res.payload.usedFallback, false);
+  assert.equal(res.payload.aiUnavailable, false);
+  assert.equal(res.payload.draftNarrativeSource, 'manual');
+  assert.equal(String(res.payload.manualReasonCode || ''), 'incomplete_scenario_input');
+  assert.equal(String(res.payload.trace?.label || ''), 'Step 1 guided draft');
 });
 
 test('scenario-draft route returns deterministic server fallback when hosted AI proxy is not configured', async () => {
@@ -204,4 +252,110 @@ test('scenario-draft route orchestrates live generation and quality-gate server-
   assert.equal(res.payload.scenarioLens?.key, 'identity');
   assert.match(String(res.payload.draftNarrative || ''), /global admin credentials/i);
   assert.equal(String(res.payload.trace?.label || ''), 'Step 1 guided draft');
+});
+
+test('scenario-draft route reuses identical in-flight work for simultaneous requests', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  process.env.COMPASS_API_KEY = 'proxy-secret';
+  process.env.COMPASS_MODEL = 'gpt-5.1';
+
+  const aiPayload = JSON.stringify({
+    draftNarrative: 'Azure global admin credentials found on the dark web are being used to access the tenant, escalate privileges, and modify critical controls.',
+    summary: 'The scenario stays in the identity compromise lane.',
+    linkAnalysis: 'The main chain is identity compromise, privileged escalation, and downstream disruption or fraud.',
+    workflowGuidance: [
+      'Confirm the scope of the compromised admin identity.',
+      'Keep only the risks that share the same identity compromise path.'
+    ],
+    benchmarkBasis: 'Prefer identity-control and privileged-access comparators from GCC and global enterprise peers.',
+    scenarioLens: {
+      key: 'identity',
+      label: 'Cyber',
+      functionKey: 'technology',
+      estimatePresetKey: 'identity',
+      secondaryKeys: []
+    },
+    structuredScenario: {
+      assetService: 'Azure tenant administration',
+      primaryDriver: 'Credential theft and account takeover',
+      eventPath: 'Privileged credential abuse to access the tenant',
+      effect: 'Privilege misuse, disruption, and exposure'
+    },
+    risks: [
+      {
+        title: 'Privileged account takeover through exposed admin credentials',
+        category: 'Identity & Access',
+        description: 'Exposed global admin credentials could enable privilege escalation and control changes across the tenant.',
+        confidence: 'high',
+        regulations: ['ISO 27001']
+      }
+    ]
+  });
+
+  let aiFetchCount = 0;
+  global.fetch = (url) => {
+    if (String(url).includes('/kv')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ result: null })
+      });
+    }
+    aiFetchCount += 1;
+    return new Promise((resolve) => {
+      setTimeout(() => resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: aiPayload
+              }
+            }
+          ]
+        }),
+        text: async () => aiPayload
+      }), 50);
+    });
+  };
+
+  const handler = loadFresh('../../api/ai/scenario-draft');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const req = {
+    method: 'POST',
+    body: JSON.stringify({
+      riskStatement: 'Azure global admin credentials found on the dark web.',
+      guidedInput: {
+        event: 'Azure global admin credentials found on the dark web.'
+      },
+      traceLabel: 'Step 1 guided draft'
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  };
+  const firstRes = createRes();
+  const secondRes = createRes();
+
+  const first = handler(req, firstRes);
+  const second = handler(req, secondRes);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(aiFetchCount, 1);
+  await Promise.all([first, second]);
+
+  // This workflow may do one follow-up repair pass, but the duplicate request should not double the work.
+  assert.equal(aiFetchCount <= 2, true);
+  assert.equal(firstRes.statusCode, 200);
+  assert.equal(secondRes.statusCode, 200);
+  assert.equal(firstRes.payload.mode, 'live');
+  assert.equal(secondRes.payload.mode, 'live');
 });

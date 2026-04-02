@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const { resetWorkflowReuseState } = require('../../api/_workflowReuse');
 
 const originalEnv = {
   ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN,
@@ -62,6 +63,56 @@ function loadFresh(modulePath) {
 test.afterEach(() => {
   restoreEnv();
   global.fetch = originalFetch;
+  resetWorkflowReuseState();
+});
+
+test('treatment-suggestion route returns manual mode for incomplete baseline input before any upstream AI call', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  process.env.COMPASS_API_KEY = 'proxy-secret';
+  process.env.COMPASS_MODEL = 'gpt-5.1';
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return {
+        ok: true,
+        json: async () => ({ result: null })
+      };
+    }
+    throw new Error(`Unexpected fetch in manual treatment-suggestion test: ${url}`);
+  };
+
+  const handler = loadFresh('../../api/ai/treatment-suggestion');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const res = createRes();
+
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      baselineAssessment: {
+        scenarioTitle: 'Partial baseline'
+      },
+      improvementRequest: 'Fix'
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'manual');
+  assert.equal(res.payload.usedFallback, false);
+  assert.equal(res.payload.aiUnavailable, false);
+  assert.deepEqual(res.payload.suggestedInputs, {});
+  assert.equal(String(res.payload.manualReasonCode || ''), 'incomplete_treatment_input');
+  assert.equal(String(res.payload.trace?.label || ''), 'Step 3 treatment suggestion');
 });
 
 test('treatment-suggestion route returns deterministic server fallback when hosted AI proxy is not configured', async () => {
@@ -211,4 +262,107 @@ test('treatment-suggestion route orchestrates live generation server-side', asyn
   assert.match(String(res.payload.summary || ''), /future-state case/i);
   assert.equal(typeof res.payload.suggestedInputs?.controlStrength?.likely, 'number');
   assert.equal(String(res.payload.trace?.label || ''), 'Step 3 treatment suggestion');
+});
+
+test('treatment-suggestion route does not reuse completed results when the normalized input changes', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  process.env.COMPASS_API_KEY = 'proxy-secret';
+  process.env.COMPASS_MODEL = 'gpt-5.1';
+
+  let aiFetchCount = 0;
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return {
+        ok: true,
+        json: async () => ({ result: null })
+      };
+    }
+    aiFetchCount += 1;
+    const aiPayload = JSON.stringify({
+      summary: `Treatment response ${aiFetchCount}`,
+      changesSummary: 'The future-state case improves baseline controls.',
+      workflowGuidance: ['Review the adjusted values before applying them.'],
+      benchmarkBasis: 'Use realistic control improvements.',
+      inputRationale: {
+        tef: 'Frequency reduces slightly.',
+        vulnerability: 'Vulnerability improves.',
+        lossComponents: 'Disruption costs improve modestly.'
+      },
+      suggestedInputs: {
+        TEF: { min: 1, likely: 3, max: 5 },
+        controlStrength: { min: 0.55, likely: 0.72, max: 0.88 }
+      }
+    });
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: aiPayload
+            }
+          }
+        ]
+      }),
+      text: async () => aiPayload
+    };
+  };
+
+  const handler = loadFresh('../../api/ai/treatment-suggestion');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const baseBody = {
+    baselineAssessment: {
+      scenarioTitle: 'Privileged access compromise',
+      narrative: 'Privileged access abuse could disrupt critical services.',
+      fairParams: {
+        tefLikely: 4,
+        controlStrLikely: 0.45,
+        biLikely: 120000
+      }
+    },
+    traceLabel: 'Step 3 treatment suggestion'
+  };
+
+  const firstRes = createRes();
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      ...baseBody,
+      improvementRequest: 'Stronger MFA and faster containment for admin accounts.'
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, firstRes);
+
+  const secondRes = createRes();
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      ...baseBody,
+      improvementRequest: 'Stronger MFA, faster containment, and tighter privileged access review.'
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, secondRes);
+
+  assert.equal(aiFetchCount, 2);
+  assert.equal(firstRes.statusCode, 200);
+  assert.equal(secondRes.statusCode, 200);
+  assert.equal(firstRes.payload.mode, 'live');
+  assert.equal(secondRes.payload.mode, 'live');
+  assert.notEqual(String(firstRes.payload.summary || ''), String(secondRes.payload.summary || ''));
 });

@@ -135,6 +135,31 @@ test('reviewer-brief route returns deterministic fallback when hosted AI proxy i
   assert.match(String(res.payload.whatMatters || ''), /assessment|risk/i);
 });
 
+test('reviewer-brief route returns manual mode for incomplete assessment content before any upstream AI call', async () => {
+  process.env.COMPASS_API_KEY = 'proxy-secret';
+  process.env.COMPASS_MODEL = 'gpt-5.1';
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return { ok: true, json: async () => ({ result: null }) };
+    }
+    throw new Error(`Unexpected fetch in reviewer brief manual test: ${url}`);
+  };
+
+  const handler = loadFresh('../../api/ai/reviewer-brief');
+  const res = createRes();
+  await handler(buildRequest({
+    assessmentData: 'Too short.',
+    preferredSection: 'challenge',
+    traceLabel: 'Reviewer decision brief'
+  }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'manual');
+  assert.equal(res.payload.usedFallback, false);
+  assert.equal(res.payload.aiUnavailable, false);
+  assert.equal(String(res.payload.manualReasonCode || ''), 'incomplete_assessment_data');
+});
+
 test('reviewer-brief route orchestrates live reviewer brief generation server-side', async () => {
   process.env.COMPASS_API_KEY = 'proxy-secret';
   process.env.COMPASS_MODEL = 'gpt-5.1';
@@ -262,6 +287,37 @@ test('parameter-challenge route returns deterministic fallback when hosted AI pr
   assert.equal(res.payload.aiUnavailable, true);
   assert.equal(Array.isArray(res.payload.analystQuestions), true);
   assert.equal(String(res.payload.trace?.label || ''), 'Parameter challenge record');
+});
+
+test('parameter-challenge route returns manual mode for incomplete challenge input before any upstream AI call', async () => {
+  process.env.COMPASS_API_KEY = 'proxy-secret';
+  process.env.COMPASS_MODEL = 'gpt-5.1';
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return { ok: true, json: async () => ({ result: null }) };
+    }
+    throw new Error(`Unexpected fetch in parameter challenge manual test: ${url}`);
+  };
+
+  const handler = loadFresh('../../api/ai/parameter-challenge');
+  const res = createRes();
+  await handler(buildRequest({
+    parameterKey: 'controlStrLikely',
+    parameterLabel: 'Control strength',
+    currentValue: 0.62,
+    currentValueLabel: '0.62',
+    scenarioSummary: '',
+    reviewerConcern: '',
+    currentAle: '',
+    allowedParams: ['controlStrLikely'],
+    traceLabel: 'Parameter challenge record'
+  }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'manual');
+  assert.equal(res.payload.usedFallback, false);
+  assert.equal(res.payload.aiUnavailable, false);
+  assert.equal(String(res.payload.manualReasonCode || ''), 'incomplete_parameter_challenge_input');
 });
 
 test('challenge-synthesis route returns deterministic fallback when hosted AI proxy is not configured', async () => {

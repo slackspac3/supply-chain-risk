@@ -1,6 +1,70 @@
 const RESULTS_TAB_SESSION_PREFIX = 'rq_results_tab__';
 const VALID_RESULTS_TABS = ['executive', 'technical', 'appendix'];
 const BOARDROOM_SESSION_PREFIX = 'rq_boardroom__';
+const RESULTS_AI_ACTION_COOLDOWN_MS = 4000;
+const _resultsAiActionCooldowns = typeof AiWorkflowClient !== 'undefined' && AiWorkflowClient && typeof AiWorkflowClient.createActionCooldownStore === 'function'
+  ? AiWorkflowClient.createActionCooldownStore({ cooldownMs: RESULTS_AI_ACTION_COOLDOWN_MS, maxEntries: 48 })
+  : null;
+
+function setResultsAiActionBusy(button, busyLabel) {
+  if (!button) return () => {};
+  const idleLabel = String(button.dataset.idleLabel || button.textContent || '').trim() || String(button.textContent || '').trim();
+  button.dataset.idleLabel = idleLabel;
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  button.textContent = busyLabel;
+  return () => {
+    if (!button.isConnected) return;
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    button.textContent = idleLabel;
+  };
+}
+
+function flashResultsAiActionCooldown(button, label, durationMs = 1200) {
+  if (!button) return;
+  const idleLabel = String(button.dataset.idleLabel || button.textContent || '').trim() || String(button.textContent || '').trim();
+  button.dataset.idleLabel = idleLabel;
+  button.disabled = true;
+  button.removeAttribute('aria-busy');
+  button.textContent = String(label || '').trim() || idleLabel;
+  window.setTimeout(() => {
+    if (!button.isConnected) return;
+    button.disabled = false;
+    button.textContent = idleLabel;
+  }, Math.max(400, Number(durationMs || 0)));
+}
+
+function getResultsAiActionScope(actionKey = '', assessment = null, fallbackId = '') {
+  const assessmentId = String(assessment?.id || fallbackId || '').trim()
+    || String(assessment?.scenarioTitle || '').trim();
+  return `${String(actionKey || '').trim()}::${assessmentId}`;
+}
+
+function guardResultsAiActionCooldown({
+  button = null,
+  actionKey = '',
+  endpoint = '',
+  payload = {},
+  assessment = null,
+  fallbackId = '',
+  cooldownLabel = 'Loaded just now',
+  message = 'This AI result already reflects the current inputs. Review it or change the inputs before rerunning.'
+} = {}) {
+  if (!_resultsAiActionCooldowns) return false;
+  const scope = getResultsAiActionScope(actionKey, assessment, fallbackId);
+  const remainingMs = _resultsAiActionCooldowns.getRemainingMs(endpoint, payload, { scope });
+  if (!remainingMs) return false;
+  flashResultsAiActionCooldown(button, cooldownLabel, Math.min(remainingMs, 1400));
+  UI.toast(message, 'info', 3500);
+  return true;
+}
+
+function markResultsAiActionCooldown(actionKey = '', endpoint = '', payload = {}, assessment = null, fallbackId = '') {
+  if (!_resultsAiActionCooldowns) return 0;
+  const scope = getResultsAiActionScope(actionKey, assessment, fallbackId);
+  return _resultsAiActionCooldowns.markCompleted(endpoint, payload, { scope });
+}
 
 function persistResultsTabPreference(nextTab) {
   const tab = String(nextTab || '').trim();
@@ -2320,23 +2384,32 @@ function openParameterChallengeModal({
       return;
     }
     const submitButton = document.getElementById(submitId);
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.textContent = 'Generating…';
-    }
+    const currentAle = assessment?.results?.annualLoss?.mean || assessment?.results?.ale?.mean || 0;
+    const requestPayload = {
+      parameterKey: parameterTarget.key,
+      parameterLabel: parameterTarget.label,
+      currentValue: parameterTarget.currentValue,
+      currentValueLabel: parameterTarget.currentValueLabel,
+      scenarioSummary: assessment.enhancedNarrative || assessment.narrative || assessment.scenarioTitle || '',
+      reviewerConcern,
+      currentAle: fmtCurrency(currentAle),
+      allowedParams: ['tefLikely', 'vulnerability', 'lmLow', 'lmHigh', 'controlStrLikely']
+    };
+    if (guardResultsAiActionCooldown({
+      button: submitButton,
+      actionKey: 'parameter-challenge',
+      endpoint: '/api/ai/parameter-challenge',
+      payload: requestPayload,
+      assessment,
+      fallbackId: id,
+      cooldownLabel: 'Saved just now',
+      message: 'This parameter challenge already reflects the current concern. Review it or change the concern before submitting again.'
+    })) return;
+    const resetBusy = setResultsAiActionBusy(submitButton, 'Generating…');
     try {
-      const currentAle = assessment?.results?.annualLoss?.mean || assessment?.results?.ale?.mean || 0;
-      const result = await LLMService.generateParameterChallengeRecord({
-        parameterKey: parameterTarget.key,
-        parameterLabel: parameterTarget.label,
-        currentValue: parameterTarget.currentValue,
-        currentValueLabel: parameterTarget.currentValueLabel,
-        scenarioSummary: assessment.enhancedNarrative || assessment.narrative || assessment.scenarioTitle || '',
-        reviewerConcern,
-        currentAle: fmtCurrency(currentAle),
-        allowedParams: ['tefLikely', 'vulnerability', 'lmLow', 'lmHigh', 'controlStrLikely']
-      });
+      const result = await LLMService.generateParameterChallengeRecord(requestPayload);
       if (!result) throw new Error('No challenge record generated');
+      markResultsAiActionCooldown('parameter-challenge', '/api/ai/parameter-challenge', requestPayload, assessment, id);
       const adjustmentParam = normaliseParameterAdjustmentKey(result?.reviewerAdjustment?.param, parameterTarget.key);
       const nextRecord = {
         id: `pcr_${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -2381,10 +2454,8 @@ function openParameterChallengeModal({
     } catch (error) {
       console.error('generateParameterChallengeRecord failed:', error);
       UI.toast('The challenge record could not be generated right now. Try again.', 'danger');
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = 'Submit Challenge';
-      }
+    } finally {
+      resetBusy();
     }
   });
 }
@@ -4116,28 +4187,38 @@ function bindResultsInteractions({
         UI.toast('Consensus analysis is not available for this assessment right now.', 'warning');
         return;
       }
-      const original = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Finding…';
+      const requestPayload = {
+        scenarioTitle: getResultsScenarioDisplayTitle(latest),
+        scenarioSummary: latest.enhancedNarrative || latest.narrative || '',
+        originalAleRange: analysis.baseAleRange,
+        adjustedAleRange: analysis.adjustedAleRange,
+        projectedAleRange: analysis.adjustedAleRange,
+        aleChangePct: analysis.adjustedChangePct,
+        originalParameters: analysis.baseSnapshot,
+        adjustedParameters: analysis.adjustedSnapshot,
+        challenges: analysis.adjustments.map(item => ({
+          ref: item.ref,
+          parameter: item.record.parameterLabel,
+          concern: item.record.reviewerConcern,
+          proposedValue: item.record?.reviewerAdjustment?.suggestedValueLabel || item.record?.reviewerAdjustment?.suggestedValue,
+          impactPct: item.impactPct,
+          aleImpact: item.record?.reviewerAdjustment?.aleImpact || ''
+        }))
+      };
+      if (guardResultsAiActionCooldown({
+        button,
+        actionKey: 'consensus-recommendation',
+        endpoint: '/api/ai/consensus-recommendation',
+        payload: requestPayload,
+        assessment: latest,
+        fallbackId: id,
+        cooldownLabel: 'Loaded just now',
+        message: 'This consensus recommendation already reflects the current challenge set. Review it or change the inputs before rerunning.'
+      })) return;
+      const resetBusy = setResultsAiActionBusy(button, 'Finding…');
       try {
-        const result = await LLMService.generateConsensusRecommendation({
-          scenarioTitle: getResultsScenarioDisplayTitle(latest),
-          scenarioSummary: latest.enhancedNarrative || latest.narrative || '',
-          originalAleRange: analysis.baseAleRange,
-          adjustedAleRange: analysis.adjustedAleRange,
-          projectedAleRange: analysis.adjustedAleRange,
-          aleChangePct: analysis.adjustedChangePct,
-          originalParameters: analysis.baseSnapshot,
-          adjustedParameters: analysis.adjustedSnapshot,
-          challenges: analysis.adjustments.map(item => ({
-            ref: item.ref,
-            parameter: item.record.parameterLabel,
-            concern: item.record.reviewerConcern,
-            proposedValue: item.record?.reviewerAdjustment?.suggestedValueLabel || item.record?.reviewerAdjustment?.suggestedValue,
-            impactPct: item.impactPct,
-            aleImpact: item.record?.reviewerAdjustment?.aleImpact || ''
-          }))
-        });
+        const result = await LLMService.generateConsensusRecommendation(requestPayload);
+        markResultsAiActionCooldown('consensus-recommendation', '/api/ai/consensus-recommendation', requestPayload, latest, id);
         const refToRecordId = new Map(analysis.adjustments.map(item => [item.ref, item.record.id]));
         let acceptRecordIds = (Array.isArray(result?.acceptChallenges) ? result.acceptChallenges : [])
           .map(ref => refToRecordId.get(String(ref || '').trim()))
@@ -4187,8 +4268,8 @@ function bindResultsInteractions({
       } catch (error) {
         console.error('generateConsensusRecommendation failed:', error);
         UI.toast('Consensus analysis is unavailable right now. Try again.', 'danger');
-        button.disabled = false;
-        button.textContent = original;
+      } finally {
+        resetBusy();
       }
     });
   });
@@ -4278,20 +4359,30 @@ function bindResultsInteractions({
         UI.toast('At least two challenge records are needed before synthesis can run.', 'warning');
         return;
       }
-      const original = button.textContent;
-      button.disabled = true;
-      button.textContent = 'Synthesising…';
+      const requestPayload = {
+        scenarioTitle: getResultsScenarioDisplayTitle(latest),
+        scenarioSummary: latest.enhancedNarrative || latest.narrative || '',
+        baseAleRange: `${fmtCurrency(Number(latest?.results?.annualLoss?.mean || latest?.results?.ale?.mean || 0))} mean ALE · ${fmtCurrency(Number(latest?.results?.annualLoss?.p90 || latest?.results?.ale?.p90 || latest?.results?.eventLoss?.p90 || 0))} bad year`,
+        records: records.map(item => ({
+          parameter: item.parameterLabel,
+          concern: item.reviewerConcern,
+          reviewerAdjustment: item.reviewerAdjustment
+        }))
+      };
+      if (guardResultsAiActionCooldown({
+        button,
+        actionKey: 'challenge-synthesis',
+        endpoint: '/api/ai/challenge-synthesis',
+        payload: requestPayload,
+        assessment: latest,
+        fallbackId: id,
+        cooldownLabel: 'Loaded just now',
+        message: 'This challenge synthesis already reflects the current records. Review it or change the challenge set before rerunning.'
+      })) return;
+      const resetBusy = setResultsAiActionBusy(button, 'Synthesising…');
       try {
-        const result = await LLMService.generateChallengeSynthesis({
-          scenarioTitle: getResultsScenarioDisplayTitle(latest),
-          scenarioSummary: latest.enhancedNarrative || latest.narrative || '',
-          baseAleRange: `${fmtCurrency(Number(latest?.results?.annualLoss?.mean || latest?.results?.ale?.mean || 0))} mean ALE · ${fmtCurrency(Number(latest?.results?.annualLoss?.p90 || latest?.results?.ale?.p90 || latest?.results?.eventLoss?.p90 || 0))} bad year`,
-          records: records.map(item => ({
-            parameter: item.parameterLabel,
-            concern: item.reviewerConcern,
-            reviewerAdjustment: item.reviewerAdjustment
-          }))
-        });
+        const result = await LLMService.generateChallengeSynthesis(requestPayload);
+        markResultsAiActionCooldown('challenge-synthesis', '/api/ai/challenge-synthesis', requestPayload, latest, id);
         updateAssessmentRecord(latest.id, current => ({
           ...current,
           challengeSynthesis: {
@@ -4316,8 +4407,8 @@ function bindResultsInteractions({
       } catch (error) {
         console.error('generateChallengeSynthesis failed:', error);
         UI.toast('Challenge synthesis is unavailable right now. Try again.', 'danger');
-        button.disabled = false;
-        button.textContent = original;
+      } finally {
+        resetBusy();
       }
     });
   });
@@ -4441,14 +4532,25 @@ function bindResultsInteractions({
       confidenceFrame,
       assessmentIntelligence
     });
-    button.disabled = true;
-    button.textContent = 'Generating…';
+    const requestPayload = {
+      assessmentData,
+      preferredSection
+    };
+    if (guardResultsAiActionCooldown({
+      button,
+      actionKey: 'reviewer-brief',
+      endpoint: '/api/ai/reviewer-brief',
+      payload: requestPayload,
+      assessment,
+      fallbackId: id,
+      cooldownLabel: 'Loaded just now',
+      message: 'This reviewer brief already reflects the current assessment view. Review it or change the assessment before rerunning.'
+    })) return;
+    const resetBusy = setResultsAiActionBusy(button, 'Generating…');
     try {
-      const result = await LLMService.generateReviewerDecisionBrief({
-        assessmentData,
-        preferredSection
-      });
+      const result = await LLMService.generateReviewerDecisionBrief(requestPayload);
       if (!result) throw new Error('No reviewer brief generated');
+      markResultsAiActionCooldown('reviewer-brief', '/api/ai/reviewer-brief', requestPayload, assessment, id);
       const nextBrief = {
         ...result,
         createdAt: Date.now(),
@@ -4489,9 +4591,9 @@ function bindResultsInteractions({
       UI.toast(toastMeta.copy, toastMeta.tone, 5000);
     } catch (error) {
       console.error('generateReviewerDecisionBrief failed:', error);
-      button.disabled = false;
-      button.textContent = 'Generate Brief';
       UI.toast('Reviewer brief unavailable right now. Try again in a moment.', 'danger');
+    } finally {
+      resetBusy();
     }
   });
 
@@ -4551,22 +4653,33 @@ function bindResultsInteractions({
       analystViewEl?.focus();
       return;
     }
-    btn.disabled = true;
-    btn.textContent = 'Mediating…';
+    const requestPayload = {
+      narrative: assessment.enhancedNarrative || assessment.narrative || '',
+      fairParams: assessment.results?.inputs || assessment.draft?.fairParams || {},
+      results: assessment.results,
+      assessmentIntelligence,
+      reviewerView: assessment.reviewSubmission?.reviewNote || '',
+      analystView,
+      disputedFocus: focusEl?.value || 'Overall assessment',
+      scenarioLens: assessment.scenarioLens || assessment.draft?.scenarioLens,
+      citations: assessment.citations || []
+    };
+    if (guardResultsAiActionCooldown({
+      button: btn,
+      actionKey: 'review-mediation',
+      endpoint: '/api/ai/review-mediation',
+      payload: requestPayload,
+      assessment,
+      fallbackId: id,
+      cooldownLabel: 'Loaded just now',
+      message: 'This mediation already reflects the current analyst and reviewer positions. Change a position before rerunning.'
+    })) return;
+    const resetBusy = setResultsAiActionBusy(btn, 'Mediating…');
     if (statusEl) statusEl.textContent = 'Reviewing both positions against the current model and evidence…';
     try {
-      const result = await LLMService.mediateAssessmentDispute({
-        narrative: assessment.enhancedNarrative || assessment.narrative || '',
-        fairParams: assessment.results?.inputs || assessment.draft?.fairParams || {},
-        results: assessment.results,
-        assessmentIntelligence,
-        reviewerView: assessment.reviewSubmission?.reviewNote || '',
-        analystView,
-        disputedFocus: focusEl?.value || 'Overall assessment',
-        scenarioLens: assessment.scenarioLens || assessment.draft?.scenarioLens,
-        citations: assessment.citations || []
-      });
+      const result = await LLMService.mediateAssessmentDispute(requestPayload);
       if (!result) throw new Error('No mediation result');
+      markResultsAiActionCooldown('review-mediation', '/api/ai/review-mediation', requestPayload, assessment, id);
       updateAssessmentRecord(assessment.id, current => ({
         ...current,
         reviewMediation: {
@@ -4601,8 +4714,8 @@ function bindResultsInteractions({
       console.error('AI mediation failed:', error);
       if (resultHost) resultHost.innerHTML = '<div class="form-help">AI mediation is unavailable right now. Keep the discussion manual or try again in a moment.</div>';
       if (statusEl) statusEl.textContent = 'AI mediation is unavailable right now.';
-      btn.disabled = false;
-      btn.textContent = 'Run AI Mediation';
+    } finally {
+      resetBusy();
     }
   });
 
@@ -4650,23 +4763,34 @@ function bindResultsInteractions({
 
   document.getElementById('btn-run-challenge')?.addEventListener('click', async function() {
     const btn = this;
-    btn.disabled = true;
-    btn.textContent = 'Challenging…';
     const body = document.getElementById('challenge-mode-body');
+    const requestPayload = {
+      narrative: assessment.enhancedNarrative || assessment.narrative || '',
+      fairParams: assessment.results?.inputs || assessment.draft?.fairParams || {},
+      results: assessment.results,
+      assessmentIntelligence: assessment.assessmentIntelligence || assessmentIntelligence,
+      obligationBasis: assessment.obligationBasis || null
+    };
+    if (guardResultsAiActionCooldown({
+      button: btn,
+      actionKey: 'challenge-assessment-panel',
+      endpoint: '/api/ai/challenge-assessment',
+      payload: requestPayload,
+      assessment,
+      fallbackId: id,
+      cooldownLabel: 'Loaded just now',
+      message: 'This challenge view already reflects the current assessment inputs. Review it or change the inputs before rerunning.'
+    })) return;
+    const resetBusy = setResultsAiActionBusy(btn, 'Challenging…');
     try {
-      const result = await LLMService.challengeAssessment({
-        narrative: assessment.enhancedNarrative || assessment.narrative || '',
-        fairParams: assessment.results?.inputs || assessment.draft?.fairParams || {},
-        results: assessment.results,
-        assessmentIntelligence: assessment.assessmentIntelligence || assessmentIntelligence,
-        obligationBasis: assessment.obligationBasis || null
-      });
+      const result = await LLMService.challengeAssessment(requestPayload);
       if (!result) throw new Error('No result');
+      markResultsAiActionCooldown('challenge-assessment-panel', '/api/ai/challenge-assessment', requestPayload, assessment, id);
       if (body) body.innerHTML = renderAssessmentChallengeResult(result);
     } catch {
       if (body) body.innerHTML = '<div class="form-help">Challenge unavailable right now. Try again in a moment.</div>';
-      btn.disabled = false;
-      btn.textContent = 'Run AI Challenge';
+    } finally {
+      resetBusy();
     }
   });
 
@@ -4738,24 +4862,35 @@ function bindResultsInteractions({
   const challengeButton = document.getElementById('btn-challenge-assessment');
   if (challengeButton) challengeButton.addEventListener('click', async () => {
     const status = document.getElementById('assessment-challenge-status');
-    challengeButton.disabled = true;
+    const aiContext = buildCurrentAIAssistContext({ buId: assessment.buId });
+    const requestPayload = {
+      scenarioTitle: getResultsScenarioDisplayTitle(assessment),
+      narrative: assessment.enhancedNarrative || assessment.narrative || '',
+      geography: assessment.geography,
+      businessUnitName: assessment.buName,
+      businessUnit: aiContext.businessUnit || getBusinessUnitById(assessment.buId),
+      adminSettings: aiContext.adminSettings,
+      confidence: assessmentIntelligence.confidence,
+      drivers: assessmentIntelligence.drivers,
+      assumptions: assessmentIntelligence.assumptions,
+      missingInformation: missingInformation || [],
+      applicableRegulations: assessment.applicableRegulations || [],
+      citations: assessment.citations || []
+    };
+    if (guardResultsAiActionCooldown({
+      button: challengeButton,
+      actionKey: 'challenge-assessment-review',
+      endpoint: '/api/ai/challenge-assessment',
+      payload: requestPayload,
+      assessment,
+      fallbackId: id,
+      cooldownLabel: 'Loaded just now',
+      message: 'This challenge review already reflects the current assessment. Review it or change the assessment before rerunning.'
+    })) return;
+    const resetBusy = setResultsAiActionBusy(challengeButton, 'Reviewing…');
     if (status) status.textContent = 'Reviewing the assessment challenge points...';
     try {
-      const aiContext = buildCurrentAIAssistContext({ buId: assessment.buId });
-      const result = await LLMService.challengeAssessment({
-        scenarioTitle: getResultsScenarioDisplayTitle(assessment),
-        narrative: assessment.enhancedNarrative || assessment.narrative || '',
-        geography: assessment.geography,
-        businessUnitName: assessment.buName,
-        businessUnit: aiContext.businessUnit || getBusinessUnitById(assessment.buId),
-        adminSettings: aiContext.adminSettings,
-        confidence: assessmentIntelligence.confidence,
-        drivers: assessmentIntelligence.drivers,
-        assumptions: assessmentIntelligence.assumptions,
-        missingInformation: missingInformation || [],
-        applicableRegulations: assessment.applicableRegulations || [],
-        citations: assessment.citations || []
-      });
+      const result = await LLMService.challengeAssessment(requestPayload);
       const next = updateAssessmentRecord(assessment.id, current => ({
         ...current,
         assessmentChallenge: {
@@ -4766,6 +4901,7 @@ function bindResultsInteractions({
         }
       }));
       if (!next) throw new Error('Could not update the saved assessment.');
+      markResultsAiActionCooldown('challenge-assessment-review', '/api/ai/challenge-assessment', requestPayload, assessment, id);
       const toastMeta = buildReviewerWorkflowSuccessToast(result, {
         live: 'Live AI challenge review loaded.',
         deterministicFallback: 'Deterministic fallback challenge review loaded. Review the suggested questions and evidence gaps.',
@@ -4777,7 +4913,7 @@ function bindResultsInteractions({
       if (status) status.textContent = 'Challenge review could not be generated.';
       UI.toast('The challenge review is unavailable right now. Try again in a moment.', 'danger');
     } finally {
-      challengeButton.disabled = false;
+      resetBusy();
     }
   });
   document.getElementById('btn-export-pptx')?.addEventListener('click', event => {

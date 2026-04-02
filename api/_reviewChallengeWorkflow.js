@@ -9,7 +9,15 @@ const {
   buildEvidenceMeta,
   buildResolvedObligationPromptBlock,
   cleanUserFacingText,
+  compactInputValue,
+  isPlainObject,
+  normaliseAdminSettingsInput,
+  normaliseBlockInputText,
+  normaliseBusinessUnitInput,
+  normaliseCitationInputs,
   normaliseGuidance,
+  normaliseInlineInputText,
+  normaliseStringListInput,
   truncateText,
   withEvidenceMeta
 } = workflowUtils;
@@ -20,6 +28,248 @@ function safeJson(value) {
   } catch {
     return '{}';
   }
+}
+
+function normaliseNumericInput(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normaliseFairParamsInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  const next = {};
+  Object.entries(value).forEach(([key, item]) => {
+    const parsed = normaliseNumericInput(item);
+    if (parsed !== undefined) next[key] = parsed;
+  });
+  return Object.keys(next).length ? next : undefined;
+}
+
+function normaliseResultsInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    ale: compactInputValue({
+      mean: normaliseNumericInput(value?.ale?.mean)
+    }),
+    eventLoss: compactInputValue({
+      p90: normaliseNumericInput(value?.eventLoss?.p90)
+    })
+  });
+}
+
+function normaliseConfidenceInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    label: normaliseInlineInputText(value.label || ''),
+    summary: normaliseBlockInputText(value.summary || ''),
+    score: normaliseNumericInput(value.score)
+  });
+}
+
+function normaliseSensitivityDriverInput(item = {}) {
+  if (!isPlainObject(item)) return undefined;
+  return compactInputValue({
+    label: normaliseInlineInputText(item.label || ''),
+    why: normaliseBlockInputText(item.why || '')
+  });
+}
+
+function normaliseDriversInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    upward: normaliseStringListInput(value.upward, { maxItems: 6, block: true }),
+    stabilisers: normaliseStringListInput(value.stabilisers, { maxItems: 6, block: true }),
+    sensitivity: (Array.isArray(value.sensitivity) ? value.sensitivity : [])
+      .map((item) => normaliseSensitivityDriverInput(item))
+      .filter(Boolean)
+      .slice(0, 6)
+  });
+}
+
+function normaliseAssumptionInput(item = {}) {
+  if (!isPlainObject(item)) return undefined;
+  return compactInputValue({
+    category: normaliseInlineInputText(item.category || ''),
+    text: normaliseBlockInputText(item.text || item.label || '')
+  });
+}
+
+function normaliseAssumptionsInput(items = [], { maxItems = 8 } = {}) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => normaliseAssumptionInput(item))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function normaliseAssessmentIntelligenceInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    assumptions: normaliseAssumptionsInput(value.assumptions, { maxItems: 8 }),
+    drivers: compactInputValue({
+      sensitivity: (Array.isArray(value?.drivers?.sensitivity) ? value.drivers.sensitivity : [])
+        .map((item) => normaliseSensitivityDriverInput(item))
+        .filter(Boolean)
+        .slice(0, 6)
+    })
+  });
+}
+
+function normaliseObligationBasisInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    resolvedObligationSummary: normaliseBlockInputText(value.resolvedObligationSummary || ''),
+    resolvedObligationContext: workflowUtils.normaliseResolvedObligationContextInput
+      ? workflowUtils.normaliseResolvedObligationContextInput(value.resolvedObligationContext)
+      : undefined,
+    direct: (Array.isArray(value.direct) ? value.direct : [])
+      .map((item) => workflowUtils.normaliseResolvedObligationEntryInput
+        ? workflowUtils.normaliseResolvedObligationEntryInput(item)
+        : undefined)
+      .filter(Boolean)
+      .slice(0, 6),
+    inheritedMandatory: (Array.isArray(value.inheritedMandatory) ? value.inheritedMandatory : [])
+      .map((item) => workflowUtils.normaliseResolvedObligationEntryInput
+        ? workflowUtils.normaliseResolvedObligationEntryInput(item)
+        : undefined)
+      .filter(Boolean)
+      .slice(0, 6),
+    inheritedConditional: (Array.isArray(value.inheritedConditional) ? value.inheritedConditional : [])
+      .map((item) => workflowUtils.normaliseResolvedObligationEntryInput
+        ? workflowUtils.normaliseResolvedObligationEntryInput(item)
+        : undefined)
+      .filter(Boolean)
+      .slice(0, 6),
+    inheritedGuidance: (Array.isArray(value.inheritedGuidance) ? value.inheritedGuidance : [])
+      .map((item) => workflowUtils.normaliseResolvedObligationEntryInput
+        ? workflowUtils.normaliseResolvedObligationEntryInput(item)
+        : undefined)
+      .filter(Boolean)
+      .slice(0, 6)
+  });
+}
+
+function normaliseScenarioLensInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    key: normaliseInlineInputText(value.key || ''),
+    label: normaliseInlineInputText(value.label || '')
+  });
+}
+
+function normaliseReviewerDecisionBriefInput(input = {}) {
+  return compactInputValue({
+    assessmentData: normaliseBlockInputText(input.assessmentData || ''),
+    preferredSection: normaliseInlineInputText(input.preferredSection || ''),
+    traceLabel: normaliseInlineInputText(input.traceLabel || '')
+  }) || {};
+}
+
+function normaliseChallengeAssessmentInput(input = {}) {
+  return compactInputValue({
+    scenarioTitle: normaliseInlineInputText(input.scenarioTitle || ''),
+    narrative: normaliseBlockInputText(input.narrative || ''),
+    geography: normaliseInlineInputText(input.geography || ''),
+    businessUnitName: normaliseInlineInputText(input.businessUnitName || ''),
+    businessUnit: normaliseBusinessUnitInput(input.businessUnit),
+    adminSettings: normaliseAdminSettingsInput(input.adminSettings),
+    confidence: normaliseConfidenceInput(input.confidence),
+    drivers: normaliseDriversInput(input.drivers),
+    assumptions: normaliseAssumptionsInput(input.assumptions, { maxItems: 8 }),
+    missingInformation: normaliseStringListInput(input.missingInformation, { maxItems: 8, block: true }),
+    applicableRegulations: normaliseStringListInput(input.applicableRegulations, { maxItems: 12 }),
+    citations: normaliseCitationInputs(input.citations),
+    results: normaliseResultsInput(input.results),
+    fairParams: normaliseFairParamsInput(input.fairParams),
+    assessmentIntelligence: normaliseAssessmentIntelligenceInput(input.assessmentIntelligence),
+    obligationBasis: normaliseObligationBasisInput(input.obligationBasis),
+    traceLabel: normaliseInlineInputText(input.traceLabel || '')
+  }) || {};
+}
+
+function normaliseParameterChallengeRecordInput(input = {}) {
+  return compactInputValue({
+    parameterKey: normaliseInlineInputText(input.parameterKey || ''),
+    parameterLabel: normaliseInlineInputText(input.parameterLabel || ''),
+    currentValue: input.currentValue,
+    currentValueLabel: normaliseInlineInputText(input.currentValueLabel || ''),
+    scenarioSummary: normaliseBlockInputText(input.scenarioSummary || ''),
+    reviewerConcern: normaliseBlockInputText(input.reviewerConcern || ''),
+    currentAle: normaliseInlineInputText(input.currentAle || ''),
+    allowedParams: normaliseStringListInput(input.allowedParams, { maxItems: 8 }),
+    traceLabel: normaliseInlineInputText(input.traceLabel || '')
+  }) || {};
+}
+
+function normaliseChallengeRecordInput(item = {}) {
+  if (!isPlainObject(item)) return undefined;
+  return compactInputValue({
+    parameter: normaliseInlineInputText(item.parameter || ''),
+    concern: normaliseBlockInputText(item.concern || ''),
+    reviewerAdjustment: compactInputValue({
+      param: normaliseInlineInputText(item?.reviewerAdjustment?.param || ''),
+      suggestedValue: normaliseNumericInput(item?.reviewerAdjustment?.suggestedValue),
+      aleImpact: normaliseBlockInputText(item?.reviewerAdjustment?.aleImpact || ''),
+      rationale: normaliseBlockInputText(item?.reviewerAdjustment?.rationale || '')
+    })
+  });
+}
+
+function normaliseChallengeSynthesisInput(input = {}) {
+  return compactInputValue({
+    scenarioTitle: normaliseInlineInputText(input.scenarioTitle || ''),
+    scenarioSummary: normaliseBlockInputText(input.scenarioSummary || ''),
+    baseAleRange: normaliseInlineInputText(input.baseAleRange || ''),
+    records: (Array.isArray(input.records) ? input.records : [])
+      .map((item) => normaliseChallengeRecordInput(item))
+      .filter(Boolean)
+      .slice(0, 8),
+    traceLabel: normaliseInlineInputText(input.traceLabel || '')
+  }) || {};
+}
+
+function normaliseConsensusChallengeInput(item = {}) {
+  if (!isPlainObject(item)) return undefined;
+  return compactInputValue({
+    ref: normaliseInlineInputText(item.ref || ''),
+    parameter: normaliseInlineInputText(item.parameter || ''),
+    concern: normaliseBlockInputText(item.concern || ''),
+    proposedValue: normaliseInlineInputText(item.proposedValue || ''),
+    impactPct: normaliseNumericInput(item.impactPct),
+    aleImpact: normaliseBlockInputText(item.aleImpact || '')
+  });
+}
+
+function normaliseConsensusRecommendationInput(input = {}) {
+  return compactInputValue({
+    scenarioTitle: normaliseInlineInputText(input.scenarioTitle || ''),
+    scenarioSummary: normaliseBlockInputText(input.scenarioSummary || ''),
+    originalAleRange: normaliseInlineInputText(input.originalAleRange || ''),
+    adjustedAleRange: normaliseInlineInputText(input.adjustedAleRange || ''),
+    projectedAleRange: normaliseInlineInputText(input.projectedAleRange || ''),
+    aleChangePct: normaliseNumericInput(input.aleChangePct),
+    originalParameters: normaliseFairParamsInput(input.originalParameters),
+    adjustedParameters: normaliseFairParamsInput(input.adjustedParameters),
+    challenges: (Array.isArray(input.challenges) ? input.challenges : [])
+      .map((item) => normaliseConsensusChallengeInput(item))
+      .filter(Boolean)
+      .slice(0, 8),
+    traceLabel: normaliseInlineInputText(input.traceLabel || '')
+  }) || {};
+}
+
+function normaliseReviewMediationInput(input = {}) {
+  return compactInputValue({
+    narrative: normaliseBlockInputText(input.narrative || ''),
+    fairParams: normaliseFairParamsInput(input.fairParams),
+    results: normaliseResultsInput(input.results),
+    assessmentIntelligence: normaliseAssessmentIntelligenceInput(input.assessmentIntelligence),
+    reviewerView: normaliseBlockInputText(input.reviewerView || ''),
+    analystView: normaliseBlockInputText(input.analystView || ''),
+    disputedFocus: normaliseInlineInputText(input.disputedFocus || ''),
+    scenarioLens: normaliseScenarioLensInput(input.scenarioLens),
+    citations: normaliseCitationInputs(input.citations, { maxItems: 4 }),
+    traceLabel: normaliseInlineInputText(input.traceLabel || '')
+  }) || {};
 }
 
 function buildAssessmentChallengeStub(input = {}) {
@@ -289,23 +539,38 @@ function hasExecutiveChallengeShape(input = {}) {
     || hasMeaningfulObject(input.assessmentIntelligence);
 }
 
+function hasMeaningfulReviewerBriefInput(assessmentData = '') {
+  const text = cleanUserFacingText(String(assessmentData || '').trim(), { maxSentences: 4 });
+  const tokens = (text.match(/[a-z0-9]{2,}/gi) || []).length;
+  return !!text && (text.length >= 24 || tokens >= 5);
+}
+
+function hasMeaningfulParameterChallengeInput(input = {}) {
+  const parameterIdentity = String(input?.parameterLabel || input?.parameterKey || '').trim();
+  const reviewerConcern = cleanUserFacingText(String(input?.reviewerConcern || '').trim(), { maxSentences: 2 });
+  const scenarioSummary = cleanUserFacingText(String(input?.scenarioSummary || '').trim(), { maxSentences: 2 });
+  const currentAle = cleanUserFacingText(String(input?.currentAle || '').trim(), { maxSentences: 1 });
+  return !!parameterIdentity && !!reviewerConcern && !!(scenarioSummary || currentAle);
+}
+
 async function buildReviewerDecisionBriefWorkflow(input = {}) {
+  input = normaliseReviewerDecisionBriefInput(input);
   const config = getCompassProviderConfig();
   const traceLabel = sanitizeAiText(input.traceLabel || 'Reviewer decision brief', { maxChars: 120 }) || 'Reviewer decision brief';
   const assessmentData = String(input?.assessmentData || '').trim().slice(0, 2400);
   const stub = buildReviewerDecisionBriefStub(input);
-  if (!assessmentData) {
+  if (!hasMeaningfulReviewerBriefInput(assessmentData)) {
     return {
       mode: 'manual',
       ...stub,
       usedFallback: false,
       aiUnavailable: false,
-      manualReasonCode: 'missing_assessment_data',
+      manualReasonCode: 'incomplete_assessment_data',
       manualReasonTitle: 'Manual reviewer brief only',
       manualReasonMessage: 'The server needs a fuller assessment summary before it can generate a reviewer brief.',
       trace: buildTraceEntry({
         label: traceLabel,
-        promptSummary: 'Server manual mode used for reviewer brief because assessment data was missing.',
+        promptSummary: 'Server manual mode used for reviewer brief because assessment data was too short or incomplete.',
         response: 'The reviewer brief stayed in manual mode because the assessment summary was incomplete.'
       })
     };
@@ -384,6 +649,7 @@ ${schema}`;
 }
 
 async function buildChallengeAssessmentWorkflow(input = {}) {
+  input = normaliseChallengeAssessmentInput(input);
   const config = getCompassProviderConfig();
   const traceLabel = sanitizeAiText(input.traceLabel || 'Assessment challenge', { maxChars: 120 }) || 'Assessment challenge';
   if (hasExecutiveChallengeShape(input)) {
@@ -577,12 +843,29 @@ Instructions:
 }
 
 async function buildParameterChallengeRecordWorkflow(input = {}) {
+  input = normaliseParameterChallengeRecordInput(input);
   const config = getCompassProviderConfig();
   const traceLabel = sanitizeAiText(input.traceLabel || 'Parameter challenge record', { maxChars: 120 }) || 'Parameter challenge record';
   const stub = buildParameterChallengeStub(input);
   const allowedParams = Array.isArray(input?.allowedParams)
     ? input.allowedParams.map((item) => String(item || '').trim()).filter(Boolean)
     : ['tefLikely', 'vulnerability', 'lmLow', 'lmHigh', 'controlStrLikely'];
+  if (!hasMeaningfulParameterChallengeInput(input)) {
+    return {
+      mode: 'manual',
+      ...stub,
+      usedFallback: false,
+      aiUnavailable: false,
+      manualReasonCode: 'incomplete_parameter_challenge_input',
+      manualReasonTitle: 'Manual parameter challenge only',
+      manualReasonMessage: 'Add the challenged parameter, reviewer concern, and a short scenario summary before the server can build a parameter challenge record.',
+      trace: buildTraceEntry({
+        label: traceLabel,
+        promptSummary: 'Server manual mode used for parameter challenge because the request was incomplete.',
+        response: 'The parameter challenge stayed in manual mode because the request was incomplete.'
+      })
+    };
+  }
   if (!config.proxyConfigured) {
     return {
       mode: 'deterministic_fallback',
@@ -663,6 +946,7 @@ Allowed reviewerAdjustment.param values: ${allowedParams.join(', ')}`;
 }
 
 async function buildChallengeSynthesisWorkflow(input = {}) {
+  input = normaliseChallengeSynthesisInput(input);
   const config = getCompassProviderConfig();
   const traceLabel = sanitizeAiText(input.traceLabel || 'Challenge synthesis', { maxChars: 120 }) || 'Challenge synthesis';
   const stub = buildChallengeSynthesisStub(input);
@@ -767,6 +1051,7 @@ Write as if advising a risk committee. Keep the total to 3 sentences.`;
 }
 
 async function buildConsensusRecommendationWorkflow(input = {}) {
+  input = normaliseConsensusRecommendationInput(input);
   const config = getCompassProviderConfig();
   const traceLabel = sanitizeAiText(input.traceLabel || 'Consensus recommendation', { maxChars: 120 }) || 'Consensus recommendation';
   const stub = buildConsensusRecommendationStub(input);
@@ -887,6 +1172,7 @@ Rules:
 }
 
 async function buildReviewMediationWorkflow(input = {}) {
+  input = normaliseReviewMediationInput(input);
   const config = getCompassProviderConfig();
   const reviewerView = String(input?.reviewerView || '').trim();
   const analystView = String(input?.analystView || '').trim();

@@ -3,7 +3,9 @@
 const { requireSession } = require('../_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('../_request');
 const { checkRateLimit } = require('../_rateLimit');
-const { buildTreatmentSuggestionWorkflow } = require('../_treatmentSuggestionWorkflow');
+const { buildTreatmentSuggestionWorkflow, normaliseTreatmentSuggestionInput } = require('../_treatmentSuggestionWorkflow');
+const { recordAiRouteReuse, withAiRouteMetrics } = require('../_aiRouteMetrics');
+const { withWorkflowReuse } = require('../_workflowReuse');
 
 const ALLOWED_FIELDS = [
   'baselineAssessment',
@@ -70,7 +72,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const input = {
+  const normalisedInput = normaliseTreatmentSuggestionInput({
     baselineAssessment: isPlainObject(body.baselineAssessment) ? body.baselineAssessment : {},
     improvementRequest: typeof body.improvementRequest === 'string' ? body.improvementRequest : '',
     businessUnit: isPlainObject(body.businessUnit) ? body.businessUnit : null,
@@ -78,10 +80,17 @@ module.exports = async function handler(req, res) {
     citations: Array.isArray(body.citations) ? body.citations : [],
     priorMessages: Array.isArray(body.priorMessages) ? body.priorMessages : [],
     traceLabel: typeof body.traceLabel === 'string' ? body.traceLabel : ''
-  };
+  });
 
   try {
-    const result = await buildTreatmentSuggestionWorkflow(input);
+    const routeName = 'treatment-suggestion';
+    const result = await withAiRouteMetrics(routeName, () => withWorkflowReuse({
+      workflow: routeName,
+      scopeKey: String(session?.username || 'anonymous').trim().toLowerCase(),
+      fingerprintInput: normalisedInput,
+      observeReuseEvent: (event) => recordAiRouteReuse(routeName, event),
+      compute: () => buildTreatmentSuggestionWorkflow(normalisedInput)
+    }));
     res.status(200).json(result);
   } catch (error) {
     res.status(503).json({

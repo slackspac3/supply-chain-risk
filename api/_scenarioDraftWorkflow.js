@@ -2,6 +2,7 @@
 
 const { getCompassProviderConfig } = require('./_aiRuntime');
 const { buildTraceEntry, callAi, parseOrRepairStructuredJson, runStructuredQualityGate, sanitizeAiText } = require('./_aiOrchestrator');
+const { buildDeterministicFallbackResult, buildFallbackFromError, buildManualModeResult, buildWorkflowTimeoutProfile } = require('./_aiWorkflowSupport');
 const { buildFeedbackLearningPromptBlock, resolveHierarchicalFeedbackProfile, rerankRiskCardsWithFeedback } = require('./_learningAuthority');
 
 function normaliseSentenceKey(sentence = '') {
@@ -105,6 +106,184 @@ function cleanUserFacingText(value = '', { maxSentences = 0, stripTrailingPeriod
     text = text.replace(/[.]+$/g, '').trim();
   }
   return text;
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normaliseInlineInputText(value = '') {
+  return String(value || '')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normaliseBlockInputText(value = '') {
+  return String(value || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function compactInputValue(value) {
+  if (Array.isArray(value)) {
+    const next = value
+      .map((item) => compactInputValue(item))
+      .filter((item) => item !== undefined);
+    return next.length ? next : undefined;
+  }
+  if (isPlainObject(value)) {
+    const next = {};
+    Object.entries(value).forEach(([key, item]) => {
+      const compacted = compactInputValue(item);
+      if (compacted !== undefined) next[key] = compacted;
+    });
+    return Object.keys(next).length ? next : undefined;
+  }
+  if (typeof value === 'string') {
+    return value.trim() ? value : undefined;
+  }
+  if (value == null) return undefined;
+  return value;
+}
+
+function normaliseStringListInput(items = [], { maxItems = 12, block = false, dedupe = true } = {}) {
+  const source = Array.isArray(items) ? items : [];
+  const seen = new Set();
+  const result = [];
+  source.forEach((item) => {
+    const value = block ? normaliseBlockInputText(item) : normaliseInlineInputText(item);
+    if (!value) return;
+    const key = value.toLowerCase();
+    if (dedupe && seen.has(key)) return;
+    seen.add(key);
+    if (result.length < maxItems) result.push(value);
+  });
+  return result;
+}
+
+function normaliseNumericInput(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normaliseCitationInput(item = {}) {
+  if (!isPlainObject(item)) return undefined;
+  return compactInputValue({
+    title: normaliseInlineInputText(item.title || item.sourceTitle || item.note || ''),
+    sourceTitle: normaliseInlineInputText(item.sourceTitle || ''),
+    excerpt: normaliseBlockInputText(item.excerpt || item.description || item.text || item.note || ''),
+    url: String(item.url || item.link || '').trim(),
+    relevanceReason: normaliseBlockInputText(item.relevanceReason || ''),
+    score: normaliseNumericInput(item.score)
+  });
+}
+
+function normaliseCitationInputs(items = [], { maxItems = 8 } = {}) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => normaliseCitationInput(item))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function normaliseResolvedObligationEntryInput(item = {}) {
+  if (!isPlainObject(item)) return undefined;
+  return compactInputValue({
+    title: normaliseInlineInputText(item.title || ''),
+    sourceEntityName: normaliseInlineInputText(item.sourceEntityName || ''),
+    text: normaliseBlockInputText(item.text || '')
+  });
+}
+
+function normaliseResolvedObligationContextInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    summary: normaliseBlockInputText(value.summary || ''),
+    direct: (Array.isArray(value.direct) ? value.direct : []).map((item) => normaliseResolvedObligationEntryInput(item)).filter(Boolean).slice(0, 6),
+    inheritedMandatory: (Array.isArray(value.inheritedMandatory) ? value.inheritedMandatory : []).map((item) => normaliseResolvedObligationEntryInput(item)).filter(Boolean).slice(0, 6),
+    inheritedConditional: (Array.isArray(value.inheritedConditional) ? value.inheritedConditional : []).map((item) => normaliseResolvedObligationEntryInput(item)).filter(Boolean).slice(0, 6),
+    inheritedGuidance: (Array.isArray(value.inheritedGuidance) ? value.inheritedGuidance : []).map((item) => normaliseResolvedObligationEntryInput(item)).filter(Boolean).slice(0, 6)
+  });
+}
+
+function normaliseBusinessUnitInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    id: normaliseInlineInputText(value.id || ''),
+    buId: normaliseInlineInputText(value.buId || ''),
+    name: normaliseInlineInputText(value.name || ''),
+    geography: normaliseInlineInputText(value.geography || ''),
+    functionKey: normaliseInlineInputText(value.functionKey || ''),
+    selectedDepartmentKey: normaliseInlineInputText(value.selectedDepartmentKey || ''),
+    scenarioLensHint: normaliseInlineInputText(value.scenarioLensHint || ''),
+    contextSummary: normaliseBlockInputText(value.contextSummary || ''),
+    notes: normaliseBlockInputText(value.notes || ''),
+    selectedDepartmentContext: normaliseBlockInputText(value.selectedDepartmentContext || ''),
+    aiGuidance: normaliseBlockInputText(value.aiGuidance || '')
+  });
+}
+
+function normaliseAdminSettingsInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    geography: normaliseInlineInputText(value.geography || ''),
+    applicableRegulations: normaliseStringListInput(value.applicableRegulations, { maxItems: 12 }),
+    businessUnitContext: normaliseBlockInputText(value.businessUnitContext || ''),
+    departmentContext: normaliseBlockInputText(value.departmentContext || ''),
+    companyContextProfile: normaliseBlockInputText(value.companyContextProfile || ''),
+    companyStructureContext: normaliseBlockInputText(value.companyStructureContext || ''),
+    inheritedContextSummary: normaliseBlockInputText(value.inheritedContextSummary || ''),
+    personalContextSummary: normaliseBlockInputText(value.personalContextSummary || ''),
+    userProfileSummary: normaliseBlockInputText(value.userProfileSummary || ''),
+    adminContextSummary: normaliseBlockInputText(value.adminContextSummary || ''),
+    benchmarkStrategy: normaliseBlockInputText(value.benchmarkStrategy || ''),
+    resolvedObligationSummary: normaliseBlockInputText(value.resolvedObligationSummary || ''),
+    resolvedObligationContext: normaliseResolvedObligationContextInput(value.resolvedObligationContext)
+  });
+}
+
+function normalisePriorMessagesInput(items = [], { maxItems = 6 } = {}) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => {
+      if (!isPlainObject(item)) return undefined;
+      return compactInputValue({
+        role: normaliseInlineInputText(item.role || '').toLowerCase(),
+        content: normaliseBlockInputText(item.content || '')
+      });
+    })
+    .filter((item) => item?.role && item?.content)
+    .slice(-maxItems);
+}
+
+function normaliseGuidedInput(value = {}) {
+  if (!isPlainObject(value)) return undefined;
+  return compactInputValue({
+    event: normaliseBlockInputText(value.event || ''),
+    impact: normaliseBlockInputText(value.impact || ''),
+    cause: normaliseBlockInputText(value.cause || ''),
+    asset: normaliseBlockInputText(value.asset || ''),
+    urgency: normaliseInlineInputText(value.urgency || '').toLowerCase()
+  });
+}
+
+function normaliseGuidedScenarioDraftInput(input = {}) {
+  return compactInputValue({
+    session: input.session,
+    riskStatement: normaliseBlockInputText(input.riskStatement || ''),
+    guidedInput: normaliseGuidedInput(input.guidedInput),
+    scenarioLensHint: normaliseInlineInputText(input.scenarioLensHint || ''),
+    businessUnit: normaliseBusinessUnitInput(input.businessUnit),
+    geography: normaliseInlineInputText(input.geography || ''),
+    applicableRegulations: normaliseStringListInput(input.applicableRegulations, { maxItems: 12 }),
+    citations: normaliseCitationInputs(input.citations),
+    adminSettings: normaliseAdminSettingsInput(input.adminSettings),
+    traceLabel: normaliseInlineInputText(input.traceLabel || ''),
+    priorMessages: normalisePriorMessagesInput(input.priorMessages)
+  }) || { session: input.session };
 }
 
 function normaliseScenarioHintKey(value) {
@@ -1165,44 +1344,112 @@ function buildServerFallbackResult(input = {}, { aiUnavailable = false, feedback
     userProfile: input.adminSettings?.userProfileSummary
   });
   const fallbackRisks = rerankRiskCardsWithFeedback(fallbackScenarioExpansion.riskTitles, feedbackProfile);
-  const result = withEvidenceMeta({
-    mode: 'deterministic_fallback',
-    seedNarrative,
-    draftNarrative: fallbackScenarioExpansion.scenarioExpansion,
-    draftNarrativeSource: 'fallback',
-    draftNarrativeReason: aiUnavailable ? 'proxy_unavailable' : 'quality_fallback',
-    enhancedStatement: fallbackScenarioExpansion.scenarioExpansion,
-    summary: fallbackScenarioExpansion.summary,
-    linkAnalysis: buildRiskContextLinkAnalysis({
-      classification,
-      riskTitles: fallbackRisks
-    }),
-    workflowGuidance: [
-      'Confirm the scenario wording in plain English before moving on.',
-      'Keep only the risks that clearly belong in the same event path and business consequence chain.',
-      'Challenge any assumption that does not fit the business context or known incident history.'
-    ],
-    benchmarkBasis: 'This Step 1 draft is in deterministic server fallback mode. Treat it as a bounded working draft until live AI is available again.',
-    scenarioLens: buildScenarioLens(classification),
-    structuredScenario: buildStructuredScenario(input, classification),
-    risks: fallbackRisks,
-    regulations: Array.from(new Set([...(Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []), ...fallbackRisks.flatMap((risk) => risk.regulations || [])].map(String).filter(Boolean))),
-    citations: Array.isArray(input.citations) ? input.citations : [],
-    usedFallback: true,
+  const result = buildDeterministicFallbackResult({
+    baseResult: {
+      seedNarrative,
+      draftNarrative: fallbackScenarioExpansion.scenarioExpansion,
+      draftNarrativeSource: 'fallback',
+      draftNarrativeReason: aiUnavailable ? 'proxy_unavailable' : 'quality_fallback',
+      enhancedStatement: fallbackScenarioExpansion.scenarioExpansion,
+      summary: fallbackScenarioExpansion.summary,
+      linkAnalysis: buildRiskContextLinkAnalysis({
+        classification,
+        riskTitles: fallbackRisks
+      }),
+      workflowGuidance: [
+        'Confirm the scenario wording in plain English before moving on.',
+        'Keep only the risks that clearly belong in the same event path and business consequence chain.',
+        'Challenge any assumption that does not fit the business context or known incident history.'
+      ],
+      benchmarkBasis: 'This Step 1 draft is in deterministic server fallback mode. Treat it as a bounded working draft until live AI is available again.',
+      scenarioLens: buildScenarioLens(classification),
+      structuredScenario: buildStructuredScenario(input, classification),
+      risks: fallbackRisks,
+      regulations: Array.from(new Set([...(Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []), ...fallbackRisks.flatMap((risk) => risk.regulations || [])].map(String).filter(Boolean))),
+      citations: Array.isArray(input.citations) ? input.citations : []
+    },
     aiUnavailable,
-    trace: buildTraceEntry({
-      label: traceLabel,
-      promptSummary: 'Server deterministic fallback used for Step 1 guided draft.',
-      response: fallbackScenarioExpansion.scenarioExpansion,
-      sources: input.citations || []
-    })
-  }, evidenceMeta);
+    traceLabel,
+    promptSummary: 'Server deterministic fallback used for Step 1 guided draft.',
+    response: fallbackScenarioExpansion.scenarioExpansion,
+    sources: input.citations || [],
+    evidenceMeta,
+    withEvidenceMeta,
+    includeReasonFields: false
+  });
   result.aiAlignment = buildAiAlignment(input, result, {
     classification,
     seedNarrative,
     fallbackScenarioExpansion
   });
   return result;
+}
+
+function buildScenarioDraftValidationText(input = {}) {
+  return cleanUserFacingText(cleanScenarioSeed([
+    input.riskStatement,
+    input?.guidedInput?.event,
+    input?.guidedInput?.asset,
+    input?.guidedInput?.cause,
+    input?.guidedInput?.impact
+  ].filter(Boolean).join('. ')), { maxSentences: 5 });
+}
+
+function hasMeaningfulScenarioDraftInput(input = {}) {
+  const text = buildScenarioDraftValidationText(input);
+  const tokens = (text.match(/[a-z0-9]{2,}/gi) || []).length;
+  return !!text && ((text.length >= 10 && tokens >= 2) || tokens >= 3);
+}
+
+function buildManualScenarioDraftResult(input = {}, { traceLabel = 'Step 1 guided draft' } = {}) {
+  const seedNarrative = buildScenarioDraftValidationText(input);
+  const classification = classifyScenario(seedNarrative, {
+    guidedInput: input.guidedInput,
+    businessUnit: input.businessUnit,
+    scenarioLensHint: input.scenarioLensHint
+  });
+  const evidenceMeta = buildEvidenceMeta({
+    citations: input.citations || [],
+    businessUnit: input.businessUnit,
+    geography: input.geography,
+    applicableRegulations: input.applicableRegulations,
+    organisationContext: input.adminSettings?.companyStructureContext,
+    adminSettings: input.adminSettings,
+    userProfile: input.adminSettings?.userProfileSummary
+  });
+  return buildManualModeResult({
+    baseResult: {
+      seedNarrative,
+      draftNarrative: '',
+      draftNarrativeSource: 'manual',
+      draftNarrativeReason: 'input_incomplete',
+      enhancedStatement: '',
+      summary: 'The current scenario text is too limited for the server to draft a useful scenario.',
+      linkAnalysis: 'Add the event, affected asset or service, and main impact before trying AI draft generation again.',
+      workflowGuidance: [
+        'Describe the event or issue you are assessing in one plain sentence.',
+        'Add the main impact or the asset, service, or team affected.',
+        'Then try the guided draft again.'
+      ],
+      benchmarkBasis: 'This step stayed in manual mode because the current scenario text is too limited for a reliable server draft.',
+      scenarioLens: buildScenarioLens(classification),
+      structuredScenario: buildStructuredScenario({ ...input, riskStatement: seedNarrative }, classification),
+      risks: [],
+      regulations: Array.from(new Set((Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []).map(String).filter(Boolean))),
+      citations: Array.isArray(input.citations) ? input.citations : []
+    },
+    manualReason: {
+      code: 'incomplete_scenario_input',
+      title: 'Manual draft only',
+      message: 'Add a clearer event, affected asset or service, or main impact before asking the server to draft the scenario.'
+    },
+    traceLabel,
+    promptSummary: 'Server manual mode used for Step 1 guided draft because the input was too short or incomplete.',
+    response: 'The guided draft stayed in manual mode because the scenario input was incomplete.',
+    sources: input.citations || [],
+    evidenceMeta,
+    withEvidenceMeta
+  });
 }
 
 function normaliseScenarioDraftCandidate(parsed = {}, fallback = {}, input = {}, classification = {}) {
@@ -1227,8 +1474,19 @@ function normaliseScenarioDraftCandidate(parsed = {}, fallback = {}, input = {},
   };
 }
 
+const SCENARIO_DRAFT_TIMEOUTS = buildWorkflowTimeoutProfile({
+  liveMs: 24000,
+  repairMs: 10000,
+  qualityMs: 12000,
+  qualityRepairMs: 8000
+});
+
 async function buildGuidedScenarioDraftWorkflow(input = {}) {
+  input = normaliseGuidedScenarioDraftInput(input);
   const traceLabel = sanitizeAiText(input.traceLabel || 'Step 1 guided draft', { maxChars: 120 }) || 'Step 1 guided draft';
+  if (!hasMeaningfulScenarioDraftInput(input)) {
+    return buildManualScenarioDraftResult(input, { traceLabel });
+  }
   const feedbackProfile = await resolveHierarchicalFeedbackProfile({
     username: input.session?.username || '',
     buId: input.businessUnit?.id || input.businessUnit?.buId || '',
@@ -1246,10 +1504,6 @@ async function buildGuidedScenarioDraftWorkflow(input = {}) {
     businessUnit: input.businessUnit,
     scenarioLensHint: input.scenarioLensHint
   });
-  const fallbackScenarioExpansion = buildScenarioExpansion({
-    ...input,
-    riskStatement: seedNarrative
-  }, classification);
   const evidenceMeta = buildEvidenceMeta({
     citations: input.citations || [],
     businessUnit: input.businessUnit,
@@ -1259,6 +1513,23 @@ async function buildGuidedScenarioDraftWorkflow(input = {}) {
     adminSettings: input.adminSettings,
     userProfile: input.adminSettings?.userProfileSummary
   });
+  const defaultWorkflowGuidance = [
+    'Confirm the scenario wording in plain English before moving on.',
+    'Keep only the risks that clearly belong in the same event path and business consequence chain.',
+    'Challenge any assumption that does not fit the business context or known incident history.'
+  ];
+  const defaultBenchmarkBasis = 'Prefer GCC and UAE benchmark references where credible, then fall back to the closest global enterprise comparator.';
+  const defaultStructuredScenario = buildStructuredScenario(input, classification);
+  let fallbackScenarioExpansion = null;
+  const getFallbackScenarioExpansion = () => {
+    if (!fallbackScenarioExpansion) {
+      fallbackScenarioExpansion = buildScenarioExpansion({
+        ...input,
+        riskStatement: seedNarrative
+      }, classification);
+    }
+    return fallbackScenarioExpansion;
+  };
   const outputSchema = `{
   "draftNarrative": "string",
   "summary": "string",
@@ -1342,20 +1613,24 @@ ${feedbackPromptBlock}`;
       temperature: 0.2,
       maxCompletionTokens: 2200,
       maxPromptChars: 18000,
+      timeoutMs: SCENARIO_DRAFT_TIMEOUTS.liveMs,
       priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : []
     });
     const parsed = await parseOrRepairStructuredJson(generation.text, outputSchema, {
-      taskName: 'repairGuidedScenarioDraft'
+      taskName: 'repairGuidedScenarioDraft',
+      timeoutMs: SCENARIO_DRAFT_TIMEOUTS.repairMs
     });
     let candidate = normaliseScenarioDraftCandidate(parsed?.parsed || {}, {
-      ...fallbackScenarioExpansion,
-      workflowGuidance: [
-        'Confirm the scenario wording in plain English before moving on.',
-        'Keep only the risks that clearly belong in the same event path and business consequence chain.',
-        'Challenge any assumption that does not fit the business context or known incident history.'
-      ],
-      benchmarkBasis: 'Prefer GCC and UAE benchmark references where credible, then fall back to the closest global enterprise comparator.',
-      structuredScenario: buildStructuredScenario(input, classification)
+      summary: buildRiskContextSummary({
+        classification,
+        asset: defaultStructuredScenario.assetService,
+        impact: defaultStructuredScenario.effect,
+        riskTitles: []
+      }),
+      linkAnalysis: buildRiskContextLinkAnalysis({ classification, riskTitles: [] }),
+      workflowGuidance: defaultWorkflowGuidance,
+      benchmarkBasis: defaultBenchmarkBasis,
+      structuredScenario: defaultStructuredScenario
     }, input, classification);
 
     try {
@@ -1376,14 +1651,17 @@ ${feedbackPromptBlock}`;
           'Keep the risk shortlist tightly aligned to the same event tree.',
           'Keep the structured scenario populated enough for downstream quantification.'
         ],
-        candidatePayload: candidate
+        candidatePayload: candidate,
+        timeoutMs: SCENARIO_DRAFT_TIMEOUTS.qualityMs,
+        repairTimeoutMs: SCENARIO_DRAFT_TIMEOUTS.qualityRepairMs
       });
       if (qualityChecked?.parsed) {
         candidate = normaliseScenarioDraftCandidate(qualityChecked.parsed, {
-          ...fallbackScenarioExpansion,
+          summary: candidate.summary,
+          linkAnalysis: candidate.linkAnalysis,
           workflowGuidance: candidate.workflowGuidance,
           benchmarkBasis: candidate.benchmarkBasis,
-          structuredScenario: buildStructuredScenario(input, classification)
+          structuredScenario: defaultStructuredScenario
         }, input, classification);
       }
     } catch (qualityGateError) {
@@ -1398,10 +1676,15 @@ ${feedbackPromptBlock}`;
     });
     const useFallbackNarrative = !selectedDraft.accepted;
     const rerankedCandidateRisks = rerankRiskCardsWithFeedback(candidate.risks, feedbackProfile);
-    const rerankedFallbackRisks = rerankRiskCardsWithFeedback(fallbackScenarioExpansion.riskTitles, feedbackProfile);
+    const fallbackExpansion = (useFallbackNarrative || !rerankedCandidateRisks.length)
+      ? getFallbackScenarioExpansion()
+      : null;
+    const rerankedFallbackRisks = fallbackExpansion
+      ? rerankRiskCardsWithFeedback(fallbackExpansion.riskTitles, feedbackProfile)
+      : [];
     const finalNarrative = useFallbackNarrative
-      ? fallbackScenarioExpansion.scenarioExpansion
-      : (selectedDraft.narrative || candidate.draftNarrative || fallbackScenarioExpansion.scenarioExpansion);
+      ? fallbackExpansion.scenarioExpansion
+      : (selectedDraft.narrative || candidate.draftNarrative || candidate.enhancedStatement || seedNarrative);
     const finalRisks = useFallbackNarrative || !rerankedCandidateRisks.length
       ? rerankedFallbackRisks
       : rerankedCandidateRisks;
@@ -1412,17 +1695,13 @@ ${feedbackPromptBlock}`;
       draftNarrativeSource: useFallbackNarrative ? 'fallback' : 'ai',
       draftNarrativeReason: useFallbackNarrative ? (selectedDraft.reason || 'quality_fallback') : 'accepted',
       enhancedStatement: finalNarrative,
-      summary: candidate.summary || fallbackScenarioExpansion.summary,
+      summary: candidate.summary || (fallbackExpansion?.summary || ''),
       linkAnalysis: candidate.linkAnalysis || buildRiskContextLinkAnalysis({ classification, riskTitles: finalRisks }),
-      workflowGuidance: candidate.workflowGuidance?.length ? candidate.workflowGuidance : [
-        'Confirm the scenario wording in plain English before moving on.',
-        'Keep only the risks that clearly belong in the same event path and business consequence chain.',
-        'Challenge any assumption that does not fit the business context or known incident history.'
-      ],
-      benchmarkBasis: candidate.benchmarkBasis || 'Prefer GCC and UAE benchmark references where credible, then fall back to the closest global enterprise comparator.',
+      workflowGuidance: candidate.workflowGuidance?.length ? candidate.workflowGuidance : defaultWorkflowGuidance,
+      benchmarkBasis: candidate.benchmarkBasis || defaultBenchmarkBasis,
       scenarioLens: candidate.scenarioLens,
       structuredScenario: {
-        ...buildStructuredScenario(input, classification),
+        ...defaultStructuredScenario,
         ...(candidate.structuredScenario || {})
       },
       risks: finalRisks,
@@ -1440,24 +1719,41 @@ ${feedbackPromptBlock}`;
     result.aiAlignment = buildAiAlignment(input, result, {
       classification,
       seedNarrative,
-      fallbackScenarioExpansion
+      fallbackScenarioExpansion: fallbackExpansion
     });
     return result;
   } catch (error) {
-    console.warn('buildGuidedScenarioDraftWorkflow server fallback:', error.message);
-    return buildServerFallbackResult(input, { aiUnavailable: true, feedbackProfile, traceLabel });
+    return buildFallbackFromError({
+      error,
+      buildFallbackResult: ({ normalisedError }) => {
+        console.warn('buildGuidedScenarioDraftWorkflow server fallback:', normalisedError.message);
+        return buildServerFallbackResult(input, { aiUnavailable: true, feedbackProfile, traceLabel });
+      }
+    });
   }
 }
 
 module.exports = {
   buildGuidedScenarioDraftWorkflow,
+  normaliseGuidedScenarioDraftInput,
   workflowUtils: {
     buildResolvedObligationPromptBlock,
     buildContextPromptBlock,
     buildEvidenceMeta,
+    compactInputValue,
     cleanUserFacingText,
+    isPlainObject,
+    normaliseAdminSettingsInput,
+    normaliseBlockInputText,
+    normaliseBusinessUnitInput,
+    normaliseCitationInputs,
     normaliseGuidance,
+    normaliseInlineInputText,
+    normalisePriorMessagesInput,
+    normaliseResolvedObligationContextInput,
+    normaliseResolvedObligationEntryInput,
     normaliseRiskCards,
+    normaliseStringListInput,
     truncateText,
     withEvidenceMeta
   }

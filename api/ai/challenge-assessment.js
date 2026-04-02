@@ -3,6 +3,7 @@
 const { requireSession } = require('../_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('../_request');
 const { checkRateLimit } = require('../_rateLimit');
+const { withAiRouteMetrics } = require('../_aiRouteMetrics');
 const { buildChallengeAssessmentWorkflow } = require('../_reviewChallengeWorkflow');
 
 const ALLOWED_FIELDS = [
@@ -47,7 +48,7 @@ module.exports = async function handler(req, res) {
   const unexpectedFields = getUnexpectedFields(body, ALLOWED_FIELDS);
   if (unexpectedFields.length) return void res.status(400).json({ error: 'Unexpected request fields', fields: unexpectedFields });
   try {
-    const result = await buildChallengeAssessmentWorkflow({
+    const result = await withAiRouteMetrics('challenge-assessment', () => buildChallengeAssessmentWorkflow({
       scenarioTitle: typeof body.scenarioTitle === 'string' ? body.scenarioTitle : '',
       narrative: typeof body.narrative === 'string' ? body.narrative : '',
       geography: typeof body.geography === 'string' ? body.geography : '',
@@ -65,7 +66,7 @@ module.exports = async function handler(req, res) {
       assessmentIntelligence: isPlainObject(body.assessmentIntelligence) ? body.assessmentIntelligence : {},
       obligationBasis: isPlainObject(body.obligationBasis) ? body.obligationBasis : {},
       traceLabel: typeof body.traceLabel === 'string' ? body.traceLabel : ''
-    });
+    }));
     res.status(200).json(result);
   } catch (error) {
     res.status(503).json({ error: String(error?.message || 'AI challenge assessment is unavailable right now.') });

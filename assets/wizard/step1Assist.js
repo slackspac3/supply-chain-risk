@@ -9,6 +9,48 @@
     narrativeRefinement: 'Step 1 narrative refinement',
     registerAnalysis: 'Step 1 register analysis'
   };
+  const STEP1_AI_ACTION_COOLDOWN_MS = 4000;
+  const _step1AiActionCooldowns = typeof AiWorkflowClient !== 'undefined' && AiWorkflowClient && typeof AiWorkflowClient.createActionCooldownStore === 'function'
+    ? AiWorkflowClient.createActionCooldownStore({ cooldownMs: STEP1_AI_ACTION_COOLDOWN_MS, maxEntries: 24 })
+    : null;
+
+  function _setStep1TransientButtonState(button, label, durationMs = 1200) {
+    if (!button) return;
+    const idleLabel = String(button.dataset.idleLabel || button.textContent || '').trim() || String(button.textContent || '').trim();
+    button.dataset.idleLabel = idleLabel;
+    button.disabled = true;
+    button.textContent = String(label || '').trim() || idleLabel;
+    window.setTimeout(() => {
+      if (!button.isConnected) return;
+      button.disabled = false;
+      button.textContent = idleLabel;
+    }, Math.max(400, Number(durationMs || 0)));
+  }
+
+  function _getStep1AiActionCooldownMs(endpoint = '', payload = {}, scope = '') {
+    if (!_step1AiActionCooldowns) return 0;
+    return _step1AiActionCooldowns.getRemainingMs(endpoint, payload, { scope });
+  }
+
+  function _markStep1AiActionCooldown(endpoint = '', payload = {}, scope = '') {
+    if (!_step1AiActionCooldowns) return 0;
+    return _step1AiActionCooldowns.markCompleted(endpoint, payload, { scope });
+  }
+
+  function _guardStep1AiActionCooldown({
+    button = null,
+    endpoint = '',
+    payload = {},
+    scope = '',
+    cooldownLabel = 'Just ran…',
+    message = 'This AI action just ran for the current inputs. Review the result or change the inputs before rerunning.'
+  } = {}) {
+    const remainingMs = _getStep1AiActionCooldownMs(endpoint, payload, scope);
+    if (!remainingMs) return false;
+    _setStep1TransientButtonState(button, cooldownLabel, Math.min(remainingMs, 1400));
+    UI.toast(message, 'info', 3500);
+    return true;
+  }
 
   function _buildGuidedDraftStatusCopy(source = '') {
     if (source === 'ai') return 'Built with AI using the current function context, geography, regulations, and retrieved references.';
@@ -239,10 +281,29 @@
     }
 
     const button = document.getElementById('btn-build-guided-narrative');
-    const resetButton = _setStep1ButtonBusy(button, 'Building…');
     const preview = document.getElementById('guided-preview');
     const bu = getBUList().find(b => b.id === (document.getElementById('wizard-bu')?.value || AppState.draft.buId));
     const preferredLens = getStep1PreferredScenarioLens(settings, AppState.draft, localDraft);
+    const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+    const requestPayload = {
+      riskStatement: localDraft,
+      guidedInput: { ...AppState.draft.guidedInput },
+      scenarioLensHint: preferredLens,
+      businessUnit: aiContext.businessUnit || bu,
+      geography: formatScenarioGeographies(getScenarioGeographies()),
+      applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
+      adminSettings: aiContext.adminSettings,
+      traceLabel: STEP1_TRACE_LABELS.guidedDraft
+    };
+    if (_guardStep1AiActionCooldown({
+      button,
+      endpoint: '/api/ai/scenario-draft',
+      payload: requestPayload,
+      scope: 'step1-guided-draft',
+      cooldownLabel: 'Built just now',
+      message: 'This guided draft already reflects the current answers. Review it or change the guided inputs before rebuilding.'
+    })) return;
+    const resetButton = _setStep1ButtonBusy(button, 'Building…');
 
     if (preview) {
       preview.textContent = 'Building a scenario draft from the current event, impact, and context…';
@@ -250,7 +311,6 @@
     window.scheduleStep1ScenarioCrossReferenceRefresh?.({ immediate: true, force: true, narrativeOverride: localDraft });
 
     try {
-      const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
       _warnIfRagNotReady();
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
         narrative: localDraft,
@@ -260,17 +320,11 @@
         businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
       }), 5);
       const rawResult = await LLMService.buildGuidedScenarioDraft({
-        riskStatement: localDraft,
-        guidedInput: { ...AppState.draft.guidedInput },
-        scenarioLensHint: preferredLens,
-        businessUnit: aiContext.businessUnit || bu,
-        geography: formatScenarioGeographies(getScenarioGeographies()),
-        applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
-        citations,
-        adminSettings: aiContext.adminSettings,
-        traceLabel: STEP1_TRACE_LABELS.guidedDraft
+        ...requestPayload,
+        citations
       });
       const result = _ensureRiskConfidence(rawResult);
+      _markStep1AiActionCooldown('/api/ai/scenario-draft', requestPayload, 'step1-guided-draft');
       const finalDraft = String(result.draftNarrative || result.enhancedStatement || localDraft).trim() || localDraft;
       const resultMode = String(result.mode || '').trim().toLowerCase();
       const guidedDraftSource = resultMode === 'deterministic_fallback'
@@ -487,12 +541,33 @@
       return;
     }
     const button = document.getElementById('btn-enhance-risk-statement');
+    const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+    const preferredLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
+    const requestPayload = {
+      riskStatement: assistSeed || narrative,
+      registerText: '',
+      registerMeta: null,
+      scenarioLensHint: preferredLens,
+      businessUnit: aiContext.businessUnit || bu,
+      geography: formatScenarioGeographies(getScenarioGeographies()),
+      applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
+      guidedInput: { ...AppState.draft.guidedInput },
+      adminSettings: aiContext.adminSettings,
+      priorMessages: _getStep1PriorMessages(),
+      traceLabel: STEP1_TRACE_LABELS.narrativeRefinement
+    };
+    if (_guardStep1AiActionCooldown({
+      button,
+      endpoint: '/api/compass',
+      payload: requestPayload,
+      scope: 'step1-enhance-draft',
+      cooldownLabel: 'Enhanced just now',
+      message: 'This draft refinement already reflects the current wording. Review it or change the draft before rerunning.'
+    })) return;
     const resetButton = _setStep1ButtonBusy(button, 'Enhancing…');
     window.scheduleStep1ScenarioCrossReferenceRefresh?.({ immediate: true, force: true, narrativeOverride: assistSeed || narrative });
     if (output) output.innerHTML = UI.wizardAssistSkeleton();
     try {
-      const preferredLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
-      const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
       _warnIfRagNotReady();
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
         narrative: assistSeed || narrative,
@@ -503,20 +578,11 @@
         businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
       }), 5);
       const rawResult = await LLMService.enhanceRiskContext({
-        riskStatement: assistSeed || narrative,
-        registerText: '',
-        registerMeta: null,
-        scenarioLensHint: preferredLens,
-        businessUnit: aiContext.businessUnit || bu,
-        geography: formatScenarioGeographies(getScenarioGeographies()),
-        applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
-        guidedInput: { ...AppState.draft.guidedInput },
-        citations,
-        adminSettings: aiContext.adminSettings,
-        priorMessages: _getStep1PriorMessages(),
-        traceLabel: STEP1_TRACE_LABELS.narrativeRefinement
+        ...requestPayload,
+        citations
       });
       const result = _ensureRiskConfidence(rawResult);
+      _markStep1AiActionCooldown('/api/compass', requestPayload, 'step1-enhance-draft');
       draftScenarioState.applyScenarioAssistResultToDraft(result, {
         narrative,
         assistSeed,
@@ -557,20 +623,30 @@
     }
     const bu = getBUList().find(b => b.id === AppState.draft.buId);
     const button = document.getElementById('btn-register-analyse');
+    const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+    const requestPayload = {
+      registerText: AppState.draft.registerFindings,
+      registerMeta: AppState.draft.registerMeta,
+      businessUnit: aiContext.businessUnit || bu,
+      geography: formatScenarioGeographies(getScenarioGeographies()),
+      applicableRegulations: AppState.draft.applicableRegulations || [],
+      adminSettings: aiContext.adminSettings,
+      priorMessages: _getStep1PriorMessages(),
+      traceLabel: STEP1_TRACE_LABELS.registerAnalysis
+    };
+    if (_guardStep1AiActionCooldown({
+      button,
+      endpoint: '/api/ai/register-analysis',
+      payload: requestPayload,
+      scope: 'step1-register-analysis',
+      cooldownLabel: 'Analysed just now',
+      message: 'This register analysis already reflects the current upload and context. Review it or change the file before rerunning.'
+    })) return;
     const resetButton = _setStep1ButtonBusy(button, 'Uploading, extracting, and analysing…');
     try {
-      const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
-      const rawResult = await LLMService.analyseRiskRegister({
-        registerText: AppState.draft.registerFindings,
-        registerMeta: AppState.draft.registerMeta,
-        businessUnit: aiContext.businessUnit || bu,
-        geography: formatScenarioGeographies(getScenarioGeographies()),
-        applicableRegulations: AppState.draft.applicableRegulations || [],
-        adminSettings: aiContext.adminSettings,
-        priorMessages: _getStep1PriorMessages(),
-        traceLabel: STEP1_TRACE_LABELS.registerAnalysis
-      });
+      const rawResult = await LLMService.analyseRiskRegister(requestPayload);
       const result = _ensureRiskConfidence(rawResult);
+      _markStep1AiActionCooldown('/api/ai/register-analysis', requestPayload, 'step1-register-analysis');
       const parsedFallback = parseRegisterText(AppState.draft.registerFindings).map(title => ({ title, source: 'register' }));
       const extractedRisks = result.risks || parsedFallback;
       if (!extractedRisks.length) {

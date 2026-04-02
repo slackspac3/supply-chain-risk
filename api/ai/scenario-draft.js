@@ -3,7 +3,9 @@
 const { requireSession } = require('../_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('../_request');
 const { checkRateLimit } = require('../_rateLimit');
-const { buildGuidedScenarioDraftWorkflow } = require('../_scenarioDraftWorkflow');
+const { buildGuidedScenarioDraftWorkflow, normaliseGuidedScenarioDraftInput } = require('../_scenarioDraftWorkflow');
+const { recordAiRouteReuse, withAiRouteMetrics } = require('../_aiRouteMetrics');
+const { withWorkflowReuse } = require('../_workflowReuse');
 
 const ALLOWED_FIELDS = [
   'riskStatement',
@@ -73,8 +75,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const input = {
-    session,
+  const normalisedInput = normaliseGuidedScenarioDraftInput({
     riskStatement: typeof body.riskStatement === 'string' ? body.riskStatement : '',
     guidedInput: isPlainObject(body.guidedInput) ? body.guidedInput : {},
     scenarioLensHint: body.scenarioLensHint,
@@ -85,8 +86,17 @@ module.exports = async function handler(req, res) {
     adminSettings: isPlainObject(body.adminSettings) ? body.adminSettings : {},
     traceLabel: typeof body.traceLabel === 'string' ? body.traceLabel : '',
     priorMessages: Array.isArray(body.priorMessages) ? body.priorMessages : []
-  };
-
-  const result = await buildGuidedScenarioDraftWorkflow(input);
+  });
+  const routeName = 'scenario-draft';
+  const result = await withAiRouteMetrics(routeName, () => withWorkflowReuse({
+    workflow: routeName,
+    scopeKey: String(session?.username || 'anonymous').trim().toLowerCase(),
+    fingerprintInput: normalisedInput,
+    observeReuseEvent: (event) => recordAiRouteReuse(routeName, event),
+    compute: () => buildGuidedScenarioDraftWorkflow({
+      ...normalisedInput,
+      session
+    })
+  }));
   res.status(200).json(result);
 };

@@ -43,15 +43,73 @@ test('suggestTreatmentImprovement uses the server treatment-suggestion endpoint 
 
   const result = await service.suggestTreatmentImprovement({
     baselineAssessment: {
-      scenarioTitle: 'Identity compromise'
+      scenarioTitle: ' Identity compromise ',
+      narrative: '  Privileged account abuse could disrupt critical services. ',
+      geography: ' UAE ',
+      fairParams: {
+        tefLikely: 4,
+        controlStrLikely: 0.45,
+        biLikely: 120000
+      },
+      results: {
+        inputs: {
+          tefLikely: 4,
+          controlStrLikely: 0.45,
+          biLikely: 120000
+        },
+        debugOnly: true
+      },
+      debugOnly: true
     },
-    improvementRequest: 'Stronger MFA'
+    improvementRequest: '  Stronger MFA   and faster containment  ',
+    businessUnit: {
+      name: ' Security ',
+      geography: ' UAE ',
+      junk: 'drop-me'
+    },
+    adminSettings: {
+      userProfileSummary: '  Identity owner ',
+      debugOnly: 'drop-me'
+    },
+    citations: [{ title: ' MFA standard ', excerpt: '  Enforce phishing-resistant MFA. ' }],
+    priorMessages: [{ role: ' user ', content: '  improve the treatment case  ' }]
   });
 
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/treatment-suggestion');
   assert.equal(fetchCalls[0].options.method, 'POST');
   assert.equal(fetchCalls[0].options.headers['x-session-token'], 'session-token');
+  const requestBody = JSON.parse(fetchCalls[0].options.body);
+  assert.deepEqual(requestBody.baselineAssessment, {
+    scenarioTitle: 'Identity compromise',
+    narrative: 'Privileged account abuse could disrupt critical services.',
+    geography: 'UAE',
+    fairParams: {
+      tefLikely: 4,
+      controlStrLikely: 0.45,
+      biLikely: 120000
+    },
+    results: {
+      inputs: {
+        tefLikely: 4,
+        controlStrLikely: 0.45,
+        biLikely: 120000
+      }
+    }
+  });
+  assert.equal(requestBody.improvementRequest, 'Stronger MFA and faster containment');
+  assert.deepEqual(requestBody.businessUnit, {
+    name: 'Security',
+    geography: 'UAE'
+  });
+  assert.deepEqual(requestBody.adminSettings, {
+    userProfileSummary: 'Identity owner'
+  });
+  assert.deepEqual(requestBody.citations, [{
+    title: 'MFA standard',
+    excerpt: 'Enforce phishing-resistant MFA.'
+  }]);
+  assert.deepEqual(requestBody.priorMessages, [{ role: 'user', content: 'improve the treatment case' }]);
   assert.equal(result.mode, 'live');
   assert.equal(typeof result.suggestedInputs?.TEF?.likely, 'number');
   assert.equal(service.getLatestTrace('Step 3 treatment suggestion')?.response, 'Server returned treatment suggestion');

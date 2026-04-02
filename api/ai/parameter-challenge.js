@@ -3,6 +3,7 @@
 const { requireSession } = require('../_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('../_request');
 const { checkRateLimit } = require('../_rateLimit');
+const { withAiRouteMetrics } = require('../_aiRouteMetrics');
 const { buildParameterChallengeRecordWorkflow } = require('../_reviewChallengeWorkflow');
 
 const ALLOWED_FIELDS = ['parameterKey', 'parameterLabel', 'currentValue', 'currentValueLabel', 'scenarioSummary', 'reviewerConcern', 'currentAle', 'allowedParams', 'traceLabel'];
@@ -28,7 +29,7 @@ module.exports = async function handler(req, res) {
   if (!isPlainObject(body)) return void res.status(400).json({ error: 'Invalid JSON body' });
   const unexpectedFields = getUnexpectedFields(body, ALLOWED_FIELDS);
   if (unexpectedFields.length) return void res.status(400).json({ error: 'Unexpected request fields', fields: unexpectedFields });
-  const result = await buildParameterChallengeRecordWorkflow({
+  const result = await withAiRouteMetrics('parameter-challenge', () => buildParameterChallengeRecordWorkflow({
     parameterKey: typeof body.parameterKey === 'string' ? body.parameterKey : '',
     parameterLabel: typeof body.parameterLabel === 'string' ? body.parameterLabel : '',
     currentValue: body.currentValue,
@@ -38,6 +39,6 @@ module.exports = async function handler(req, res) {
     currentAle: typeof body.currentAle === 'string' ? body.currentAle : '',
     allowedParams: Array.isArray(body.allowedParams) ? body.allowedParams : [],
     traceLabel: typeof body.traceLabel === 'string' ? body.traceLabel : ''
-  });
+  }));
   res.status(200).json(result);
 };

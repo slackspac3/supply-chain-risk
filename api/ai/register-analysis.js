@@ -3,7 +3,9 @@
 const { requireSession } = require('../_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('../_request');
 const { checkRateLimit } = require('../_rateLimit');
-const { buildRegisterAnalysisWorkflow } = require('../_registerAnalysisWorkflow');
+const { buildRegisterAnalysisWorkflow, normaliseRegisterAnalysisInput } = require('../_registerAnalysisWorkflow');
+const { recordAiRouteReuse, withAiRouteMetrics } = require('../_aiRouteMetrics');
+const { withWorkflowReuse } = require('../_workflowReuse');
 
 const ALLOWED_FIELDS = [
   'registerText',
@@ -72,8 +74,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const input = {
-    session,
+  const normalisedInput = normaliseRegisterAnalysisInput({
     registerText: typeof body.registerText === 'string' ? body.registerText : '',
     registerMeta: isPlainObject(body.registerMeta) ? body.registerMeta : null,
     businessUnit: isPlainObject(body.businessUnit) ? body.businessUnit : null,
@@ -83,8 +84,18 @@ module.exports = async function handler(req, res) {
     priorMessages: Array.isArray(body.priorMessages) ? body.priorMessages : [],
     traceLabel: typeof body.traceLabel === 'string' ? body.traceLabel : '',
     citations: Array.isArray(body.citations) ? body.citations : []
-  };
+  });
 
-  const result = await buildRegisterAnalysisWorkflow(input);
+  const routeName = 'register-analysis';
+  const result = await withAiRouteMetrics(routeName, () => withWorkflowReuse({
+    workflow: routeName,
+    scopeKey: String(session?.username || 'anonymous').trim().toLowerCase(),
+    fingerprintInput: normalisedInput,
+    observeReuseEvent: (event) => recordAiRouteReuse(routeName, event),
+    compute: () => buildRegisterAnalysisWorkflow({
+      ...normalisedInput,
+      session
+    })
+  }));
   res.status(200).json(result);
 };

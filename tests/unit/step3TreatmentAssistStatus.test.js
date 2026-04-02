@@ -22,7 +22,7 @@ function loadStep3Helper() {
   return context.getStep3TreatmentAssistStatusCopy;
 }
 
-test('treatment assist status copy distinguishes live, deterministic fallback, and default states', () => {
+test('treatment assist status copy distinguishes live, deterministic fallback, manual, and default states', () => {
   const getStatusCopy = loadStep3Helper();
 
   assert.match(
@@ -32,6 +32,10 @@ test('treatment assist status copy distinguishes live, deterministic fallback, a
   assert.match(
     getStatusCopy({ treatmentSuggestionMode: 'deterministic_fallback' }),
     /deterministic fallback adjusted/i
+  );
+  assert.match(
+    getStatusCopy({ treatmentSuggestionMode: 'manual' }),
+    /stayed manual/i
   );
   assert.match(
     getStatusCopy({ treatmentSuggestionMode: '' }),

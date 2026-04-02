@@ -7,6 +7,40 @@ function getStep3PriorMessages() {
   return Array.isArray(AppState?.draft?.llmContext) ? AppState.draft.llmContext : [];
 }
 
+const STEP3_AI_ACTION_COOLDOWN_MS = 4000;
+const _step3AiActionCooldowns = typeof AiWorkflowClient !== 'undefined' && AiWorkflowClient && typeof AiWorkflowClient.createActionCooldownStore === 'function'
+  ? AiWorkflowClient.createActionCooldownStore({ cooldownMs: STEP3_AI_ACTION_COOLDOWN_MS, maxEntries: 12 })
+  : null;
+
+function setStep3AiActionBusy(button, busyLabel) {
+  if (!button) return () => {};
+  const idleLabel = String(button.dataset.idleLabel || button.textContent || '').trim() || String(button.textContent || '').trim();
+  button.dataset.idleLabel = idleLabel;
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  button.textContent = busyLabel;
+  return () => {
+    if (!button.isConnected) return;
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    button.textContent = idleLabel;
+  };
+}
+
+function flashStep3AiActionCooldown(button, label, durationMs = 1200) {
+  if (!button) return;
+  const idleLabel = String(button.dataset.idleLabel || button.textContent || '').trim() || String(button.textContent || '').trim();
+  button.dataset.idleLabel = idleLabel;
+  button.disabled = true;
+  button.removeAttribute('aria-busy');
+  button.textContent = String(label || '').trim() || idleLabel;
+  window.setTimeout(() => {
+    if (!button.isConnected) return;
+    button.disabled = false;
+    button.textContent = idleLabel;
+  }, Math.max(400, Number(durationMs || 0)));
+}
+
 function ensureFairRationaleStyles() {
   if (document.getElementById('fair-rationale-styles')) return;
   const style = document.createElement('style');
@@ -1796,10 +1830,26 @@ function renderWizard3() {
     AppState.draft.treatmentImprovementRequest = request;
     if (statusEl) statusEl.textContent = 'Using AI to adjust the copied baseline values…';
     const btn = document.getElementById('btn-treatment-ai-assist');
-    if (btn) { btn.disabled = true; btn.textContent = 'Adjusting…'; }
+    const aiContext = buildCurrentAIAssistContext({ buId: draft.buId });
+    const buContext = aiContext.businessUnit || getBUList().find(b => b.id === draft.buId) || bu || null;
+    const requestPayload = {
+      baselineAssessment,
+      improvementRequest: request,
+      businessUnit: buContext,
+      adminSettings: aiContext.adminSettings,
+      priorMessages: getStep3PriorMessages()
+    };
+    const remainingCooldownMs = _step3AiActionCooldowns
+      ? _step3AiActionCooldowns.getRemainingMs('/api/ai/treatment-suggestion', requestPayload, { scope: `step3-treatment::${String(draft.id || draft.baselineAssessmentId || baselineAssessment?.id || '').trim()}` })
+      : 0;
+    if (remainingCooldownMs) {
+      flashStep3AiActionCooldown(btn, 'Loaded just now', Math.min(remainingCooldownMs, 1400));
+      if (statusEl) statusEl.textContent = 'The current better-outcome draft already reflects this request. Change the request or baseline inputs before rerunning.';
+      UI.toast('This better-outcome draft already reflects the current request. Review it or change the inputs before rerunning.', 'info', 3500);
+      return;
+    }
+    const resetBusy = setStep3AiActionBusy(btn, 'Adjusting…');
     try {
-      const aiContext = buildCurrentAIAssistContext({ buId: draft.buId });
-      const buContext = aiContext.businessUnit || getBUList().find(b => b.id === draft.buId) || bu || null;
       const citations = await RAGService.retrieveRelevantDocs(draft.buId, buildAssessmentRetrievalQuery({
         narrative: `${baselineTitle || ''}\n${request}`,
         structuredScenario: draft.structuredScenario || baselineAssessment.structuredScenario,
@@ -1811,15 +1861,14 @@ function renderWizard3() {
         treatmentRequest: request
       }), 5);
       const result = await LLMService.suggestTreatmentImprovement({
-        baselineAssessment,
-        improvementRequest: request,
-        businessUnit: buContext,
-        adminSettings: aiContext.adminSettings,
+        ...requestPayload,
         citations,
-        priorMessages: getStep3PriorMessages()
       });
+      _step3AiActionCooldowns?.markCompleted('/api/ai/treatment-suggestion', requestPayload, { scope: `step3-treatment::${String(draft.id || draft.baselineAssessmentId || baselineAssessment?.id || '').trim()}` });
       const resultMode = String(result.mode || (result.usedFallback ? 'deterministic_fallback' : 'live')).trim().toLowerCase();
-      applySuggestedTreatmentInputs(result.suggestedInputs || {});
+      if (resultMode !== 'manual') {
+        applySuggestedTreatmentInputs(result.suggestedInputs || {});
+      }
       AppState.draft.treatmentSuggestionMode = resultMode;
       AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : (AppState.draft.workflowGuidance || []);
       AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis || '';
@@ -1836,10 +1885,12 @@ function renderWizard3() {
       saveDraft();
       renderWizard3();
       UI.toast(
-        resultMode === 'deterministic_fallback'
-          ? 'A deterministic fallback better-outcome draft was loaded. Review the numbers before rerunning.'
-          : 'A live AI better-outcome draft was loaded. Review the numbers before rerunning.',
-        resultMode === 'deterministic_fallback' ? 'warning' : 'success',
+        resultMode === 'manual'
+          ? 'The better-outcome step stayed manual because the current baseline or request is incomplete.'
+          : resultMode === 'deterministic_fallback'
+            ? 'A deterministic fallback better-outcome draft was loaded. Review the numbers before rerunning.'
+            : 'A live AI better-outcome draft was loaded. Review the numbers before rerunning.',
+        resultMode === 'live' ? 'success' : 'warning',
         5000
       );
     } catch (error) {
@@ -1850,7 +1901,7 @@ function renderWizard3() {
         if (statusEl) statusEl.textContent = 'AI could not update the values just now. Keep the current values or try again in a moment.';
         UI.toast('AI could not update the values. Try again in a moment.', 'danger');
       }
-      if (btn) { btn.disabled = false; btn.textContent = 'AI Assist This Better Outcome'; }
+      resetBusy();
     }
   });
   document.getElementById('btn-back-3').addEventListener('click', () => { saveDraft(); Router.navigate('/wizard/2'); });
@@ -1896,6 +1947,9 @@ function getStep3TreatmentAssistStatusCopy(draft = AppState.draft) {
   }
   if (mode === 'deterministic_fallback') {
     return 'Deterministic fallback adjusted the copied baseline values. Review the numbers before rerunning.';
+  }
+  if (mode === 'manual') {
+    return 'The better-outcome step stayed manual because the current request or baseline data is incomplete.';
   }
   return 'These are quick starting points. You can still adjust every number manually before rerunning the analysis.';
 }

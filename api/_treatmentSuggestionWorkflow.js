@@ -2,12 +2,21 @@
 
 const { getCompassProviderConfig } = require('./_aiRuntime');
 const { buildTraceEntry, callAi, normaliseAiError, parseOrRepairStructuredJson, sanitizeAiText } = require('./_aiOrchestrator');
+const { buildDeterministicFallbackResult, buildFallbackFromError, buildManualModeResult, buildWorkflowTimeoutProfile } = require('./_aiWorkflowSupport');
 const { workflowUtils } = require('./_scenarioDraftWorkflow');
 
 const {
   buildContextPromptBlock,
   buildEvidenceMeta,
   cleanUserFacingText,
+  compactInputValue,
+  normaliseAdminSettingsInput,
+  normaliseBlockInputText,
+  normaliseBusinessUnitInput,
+  normaliseCitationInputs,
+  normaliseInlineInputText,
+  normalisePriorMessagesInput,
+  normaliseStringListInput,
   truncateText,
   withEvidenceMeta
 } = workflowUtils;
@@ -41,6 +50,48 @@ function ensureRange(value, fallbackRange) {
     likely: toNumber(value?.likely, toNumber(fallbackRange?.likely, 0)),
     max: toNumber(value?.max, toNumber(fallbackRange?.max, 0))
   };
+}
+
+function normaliseFairParamsInput(value = {}) {
+  if (!workflowUtils.isPlainObject || !workflowUtils.isPlainObject(value)) return undefined;
+  const next = {};
+  Object.entries(value).forEach(([key, item]) => {
+    const parsed = Number(item);
+    if (Number.isFinite(parsed)) next[key] = parsed;
+  });
+  return Object.keys(next).length ? next : undefined;
+}
+
+function normaliseResultsInput(value = {}) {
+  if (!workflowUtils.isPlainObject || !workflowUtils.isPlainObject(value)) return undefined;
+  return compactInputValue({
+    inputs: normaliseFairParamsInput(value.inputs)
+  });
+}
+
+function normaliseBaselineAssessmentInput(value = {}) {
+  if (!workflowUtils.isPlainObject || !workflowUtils.isPlainObject(value)) return undefined;
+  return compactInputValue({
+    scenarioTitle: normaliseInlineInputText(value.scenarioTitle || ''),
+    narrative: normaliseBlockInputText(value.narrative || ''),
+    enhancedNarrative: normaliseBlockInputText(value.enhancedNarrative || ''),
+    geography: normaliseInlineInputText(value.geography || ''),
+    applicableRegulations: normaliseStringListInput(value.applicableRegulations, { maxItems: 12 }),
+    fairParams: normaliseFairParamsInput(value.fairParams),
+    results: normaliseResultsInput(value.results)
+  });
+}
+
+function normaliseTreatmentSuggestionInput(input = {}) {
+  return compactInputValue({
+    baselineAssessment: normaliseBaselineAssessmentInput(input.baselineAssessment),
+    improvementRequest: normaliseBlockInputText(input.improvementRequest || ''),
+    businessUnit: normaliseBusinessUnitInput(input.businessUnit),
+    adminSettings: normaliseAdminSettingsInput(input.adminSettings),
+    citations: normaliseCitationInputs(input.citations),
+    priorMessages: normalisePriorMessagesInput(input.priorMessages),
+    traceLabel: normaliseInlineInputText(input.traceLabel || '')
+  }) || {};
 }
 
 function buildTreatmentImprovementStub(input = {}) {
@@ -138,22 +189,88 @@ function buildFallbackTreatmentSuggestionResult(input = {}, {
     userProfile: input.adminSettings?.userProfileSummary
   });
   const stub = buildTreatmentImprovementStub(input);
-  return withEvidenceMeta({
-    mode: 'deterministic_fallback',
-    ...stub,
-    usedFallback: true,
+  return buildDeterministicFallbackResult({
+    baseResult: {
+      ...stub
+    },
+    fallbackReason: fallbackReason || {
+      code: 'server_treatment_fallback',
+      title: 'Deterministic fallback treatment suggestion loaded',
+      message: 'The server used a deterministic future-state suggestion instead of live AI for this better-outcome case.',
+      detail: ''
+    },
     aiUnavailable,
-    fallbackReasonCode: fallbackReason?.code || 'server_treatment_fallback',
-    fallbackReasonTitle: fallbackReason?.title || 'Deterministic fallback treatment suggestion loaded',
-    fallbackReasonMessage: fallbackReason?.message || 'The server used a deterministic future-state suggestion instead of live AI for this better-outcome case.',
-    fallbackReasonDetail: fallbackReason?.detail || '',
-    trace: buildTraceEntry({
-      label: traceLabel,
-      promptSummary: 'Server deterministic fallback used for Step 3 treatment suggestion.',
-      response: stub.changesSummary || stub.summary,
-      sources: input.citations || []
-    })
-  }, evidenceMeta);
+    traceLabel,
+    promptSummary: 'Server deterministic fallback used for Step 3 treatment suggestion.',
+    response: stub.changesSummary || stub.summary,
+    sources: input.citations || [],
+    evidenceMeta,
+    withEvidenceMeta
+  });
+}
+
+function hasMeaningfulTreatmentBaseline(input = {}) {
+  const baseline = input?.baselineAssessment || {};
+  const fairInputs = baseline?.fairParams || baseline?.results?.inputs || {};
+  const hasNumericInput = [
+    'tefMin', 'tefLikely', 'tefMax',
+    'controlStrMin', 'controlStrLikely', 'controlStrMax',
+    'threatCapMin', 'threatCapLikely', 'threatCapMax',
+    'biLikely', 'irLikely', 'rcLikely'
+  ].some((key) => Number.isFinite(Number(fairInputs?.[key])));
+  const baselineContext = cleanUserFacingText(
+    baseline?.enhancedNarrative || baseline?.narrative || baseline?.scenarioTitle || '',
+    { maxSentences: 2 }
+  );
+  return hasNumericInput || baselineContext.length >= 12;
+}
+
+function hasMeaningfulTreatmentRequest(input = {}) {
+  const request = cleanUserFacingText(input?.improvementRequest || '', { maxSentences: 2 });
+  return request.length >= 10;
+}
+
+function buildManualTreatmentSuggestionResult(input = {}, { traceLabel = 'Step 3 treatment suggestion' } = {}) {
+  const evidenceMeta = buildEvidenceMeta({
+    citations: input.citations || [],
+    businessUnit: input.businessUnit,
+    geography: input.baselineAssessment?.geography || input.businessUnit?.geography,
+    applicableRegulations: input.baselineAssessment?.applicableRegulations,
+    organisationContext: input.baselineAssessment?.narrative,
+    uploadedText: input.improvementRequest,
+    adminSettings: input.adminSettings,
+    userProfile: input.adminSettings?.userProfileSummary
+  });
+  return buildManualModeResult({
+    baseResult: {
+      summary: 'The better-outcome case stayed manual because the current request or baseline data is incomplete.',
+      changesSummary: 'No treatment adjustments were applied.',
+      workflowGuidance: [
+        'Describe the improvement you want to test in one plain sentence.',
+        'Make sure the baseline scenario or FAIR inputs are filled in first.',
+        'Then try the better-outcome assist again.'
+      ],
+      benchmarkBasis: 'This step stayed in manual mode because the current treatment request or baseline data is too limited for a reliable server suggestion.',
+      inputRationale: {
+        tef: '',
+        vulnerability: '',
+        lossComponents: ''
+      },
+      suggestedInputs: {},
+      citations: Array.isArray(input.citations) ? input.citations : []
+    },
+    manualReason: {
+      code: 'incomplete_treatment_input',
+      title: 'Manual treatment guidance only',
+      message: 'Add a clearer improvement request and baseline scenario data before asking the server for a better-outcome suggestion.'
+    },
+    traceLabel,
+    promptSummary: 'Server manual mode used for Step 3 treatment suggestion because the request or baseline data was incomplete.',
+    response: 'The treatment-suggestion step stayed in manual mode because the input was incomplete.',
+    sources: input.citations || [],
+    evidenceMeta,
+    withEvidenceMeta
+  });
 }
 
 function classifyTreatmentFallbackReason(error = null) {
@@ -184,34 +301,65 @@ function classifyTreatmentFallbackReason(error = null) {
   }, safeMessage);
 }
 
-function normaliseTreatmentSuggestionCandidate(parsed = {}, fallback = {}, input = {}) {
-  const fallbackSuggestedInputs = fallback.suggestedInputs || {};
-  const fallbackLossComponents = fallbackSuggestedInputs.lossComponents || {};
+function hasCompleteNumericRange(value = {}) {
+  return ['min', 'likely', 'max'].every((key) => Number.isFinite(Number(value?.[key])));
+}
+
+function normaliseTreatmentSuggestionCandidate(parsed = {}, fallbackSource = null, input = {}) {
+  let resolvedFallback = null;
+  const getFallback = () => {
+    if (resolvedFallback === null) {
+      const next = typeof fallbackSource === 'function' ? fallbackSource() : fallbackSource;
+      resolvedFallback = next && typeof next === 'object' ? next : {};
+    }
+    return resolvedFallback;
+  };
+  const parsedSummary = cleanUserFacingText(parsed.summary || '', { maxSentences: 2 });
+  const parsedChangesSummary = cleanUserFacingText(parsed.changesSummary || '', { maxSentences: 3 });
+  const parsedWorkflowGuidance = normaliseGuidance(parsed.workflowGuidance);
+  const parsedBenchmarkBasis = normaliseBenchmarkBasis(parsed.benchmarkBasis || '');
+  const parsedInputRationale = normaliseInputRationale(parsed.inputRationale || {});
+  const parsedSuggestedInputs = parsed?.suggestedInputs && typeof parsed.suggestedInputs === 'object' ? parsed.suggestedInputs : {};
+  const getFallbackSuggestedInputs = () => (getFallback().suggestedInputs || {});
+  const getFallbackLossComponents = () => (getFallbackSuggestedInputs().lossComponents || {});
   return {
-    summary: cleanUserFacingText(parsed.summary || fallback.summary || '', { maxSentences: 2 }),
-    changesSummary: cleanUserFacingText(parsed.changesSummary || fallback.changesSummary || '', { maxSentences: 3 }),
-    workflowGuidance: normaliseGuidance(parsed.workflowGuidance?.length ? parsed.workflowGuidance : fallback.workflowGuidance),
-    benchmarkBasis: normaliseBenchmarkBasis(parsed.benchmarkBasis || fallback.benchmarkBasis || ''),
-    inputRationale: normaliseInputRationale({ ...fallback.inputRationale, ...(parsed.inputRationale || {}) }),
+    summary: parsedSummary || cleanUserFacingText(getFallback().summary || '', { maxSentences: 2 }),
+    changesSummary: parsedChangesSummary || cleanUserFacingText(getFallback().changesSummary || '', { maxSentences: 3 }),
+    workflowGuidance: parsedWorkflowGuidance.length ? parsedWorkflowGuidance : normaliseGuidance(getFallback().workflowGuidance),
+    benchmarkBasis: parsedBenchmarkBasis || normaliseBenchmarkBasis(getFallback().benchmarkBasis || ''),
+    inputRationale: {
+      tef: parsedInputRationale.tef || normaliseInputRationale(getFallback().inputRationale || {}).tef,
+      vulnerability: parsedInputRationale.vulnerability || normaliseInputRationale(getFallback().inputRationale || {}).vulnerability,
+      lossComponents: parsedInputRationale.lossComponents || normaliseInputRationale(getFallback().inputRationale || {}).lossComponents
+    },
     suggestedInputs: {
-      TEF: ensureRange(parsed?.suggestedInputs?.TEF, fallbackSuggestedInputs.TEF),
-      controlStrength: ensureRange(parsed?.suggestedInputs?.controlStrength, fallbackSuggestedInputs.controlStrength),
-      threatCapability: ensureRange(parsed?.suggestedInputs?.threatCapability, fallbackSuggestedInputs.threatCapability),
+      TEF: ensureRange(parsedSuggestedInputs.TEF, hasCompleteNumericRange(parsedSuggestedInputs.TEF) ? parsedSuggestedInputs.TEF : getFallbackSuggestedInputs().TEF),
+      controlStrength: ensureRange(parsedSuggestedInputs.controlStrength, hasCompleteNumericRange(parsedSuggestedInputs.controlStrength) ? parsedSuggestedInputs.controlStrength : getFallbackSuggestedInputs().controlStrength),
+      threatCapability: ensureRange(parsedSuggestedInputs.threatCapability, hasCompleteNumericRange(parsedSuggestedInputs.threatCapability) ? parsedSuggestedInputs.threatCapability : getFallbackSuggestedInputs().threatCapability),
       lossComponents: {
-        incidentResponse: ensureRange(parsed?.suggestedInputs?.lossComponents?.incidentResponse, fallbackLossComponents.incidentResponse),
-        businessInterruption: ensureRange(parsed?.suggestedInputs?.lossComponents?.businessInterruption, fallbackLossComponents.businessInterruption),
-        dataBreachRemediation: ensureRange(parsed?.suggestedInputs?.lossComponents?.dataBreachRemediation, fallbackLossComponents.dataBreachRemediation),
-        regulatoryLegal: ensureRange(parsed?.suggestedInputs?.lossComponents?.regulatoryLegal, fallbackLossComponents.regulatoryLegal),
-        thirdPartyLiability: ensureRange(parsed?.suggestedInputs?.lossComponents?.thirdPartyLiability, fallbackLossComponents.thirdPartyLiability),
-        reputationContract: ensureRange(parsed?.suggestedInputs?.lossComponents?.reputationContract, fallbackLossComponents.reputationContract)
+        incidentResponse: ensureRange(parsedSuggestedInputs?.lossComponents?.incidentResponse, hasCompleteNumericRange(parsedSuggestedInputs?.lossComponents?.incidentResponse) ? parsedSuggestedInputs.lossComponents.incidentResponse : getFallbackLossComponents().incidentResponse),
+        businessInterruption: ensureRange(parsedSuggestedInputs?.lossComponents?.businessInterruption, hasCompleteNumericRange(parsedSuggestedInputs?.lossComponents?.businessInterruption) ? parsedSuggestedInputs.lossComponents.businessInterruption : getFallbackLossComponents().businessInterruption),
+        dataBreachRemediation: ensureRange(parsedSuggestedInputs?.lossComponents?.dataBreachRemediation, hasCompleteNumericRange(parsedSuggestedInputs?.lossComponents?.dataBreachRemediation) ? parsedSuggestedInputs.lossComponents.dataBreachRemediation : getFallbackLossComponents().dataBreachRemediation),
+        regulatoryLegal: ensureRange(parsedSuggestedInputs?.lossComponents?.regulatoryLegal, hasCompleteNumericRange(parsedSuggestedInputs?.lossComponents?.regulatoryLegal) ? parsedSuggestedInputs.lossComponents.regulatoryLegal : getFallbackLossComponents().regulatoryLegal),
+        thirdPartyLiability: ensureRange(parsedSuggestedInputs?.lossComponents?.thirdPartyLiability, hasCompleteNumericRange(parsedSuggestedInputs?.lossComponents?.thirdPartyLiability) ? parsedSuggestedInputs.lossComponents.thirdPartyLiability : getFallbackLossComponents().thirdPartyLiability),
+        reputationContract: ensureRange(parsedSuggestedInputs?.lossComponents?.reputationContract, hasCompleteNumericRange(parsedSuggestedInputs?.lossComponents?.reputationContract) ? parsedSuggestedInputs.lossComponents.reputationContract : getFallbackLossComponents().reputationContract)
       }
     },
     citations: Array.isArray(input.citations) ? input.citations : []
   };
 }
 
+const TREATMENT_SUGGESTION_TIMEOUTS = buildWorkflowTimeoutProfile({
+  liveMs: 20000,
+  repairMs: 10000
+});
+
 async function buildTreatmentSuggestionWorkflow(input = {}) {
+  input = normaliseTreatmentSuggestionInput(input);
   const traceLabel = sanitizeAiText(input.traceLabel || 'Step 3 treatment suggestion', { maxChars: 120 }) || 'Step 3 treatment suggestion';
+  if (!hasMeaningfulTreatmentRequest(input) || !hasMeaningfulTreatmentBaseline(input)) {
+    return buildManualTreatmentSuggestionResult(input, { traceLabel });
+  }
   const config = getCompassProviderConfig();
   if (!config.proxyConfigured) {
     return buildFallbackTreatmentSuggestionResult(input, {
@@ -221,7 +369,6 @@ async function buildTreatmentSuggestionWorkflow(input = {}) {
     });
   }
 
-  const fallback = buildTreatmentImprovementStub(input);
   const evidenceMeta = buildEvidenceMeta({
     citations: input.citations || [],
     businessUnit: input.businessUnit,
@@ -294,13 +441,14 @@ ${truncateText(evidenceMeta.promptBlock || '', 320)}`;
       temperature: 0.2,
       maxCompletionTokens: 1800,
       maxPromptChars: 10000,
-      timeoutMs: 30000,
+      timeoutMs: TREATMENT_SUGGESTION_TIMEOUTS.liveMs,
       priorMessages: Array.isArray(input?.priorMessages) ? input.priorMessages : []
     });
     const parsed = await parseOrRepairStructuredJson(generation.text, outputSchema, {
-      taskName: 'repairSuggestTreatmentImprovement'
+      taskName: 'repairSuggestTreatmentImprovement',
+      timeoutMs: TREATMENT_SUGGESTION_TIMEOUTS.repairMs
     });
-    const candidate = normaliseTreatmentSuggestionCandidate(parsed?.parsed || {}, fallback, input);
+    const candidate = normaliseTreatmentSuggestionCandidate(parsed?.parsed || {}, () => buildTreatmentImprovementStub(input), input);
     return withEvidenceMeta({
       mode: 'live',
       ...candidate,
@@ -314,18 +462,22 @@ ${truncateText(evidenceMeta.promptBlock || '', 320)}`;
       })
     }, evidenceMeta);
   } catch (error) {
-    const normalisedError = normaliseAiError(error);
-    const fallbackReason = classifyTreatmentFallbackReason(normalisedError);
-    const aiUnavailable = !/invalid_ai_output|unexpected_response_shape/i.test(String(fallbackReason.code || ''));
-    console.warn('buildTreatmentSuggestionWorkflow server fallback:', normalisedError.message);
-    return buildFallbackTreatmentSuggestionResult(input, {
-      aiUnavailable,
-      traceLabel,
-      fallbackReason
+    return buildFallbackFromError({
+      error,
+      classifyFallbackReason: classifyTreatmentFallbackReason,
+      buildFallbackResult: ({ aiUnavailable, fallbackReason, normalisedError }) => {
+        console.warn('buildTreatmentSuggestionWorkflow server fallback:', normalisedError.message);
+        return buildFallbackTreatmentSuggestionResult(input, {
+          aiUnavailable,
+          traceLabel,
+          fallbackReason
+        });
+      }
     });
   }
 }
 
 module.exports = {
-  buildTreatmentSuggestionWorkflow
+  buildTreatmentSuggestionWorkflow,
+  normaliseTreatmentSuggestionInput
 };

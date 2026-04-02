@@ -38,14 +38,52 @@ test('analyseRiskRegister uses the server register-analysis endpoint and stores 
   });
 
   const result = await service.analyseRiskRegister({
-    registerText: 'Privileged access review is incomplete and stale.',
-    traceLabel: 'Step 1 register analysis'
+    registerText: '  Privileged access review is incomplete and stale.  \n\n Third-party dependency control is weak. ',
+    registerMeta: {
+      extension: ' CSV ',
+      sheetSelectionMode: ' all_sheets ',
+      sheets: [{ sheetName: 'Risk Register', rowCount: 2 }]
+    },
+    businessUnit: {
+      name: ' Technology ',
+      selectedDepartmentKey: ' iam ',
+      notes: '  Access reviews lag quarterly. '
+    },
+    adminSettings: {
+      adminContextSummary: '  Imported from IAM register ',
+      benchmarkStrategy: '  Use identity comparators first ',
+      debugOnly: 'drop-me'
+    },
+    citations: [{ title: ' Identity policy ', note: '  Review access quarterly. ' }],
+    priorMessages: [{ role: ' user ', content: '  shortlist identity items  ' }],
+    traceLabel: ' Step 1 register analysis '
   });
 
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/register-analysis');
   assert.equal(fetchCalls[0].options.method, 'POST');
   assert.equal(fetchCalls[0].options.headers['x-session-token'], 'session-token');
+  const requestBody = JSON.parse(fetchCalls[0].options.body);
+  assert.equal(requestBody.registerText, 'Privileged access review is incomplete and stale.\n\nThird-party dependency control is weak.');
+  assert.deepEqual(requestBody.registerMeta, {
+    extension: 'csv',
+    sheetSelectionMode: 'all_sheets'
+  });
+  assert.deepEqual(requestBody.businessUnit, {
+    name: 'Technology',
+    selectedDepartmentKey: 'iam',
+    notes: 'Access reviews lag quarterly.'
+  });
+  assert.deepEqual(requestBody.adminSettings, {
+    adminContextSummary: 'Imported from IAM register',
+    benchmarkStrategy: 'Use identity comparators first'
+  });
+  assert.deepEqual(requestBody.citations, [{
+    title: 'Identity policy',
+    excerpt: 'Review access quarterly.'
+  }]);
+  assert.deepEqual(requestBody.priorMessages, [{ role: 'user', content: 'shortlist identity items' }]);
+  assert.equal(requestBody.traceLabel, 'Step 1 register analysis');
   assert.equal(result.mode, 'live');
   assert.equal(Array.isArray(result.risks), true);
   assert.equal(service.getLatestTrace('Step 1 register analysis')?.response, 'Server returned register shortlist');

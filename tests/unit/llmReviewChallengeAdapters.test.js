@@ -151,6 +151,72 @@ test('reviewer/challenge methods use server endpoints and keep trace data in run
     assert.equal(call.options.method, 'POST');
     assert.equal(call.options.headers['x-session-token'], 'session-token');
   });
+  const reviewerBody = JSON.parse(fetchCalls[0].options.body);
+  const challengeBody = JSON.parse(fetchCalls[1].options.body);
+  const mediationBody = JSON.parse(fetchCalls[2].options.body);
+  const parameterBody = JSON.parse(fetchCalls[3].options.body);
+  const synthesisBody = JSON.parse(fetchCalls[4].options.body);
+  const consensusBody = JSON.parse(fetchCalls[5].options.body);
+  assert.deepEqual(reviewerBody, {
+    assessmentData: 'Assessment source text.',
+    preferredSection: 'challenge'
+  });
+  assert.deepEqual(challengeBody, {
+    scenarioTitle: 'Identity compromise',
+    narrative: 'Identity compromise through exposed admin credentials.',
+    geography: 'UAE',
+    businessUnitName: 'G42',
+    confidence: { label: 'Low confidence', summary: 'Recovery evidence is weak.' },
+    drivers: { upward: ['Privileged access remains exposed'] },
+    assumptions: [{ category: 'Controls', text: 'Recovery controls operate consistently.' }],
+    missingInformation: ['Latest privileged access logs'],
+    applicableRegulations: ['ISO 27001'],
+    citations: [{ title: 'Privileged access policy' }]
+  });
+  assert.deepEqual(mediationBody, {
+    narrative: 'Identity compromise through exposed admin credentials.',
+    fairParams: { controlStrLikely: 0.62, tefLikely: 5 },
+    results: { ale: { mean: 3200000 }, eventLoss: { p90: 9000000 } },
+    assessmentIntelligence: {
+      assumptions: [{ text: 'Recovery is fast.' }],
+      drivers: { sensitivity: [{ label: 'Recovery timing', why: 'Drives the high end.' }] }
+    },
+    reviewerView: 'The recovery estimate is too optimistic.',
+    analystView: 'Recent drills support the current timing.'
+  });
+  assert.deepEqual(parameterBody, {
+    parameterKey: 'controlStrLikely',
+    parameterLabel: 'Control strength',
+    currentValue: 0.62,
+    currentValueLabel: '0.62',
+    scenarioSummary: 'Identity compromise through exposed admin credentials.',
+    reviewerConcern: 'This control strength looks too optimistic.',
+    currentAle: '$3.2M mean ALE',
+    allowedParams: ['controlStrLikely']
+  });
+  assert.deepEqual(synthesisBody, {
+    scenarioTitle: 'Identity compromise',
+    scenarioSummary: 'Identity compromise through exposed admin credentials.',
+    baseAleRange: '$3.2M mean ALE · $9.0M bad year',
+    records: [
+      { parameter: 'Control strength', concern: 'Too optimistic', reviewerAdjustment: { param: 'controlStrLikely', suggestedValue: 0.54 } },
+      { parameter: 'Loss magnitude', concern: 'Recovery cost understated', reviewerAdjustment: { param: 'lmHigh', suggestedValue: 2200000 } }
+    ]
+  });
+  assert.deepEqual(consensusBody, {
+    scenarioTitle: 'Identity compromise',
+    scenarioSummary: 'Identity compromise through exposed admin credentials.',
+    originalAleRange: '$3.2M mean ALE',
+    adjustedAleRange: '$4.1M mean ALE',
+    projectedAleRange: '$3.7M mean ALE',
+    aleChangePct: 12,
+    originalParameters: { controlStrLikely: 0.62 },
+    adjustedParameters: { controlStrLikely: 0.54 },
+    challenges: [
+      { ref: 'C1', parameter: 'Control strength', concern: 'Too optimistic', proposedValue: '0.54', impactPct: 8, aleImpact: 'ALE rises modestly.' },
+      { ref: 'C2', parameter: 'Loss magnitude', concern: 'Recovery cost understated', proposedValue: '2.2M', impactPct: 22, aleImpact: 'ALE rises materially.' }
+    ]
+  });
   assert.equal(reviewerBrief.whatMatters, 'Server-owned reviewer brief');
   assert.equal(reviewerBrief.mode, 'live');
   assert.equal(challenge.summary, 'Server-owned challenge review');

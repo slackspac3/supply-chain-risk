@@ -3,6 +3,7 @@
 const { requireSession } = require('../_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('../_request');
 const { checkRateLimit } = require('../_rateLimit');
+const { withAiRouteMetrics } = require('../_aiRouteMetrics');
 const { buildConsensusRecommendationWorkflow } = require('../_reviewChallengeWorkflow');
 
 const ALLOWED_FIELDS = ['scenarioTitle', 'scenarioSummary', 'originalAleRange', 'adjustedAleRange', 'projectedAleRange', 'aleChangePct', 'originalParameters', 'adjustedParameters', 'challenges', 'traceLabel'];
@@ -28,7 +29,7 @@ module.exports = async function handler(req, res) {
   if (!isPlainObject(body)) return void res.status(400).json({ error: 'Invalid JSON body' });
   const unexpectedFields = getUnexpectedFields(body, ALLOWED_FIELDS);
   if (unexpectedFields.length) return void res.status(400).json({ error: 'Unexpected request fields', fields: unexpectedFields });
-  const result = await buildConsensusRecommendationWorkflow({
+  const result = await withAiRouteMetrics('consensus-recommendation', () => buildConsensusRecommendationWorkflow({
     scenarioTitle: typeof body.scenarioTitle === 'string' ? body.scenarioTitle : '',
     scenarioSummary: typeof body.scenarioSummary === 'string' ? body.scenarioSummary : '',
     originalAleRange: typeof body.originalAleRange === 'string' ? body.originalAleRange : '',
@@ -39,6 +40,6 @@ module.exports = async function handler(req, res) {
     adjustedParameters: isPlainObject(body.adjustedParameters) ? body.adjustedParameters : {},
     challenges: Array.isArray(body.challenges) ? body.challenges : [],
     traceLabel: typeof body.traceLabel === 'string' ? body.traceLabel : ''
-  });
+  }));
   res.status(200).json(result);
 };
