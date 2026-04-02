@@ -993,6 +993,54 @@ test('authenticated admin shell renders without crashing', async ({ page }) => {
   });
 });
 
+test('admin org setup can add and save entity obligations from the tree', async ({ page }) => {
+  const adminSettings = {
+    geography: 'United Arab Emirates',
+    companyStructure: [
+      { id: 'holding-g42', parentId: '', type: 'Holding company', name: 'G42 Holding' },
+      { id: 'subsidiary-tech', parentId: 'holding-g42', type: 'Wholly owned subsidiary', name: 'Tech Subsidiary' },
+      { id: 'dept-tech', parentId: 'subsidiary-tech', type: 'Department / function', name: 'Technology', departmentRelationshipType: 'In-house' }
+    ],
+    entityContextLayers: [],
+    entityObligations: [],
+    applicableRegulations: ['UAE PDPL'],
+    aiInstructions: 'Use British English.',
+    benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+    typicalDepartments: ['Security']
+  };
+  await seedAuthenticatedUser(page, {
+    username: 'admin',
+    displayName: 'Global Admin',
+    role: 'admin',
+    adminSettings,
+    preferredAdminSection: 'org'
+  });
+  await mockSharedApis(page, { settings: adminSettings });
+
+  await expectNoClientCrashOnRoute(page, '/#/admin/settings/org', async () => {
+    await expect(page.locator('.org-accordion__identity strong').first()).toHaveText(/g42 holding/i);
+    await page.locator('.org-entity-obligations').first().click();
+
+    const managerDialog = page.getByRole('dialog').filter({ hasText: /manage obligations: g42 holding/i });
+    await expect(managerDialog.getByText(/manage obligations: g42 holding/i)).toBeVisible();
+    await managerDialog.getByRole('button', { name: /add obligation/i }).click();
+
+    const editorDialog = page.getByRole('dialog').filter({ hasText: /add obligation: g42 holding/i });
+    await editorDialog.getByLabel(/obligation title/i).fill('Group export controls obligation');
+    await editorDialog.getByLabel(/family key/i).fill('export-controls');
+    await editorDialog.getByLabel(/obligation text/i).fill('Controlled technology transfers must be screened before onboarding or cross-border movement.');
+    await editorDialog.getByLabel(/flow-down mode/i).selectOption('partial');
+    await editorDialog.locator('input[name*="include-entity"]').first().check();
+    await editorDialog.getByRole('button', { name: /save obligation/i }).click();
+
+    await expect(managerDialog.getByText(/group export controls obligation/i)).toBeVisible();
+    await managerDialog.getByRole('button', { name: /save changes/i }).click();
+
+    await expect(page.locator('#admin-obligation-summary-list')).toContainText('G42 Holding');
+    await expect(page.locator('#admin-obligation-summary-list')).toContainText('Group export controls obligation');
+  });
+});
+
 test('admin system access warns calmly when pilot is using local fallback AI', async ({ page }) => {
   await seedAuthenticatedUser(page, {
     username: 'admin',

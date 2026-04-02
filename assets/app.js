@@ -58,6 +58,7 @@ const DEFAULT_ADMIN_SETTINGS = {
   companyContextSections: null,
   companyStructure: [],
   entityContextLayers: [],
+  entityObligations: [],
   riskAppetiteStatement: 'Moderate. Escalate risks that threaten regulated operations, cross-border data movement, or strategic platforms.',
   applicableRegulations: ['UAE PDPL', 'BIS Export Controls', 'OFAC Sanctions', 'UAE Cybersecurity Council Guidance', 'NIST SP 800-53', 'NIST RMF', 'ISO 27001', 'ISO 27002', 'ISO 27005', 'ISO 27017', 'ISO 27018', 'ISO 27701', 'ISO 22301', 'ISO 22313', 'ISO 27036', 'ISO 28000', 'ISO 31000'],
   aiInstructions: 'Prioritise operational, regulatory, and strategic impact. Use British English.',
@@ -242,11 +243,172 @@ function getAiFeedbackTuningSettings(settings = null) {
   return normaliseAiFeedbackTuning(resolvedSettings?.aiFeedbackTuning || DEFAULT_AI_FEEDBACK_TUNING);
 }
 
+function getObligationResolutionApi() {
+  if (typeof window === 'undefined') return null;
+  return window.ObligationResolution && typeof window.ObligationResolution === 'object'
+    ? window.ObligationResolution
+    : null;
+}
+
+function createEmptyResolvedObligationContext() {
+  return {
+    selectedBusinessEntityId: '',
+    selectedDepartmentEntityId: '',
+    lineageEntityIds: [],
+    direct: [],
+    inheritedMandatory: [],
+    inheritedConditional: [],
+    inheritedGuidance: [],
+    allResolved: [],
+    resolvedApplicableRegulations: [],
+    summary: ''
+  };
+}
+
+function cloneResolvedObligationItem(item = {}) {
+  const source = item && typeof item === 'object' ? item : {};
+  const normaliseOptionalBoolean = (value) => {
+    if (value === true) return true;
+    if (value === false) return false;
+    return null;
+  };
+  return {
+    id: String(source.id || '').trim(),
+    sourceObligationId: String(source.sourceObligationId || '').trim(),
+    sourceEntityId: String(source.sourceEntityId || '').trim(),
+    sourceEntityName: String(source.sourceEntityName || '').trim(),
+    appliesToEntityId: String(source.appliesToEntityId || '').trim(),
+    appliesToDepartmentId: String(source.appliesToDepartmentId || '').trim(),
+    title: String(source.title || '').trim(),
+    familyKey: String(source.familyKey || '').trim(),
+    type: String(source.type || '').trim(),
+    requirementLevel: String(source.requirementLevel || '').trim(),
+    text: String(source.text || '').trim(),
+    jurisdictions: Array.isArray(source.jurisdictions) ? source.jurisdictions.map(value => String(value || '').trim()).filter(Boolean) : [],
+    regulationTags: Array.isArray(source.regulationTags) ? source.regulationTags.map(value => String(value || '').trim()).filter(Boolean) : [],
+    direct: !!source.direct,
+    flowDownMode: String(source.flowDownMode || '').trim(),
+    inheritanceType: String(source.inheritanceType || '').trim(),
+    scenarioLensScoped: !!source.scenarioLensScoped,
+    scenarioLensMatched: normaliseOptionalBoolean(source.scenarioLensMatched),
+    geographyScoped: !!source.geographyScoped,
+    departmentScoped: !!source.departmentScoped,
+    visibleToChildUsers: source.visibleToChildUsers !== false,
+    applicabilityReason: String(source.applicabilityReason || '').trim(),
+    reviewedAt: Number(source.reviewedAt || 0)
+  };
+}
+
+function normaliseResolvedObligationBucket(items = []) {
+  const source = Array.isArray(items) ? items : [];
+  const seen = new Set();
+  return source
+    .map(cloneResolvedObligationItem)
+    .filter(item => item.title)
+    .filter(item => {
+      const key = item.id || `${item.sourceEntityId}::${item.familyKey || item.title.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function normaliseResolvedObligationSnapshot(snapshot = {}) {
+  const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const direct = normaliseResolvedObligationBucket(source.direct);
+  const inheritedMandatory = normaliseResolvedObligationBucket(source.inheritedMandatory);
+  const inheritedConditional = normaliseResolvedObligationBucket(source.inheritedConditional);
+  const inheritedGuidance = normaliseResolvedObligationBucket(source.inheritedGuidance);
+  const allResolved = normaliseResolvedObligationBucket(
+    Array.isArray(source.allResolved) && source.allResolved.length
+      ? source.allResolved
+      : [...direct, ...inheritedMandatory, ...inheritedConditional, ...inheritedGuidance]
+  );
+  const resolvedApplicableRegulations = Array.from(new Set(
+    (
+      Array.isArray(source.resolvedApplicableRegulations) && source.resolvedApplicableRegulations.length
+        ? source.resolvedApplicableRegulations
+        : allResolved.flatMap(item => item.regulationTags || [])
+    )
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  return {
+    selectedBusinessEntityId: String(source.selectedBusinessEntityId || '').trim(),
+    selectedDepartmentEntityId: String(source.selectedDepartmentEntityId || '').trim(),
+    lineageEntityIds: Array.isArray(source.lineageEntityIds) ? source.lineageEntityIds.map(value => String(value || '').trim()).filter(Boolean) : [],
+    direct,
+    inheritedMandatory,
+    inheritedConditional,
+    inheritedGuidance,
+    allResolved,
+    resolvedApplicableRegulations,
+    summary: String(source.summary || '').trim(),
+    capturedAt: Number(source.capturedAt || 0)
+  };
+}
+
+function buildResolvedObligationSnapshot(options = {}) {
+  const rawContext = options.context
+    || options.obligationContext
+    || options.settings?.resolvedObligationContext
+    || options.draft?.obligationBasis
+    || options.assessment?.obligationBasis
+    || null;
+  const snapshot = normaliseResolvedObligationSnapshot(rawContext || createEmptyResolvedObligationContext());
+  if (!snapshot.summary && snapshot.allResolved.length) {
+    const resolver = getObligationResolutionApi();
+    snapshot.summary = resolver?.buildResolvedObligationSummary
+      ? String(resolver.buildResolvedObligationSummary(snapshot) || '').trim()
+      : '';
+  }
+  snapshot.capturedAt = Number(options.capturedAt || snapshot.capturedAt || Date.now());
+  return snapshot;
+}
+
+function resolveScopedObligationContext({
+  settings = getAdminSettings(),
+  businessUnitEntityId = '',
+  departmentEntityId = '',
+  geography = '',
+  geographies = [],
+  scenarioLens = ''
+} = {}) {
+  const resolver = getObligationResolutionApi();
+  if (!resolver?.resolveObligationContext) return createEmptyResolvedObligationContext();
+  return resolver.resolveObligationContext({
+    settings,
+    businessUnitEntityId,
+    departmentEntityId,
+    geography,
+    geographies,
+    scenarioLens
+  });
+}
+
+function applyResolvedObligationContextToSettings(baseSettings, obligationContext = createEmptyResolvedObligationContext()) {
+  const safeBase = baseSettings && typeof baseSettings === 'object' ? baseSettings : {};
+  const resolvedApplicableRegulations = Array.isArray(obligationContext?.resolvedApplicableRegulations)
+    ? obligationContext.resolvedApplicableRegulations
+    : [];
+  return {
+    ...safeBase,
+    resolvedObligationContext: obligationContext,
+    resolvedObligations: Array.isArray(obligationContext?.allResolved) ? obligationContext.allResolved : [],
+    resolvedObligationSummary: String(safeBase.resolvedObligationSummary || obligationContext?.summary || '').trim(),
+    applicableRegulations: Array.from(new Set([
+      ...(Array.isArray(safeBase.applicableRegulations) ? safeBase.applicableRegulations : []),
+      ...resolvedApplicableRegulations
+    ].map(value => String(value || '').trim()).filter(Boolean)))
+  };
+}
+
 function normaliseAdminSettings(settings = {}) {
   const mergedRegulations = Array.from(new Set([
     ...DEFAULT_ADMIN_SETTINGS.applicableRegulations,
     ...(Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [])
   ].map(value => String(value || '').trim()).filter(Boolean)));
+  const resolver = getObligationResolutionApi();
   return {
     ...DEFAULT_ADMIN_SETTINGS,
     ...settings,
@@ -254,6 +416,9 @@ function normaliseAdminSettings(settings = {}) {
     companyContextSections: settings.companyContextSections && typeof settings.companyContextSections === 'object' ? settings.companyContextSections : null,
     companyStructure: Array.isArray(settings.companyStructure) ? settings.companyStructure : [],
     entityContextLayers: Array.isArray(settings.entityContextLayers) ? settings.entityContextLayers : [],
+    entityObligations: resolver?.normaliseEntityObligations
+      ? resolver.normaliseEntityObligations(settings.entityObligations)
+      : [],
     buOverrides: Array.isArray(settings.buOverrides) ? settings.buOverrides : [],
     docOverrides: Array.isArray(settings.docOverrides) ? settings.docOverrides : [],
     aiFeedbackTuning: normaliseAiFeedbackTuning(settings.aiFeedbackTuning),
@@ -2906,6 +3071,15 @@ function activateAuthenticatedState() {
 function ensureDraftShape() {
   const draftStartedAt = Number(AppState.draft.startedAt || AppState.draft.createdAt || Date.now());
   const structuredScenario = normaliseStructuredScenario(AppState.draft.structuredScenario, { preserveUnknown: true });
+  const obligationBasisSource = AppState.draft.obligationBasis && typeof AppState.draft.obligationBasis === 'object'
+    ? AppState.draft.obligationBasis
+    : (AppState.draft.resolvedObligationContext && typeof AppState.draft.resolvedObligationContext === 'object'
+        ? {
+            ...AppState.draft.resolvedObligationContext,
+            allResolved: Array.isArray(AppState.draft.resolvedObligations) ? AppState.draft.resolvedObligations : AppState.draft.resolvedObligationContext.allResolved,
+            summary: AppState.draft.resolvedObligationSummary || AppState.draft.resolvedObligationContext.summary || ''
+          }
+        : null);
   AppState.draft = {
     id: AppState.draft.id || 'a_' + Date.now(),
     startedAt: draftStartedAt,
@@ -2958,6 +3132,10 @@ function ensureDraftShape() {
     inferredAssumptions: Array.isArray(AppState.draft.inferredAssumptions) ? AppState.draft.inferredAssumptions : [],
     missingInformation: Array.isArray(AppState.draft.missingInformation) ? AppState.draft.missingInformation : [],
     aiAlignment: AppState.draft.aiAlignment && typeof AppState.draft.aiAlignment === 'object' ? AppState.draft.aiAlignment : null,
+    obligationBasis: obligationBasisSource ? buildResolvedObligationSnapshot({
+      context: obligationBasisSource,
+      capturedAt: Number(obligationBasisSource.capturedAt || 0)
+    }) : null,
     learningNote: AppState.draft.learningNote || '',
     treatmentImprovementRequest: AppState.draft.treatmentImprovementRequest || '',
     guidedInput: {
@@ -3144,7 +3322,7 @@ function getInheritedSettingsForUserSelection(user = AuthService.getCurrentUser(
   const companyLayer = getEntityLayerById(globalSettings, scopedBusinessUnitEntityId);
   const departmentLayer = getEntityLayerById(globalSettings, scopedDepartmentEntityId);
   const buOverride = getBUList().find(item => item.orgEntityId === scopedBusinessUnitEntityId) || null;
-  return applyBUOverrideToSettings(
+  const inheritedSettings = applyBUOverrideToSettings(
     applyEntityLayerToSettings(
       applyEntityLayerToSettings(globalSettings, companyLayer, companyNode),
       departmentLayer,
@@ -3152,6 +3330,12 @@ function getInheritedSettingsForUserSelection(user = AuthService.getCurrentUser(
     ),
     buOverride
   );
+  return applyResolvedObligationContextToSettings(inheritedSettings, resolveScopedObligationContext({
+    settings: globalSettings,
+    businessUnitEntityId: scopedBusinessUnitEntityId,
+    departmentEntityId: scopedDepartmentEntityId,
+    geography: inheritedSettings.geography || globalSettings.geography
+  }));
 }
 
 function buildResolvedUserSettings(saved = {}, defaults = getUserSettingsDefaults(), globalSettings = getAdminSettings()) {
@@ -3334,6 +3518,13 @@ function getEffectiveSettings() {
     ),
     buOverride
   );
+  const resolvedObligationContext = resolveScopedObligationContext({
+    settings: globalSettings,
+    businessUnitEntityId: scopedBusinessUnitEntityId,
+    departmentEntityId: selection.departmentEntityId,
+    geography: organisationScopedDefaults.geography || globalSettings.geography,
+    scenarioLens: AppState.draft?.scenarioLens || ''
+  });
   const merged = {
     ...organisationScopedDefaults,
     geography: userSettings.geography || organisationScopedDefaults.geography,
@@ -3364,7 +3555,7 @@ function getEffectiveSettings() {
     }
     merged[key] = value ?? organisationScopedDefaults[key];
   });
-  return merged;
+  return applyResolvedObligationContextToSettings(merged, resolvedObligationContext);
 }
 
 function joinDistinctText(parts = []) {
@@ -3525,7 +3716,7 @@ function buildCurrentAIAssistContext(options = {}) {
   const businessLayer = getEntityLayerById(globalSettings, scopedBusinessUnitEntityId);
   const departmentLayer = getEntityLayerById(globalSettings, scopedDepartmentEntityId);
   const buOverride = draftBu || getBUList().find(item => item.orgEntityId === scopedBusinessUnitEntityId) || null;
-  const inherited = applyBUOverrideToSettings(
+  const inheritedBase = applyBUOverrideToSettings(
     applyEntityLayerToSettings(
       applyEntityLayerToSettings(globalSettings, businessLayer, businessNode),
       departmentLayer,
@@ -3533,6 +3724,14 @@ function buildCurrentAIAssistContext(options = {}) {
     ),
     buOverride
   );
+  const obligationContext = resolveScopedObligationContext({
+    settings: globalSettings,
+    businessUnitEntityId: scopedBusinessUnitEntityId,
+    departmentEntityId: scopedDepartmentEntityId,
+    geography: effective.geography || inheritedBase.geography || globalSettings.geography,
+    scenarioLens: options.scenarioLens || AppState.draft?.scenarioLens || ''
+  });
+  const inherited = applyResolvedObligationContextToSettings(inheritedBase, obligationContext);
   const userProfile = normaliseUserProfile(userSettings.userProfile, user);
   const userProfileSummary = buildUserProfileSummary(userProfile);
   const businessUnitContext = String(businessLayer?.contextSummary || buOverride?.contextSummary || businessNode?.profile || '').trim();
@@ -3542,11 +3741,12 @@ function buildCurrentAIAssistContext(options = {}) {
   const combinedContextSummary = joinDistinctText([
     businessUnitContext ? `Business unit context: ${businessUnitContext}` : '',
     departmentContext ? `Function context: ${departmentContext}` : '',
+    obligationContext.summary ? `Resolved obligations:\n${obligationContext.summary}` : '',
     inheritedContextSummary ? `Inherited organisation context: ${inheritedContextSummary}` : '',
     personalContextSummary ? `User context: ${personalContextSummary}` : ''
   ]);
   const companyStructureContext = buildOrganisationContextSummary(globalSettings);
-  const adminSettings = {
+  const adminSettings = applyResolvedObligationContextToSettings({
     ...effective,
     geography: inherited.geography || effective.geography,
     applicableRegulations: Array.from(new Set([
@@ -3565,11 +3765,12 @@ function buildCurrentAIAssistContext(options = {}) {
     personalContextSummary,
     businessUnitContext,
     departmentContext,
+    resolvedObligationSummary: obligationContext.summary,
     companyStructureContext,
     userProfileSummary,
     selectedBusinessEntity: businessNode,
     selectedDepartmentEntity: departmentNode
-  };
+  }, obligationContext);
   const businessUnit = (() => {
     const base = draftBu || (businessNode ? buildBUFromOrgEntity(businessNode, globalSettings) : null);
     if (!base) return null;
@@ -3587,7 +3788,10 @@ function buildCurrentAIAssistContext(options = {}) {
       benchmarkStrategy: String(base.benchmarkStrategy || adminSettings.benchmarkStrategy || '').trim(),
       companyStructureContext,
       userProfileSummary,
-      selectedDepartmentContext: departmentContext
+      selectedDepartmentContext: departmentContext,
+      resolvedObligationSummary: obligationContext.summary,
+      resolvedObligationContext: obligationContext,
+      resolvedObligations: Array.isArray(obligationContext?.allResolved) ? obligationContext.allResolved : []
     };
   })();
   return {
@@ -3712,6 +3916,7 @@ function renderCompanyStructureSummary(structure = []) {
                   </div>
                   <div class="flex items-center gap-3" style="flex-wrap:wrap">
                     <button class="btn btn--ghost btn--sm org-entity-context" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Context</button>
+                    <button class="btn btn--ghost btn--sm org-entity-obligations" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Obligations</button>
                     <button class="btn btn--ghost btn--sm org-entity-edit" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Edit</button>
                     <button class="btn btn--ghost btn--sm org-entity-delete" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Remove</button>
                   </div>
@@ -3738,6 +3943,7 @@ function renderCompanyStructureSummary(structure = []) {
               <span class="form-help">${getEntityLayerById(settings, node.id)?.contextSummary ? 'Saved context' : 'No saved context'}</span>
               <button class="btn btn--secondary btn--sm org-entity-add-department org-summary-action" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Add Function</button>
               <button class="btn btn--ghost btn--sm org-entity-context org-summary-action" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Context</button>
+              <button class="btn btn--ghost btn--sm org-entity-obligations org-summary-action" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Obligations</button>
               <button class="btn btn--ghost btn--sm org-entity-edit org-summary-action" data-org-id="${escapeHtml(String(node.id || ''))}" type="button">Edit</button>
             </div>
           </summary>
@@ -3776,6 +3982,180 @@ function getEntityLineage(structure = [], entityId = '') {
 function getEntityLineageLabel(structure = [], entityId = '') {
   const chain = getEntityLineage(structure, entityId);
   return chain.length ? chain.map(node => node.name).join(' > ') : '';
+}
+
+function getEntityObligationsBySource(settings = getAdminSettings(), entityId = '') {
+  const safeEntityId = String(entityId || '').trim();
+  if (!safeEntityId) return [];
+  return (Array.isArray(settings?.entityObligations) ? settings.entityObligations : [])
+    .filter(item => String(item?.sourceEntityId || '').trim() === safeEntityId)
+    .map(item => cloneSerializableState(item, item));
+}
+
+function getDescendantEntities(structure = getAdminSettings().companyStructure || [], entityId = '', { includeSelf = false } = {}) {
+  const safeEntityId = String(entityId || '').trim();
+  const list = Array.isArray(structure) ? structure : [];
+  if (!safeEntityId) return [];
+  const byParent = new Map();
+  list.forEach(node => {
+    const key = String(node?.parentId || '').trim();
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key).push(node);
+  });
+  const queue = includeSelf ? [safeEntityId] : (byParent.get(safeEntityId) || []).map(node => String(node?.id || '').trim()).filter(Boolean);
+  const descendants = [];
+  const seen = new Set();
+  while (queue.length) {
+    const currentId = queue.shift();
+    if (!currentId || seen.has(currentId)) continue;
+    seen.add(currentId);
+    const currentNode = getEntityById(list, currentId);
+    if (!currentNode) continue;
+    descendants.push(currentNode);
+    (byParent.get(currentId) || []).forEach(child => {
+      const childId = String(child?.id || '').trim();
+      if (childId && !seen.has(childId)) queue.push(childId);
+    });
+  }
+  return descendants;
+}
+
+function createModalScopedId(prefix = 'modal-scope') {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function buildEntityObligationFlowdownPreview({ entity, obligation, settings = getAdminSettings() }) {
+  const resolver = getObligationResolutionApi();
+  const structure = Array.isArray(settings?.companyStructure) ? settings.companyStructure : [];
+  const preview = {
+    ready: !!entity?.id,
+    directApplies: !!entity?.id,
+    flowDownMode: String(obligation?.flowDownMode || 'none').trim().toLowerCase() || 'none',
+    isActive: obligation?.active !== false,
+    needsPartialFilter: false,
+    companyMatches: [],
+    departmentMatches: [],
+    remainingCompanyCount: 0,
+    remainingDepartmentCount: 0
+  };
+  if (!entity?.id || !resolver?.normaliseEntityObligation || !resolver?.resolveObligationContext) {
+    return preview;
+  }
+  const normalised = resolver.normaliseEntityObligation({
+    ...cloneSerializableState(obligation, obligation || {}),
+    sourceEntityId: entity.id
+  });
+  preview.flowDownMode = normalised.flowDownMode;
+  preview.isActive = normalised.active !== false;
+  const hasPartialFilter = !!(
+    normalised.flowDownTargets.entityTypes.length ||
+    normalised.flowDownTargets.includeEntityIds.length ||
+    normalised.flowDownTargets.excludeEntityIds.length ||
+    normalised.flowDownTargets.departmentIds.length ||
+    normalised.flowDownTargets.departmentNames.length ||
+    normalised.flowDownTargets.geographies.length ||
+    normalised.flowDownTargets.scenarioLenses.length
+  );
+  preview.needsPartialFilter = normalised.flowDownMode === 'partial' && !hasPartialFilter;
+  if (!normalised.title || normalised.active === false || normalised.flowDownMode === 'none' || preview.needsPartialFilter) {
+    return preview;
+  }
+
+  const descendants = getDescendantEntities(structure, entity.id);
+  const descendantCompanies = descendants.filter(node => isCompanyEntityType(node.type));
+  const descendantDepartments = descendants.filter(node => isDepartmentEntityType(node.type));
+  const previewSettings = {
+    ...settings,
+    entityObligations: [normalised]
+  };
+
+  descendantCompanies.forEach(company => {
+    const geography = getEntityLayerById(settings, company.id)?.geography || settings.geography || '';
+    const resolved = resolver.resolveObligationContext({
+      settings: previewSettings,
+      businessUnitEntityId: company.id,
+      geography
+    });
+    if (resolved.allResolved.some(item => item.sourceObligationId === normalised.id)) {
+      preview.companyMatches.push({
+        id: company.id,
+        name: company.name,
+        type: company.type
+      });
+    }
+  });
+
+  descendantDepartments.forEach(department => {
+    const businessEntity = getCompanyEntityForDepartment(structure, department.id);
+    const geography = getEntityLayerById(settings, department.id)?.geography
+      || getEntityLayerById(settings, businessEntity?.id || '')?.geography
+      || settings.geography
+      || '';
+    const resolved = resolver.resolveObligationContext({
+      settings: previewSettings,
+      businessUnitEntityId: businessEntity?.id || entity.id,
+      departmentEntityId: department.id,
+      geography
+    });
+    if (resolved.allResolved.some(item => item.sourceObligationId === normalised.id)) {
+      preview.departmentMatches.push({
+        id: department.id,
+        name: department.name,
+        parentName: businessEntity?.name || '',
+        relationshipType: department.departmentRelationshipType || ''
+      });
+    }
+  });
+
+  preview.remainingCompanyCount = Math.max(0, preview.companyMatches.length - 4);
+  preview.remainingDepartmentCount = Math.max(0, preview.departmentMatches.length - 4);
+  preview.companyMatches = preview.companyMatches.slice(0, 4);
+  preview.departmentMatches = preview.departmentMatches.slice(0, 4);
+  return preview;
+}
+
+function renderEntityObligationPreview(preview = {}) {
+  if (!preview?.ready) {
+    return '<div class="form-help">Select an organisation node first.</div>';
+  }
+  if (preview.isActive === false) {
+    return '<div class="form-help">This obligation is currently inactive, so it will not apply or flow down until you reactivate it.</div>';
+  }
+  if (preview.flowDownMode === 'none') {
+    return '<div class="form-help">This obligation will stay attached only to the source entity or function.</div>';
+  }
+  if (preview.needsPartialFilter) {
+    return '<div class="form-help">Partial flow-down needs at least one target filter before child entities or functions will inherit it.</div>';
+  }
+  const companyItems = Array.isArray(preview.companyMatches) ? preview.companyMatches : [];
+  const departmentItems = Array.isArray(preview.departmentMatches) ? preview.departmentMatches : [];
+  const companyMarkup = companyItems.length
+    ? `<div class="citation-chips" style="margin-top:8px">${companyItems.map(item => `<span class="badge badge--neutral">${escapeHtml(String(item.name || 'Unnamed entity'))}</span>`).join('')}</div>`
+    : '<div class="form-help" style="margin-top:8px">No child businesses currently match.</div>';
+  const departmentMarkup = departmentItems.length
+    ? `<div class="citation-chips" style="margin-top:8px">${departmentItems.map(item => `<span class="badge badge--neutral">${escapeHtml(String(item.name || 'Unnamed function'))}</span>`).join('')}</div>`
+    : '<div class="form-help" style="margin-top:8px">No child functions currently match.</div>';
+  return `
+    <div class="card" style="padding:var(--sp-3);background:var(--bg-elevated)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="badge badge--gold">${escapeHtml(preview.flowDownMode === 'full' ? 'Full flow-down' : 'Partial flow-down')}</span>
+        <span class="form-help" style="margin-top:0">Direct source still applies at the node where this obligation originates.</span>
+      </div>
+      <div class="context-grid" style="margin-top:12px">
+        <div class="context-chip-panel">
+          <div class="context-panel-title">Child businesses</div>
+          <p class="context-panel-copy">${companyItems.length + Number(preview.remainingCompanyCount || 0)} current match${companyItems.length + Number(preview.remainingCompanyCount || 0) === 1 ? '' : 'es'}.</p>
+          ${companyMarkup}
+          ${preview.remainingCompanyCount ? `<div class="form-help" style="margin-top:8px">+${preview.remainingCompanyCount} more child businesses.</div>` : ''}
+        </div>
+        <div class="context-chip-panel">
+          <div class="context-panel-title">Child functions</div>
+          <p class="context-panel-copy">${departmentItems.length + Number(preview.remainingDepartmentCount || 0)} current match${departmentItems.length + Number(preview.remainingDepartmentCount || 0) === 1 ? '' : 'es'}.</p>
+          ${departmentMarkup}
+          ${preview.remainingDepartmentCount ? `<div class="form-help" style="margin-top:8px">+${preview.remainingDepartmentCount} more child functions.</div>` : ''}
+        </div>
+      </div>
+    </div>`;
 }
 
 function getChildCompanyEntities(structure = [], parentId = '') {
@@ -3893,7 +4273,15 @@ function buildEntityLayerContext(layers = [], structure = []) {
 function buildOrganisationContextSummary(settings = getAdminSettings()) {
   const structureText = buildCompanyStructureContext(settings.companyStructure || []);
   const layerText = buildEntityLayerContext(settings.entityContextLayers || [], settings.companyStructure || []);
-  return [structureText, layerText ? `Entity context layers:\n${layerText}` : ''].filter(Boolean).join('\n');
+  const resolver = getObligationResolutionApi();
+  const obligationText = resolver?.buildEntityObligationCatalogSummary
+    ? resolver.buildEntityObligationCatalogSummary(settings.entityObligations || [], settings.companyStructure || [])
+    : '';
+  return [
+    structureText,
+    layerText ? `Entity context layers:\n${layerText}` : '',
+    obligationText ? `Entity obligations:\n${obligationText}` : ''
+  ].filter(Boolean).join('\n');
 }
 
 function buildCompanyContextSections(result = {}) {
@@ -4703,6 +5091,435 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       benchmarkStrategy: benchmarkEl.value.trim()
     }, modal);
   });
+  return modal;
+}
+
+function openEntityObligationEditor({ entity, settings = getAdminSettings(), existingObligation = null, onSave }) {
+  if (!entity?.id) return null;
+  const resolver = getObligationResolutionApi();
+  const structure = Array.isArray(settings?.companyStructure) ? settings.companyStructure : [];
+  const descendants = getDescendantEntities(structure, entity.id);
+  const descendantCompanies = descendants.filter(node => isCompanyEntityType(node.type));
+  const descendantDepartments = descendants.filter(node => isDepartmentEntityType(node.type));
+  const defaultObligation = {
+    sourceEntityId: entity.id,
+    title: '',
+    familyKey: '',
+    type: 'regulatory',
+    requirementLevel: 'mandatory',
+    text: '',
+    regulationTags: [],
+    sourceDocIds: [],
+    active: true,
+    visibleToChildUsers: true,
+    flowDownMode: 'none',
+    flowDownTargets: {
+      entityTypes: [],
+      includeEntityIds: [],
+      excludeEntityIds: [],
+      departmentIds: [],
+      departmentNames: [],
+      geographies: [],
+      scenarioLenses: []
+    },
+    inheritedView: {
+      childRequirementLevel: 'mandatory',
+      childText: ''
+    },
+    review: {
+      owner: '',
+      lastReviewedAt: 0
+    }
+  };
+  const baseObligation = resolver?.normaliseEntityObligation
+    ? resolver.normaliseEntityObligation({
+        ...defaultObligation,
+        ...cloneSerializableState(existingObligation, existingObligation || {})
+      })
+    : { ...defaultObligation, ...cloneSerializableState(existingObligation, existingObligation || {}) };
+  const modalKey = createModalScopedId('entity-obligation');
+  const titleId = `${modalKey}-title`;
+  const familyId = `${modalKey}-family`;
+  const typeId = `${modalKey}-type`;
+  const levelId = `${modalKey}-level`;
+  const activeId = `${modalKey}-active`;
+  const visibleId = `${modalKey}-visible`;
+  const textId = `${modalKey}-text`;
+  const flowDownId = `${modalKey}-flow-down`;
+  const inheritedLevelId = `${modalKey}-child-level`;
+  const inheritedTextId = `${modalKey}-child-text`;
+  const ownerId = `${modalKey}-owner`;
+  const entityTypesWrapId = `${modalKey}-entity-types`;
+  const includeWrapId = `${modalKey}-include-entities`;
+  const excludeWrapId = `${modalKey}-exclude-entities`;
+  const departmentsWrapId = `${modalKey}-departments`;
+  const partialWrapId = `${modalKey}-partial-wrap`;
+  const regulationTagsId = `${modalKey}-reg-tags`;
+  const sourceDocsId = `${modalKey}-source-docs`;
+  const geographiesId = `${modalKey}-geographies`;
+  const scenarioLensesId = `${modalKey}-scenario-lenses`;
+  const previewId = `${modalKey}-preview`;
+  const heading = existingObligation?.id ? `Edit Obligation: ${entity.name}` : `Add Obligation: ${entity.name}`;
+  const companyTypes = Array.from(new Set(
+    descendantCompanies.length
+      ? descendantCompanies.map(node => String(node.type || '').trim()).filter(Boolean)
+      : ORG_ENTITY_TYPES.filter(type => !isDepartmentEntityType(type))
+  ));
+  const renderCheckboxGroup = (name, options = [], selected = [], labelBuilder = null) => {
+    const selectedSet = new Set((Array.isArray(selected) ? selected : []).map(value => String(value || '').trim()));
+    if (!options.length) return '<div class="form-help">No child nodes available yet.</div>';
+    return `<div style="display:flex;flex-direction:column;gap:8px">${options.map(option => {
+      const value = String(option.value || '').trim();
+      const label = typeof labelBuilder === 'function' ? labelBuilder(option) : option.label;
+      return `<label class="form-checkbox">
+        <input type="checkbox" name="${name}" value="${escapeHtml(value)}" ${selectedSet.has(value) ? 'checked' : ''}>
+        <span>${escapeHtml(String(label || value || 'Unnamed option'))}</span>
+      </label>`;
+    }).join('')}</div>`;
+  };
+
+  const modal = UI.modal({
+    title: heading,
+    body: `
+      <div class="form-help" style="margin-bottom:12px">Attach the obligation where it originates, then decide whether it stays direct, flows fully, or flows partially to child businesses and functions.</div>
+      <div class="grid-2" style="gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="${titleId}">Obligation Title</label>
+          <input class="form-input" id="${titleId}" value="${escapeHtml(String(baseObligation.title || ''))}" placeholder="Example: Group export controls obligation">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="${familyId}">Family Key</label>
+          <input class="form-input" id="${familyId}" value="${escapeHtml(String(baseObligation.familyKey || ''))}" placeholder="Optional stable key for parent/child overrides">
+        </div>
+      </div>
+      <div class="grid-2 mt-4" style="gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="${typeId}">Obligation Type</label>
+          <select class="form-select" id="${typeId}">
+            ${['regulatory', 'policy', 'contractual', 'governance', 'operational'].map(type => `<option value="${type}" ${baseObligation.type === type ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="${levelId}">Requirement Level</label>
+          <select class="form-select" id="${levelId}">
+            ${['mandatory', 'conditional', 'guidance'].map(level => `<option value="${level}" ${baseObligation.requirementLevel === level ? 'selected' : ''}>${escapeHtml(level)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group mt-4">
+        <label class="form-label" for="${textId}">Obligation Text</label>
+        <textarea class="form-textarea" id="${textId}" rows="4" placeholder="Describe what the source entity must do, monitor, or evidence.">${escapeHtml(String(baseObligation.text || ''))}</textarea>
+      </div>
+      <div class="grid-2 mt-4" style="gap:12px">
+        <div class="form-group">
+          <label class="form-label">Regulation Tags</label>
+          <div class="tag-input-wrap" id="${regulationTagsId}"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Source Document IDs</label>
+          <div class="tag-input-wrap" id="${sourceDocsId}"></div>
+        </div>
+      </div>
+      <div class="grid-2 mt-4" style="gap:12px">
+        <label class="form-checkbox">
+          <input type="checkbox" id="${activeId}" ${baseObligation.active !== false ? 'checked' : ''}>
+          <span>Obligation is active</span>
+        </label>
+        <label class="form-checkbox">
+          <input type="checkbox" id="${visibleId}" ${baseObligation.visibleToChildUsers !== false ? 'checked' : ''}>
+          <span>Visible to child users when inherited</span>
+        </label>
+      </div>
+      <div class="grid-2 mt-4" style="gap:12px">
+        <div class="form-group">
+          <label class="form-label" for="${flowDownId}">Flow-down Mode</label>
+          <select class="form-select" id="${flowDownId}">
+            <option value="none" ${baseObligation.flowDownMode === 'none' ? 'selected' : ''}>Direct only</option>
+            <option value="full" ${baseObligation.flowDownMode === 'full' ? 'selected' : ''}>Full flow-down</option>
+            <option value="partial" ${baseObligation.flowDownMode === 'partial' ? 'selected' : ''}>Partial flow-down</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="${ownerId}">Review Owner</label>
+          <input class="form-input" id="${ownerId}" value="${escapeHtml(String(baseObligation.review?.owner || ''))}" placeholder="Example: group-compliance">
+        </div>
+      </div>
+      <div id="${partialWrapId}" class="card mt-4" style="padding:var(--sp-4);background:var(--bg-elevated)">
+        <div class="context-panel-title">Child Scope And Inherited View</div>
+        <p class="context-panel-copy">Use these filters to control which subsidiaries or functions inherit this obligation and how it should read when it reaches them.</p>
+        <div class="grid-2 mt-4" style="gap:12px">
+          <div class="form-group">
+            <label class="form-label" for="${inheritedLevelId}">Child Requirement Level</label>
+            <select class="form-select" id="${inheritedLevelId}">
+              ${['mandatory', 'conditional', 'guidance'].map(level => `<option value="${level}" ${baseObligation.inheritedView?.childRequirementLevel === level ? 'selected' : ''}>${escapeHtml(level)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Geographies</label>
+            <div class="tag-input-wrap" id="${geographiesId}"></div>
+          </div>
+        </div>
+        <div class="form-group mt-4">
+          <label class="form-label" for="${inheritedTextId}">Inherited Child Text</label>
+          <textarea class="form-textarea" id="${inheritedTextId}" rows="3" placeholder="Optional narrowed wording for subsidiaries or functions receiving this obligation.">${escapeHtml(String(baseObligation.inheritedView?.childText || ''))}</textarea>
+        </div>
+        <div class="form-group mt-4">
+          <label class="form-label">Scenario Lenses</label>
+          <div class="tag-input-wrap" id="${scenarioLensesId}"></div>
+        </div>
+        <div class="context-grid mt-4">
+          <div class="context-chip-panel">
+            <div class="context-panel-title">Entity Types</div>
+            <div id="${entityTypesWrapId}" style="margin-top:10px">${renderCheckboxGroup(`${modalKey}-entity-type`, companyTypes.map(type => ({ value: String(type || '').toLowerCase(), label: type })), baseObligation.flowDownTargets?.entityTypes || [])}</div>
+          </div>
+          <div class="context-chip-panel">
+            <div class="context-panel-title">Include Child Entities</div>
+            <div id="${includeWrapId}" style="margin-top:10px">${renderCheckboxGroup(`${modalKey}-include-entity`, descendantCompanies.map(node => ({ value: node.id, label: getEntityLineageLabel(structure, node.id) || node.name })), baseObligation.flowDownTargets?.includeEntityIds || [])}</div>
+          </div>
+          <div class="context-chip-panel">
+            <div class="context-panel-title">Exclude Child Entities</div>
+            <div id="${excludeWrapId}" style="margin-top:10px">${renderCheckboxGroup(`${modalKey}-exclude-entity`, descendantCompanies.map(node => ({ value: node.id, label: getEntityLineageLabel(structure, node.id) || node.name })), baseObligation.flowDownTargets?.excludeEntityIds || [])}</div>
+          </div>
+          <div class="context-chip-panel">
+            <div class="context-panel-title">Specific Functions</div>
+            <div id="${departmentsWrapId}" style="margin-top:10px">${renderCheckboxGroup(`${modalKey}-department`, descendantDepartments.map(node => ({ value: node.id, label: getEntityLineageLabel(structure, node.id) || node.name })), baseObligation.flowDownTargets?.departmentIds || [])}</div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <div class="context-panel-title">Flow-Down Preview</div>
+        <div id="${previewId}" style="margin-top:10px"></div>
+      </div>`,
+    footer: `<button class="btn btn--ghost" id="${modalKey}-cancel">Cancel</button><button class="btn btn--primary" id="${modalKey}-save">Save Obligation</button>`
+  });
+
+  const titleEl = document.getElementById(titleId);
+  const familyEl = document.getElementById(familyId);
+  const typeEl = document.getElementById(typeId);
+  const levelEl = document.getElementById(levelId);
+  const activeEl = document.getElementById(activeId);
+  const visibleEl = document.getElementById(visibleId);
+  const textEl = document.getElementById(textId);
+  const flowDownEl = document.getElementById(flowDownId);
+  const childLevelEl = document.getElementById(inheritedLevelId);
+  const childTextEl = document.getElementById(inheritedTextId);
+  const ownerEl = document.getElementById(ownerId);
+  const partialWrapEl = document.getElementById(partialWrapId);
+  const previewEl = document.getElementById(previewId);
+  const regulationsInput = UI.tagInput(regulationTagsId, baseObligation.regulationTags || [], () => refreshPreview());
+  const sourceDocsInput = UI.tagInput(sourceDocsId, baseObligation.sourceDocIds || [], () => refreshPreview());
+  const geographiesInput = UI.tagInput(geographiesId, baseObligation.flowDownTargets?.geographies || [], () => refreshPreview());
+  const scenarioLensesInput = UI.tagInput(scenarioLensesId, baseObligation.flowDownTargets?.scenarioLenses || [], () => refreshPreview());
+
+  function getCheckedValues(name) {
+    return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map(input => String(input.value || '').trim()).filter(Boolean);
+  }
+
+  function collectDraft() {
+    return {
+      id: baseObligation.id,
+      sourceEntityId: entity.id,
+      title: titleEl?.value.trim() || '',
+      familyKey: familyEl?.value.trim() || '',
+      type: typeEl?.value || 'regulatory',
+      requirementLevel: levelEl?.value || 'mandatory',
+      text: textEl?.value.trim() || '',
+      regulationTags: regulationsInput?.getTags ? regulationsInput.getTags() : [],
+      sourceDocIds: sourceDocsInput?.getTags ? sourceDocsInput.getTags() : [],
+      active: activeEl?.checked !== false,
+      visibleToChildUsers: visibleEl?.checked !== false,
+      flowDownMode: flowDownEl?.value || 'none',
+      flowDownTargets: {
+        entityTypes: getCheckedValues(`${modalKey}-entity-type`),
+        includeEntityIds: getCheckedValues(`${modalKey}-include-entity`),
+        excludeEntityIds: getCheckedValues(`${modalKey}-exclude-entity`),
+        departmentIds: getCheckedValues(`${modalKey}-department`),
+        departmentNames: [],
+        geographies: geographiesInput?.getTags ? geographiesInput.getTags() : [],
+        scenarioLenses: scenarioLensesInput?.getTags ? scenarioLensesInput.getTags() : []
+      },
+      inheritedView: {
+        childRequirementLevel: childLevelEl?.value || levelEl?.value || 'mandatory',
+        childText: childTextEl?.value.trim() || ''
+      },
+      review: {
+        owner: ownerEl?.value.trim() || '',
+        lastReviewedAt: Date.now()
+      }
+    };
+  }
+
+  function refreshPreview() {
+    if (!partialWrapEl) return;
+    const nonDirect = flowDownEl?.value !== 'none';
+    partialWrapEl.style.display = nonDirect ? '' : 'none';
+    previewEl.innerHTML = renderEntityObligationPreview(buildEntityObligationFlowdownPreview({
+      entity,
+      obligation: collectDraft(),
+      settings
+    }));
+  }
+
+  [
+    titleEl,
+    familyEl,
+    typeEl,
+    levelEl,
+    activeEl,
+    visibleEl,
+    textEl,
+    flowDownEl,
+    childLevelEl,
+    childTextEl,
+    ownerEl
+  ].forEach(element => {
+    element?.addEventListener('input', refreshPreview);
+    element?.addEventListener('change', refreshPreview);
+  });
+  document.querySelectorAll(`input[name="${modalKey}-entity-type"], input[name="${modalKey}-include-entity"], input[name="${modalKey}-exclude-entity"], input[name="${modalKey}-department"]`).forEach(input => {
+    input.addEventListener('change', refreshPreview);
+  });
+
+  refreshPreview();
+
+  document.getElementById(`${modalKey}-cancel`)?.addEventListener('click', () => modal.close());
+  document.getElementById(`${modalKey}-save`)?.addEventListener('click', () => {
+    const nextObligation = resolver?.normaliseEntityObligation
+      ? resolver.normaliseEntityObligation(collectDraft())
+      : collectDraft();
+    if (!nextObligation.title) {
+      UI.toast('Add an obligation title before saving.', 'warning');
+      return;
+    }
+    onSave?.(nextObligation, modal);
+  });
+  return modal;
+}
+
+function openEntityObligationManager({ entity, settings = getAdminSettings(), onSaveAll }) {
+  if (!entity?.id) return null;
+  const resolver = getObligationResolutionApi();
+  const modalKey = createModalScopedId('entity-obligation-manager');
+  const bodyId = `${modalKey}-body`;
+  const localItems = getEntityObligationsBySource(settings, entity.id);
+  const otherItems = (Array.isArray(settings?.entityObligations) ? settings.entityObligations : [])
+    .filter(item => String(item?.sourceEntityId || '').trim() !== String(entity.id || '').trim())
+    .map(item => cloneSerializableState(item, item));
+
+  function buildMergedObligations() {
+    const merged = [...otherItems, ...localItems];
+    return resolver?.normaliseEntityObligations ? resolver.normaliseEntityObligations(merged) : merged;
+  }
+
+  function renderListMarkup() {
+    if (!localItems.length) {
+      return '<div class="empty-state">No direct obligations are attached to this node yet. Add the first one here, then save the manager to persist it.</div>';
+    }
+    return `<div style="display:flex;flex-direction:column;gap:12px">${localItems.map(item => {
+      const preview = buildEntityObligationFlowdownPreview({
+        entity,
+        obligation: item,
+        settings: { ...settings, entityObligations: buildMergedObligations() }
+      });
+      const inheritedCount = (preview.companyMatches?.length || 0) + Number(preview.remainingCompanyCount || 0)
+        + (preview.departmentMatches?.length || 0) + Number(preview.remainingDepartmentCount || 0);
+      return `
+        <div class="card" style="padding:var(--sp-4);background:var(--bg-elevated)">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <strong style="color:var(--text-primary)">${escapeHtml(String(item.title || 'Untitled obligation'))}</strong>
+            <span class="badge badge--neutral">${escapeHtml(String(item.type || 'regulatory'))}</span>
+            <span class="badge badge--neutral">${escapeHtml(String(item.requirementLevel || 'mandatory'))}</span>
+            <span class="badge badge--neutral">${escapeHtml(String(item.flowDownMode || 'none'))} flow-down</span>
+            ${item.active === false ? '<span class="badge badge--warning">Inactive</span>' : ''}
+            <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn--ghost btn--sm" data-obligation-action="edit" data-obligation-id="${escapeHtml(String(item.id || ''))}" type="button">Edit</button>
+              <button class="btn btn--ghost btn--sm" data-obligation-action="remove" data-obligation-id="${escapeHtml(String(item.id || ''))}" type="button">Remove</button>
+            </div>
+          </div>
+          ${item.text ? `<div class="form-help" style="margin-top:8px">${escapeHtml(truncateText(String(item.text || ''), 260))}</div>` : ''}
+          <div class="form-help" style="margin-top:8px">Direct on ${escapeHtml(String(entity.name || 'this node'))}. ${inheritedCount ? `Currently reaches ${inheritedCount} child target${inheritedCount === 1 ? '' : 's'}.` : 'Currently does not reach any child targets.'}</div>
+          ${item.regulationTags?.length ? `<div class="citation-chips" style="margin-top:8px">${item.regulationTags.map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('')}</div>` : ''}
+        </div>`;
+    }).join('')}</div>`;
+  }
+
+  const modal = UI.modal({
+    title: `Manage Obligations: ${entity.name}`,
+    body: `
+      <div class="admin-workbench-strip admin-workbench-strip--compact">
+        <div>
+          <div class="admin-workbench-strip__label">Direct obligation management</div>
+          <strong>Attach obligations where they originate, then decide how much should flow to subsidiaries or functions beneath this node.</strong>
+          <span>Direct changes stay local inside this manager until you save them.</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
+        <button class="btn btn--secondary" id="${modalKey}-add" type="button">Add Obligation</button>
+        <span class="form-help">Use family keys when a child obligation should intentionally override a parent obligation in the same family.</span>
+      </div>
+      <div id="${bodyId}" class="mt-4"></div>`,
+    footer: `<button class="btn btn--ghost" id="${modalKey}-cancel">Close</button><button class="btn btn--primary" id="${modalKey}-save">Save Changes</button>`
+  });
+
+  const bodyEl = document.getElementById(bodyId);
+
+  function renderManagerList() {
+    bodyEl.innerHTML = renderListMarkup();
+    bodyEl.querySelectorAll('[data-obligation-action="edit"]').forEach(button => {
+      button.addEventListener('click', () => {
+        const item = localItems.find(entry => entry.id === button.dataset.obligationId);
+        if (!item) return;
+        const editingId = item.id;
+        openEntityObligationEditor({
+          entity,
+          settings: { ...settings, entityObligations: buildMergedObligations() },
+          existingObligation: item,
+          onSave: (nextObligation, editorModal) => {
+            const index = localItems.findIndex(entry => entry.id === editingId);
+            if (index > -1) localItems[index] = nextObligation;
+            else localItems.push(nextObligation);
+            editorModal.close();
+            renderManagerList();
+          }
+        });
+      });
+    });
+    bodyEl.querySelectorAll('[data-obligation-action="remove"]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const index = localItems.findIndex(entry => entry.id === button.dataset.obligationId);
+        if (index < 0) return;
+        if (!await UI.confirm('Remove this obligation from the current node?')) return;
+        localItems.splice(index, 1);
+        renderManagerList();
+      });
+    });
+  }
+
+  renderManagerList();
+
+  document.getElementById(`${modalKey}-add`)?.addEventListener('click', () => {
+    openEntityObligationEditor({
+      entity,
+      settings: { ...settings, entityObligations: buildMergedObligations() },
+      onSave: (nextObligation, editorModal) => {
+        const index = localItems.findIndex(entry => entry.id === nextObligation.id);
+        if (index > -1) localItems[index] = nextObligation;
+        else localItems.push(nextObligation);
+        editorModal.close();
+        renderManagerList();
+      }
+    });
+  });
+
+  document.getElementById(`${modalKey}-cancel`)?.addEventListener('click', () => modal.close());
+  document.getElementById(`${modalKey}-save`)?.addEventListener('click', async () => {
+    const nextObligations = buildMergedObligations();
+    const saved = await onSaveAll?.(nextObligations);
+    if (saved === false) return;
+    modal.close();
+    UI.toast(`Saved obligations for ${entity.name}.`, 'success');
+  });
+
   return modal;
 }
 
@@ -7582,6 +8399,21 @@ function buildAssessmentAssumptions(draft, results, modelInputs, scenarioMeta) {
   assumptions.push({ category: 'Loss', text: `Assumes business interruption, response, legal, data, third-party, and reputation impacts can be represented as per-event ranges rather than one fixed value.` });
   if (scenarioMeta?.linked) assumptions.push({ category: 'Portfolio', text: 'Assumes the selected linked risks can escalate together and justify the applied scenario uplift in frequency and loss.' });
   if (Array.isArray(draft.applicableRegulations) && draft.applicableRegulations.length) assumptions.push({ category: 'Regulatory', text: `Assumes the currently selected regulatory set remains the most relevant set for this scenario: ${draft.applicableRegulations.slice(0, 4).join(', ')}${draft.applicableRegulations.length > 4 ? ' and others' : ''}.` });
+  const obligationBasis = buildResolvedObligationSnapshot({
+    context: draft?.obligationBasis || draft?.resolvedObligationContext,
+    capturedAt: Number(draft?.obligationBasis?.capturedAt || 0)
+  });
+  if (obligationBasis.allResolved.length) {
+    const parts = [];
+    if (obligationBasis.direct.length) parts.push(`${obligationBasis.direct.length} direct obligation${obligationBasis.direct.length === 1 ? '' : 's'}`);
+    if (obligationBasis.inheritedMandatory.length) parts.push(`${obligationBasis.inheritedMandatory.length} inherited mandatory obligation${obligationBasis.inheritedMandatory.length === 1 ? '' : 's'}`);
+    if (obligationBasis.inheritedConditional.length) parts.push(`${obligationBasis.inheritedConditional.length} inherited conditional obligation${obligationBasis.inheritedConditional.length === 1 ? '' : 's'}`);
+    if (obligationBasis.inheritedGuidance.length) parts.push(`${obligationBasis.inheritedGuidance.length} inherited guidance obligation${obligationBasis.inheritedGuidance.length === 1 ? '' : 's'}`);
+    assumptions.push({
+      category: 'Obligations',
+      text: `Assumes the resolved obligation basis remains valid for this scenario, including ${parts.join(', ')}${obligationBasis.resolvedApplicableRegulations.length ? ` and obligation-derived regulatory tags such as ${obligationBasis.resolvedApplicableRegulations.slice(0, 4).join(', ')}${obligationBasis.resolvedApplicableRegulations.length > 4 ? ' and others' : ''}` : ''}.`
+    });
+  }
   return assumptions.slice(0, 6);
 }
 
@@ -8872,6 +9704,7 @@ function renderAdminSettings(activeSection = 'org') {
   const settings = getAdminSettings();
   const companyStructure = Array.isArray(settings.companyStructure) ? [...settings.companyStructure] : [];
   const entityContextLayers = Array.isArray(settings.entityContextLayers) ? [...settings.entityContextLayers] : [];
+  const entityObligations = Array.isArray(settings.entityObligations) ? cloneSerializableState(settings.entityObligations, []) : [];
   const companyContextSections = settings.companyContextSections || buildCompanyContextSections({
     companySummary: settings.adminContextSummary || '',
     businessProfile: settings.companyContextProfile || ''
@@ -8892,7 +9725,8 @@ function renderAdminSettings(activeSection = 'org') {
   const orgSetupSections = AdminOrgSetupSection.renderSections({
     companyEntities,
     departmentEntities,
-    companyStructure
+    companyStructure,
+    entityObligations
   });
   const companyBuilderSection = window.AdminSettingsSection.renderCompanyBuilderSection({ settings, companyContextSections });
   const platformDefaultsSection = AdminPlatformDefaultsSection.renderSection({ settings, mode: 'defaults' });
@@ -8978,17 +9812,20 @@ function renderAdminSettings(activeSection = 'org') {
   const { regsInput, typicalDepartmentsInput } = defaultsBindings;
   const structureSummaryEl = currentSettingsSection === 'org' ? document.getElementById('admin-company-structure-summary') : null;
   const layerSummaryEl = currentSettingsSection === 'org' ? document.getElementById('admin-layer-summary-list') : null;
+  const obligationSummaryEl = currentSettingsSection === 'org' ? document.getElementById('admin-obligation-summary-list') : null;
   const profileEl = currentSettingsSection === 'company' ? document.getElementById('admin-company-profile') : null;
   const websiteEl = currentSettingsSection === 'company' ? document.getElementById('admin-company-url') : null;
 
   AdminOrgSetupSection.configure({
     companyStructure,
     entityContextLayers,
+    entityObligations,
     regsInput,
     profileEl,
     websiteEl,
     structureSummaryEl,
-    layerSummaryEl
+    layerSummaryEl,
+    obligationSummaryEl
   });
 
   function buildAdminSettingsPayload() {
@@ -9051,6 +9888,7 @@ function renderAdminSettings(activeSection = 'org') {
         companyContextProfile: serialiseCompanyContextSections(companyContextSections),
         companyStructure,
         entityContextLayers,
+        entityObligations,
         defaultLinkMode: document.getElementById('admin-link-mode') ? document.getElementById('admin-link-mode').value === 'yes' : !!currentSettings.defaultLinkMode,
         toleranceThresholdUsd,
         warningThresholdUsd,
@@ -9167,11 +10005,13 @@ ${topItems}${impactAssessment.impacts.length > 3 ? `\n- +${impactAssessment.impa
     AdminOrgSetupSection.bind({
       companyStructure,
       entityContextLayers,
+      entityObligations,
       regsInput,
       profileEl,
       websiteEl,
       structureSummaryEl,
-      layerSummaryEl
+      layerSummaryEl,
+      obligationSummaryEl
     });
   }
 

@@ -3,6 +3,7 @@ const { appendAuditEvent, verifySessionToken } = require('./_audit');
 const { isRequestSecretValid, sendApiError, requireSession, sendConflictError } = require('./_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
 const { get: kvGet, getKvConfig, set: kvSet } = require('./_kvStore');
+const { normaliseEntityObligations } = require('../assets/state/obligationResolution.js');
 
 const SETTINGS_KEY = process.env.SETTINGS_STORE_KEY || 'risk_calculator_settings';
 const DEFAULT_TYPICAL_DEPARTMENTS = [
@@ -44,6 +45,7 @@ function getDefaultSettings() {
     companyContextSections: null,
     companyStructure: [],
     entityContextLayers: [],
+    entityObligations: [],
     buOverrides: [],
     docOverrides: [],
     riskAppetiteStatement: 'Moderate. Escalate risks that threaten regulated operations, cross-border data movement, or strategic platforms.',
@@ -92,6 +94,7 @@ function normaliseSettings(settings = {}) {
     companyContextSections: settings.companyContextSections && typeof settings.companyContextSections === 'object' ? settings.companyContextSections : null,
     companyStructure: Array.isArray(settings.companyStructure) ? settings.companyStructure : [],
     entityContextLayers: Array.isArray(settings.entityContextLayers) ? settings.entityContextLayers : [],
+    entityObligations: normaliseEntityObligations(settings.entityObligations),
     buOverrides: Array.isArray(settings.buOverrides) ? settings.buOverrides : [],
     docOverrides: Array.isArray(settings.docOverrides) ? settings.docOverrides : [],
     aiFeedbackTuning: normaliseAiFeedbackTuning(settings.aiFeedbackTuning),
@@ -192,6 +195,26 @@ function normaliseLayer(layer = {}) {
   };
 }
 
+function normaliseObligationForCompare(obligation = {}) {
+  const normalised = normaliseEntityObligations([obligation])[0];
+  if (!normalised) return null;
+  return {
+    ...normalised,
+    jurisdictions: [...normalised.jurisdictions].sort(),
+    regulationTags: [...normalised.regulationTags].sort(),
+    sourceDocIds: [...normalised.sourceDocIds].sort(),
+    flowDownTargets: {
+      entityTypes: [...normalised.flowDownTargets.entityTypes].sort(),
+      includeEntityIds: [...normalised.flowDownTargets.includeEntityIds].sort(),
+      excludeEntityIds: [...normalised.flowDownTargets.excludeEntityIds].sort(),
+      departmentIds: [...normalised.flowDownTargets.departmentIds].sort(),
+      departmentNames: [...normalised.flowDownTargets.departmentNames].sort(),
+      geographies: [...normalised.flowDownTargets.geographies].sort(),
+      scenarioLenses: [...normalised.flowDownTargets.scenarioLenses].sort()
+    }
+  };
+}
+
 function sameValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -266,7 +289,23 @@ function canBuAdminWriteSettings(currentSettings, proposedSettings, session) {
       .filter(layer => !allowedLayerEntityIds.has(String(layer.entityId || '')))
       .map(normaliseLayer)
   );
-  return sameValue(currentOutsideLayers, proposedOutsideLayers);
+  if (!sameValue(currentOutsideLayers, proposedOutsideLayers)) {
+    return false;
+  }
+
+  const currentOutsideObligations = stableSortById(
+    (Array.isArray(currentSettings.entityObligations) ? currentSettings.entityObligations : [])
+      .filter(obligation => !allowedLayerEntityIds.has(String(obligation.sourceEntityId || '')))
+      .map(normaliseObligationForCompare)
+      .filter(Boolean)
+  );
+  const proposedOutsideObligations = stableSortById(
+    (Array.isArray(proposedSettings.entityObligations) ? proposedSettings.entityObligations : [])
+      .filter(obligation => !allowedLayerEntityIds.has(String(obligation.sourceEntityId || '')))
+      .map(normaliseObligationForCompare)
+      .filter(Boolean)
+  );
+  return sameValue(currentOutsideObligations, proposedOutsideObligations);
 }
 
 module.exports = async function handler(req, res) {

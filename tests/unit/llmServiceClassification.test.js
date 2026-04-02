@@ -11,7 +11,7 @@ function loadLlmInternals() {
   const source = fs.readFileSync(filePath, 'utf8');
   const instrumented = source.replace(
     '  return {\n    buildGuidedScenarioDraft,',
-    '  globalThis.__llmInternals = { _classifyScenario, _extractRiskCandidates, _evaluateGuidedDraftCandidate, _filterPromptIdeaCandidates };\n\n  return {\n    buildGuidedScenarioDraft,'
+    '  globalThis.__llmInternals = { _classifyScenario, _extractRiskCandidates, _evaluateGuidedDraftCandidate, _filterPromptIdeaCandidates, _buildContextPromptBlock, _buildScenarioContextResolution };\n\n  return {\n    buildGuidedScenarioDraft,'
   );
   assert.notEqual(instrumented, source, 'Failed to instrument llmService internals for test access');
 
@@ -119,4 +119,74 @@ test('filterPromptIdeaCandidates rejects AI-model drift for dark-web credential 
   const labels = ideas.map((idea) => idea.label);
   assert.ok(labels.includes('Privileged credential exposure'));
   assert.equal(labels.includes('Responsible AI drift'), false);
+});
+
+test('buildContextPromptBlock makes resolved direct and inherited obligations explicit', () => {
+  const internals = loadLlmInternals();
+  const block = internals._buildContextPromptBlock({
+    businessUnitContext: 'Subsidiary technology context',
+    resolvedObligationContext: {
+      direct: [
+        {
+          title: 'Local cyber incident reporting',
+          sourceEntityName: 'Operating company',
+          text: 'Critical cyber events must be reported to the local regulator.'
+        }
+      ],
+      inheritedMandatory: [
+        {
+          title: 'Group privileged access standard',
+          sourceEntityName: 'Holding company',
+          text: 'Privileged access reviews must follow the group standard.'
+        }
+      ],
+      inheritedConditional: [],
+      inheritedGuidance: [],
+      allResolved: [],
+      summary: 'Direct obligations and inherited group obligations are active.'
+    }
+  });
+
+  assert.match(block, /Resolved obligation basis/i);
+  assert.match(block, /Direct obligations:/i);
+  assert.match(block, /Inherited mandatory obligations:/i);
+  assert.match(block, /Group privileged access standard/i);
+});
+
+test('buildScenarioContextResolution carries resolved obligations as approved context', () => {
+  const internals = loadLlmInternals();
+  const resolution = internals._buildScenarioContextResolution({
+    narrative: 'Privileged administrator credentials were used to access the tenant and change critical configurations.',
+    guidedInput: {
+      event: 'Privileged administrator credentials were used to access the tenant and change critical configurations.',
+      asset: 'Directory tenant',
+      cause: 'Credential exposure',
+      impact: 'Service disruption and control failure'
+    },
+    businessUnit: { name: 'Technology' },
+    adminSettings: {
+      resolvedObligationContext: {
+        direct: [],
+        inheritedMandatory: [
+          {
+            title: 'Group privileged access standard',
+            sourceEntityName: 'Holding company',
+            text: 'Privileged access reviews must follow the group standard.'
+          }
+        ],
+        inheritedConditional: [],
+        inheritedGuidance: [],
+        allResolved: [],
+        summary: 'Inherited group obligations are active.'
+      }
+    },
+    geography: 'United Arab Emirates',
+    applicableRegulations: ['UAE PDPL']
+  });
+
+  assert.match(resolution.approvedContext.obligations, /Group privileged access standard/i);
+  assert.equal(
+    resolution.applies.some((item) => item.kind === 'obligations'),
+    true
+  );
 });

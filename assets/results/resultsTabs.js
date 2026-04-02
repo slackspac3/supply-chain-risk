@@ -164,6 +164,10 @@
               ${renderBenchmarkRationaleBlock(assessment.benchmarkBasis, assessment.inputRationale, assessment.benchmarkReferences)}
               ${renderInputProvenanceBlock(assessment.inputProvenance)}
             </div>` : ''}
+            ${typeof renderAssessmentObligationBasisBlock === 'function' ? renderAssessmentObligationBasisBlock(assessment, {
+              compact: false,
+              title: 'Resolved obligation basis and flow-down detail'
+            }) : ''}
           </div>
         </details>
 

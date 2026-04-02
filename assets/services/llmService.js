@@ -1594,11 +1594,14 @@ Return corrected JSON only.`;
 
 
   function _buildContextPromptBlock(settings = {}, businessUnit = null, priorPatterns = []) {
+    const obligationBlock = _buildResolvedObligationPromptBlock(settings, { compact: false });
     const parts = [
       settings?.businessUnitContext ? `Live business-unit context:
 ${settings.businessUnitContext}` : '',
       settings?.departmentContext ? `Live function context:
 ${settings.departmentContext}` : '',
+      obligationBlock ? `Resolved obligation basis:
+${obligationBlock}` : '',
       settings?.inheritedContextSummary ? `Inherited organisation context:
 ${settings.inheritedContextSummary}` : '',
       settings?.personalContextSummary ? `User-specific working context:
@@ -1613,6 +1616,55 @@ ${businessUnit.selectedDepartmentContext}` : ''
       parts.push(`Prior scenario patterns for this business unit:\n${patternLines}`);
     }
     return parts.length ? parts.join('\n\n') : '(no additional live BU/function/user context provided)';
+  }
+
+  function _collectResolvedObligationContext(settings = {}) {
+    const context = settings?.resolvedObligationContext && typeof settings.resolvedObligationContext === 'object'
+      ? settings.resolvedObligationContext
+      : {};
+    const allResolved = Array.isArray(settings?.resolvedObligations)
+      ? settings.resolvedObligations
+      : (Array.isArray(context?.allResolved) ? context.allResolved : []);
+    return {
+      direct: Array.isArray(context?.direct) ? context.direct : allResolved.filter(item => item?.direct),
+      inheritedMandatory: Array.isArray(context?.inheritedMandatory) ? context.inheritedMandatory : allResolved.filter(item => !item?.direct && item?.requirementLevel === 'mandatory'),
+      inheritedConditional: Array.isArray(context?.inheritedConditional) ? context.inheritedConditional : allResolved.filter(item => !item?.direct && item?.requirementLevel === 'conditional'),
+      inheritedGuidance: Array.isArray(context?.inheritedGuidance) ? context.inheritedGuidance : allResolved.filter(item => !item?.direct && item?.requirementLevel === 'guidance'),
+      summary: String(settings?.resolvedObligationSummary || context?.summary || '').trim()
+    };
+  }
+
+  function _buildResolvedObligationPromptBlock(settings = {}, { compact = false } = {}) {
+    const obligationContext = _collectResolvedObligationContext(settings);
+    const buckets = [
+      ['Direct obligations', obligationContext.direct],
+      ['Inherited mandatory obligations', obligationContext.inheritedMandatory],
+      ['Inherited conditional obligations', obligationContext.inheritedConditional],
+      ['Inherited guidance obligations', obligationContext.inheritedGuidance]
+    ];
+    const hasResolvedItems = buckets.some(([, items]) => Array.isArray(items) && items.length);
+    if (!hasResolvedItems && !obligationContext.summary) return '';
+    const itemLimit = compact ? 2 : 4;
+    const formatBucket = (label, items = []) => {
+      const source = Array.isArray(items) ? items.filter(Boolean) : [];
+      if (!source.length) return '';
+      return `${label}:\n${source.slice(0, itemLimit).map((item) => {
+        const parts = [
+          item?.title,
+          item?.sourceEntityName ? `source: ${item.sourceEntityName}` : '',
+          item?.text ? _truncateText(String(item.text || ''), compact ? 120 : 220) : '',
+          item?.applicabilityReason && !compact ? `why active: ${item.applicabilityReason}` : ''
+        ].filter(Boolean);
+        return `- ${parts.join(' | ')}`;
+      }).join('\n')}`;
+    };
+    const formattedBuckets = buckets.map(([label, items]) => formatBucket(label, items)).filter(Boolean);
+    if (!formattedBuckets.length) {
+      return obligationContext.summary || '';
+    }
+    return compact
+      ? formattedBuckets.join('\n')
+      : [obligationContext.summary ? `Summary:\n${obligationContext.summary}` : '', ...formattedBuckets].filter(Boolean).join('\n\n');
   }
 
   function _getContextResolverPriorPatterns(buId = '', limit = 6) {
@@ -1674,6 +1726,18 @@ ${businessUnit.selectedDepartmentContext}` : ''
         score: 9,
         useFor: 'regulatory framing and obligations',
         reason: 'These define the relevant obligations and should inform regulatory framing, but not change the event type.',
+        text
+      };
+    }
+    if (kind === 'obligations') {
+      return {
+        key: source?.key || 'obligations',
+        label: source?.label || 'Resolved obligations',
+        kind,
+        status: 'applies',
+        score: 9,
+        useFor: 'governed obligations, control framing, and escalation expectations',
+        reason: 'These define direct and inherited duties that should shape control and regulatory framing, but they must not redefine the event type on their own.',
         text
       };
     }
@@ -1827,6 +1891,12 @@ ${businessUnit.selectedDepartmentContext}` : ''
         ].filter(Boolean).join(' ')
       },
       {
+        key: 'obligations',
+        label: 'Resolved obligations',
+        kind: 'obligations',
+        text: _buildResolvedObligationPromptBlock(adminSettings, { compact: true })
+      },
+      {
         key: 'geography',
         label: 'Geography',
         kind: 'geography',
@@ -1875,6 +1945,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
         department: pickBucketText('department'),
         user: pickBucketText('user'),
         guidance: pickBucketText('guidance'),
+        obligations: pickBucketText('obligations'),
         geography: pickBucketText('geography'),
         regulations: pickBucketText('regulations'),
         priorPatterns: pickBucketText('prior-pattern')
@@ -3584,6 +3655,8 @@ Regulatory tags: ${(buContext?.regulatoryTags || []).join(', ')}
 Critical services: ${(buContext?.criticalServices || []).join(', ')}
 Geography: ${buContext?.geography || 'Unknown'}
 Benchmark strategy: ${buContext?.benchmarkStrategy || 'Prefer GCC and UAE references, then fall back to best global data with clear explanation.'}
+Resolved obligations:
+${_buildResolvedObligationPromptBlock(options.adminSettings || buContext || {}, { compact: false }) || '(none)'}
 Context applicability resolution:
 ${_buildContextResolutionPromptBlock(contextResolution)}
 ${_buildFeedbackLearningPromptBlock(feedbackProfile)}
@@ -3902,6 +3975,7 @@ Return only the refined scenario narrative text.`;
       `Business unit: ${input.businessUnit?.name || 'Unknown'}`,
       `Geography: ${input.geography || 'Unknown'}`,
       `Applicable regulations: ${(input.applicableRegulations || []).join(', ') || '(none)'}`,
+      `Resolved obligations: ${_buildResolvedObligationPromptBlock(input.adminSettings || input.businessUnit || {}, { compact: true }) || '(none)'}`,
       `Primary classification: ${classification?.key || 'general'} / ${classification?.scenarioType || 'General Enterprise Risk Scenario'}`,
       `Context resolution: ${_buildContextResolutionPromptBlock(contextResolution)}`,
       _buildAiTuningPromptBlock(_getAiFeedbackTuning())
@@ -4025,6 +4099,8 @@ If the scenario clearly spans another domain as a secondary aspect, include up t
 Applicable regulations: ${(input.applicableRegulations || []).join(', ')}
 Guided intake: ${JSON.stringify(input.guidedInput || {})}
 Benchmark strategy: ${input.adminSettings?.benchmarkStrategy || ''}
+Resolved obligations:
+${_buildResolvedObligationPromptBlock(input.adminSettings || input.businessUnit || {}, { compact: false }) || '(none)'}
 Context applicability resolution:
 ${_buildContextResolutionPromptBlock(contextResolution)}
 ${_buildFeedbackLearningPromptBlock(feedbackProfile)}
@@ -5066,10 +5142,12 @@ ${evidenceMeta.promptBlock}`;
       const assumptions = Array.isArray(input?.assessmentIntelligence?.assumptions)
         ? input.assessmentIntelligence.assumptions
         : [];
+      const obligationBasis = _buildResolvedObligationPromptBlock(input?.obligationBasis || {}, { compact: true }) || '(none)';
       const userPrompt = [
         `Scenario: ${String(input?.narrative || '').slice(0, 600)}`,
         `P90 loss: ${p90.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`,
         `Key assumptions: ${assumptions.slice(0, 3).map(item => item?.text || item).filter(Boolean).join('; ')}`,
+        `Resolved obligations: ${obligationBasis}`,
         `Control strength: ${input?.fairParams?.controlStrLikely || 'not set'}`,
         `TEF: ${input?.fairParams?.tefMin || ''}–${input?.fairParams?.tefMax || ''}/yr`
       ].join('\n');
@@ -5146,6 +5224,8 @@ Relevant citations:
 ${_buildCitationPromptBlock(input.citations || [])}
 Live scoped context:
 ${_buildContextPromptBlock(input.adminSettings, input.businessUnit)}
+Resolved obligations:
+${_buildResolvedObligationPromptBlock(input.adminSettings || input.businessUnit || {}, { compact: false }) || '(none)'}
 Instructions:
 - act like a risk committee or challenge session reviewer
 - do not restate the full scenario

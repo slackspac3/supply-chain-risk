@@ -986,6 +986,7 @@ function renderTrustExplanationLayer({ confidenceNeedsBlock, evidenceGapPlan = [
     }) : ''}
     ${explanationPanel}
     ${renderAssumptionTraceabilityPanel({ assessment, assessmentIntelligence, citations, primaryGrounding, supportingReferences, missingInformation })}
+    ${renderAssessmentObligationBasisBlock(assessment, { compact: true })}
     ${UI.resultsDetailDisclosure({
       summary: 'Show supporting drivers, cost mix, and governance tracks',
       copy: 'Open this when you want the main sensitivities, cost composition, and benchmark context behind the headline view.',
@@ -1004,6 +1005,58 @@ function renderTrustExplanationLayer({ confidenceNeedsBlock, evidenceGapPlan = [
       `
     })}
   `});
+}
+
+function normaliseAssessmentObligationBasis(assessment = {}) {
+  const source = assessment?.obligationBasis && typeof assessment.obligationBasis === 'object'
+    ? assessment.obligationBasis
+    : (assessment?.resolvedObligationContext && typeof assessment.resolvedObligationContext === 'object'
+        ? {
+            ...assessment.resolvedObligationContext,
+            allResolved: Array.isArray(assessment?.resolvedObligations) ? assessment.resolvedObligations : assessment.resolvedObligationContext.allResolved,
+            summary: assessment?.resolvedObligationSummary || assessment.resolvedObligationContext.summary || ''
+          }
+        : null);
+  if (!source) return null;
+  if (typeof buildResolvedObligationSnapshot === 'function') {
+    const snapshot = buildResolvedObligationSnapshot({
+      context: source,
+      capturedAt: Number(assessment?.obligationBasis?.capturedAt || 0)
+    });
+    return snapshot.allResolved.length ? snapshot : null;
+  }
+  return null;
+}
+
+function renderAssessmentObligationBasisBlock(assessment = {}, options = {}) {
+  const basis = normaliseAssessmentObligationBasis(assessment);
+  if (!basis?.allResolved?.length) return '';
+  const compact = options.compact !== false;
+  const bucketBadges = [
+    { label: 'Direct', count: basis.direct.length, tone: 'neutral' },
+    { label: 'Inherited mandatory', count: basis.inheritedMandatory.length, tone: 'gold' },
+    { label: 'Inherited conditional', count: basis.inheritedConditional.length, tone: 'warning' },
+    { label: 'Inherited guidance', count: basis.inheritedGuidance.length, tone: 'neutral' }
+  ].filter(item => item.count > 0);
+  const previewItems = basis.allResolved.slice(0, compact ? 4 : 8);
+  const capturedAt = Number(basis.capturedAt || 0);
+  const summary = compact
+    ? `This assessment was framed using ${basis.allResolved.length} resolved obligation${basis.allResolved.length === 1 ? '' : 's'} drawn from the active entity scope before the model was run.`
+    : `This assessment retained the resolved obligation basis that applied when the run was created, including direct duties and any inherited holding or parent obligations that flowed down to the selected entity and function.`;
+  return `<div class="results-summary-card anim-fade-in">
+    <div class="results-section-heading">${escapeHtml(String(options.title || 'Obligation basis used for this assessment'))}</div>
+    <div class="results-summary-copy" style="margin-top:var(--sp-2)">${escapeHtml(summary)}</div>
+    <div class="results-chip-block" style="margin-top:var(--sp-4)">${bucketBadges.map(item => `<span class="badge badge--${item.tone}">${escapeHtml(item.label)}: ${item.count}</span>`).join('')}</div>
+    ${basis.resolvedApplicableRegulations.length ? `<div class="results-driver-group" style="margin-top:var(--sp-4)">
+      <div class="results-driver-label">Derived regulation tags</div>
+      <div class="results-chip-block">${basis.resolvedApplicableRegulations.slice(0, compact ? 4 : 8).map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('')}</div>
+    </div>` : ''}
+    <div class="results-driver-group" style="margin-top:var(--sp-4)">
+      <div class="results-driver-label">${compact ? 'Most material obligations in scope' : 'Resolved obligation detail'}</div>
+      <div class="results-summary-copy">${previewItems.map(item => `• ${escapeHtml(String(item.title || 'Obligation'))}${item.sourceEntityName ? ` (${escapeHtml(String(item.sourceEntityName))})` : ''}${item.requirementLevel ? ` · ${escapeHtml(String(item.requirementLevel))}` : ''}${item.applicabilityReason ? ` — ${escapeHtml(String(item.applicabilityReason))}` : ''}`).join('<br>')}</div>
+    </div>
+    ${capturedAt ? `<div class="results-comparison-foot" style="margin-top:var(--sp-4)">Captured with the saved run on ${escapeHtml(new Date(capturedAt).toLocaleString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }))}.</div>` : ''}
+  </div>`;
 }
 
 function buildAssessmentComparison(currentAssessment, baselineAssessment) {
@@ -2348,7 +2401,7 @@ function renderModelBasisPanel(assessment, runMetadata, confidenceFrame, thresho
       <div class="results-model-basis__intro">
         <div class="results-driver-label">Plain-language model summary</div>
         <h3 class="results-model-basis__title">This result comes from structured FAIR inputs run through Monte Carlo simulation, not from a narrative judgement alone.</h3>
-        <p class="results-summary-copy">The platform combines user-entered values, AI-seeded starting points, inherited context/default assumptions, and recorded judgement calls. It then simulates many plausible outcomes so the result shows a range, not a single false-precision answer.</p>
+        <p class="results-summary-copy">The platform combines user-entered values, AI-seeded starting points, inherited context/default assumptions, the resolved obligation basis in scope, and recorded judgement calls. It then simulates many plausible outcomes so the result shows a range, not a single false-precision answer.</p>
       </div>
       <div class="results-model-basis__grid">
         <div class="results-model-basis-card">
@@ -2972,7 +3025,25 @@ async function runSimulation() {
     results.annualReviewThreshold = annualReviewThreshold;
     results.nearTolerance = results.eventLoss.p90 >= warningThreshold && results.eventLoss.p90 < toleranceThreshold;
     results.annualReviewTriggered = results.annualLoss.p90 >= annualReviewThreshold;
-    const assessmentIntelligence = buildAssessmentIntelligence(AppState.draft, results, validation.normalizedParams, scenario);
+    const obligationBasis = typeof buildResolvedObligationSnapshot === 'function'
+      ? buildResolvedObligationSnapshot({
+          context: getEffectiveSettings()?.resolvedObligationContext || AppState.draft?.obligationBasis,
+          capturedAt: Date.now()
+        })
+      : null;
+    const obligationDerivedRegulations = Array.isArray(obligationBasis?.resolvedApplicableRegulations)
+      ? obligationBasis.resolvedApplicableRegulations
+      : [];
+    const draftForAssessment = {
+      ...AppState.draft,
+      obligationBasis,
+      applicableRegulations: Array.from(new Set([
+        ...(Array.isArray(AppState.draft?.applicableRegulations) ? AppState.draft.applicableRegulations : []),
+        ...obligationDerivedRegulations
+      ].map(item => String(item || '').trim()).filter(Boolean)))
+    };
+    results.applicableRegulations = [...(draftForAssessment.applicableRegulations || [])];
+    const assessmentIntelligence = buildAssessmentIntelligence(draftForAssessment, results, validation.normalizedParams, scenario);
     results.runMetadata = RiskEngine.createRunMetadata({
       ...validation.normalizedParams,
       seed: results.runConfig?.seed ?? validation.normalizedParams.seed
@@ -2992,7 +3063,7 @@ async function runSimulation() {
     await yieldToUI();
     if (!AppState.draft.id) AppState.draft.id = 'a_' + Date.now();
     const assessment = {
-      ...AppState.draft,
+      ...draftForAssessment,
       inputAssignments: buildLiveInputSourceAssignments(AppState.draft),
       results,
       assessmentIntelligence,
@@ -4375,7 +4446,8 @@ function bindResultsInteractions({
         narrative: assessment.enhancedNarrative || assessment.narrative || '',
         fairParams: assessment.results?.inputs || assessment.draft?.fairParams || {},
         results: assessment.results,
-        assessmentIntelligence: assessment.assessmentIntelligence || assessmentIntelligence
+        assessmentIntelligence: assessment.assessmentIntelligence || assessmentIntelligence,
+        obligationBasis: assessment.obligationBasis || null
       });
       if (!result) throw new Error('No result');
       if (body) body.innerHTML = renderAssessmentChallengeResult(result);

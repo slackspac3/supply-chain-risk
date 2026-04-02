@@ -386,7 +386,7 @@ const UI = (() => {
 
     function render() {
       wrap.innerHTML = `
-        ${tags.map((t, i) => `<span class="tag-item">${t}<button type="button" data-idx="${i}" aria-label="Remove ${t}">×</button></span>`).join('')}
+        ${tags.map((t, i) => `<span class="tag-item">${safeHtml(t)}<button type="button" data-idx="${i}" aria-label="Remove ${safeHtml(t)}">×</button></span>`).join('')}
         <input class="tag-input" type="text" placeholder="Add tag…" />`;
       wrap.querySelectorAll('.tag-item button').forEach(btn => {
         btn.addEventListener('click', () => {
