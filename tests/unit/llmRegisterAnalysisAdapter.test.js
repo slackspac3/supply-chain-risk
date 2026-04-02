@@ -51,6 +51,7 @@ test('analyseRiskRegister uses the server register-analysis endpoint and stores 
       return {
         ok: true,
         json: async () => ({
+          mode: 'live',
           summary: 'Server-owned register analysis summary',
           risks: [
             {
@@ -80,6 +81,7 @@ test('analyseRiskRegister uses the server register-analysis endpoint and stores 
   assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/register-analysis');
   assert.equal(fetchCalls[0].options.method, 'POST');
   assert.equal(fetchCalls[0].options.headers['x-session-token'], 'session-token');
+  assert.equal(result.mode, 'live');
   assert.equal(Array.isArray(result.risks), true);
   assert.equal(service.getLatestTrace('Step 1 register analysis')?.response, 'Server returned register shortlist');
 });
@@ -93,6 +95,7 @@ test('analyseRiskRegister still uses the server register-analysis endpoint even 
       return {
         ok: true,
         json: async () => ({
+          mode: 'deterministic_fallback',
           summary: 'Fallback register analysis',
           usedFallback: true,
           risks: []

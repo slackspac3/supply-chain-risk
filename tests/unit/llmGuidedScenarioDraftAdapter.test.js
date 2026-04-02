@@ -51,6 +51,7 @@ test('buildGuidedScenarioDraft uses the server scenario-draft endpoint and store
       return {
         ok: true,
         json: async () => ({
+          mode: 'live',
           draftNarrative: 'High-urgency Cyber scenario: Azure global admin credentials found on the dark web are being used to access the tenant.',
           scenarioLens: {
             key: 'identity',
@@ -85,6 +86,7 @@ test('buildGuidedScenarioDraft uses the server scenario-draft endpoint and store
   assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/scenario-draft');
   assert.equal(fetchCalls[0].options.method, 'POST');
   assert.equal(fetchCalls[0].options.headers['x-session-token'], 'session-token');
+  assert.equal(result.mode, 'live');
   assert.equal(result.scenarioLens?.key, 'identity');
   assert.equal(service.getLatestTrace('Step 1 guided draft')?.response, 'Server returned guided draft');
 });
@@ -98,6 +100,7 @@ test('buildGuidedScenarioDraft still uses the server scenario-draft endpoint eve
       return {
         ok: true,
         json: async () => ({
+          mode: 'deterministic_fallback',
           draftNarrative: 'Server-owned guided draft',
           usedFallback: true
         })

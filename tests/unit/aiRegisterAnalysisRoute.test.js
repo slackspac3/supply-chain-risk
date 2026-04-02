@@ -100,9 +100,10 @@ test('register-analysis route returns deterministic server fallback when hosted 
   }, res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
   assert.equal(res.payload.usedFallback, true);
   assert.equal(res.payload.aiUnavailable, true);
-  assert.equal(String(res.payload.fallbackReasonTitle || ''), 'Fallback register analysis loaded');
+  assert.equal(String(res.payload.fallbackReasonTitle || ''), 'Deterministic fallback register analysis loaded');
   assert.equal(Array.isArray(res.payload.risks), true);
   assert.equal(String(res.payload.trace?.label || ''), 'Step 1 register analysis');
 });
@@ -190,6 +191,7 @@ test('register-analysis route orchestrates live extraction and quality-gate serv
   }, res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'live');
   assert.equal(res.payload.usedFallback, false);
   assert.equal(res.payload.aiUnavailable, false);
   assert.equal(Array.isArray(res.payload.risks), true);

@@ -12,8 +12,9 @@
 
   function _buildGuidedDraftStatusCopy(source = '') {
     if (source === 'ai') return 'Built with AI using the current function context, geography, regulations, and retrieved references.';
-    if (source === 'fallback') return 'Built from the original scenario and current context because the AI rewrite did not stay close enough to the event you described.';
-    return 'Built directly from the guided inputs while AI guidance was unavailable.';
+    if (source === 'fallback') return 'Built in deterministic server fallback mode because the live AI rewrite did not stay close enough to the event you described.';
+    if (source === 'manual') return 'AI draft generation is unavailable right now. Continue manually or try again.';
+    return 'Preview based on your current guided inputs.';
   }
 
   function _getStep1AiFailureMessage(error = null) {
@@ -40,7 +41,7 @@
     const qualityState = String(AppState?.draft?.aiQualityState || '').trim().toLowerCase();
     if (qualityState === 'fallback') {
       return '<div class="ai-status-banner ai-status-banner--fallback" role="alert">' +
-        '<span>⚠ Live AI was not available for this step — this content was generated locally without live model grounding. Evidence quality may be lower than usual.</span>' +
+        '<span>⚠ This step is currently showing deterministic fallback output rather than a live AI rewrite. Review the wording and selected risks before continuing.</span>' +
         '</div>';
     }
     return '';
@@ -177,7 +178,8 @@
     document.querySelectorAll('.js-ai-trace-link').forEach((node) => node.remove());
     if (!UI || typeof UI.openAiTraceModal !== 'function') return;
 
-    const guidedTrace = String(AppState?.draft?.guidedDraftSource || '').trim().toLowerCase() === 'ai'
+    const guidedDraftSource = String(AppState?.draft?.guidedDraftSource || '').trim().toLowerCase();
+    const guidedTrace = guidedDraftSource === 'ai' || guidedDraftSource === 'fallback'
       ? _getLatestStep1Trace([STEP1_TRACE_LABELS.guidedDraft])
       : null;
     const guidedPreview = document.getElementById('guided-preview');
@@ -270,7 +272,12 @@
       });
       const result = _ensureRiskConfidence(rawResult);
       const finalDraft = String(result.draftNarrative || result.enhancedStatement || localDraft).trim() || localDraft;
-      const guidedDraftSource = String(result.draftNarrativeSource || (result.usedFallback ? 'fallback' : 'ai')).trim() || 'local';
+      const resultMode = String(result.mode || '').trim().toLowerCase();
+      const guidedDraftSource = resultMode === 'deterministic_fallback'
+        ? 'fallback'
+        : resultMode === 'manual'
+          ? 'manual'
+          : (String(result.draftNarrativeSource || (result.usedFallback ? 'fallback' : 'ai')).trim() || 'local');
       clearStep1StaleAssistState(finalDraft, { clearGeneratedRisks: true });
       const appliedResult = {
         ...result,
@@ -302,32 +309,24 @@
         _renderStep1AiUnavailableBanner('guided-preview', buildGuidedScenarioDraft);
       }
       const selectedCount = getSelectedRisks().length;
-      const toastTone = guidedDraftSource === 'ai' && !result.usedFallback ? 'success' : 'warning';
-      const toastCopy = selectedCount
-        ? `Scenario draft built and shortlist refreshed with ${selectedCount} aligned risk${selectedCount === 1 ? '' : 's'}.`
-        : 'Scenario draft built from the guided answers.';
+      const toastTone = resultMode === 'live' && !result.usedFallback ? 'success' : 'warning';
+      const toastCopy = resultMode === 'deterministic_fallback'
+        ? (selectedCount
+          ? `Deterministic fallback draft loaded and shortlist refreshed with ${selectedCount} aligned risk${selectedCount === 1 ? '' : 's'}. Review before continuing.`
+          : 'Deterministic fallback draft loaded. Review before continuing.')
+        : (selectedCount
+          ? `Scenario draft built and shortlist refreshed with ${selectedCount} aligned risk${selectedCount === 1 ? '' : 's'}.`
+          : 'Scenario draft built from the guided answers.');
       UI.toast(toastCopy, toastTone, 5000);
     } catch (error) {
       clearStep1StaleAssistState(localDraft, { clearGeneratedRisks: true });
-      AppState.draft.guidedDraftPreview = localDraft;
-      AppState.draft.guidedDraftSource = 'local';
-      AppState.draft.guidedDraftStatus = _buildGuidedDraftStatusCopy('local');
-      AppState.draft.aiQualityState = 'local';
-      AppState.draft.narrative = localDraft;
-      AppState.draft.sourceNarrative = localDraft;
-      AppState.draft.enhancedNarrative = localDraft;
-      document.getElementById('intake-risk-statement').value = localDraft;
-      const seededCount = seedRisksFromScenarioDraft(localDraft, { force: true, replaceGenerated: true });
+      AppState.draft.aiQualityState = '';
       saveDraft();
       renderWizard1();
       window.scheduleStep1ScenarioCrossReferenceRefresh?.({ immediate: true, force: true, narrativeOverride: localDraft });
-      if (error?.code === 'LLM_UNAVAILABLE') {
-        _renderStep1AiUnavailableBanner('guided-preview', buildGuidedScenarioDraft, error);
-      }
+      _renderStep1AiUnavailableBanner('guided-preview', buildGuidedScenarioDraft, error);
       UI.toast(
-        seededCount
-          ? `Scenario draft built from guided context and shortlist refreshed with ${seededCount} aligned risk${seededCount === 1 ? '' : 's'}.`
-          : 'Scenario draft built from guided context while AI was unavailable.',
+        'AI draft generation is unavailable right now. Continue manually or try again.',
         'warning',
         5000
       );
@@ -370,7 +369,12 @@
       });
       const result = _ensureRiskConfidence(rawResult);
       const preview = String(result.draftNarrative || result.enhancedStatement || localDraft).trim() || localDraft;
-      const source = String(result.draftNarrativeSource || (result.usedFallback ? 'fallback' : 'ai')).trim() || 'local';
+      const resultMode = String(result.mode || '').trim().toLowerCase();
+      const source = resultMode === 'deterministic_fallback'
+        ? 'fallback'
+        : resultMode === 'manual'
+          ? 'manual'
+          : (String(result.draftNarrativeSource || (result.usedFallback ? 'fallback' : 'ai')).trim() || 'local');
       return {
         preview,
         source,

@@ -100,6 +100,7 @@ test('scenario-draft route returns deterministic server fallback when hosted AI 
   }, res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
   assert.equal(res.payload.usedFallback, true);
   assert.equal(res.payload.aiUnavailable, true);
   assert.equal(res.payload.draftNarrativeSource, 'fallback');
@@ -197,6 +198,7 @@ test('scenario-draft route orchestrates live generation and quality-gate server-
   }, res);
 
   assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'live');
   assert.equal(res.payload.usedFallback, false);
   assert.equal(res.payload.aiUnavailable, false);
   assert.equal(res.payload.scenarioLens?.key, 'identity');

@@ -1164,6 +1164,7 @@ function buildServerFallbackResult(input = {}, { aiUnavailable = false, traceLab
     userProfile: input.adminSettings?.userProfileSummary
   });
   const result = withEvidenceMeta({
+    mode: 'deterministic_fallback',
     seedNarrative,
     draftNarrative: fallbackScenarioExpansion.scenarioExpansion,
     draftNarrativeSource: 'fallback',
@@ -1391,6 +1392,7 @@ If you are unsure, stay closer to the user's explicit event wording than to adja
       ? fallbackScenarioExpansion.riskTitles
       : candidate.risks;
     const result = withEvidenceMeta({
+      mode: useFallbackNarrative ? 'deterministic_fallback' : 'live',
       seedNarrative,
       draftNarrative: finalNarrative,
       draftNarrativeSource: useFallbackNarrative ? 'fallback' : 'ai',

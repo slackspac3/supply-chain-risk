@@ -28,41 +28,41 @@ function classifyRegisterFallbackReason(error = null) {
   if (!safeMessage) {
     return withDetail({
       code: 'no_ai_response',
-      title: 'Fallback register analysis loaded',
+      title: 'Deterministic fallback register analysis loaded',
       message: 'The server did not receive a usable AI response, so it used deterministic register extraction instead.'
     }, 'No response content was returned.');
   }
   if (/Hosted AI proxy is not configured|Missing COMPASS_API_KEY secret/i.test(safeMessage)) {
     return withDetail({
       code: 'proxy_missing_secret',
-      title: 'Fallback register analysis loaded',
+      title: 'Deterministic fallback register analysis loaded',
       message: 'The hosted AI proxy is not configured, so the server used deterministic register extraction instead.'
     }, 'The proxy is missing its Compass configuration.');
   }
   if (/timed out|could not be reached|NetworkError|Failed to fetch|rate limited/i.test(safeMessage)) {
     return withDetail({
       code: 'proxy_unreachable',
-      title: 'Fallback register analysis loaded',
+      title: 'Deterministic fallback register analysis loaded',
       message: 'The hosted AI service could not be reached, so the server used deterministic register extraction instead.'
     }, safeMessage);
   }
   if (/rejected the request|401|403/i.test(safeMessage)) {
     return withDetail({
       code: 'ai_access_rejected',
-      title: 'Fallback register analysis loaded',
+      title: 'Deterministic fallback register analysis loaded',
       message: 'The AI service rejected the request, so the server used deterministic register extraction instead.'
     }, safeMessage);
   }
   if (/Unexpected token|JSON|schema|parse|response shape was not usable|unusable structured response/i.test(safeMessage)) {
     return withDetail({
       code: 'invalid_ai_output',
-      title: 'Fallback register analysis loaded',
+      title: 'Deterministic fallback register analysis loaded',
       message: 'The AI service returned an unusable structured response, so the server used deterministic register extraction instead.'
     }, safeMessage);
   }
   return withDetail({
     code: 'ai_runtime_error',
-    title: 'Fallback register analysis loaded',
+    title: 'Deterministic fallback register analysis loaded',
     message: 'The AI register-analysis step failed at runtime, so the server used deterministic register extraction instead.'
   }, safeMessage);
 }
@@ -142,6 +142,7 @@ function buildFallbackRegisterResult(input = {}, { aiUnavailable = false, fallba
     regulations: (Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []).slice(0, 3)
   }));
   const result = withEvidenceMeta({
+    mode: 'deterministic_fallback',
     summary: `Analysed ${lines.length} register entr${lines.length === 1 ? 'y' : 'ies'} and extracted ${risks.length} candidate risks.`,
     linkAnalysis: 'The shortlist comes directly from the uploaded register rows and still needs review for duplication, relevance, and any event-linking between the selected risks.',
     workflowGuidance: [
@@ -155,7 +156,7 @@ function buildFallbackRegisterResult(input = {}, { aiUnavailable = false, fallba
     usedFallback: true,
     aiUnavailable,
     fallbackReasonCode: fallbackReason?.code || 'server_register_fallback',
-    fallbackReasonTitle: fallbackReason?.title || 'Fallback register analysis loaded',
+    fallbackReasonTitle: fallbackReason?.title || 'Deterministic fallback register analysis loaded',
     fallbackReasonMessage: fallbackReason?.message || 'The server used deterministic register extraction instead of live AI analysis for this upload.',
     fallbackReasonDetail: fallbackReason?.detail || '',
     trace: buildTraceEntry({
@@ -296,6 +297,7 @@ ${truncateText(evidenceMeta.promptBlock || '', 240)}`;
     }
 
     return withEvidenceMeta({
+      mode: 'live',
       ...candidate,
       citations: Array.isArray(input.citations) ? input.citations : [],
       usedFallback: false,

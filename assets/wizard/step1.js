@@ -665,7 +665,8 @@ function normaliseStep1PromptIdeaSuggestions(suggestions = []) {
 function getStep1LivePreviewStatusCopy(source = '') {
   const safeSource = String(source || '').trim().toLowerCase();
   if (safeSource === 'ai') return 'AI-checked preview using the current function context, geography, regulations, and retrieved references.';
-  if (safeSource === 'fallback') return 'Preview kept close to your wording because the live AI rewrite drifted too far from the event you described.';
+  if (safeSource === 'fallback') return 'Deterministic server fallback preview kept close to your wording because the live AI rewrite drifted too far from the event you described.';
+  if (safeSource === 'manual') return 'AI draft generation is unavailable right now. Continue manually or try again.';
   return '';
 }
 
@@ -1830,7 +1831,7 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
     </div>
     ${draftPreview ? `${renderStep1AiQualityStrip(draft)}<div class="card mt-4 wizard-draft-preview" style="padding:var(--sp-4);background:var(--bg-elevated)">
       <div class="context-panel-title">Draft preview</div>
-      <div class="form-help" id="guided-preview-status" style="margin-top:4px;${draftPreviewStatus ? '' : 'display:none'}">${draftPreviewStatus ? `${draftPreviewSource === 'ai' ? 'AI-built draft' : draftPreviewSource === 'fallback' ? 'Context-kept draft' : draftPreviewSource === 'local' ? 'Local draft' : 'AI-checked preview'} · ${escapeHtml(draftPreviewStatus)}` : ''}</div>
+      <div class="form-help" id="guided-preview-status" style="margin-top:4px;${draftPreviewStatus ? '' : 'display:none'}">${draftPreviewStatus ? `${draftPreviewSource === 'ai' ? 'AI-built draft' : draftPreviewSource === 'fallback' ? 'Deterministic fallback draft' : draftPreviewSource === 'manual' ? 'Manual draft' : draftPreviewSource === 'local' ? 'Local draft' : 'AI-checked preview'} · ${escapeHtml(draftPreviewStatus)}` : ''}</div>
       <p class="context-panel-copy" id="guided-preview">${escapeHtml(String(draftPreview))}</p>
     </div>${renderStep1AiFeedbackCard('draft', draft)}` : '<div class="form-help wizard-preview-placeholder" id="guided-preview">Answer the prompts and build the draft. The platform will create a clean starting statement for you.</div>'}
   </div>`;
@@ -2233,7 +2234,7 @@ function renderStep1PathContent(path, {
 }
 
 function getRegisterFallbackToastCopy(result = {}) {
-  const title = String(result.fallbackReasonTitle || 'Fallback register analysis loaded').trim();
+  const title = String(result.fallbackReasonTitle || 'Deterministic fallback register analysis loaded').trim();
   const detail = String(result.fallbackReasonMessage || '').trim();
   const diagnostic = String(result.fallbackReasonDetail || '').trim();
   const shortDiagnostic = diagnostic ? ` Diagnostic: ${diagnostic}` : '';
@@ -3374,7 +3375,7 @@ function updateStep1GuidedPreview() {
     const source = String(previewModel.source || '').trim().toLowerCase();
     const status = String(previewModel.status || '').trim();
     previewStatus.textContent = status
-      ? `${source === 'ai' ? 'AI-built draft' : source === 'fallback' ? 'Context-kept draft' : source === 'local' ? 'Local draft' : 'AI-checked preview'} · ${status}`
+      ? `${source === 'ai' ? 'AI-built draft' : source === 'fallback' ? 'Deterministic fallback draft' : source === 'manual' ? 'Manual draft' : source === 'local' ? 'Local draft' : 'AI-checked preview'} · ${status}`
       : '';
     previewStatus.style.display = status ? '' : 'none';
   }
