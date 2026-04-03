@@ -390,78 +390,31 @@
   }
 
   async function previewGuidedScenarioDraft(input = {}) {
-    if (!LLMService || typeof LLMService.buildGuidedScenarioDraft !== 'function') return null;
-    const settings = getEffectiveSettings();
     const guidedInput = input?.guidedInput && typeof input.guidedInput === 'object'
       ? { ...input.guidedInput }
       : { ...(AppState.draft.guidedInput || {}) };
     const localDraft = String(input?.riskStatement || '').trim()
-      || composeStep1GuidedNarrative(guidedInput, settings, AppState.draft);
+      || composeStep1GuidedNarrative(guidedInput, getEffectiveSettings(), AppState.draft);
     if (!localDraft) return null;
-    const bu = getBUList().find(b => b.id === (input?.buId || AppState.draft.buId)) || null;
-    try {
-      const preferredLens = input?.scenarioLensHint || getStep1PreferredScenarioLens(settings, AppState.draft, localDraft);
-      const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
-      _warnIfRagNotReady();
-      const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
-        narrative: localDraft,
-        guidedInput,
-        scenarioLens: preferredLens,
-        applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
-        businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
-      }), 5);
-      const rawResult = await LLMService.buildGuidedScenarioDraft({
-        riskStatement: localDraft,
-        guidedInput,
-        scenarioLensHint: preferredLens,
-        businessUnit: aiContext.businessUnit || bu,
-        geography: formatScenarioGeographies(getScenarioGeographies()),
-        applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
-        citations,
-        adminSettings: aiContext.adminSettings,
-        traceLabel: `${STEP1_TRACE_LABELS.guidedDraft} preview`
-      });
-      const result = _ensureRiskConfidence(rawResult);
-      const preview = String(result.draftNarrative || result.enhancedStatement || localDraft).trim() || localDraft;
-      const resultMode = String(result.mode || '').trim().toLowerCase();
-      const source = resultMode === 'deterministic_fallback'
-        ? 'fallback'
-        : resultMode === 'manual'
-          ? 'manual'
-          : (String(result.draftNarrativeSource || (result.usedFallback ? 'fallback' : 'ai')).trim() || 'local');
-      return {
-        preview,
-        source,
-        status: _buildGuidedDraftStatusCopy(source),
-        aiUnavailable: !!result.aiUnavailable,
-        usedFallback: !!result.usedFallback
-      };
-    } catch (error) {
-      console.warn('previewGuidedScenarioDraft failed:', error);
-      return null;
-    }
+    // Guided preview is intentionally local-only. The authoritative Step 1 intelligence
+    // comes from the explicit "Build scenario draft" server workflow, not background preview traffic.
+    return {
+      preview: localDraft,
+      source: 'local',
+      status: '',
+      aiUnavailable: false,
+      usedFallback: true
+    };
   }
 
   async function suggestGuidedPromptIdeas(input = {}) {
-    if (!LLMService || typeof LLMService.suggestGuidedPromptIdeas !== 'function') return null;
-    const bu = getBUList().find(b => b.id === (input?.buId || AppState.draft.buId)) || null;
-    try {
-      const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
-      return await LLMService.suggestGuidedPromptIdeas({
-        riskStatement: String(input?.riskStatement || '').trim(),
-        guidedInput: input?.guidedInput && typeof input.guidedInput === 'object'
-          ? { ...input.guidedInput }
-          : {},
-        scenarioLensHint: input?.scenarioLensHint,
-        fallbackSuggestions: Array.isArray(input?.fallbackSuggestions) ? input.fallbackSuggestions : [],
-        businessUnit: aiContext.businessUnit || bu,
-        adminSettings: aiContext.adminSettings,
-        traceLabel: STEP1_TRACE_LABELS.promptIdeas
-      });
-    } catch (error) {
-      console.warn('suggestGuidedPromptIdeas failed:', error);
-      return null;
-    }
+    // Prompt ideas are bounded assistive hints only. Keep them local/deterministic so
+    // Step 1 does not spend extra backend budget on non-authoritative suggestion chips.
+    return {
+      ideas: Array.isArray(input?.fallbackSuggestions) ? input.fallbackSuggestions : [],
+      usedFallback: true,
+      aiUnavailable: false
+    };
   }
 
   async function runIntakeAssist() {

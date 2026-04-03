@@ -41,6 +41,73 @@ test('classifies technology downtime with human error as operational rather than
   assert.equal(classification.key, 'operational');
 });
 
+test('classifies no-DR Outlook email-service scenario as business continuity rather than cyber or AI', () => {
+  const internals = loadLlmInternals();
+  const text = 'There is no DR for the critical email system in place, which is MS Outlook online.';
+  const classification = internals._classifyScenario(text, {
+    guidedInput: {
+      event: text,
+      asset: 'MS Outlook online',
+      cause: 'No disaster recovery or failover capability',
+      impact: 'Extended outage and recovery pressure'
+    }
+  });
+
+  assert.equal(classification.key, 'business-continuity');
+
+  const risks = internals._extractRiskCandidates(text, {
+    lensHint: { key: 'business-continuity', label: 'Business continuity' }
+  });
+
+  assert.equal(risks[0]?.key, 'business-continuity');
+  assert.equal(risks.some((risk) => risk.key === 'ai-model-risk'), false);
+  assert.equal(risks.some((risk) => risk.key === 'cyber'), false);
+});
+
+test('classifies counterparty default scenario as financial rather than fraud-integrity', () => {
+  const internals = loadLlmInternals();
+  const text = 'A major client files for bankruptcy, creating receivables recovery pressure and a likely write-off.';
+  const classification = internals._classifyScenario(text, {
+    guidedInput: {
+      event: text,
+      asset: 'Major customer receivables balance',
+      cause: 'Customer insolvency',
+      impact: 'Bad-debt write-off and cashflow strain'
+    }
+  });
+
+  assert.equal(classification.key, 'financial');
+
+  const risks = internals._extractRiskCandidates(text, {
+    lensHint: { key: 'financial', label: 'Financial' }
+  });
+
+  assert.equal(risks[0]?.key, 'financial');
+  assert.equal(risks.some((risk) => risk.key === 'fraud-integrity'), false);
+});
+
+test('classifies supplier labour scenario as ESG and keeps fallback risks out of cyber', () => {
+  const internals = loadLlmInternals();
+  const text = 'A supplier is linked to forced labour practices in a critical sourcing category, creating human-rights scrutiny and remediation pressure.';
+  const classification = internals._classifyScenario(text, {
+    guidedInput: {
+      event: text,
+      asset: 'Critical supplier relationship',
+      cause: 'Weak sub-tier due diligence',
+      impact: 'Human-rights scrutiny and remediation pressure'
+    }
+  });
+
+  assert.equal(classification.key, 'esg');
+
+  const risks = internals._extractRiskCandidates(text, {
+    lensHint: { key: 'esg', label: 'ESG' }
+  });
+
+  assert.equal(risks[0]?.key, 'esg');
+  assert.equal(risks.some((risk) => risk.key === 'cyber'), false);
+});
+
 test('extractRiskCandidates prefers operational outage risks over cyber for non-compromise cloud downtime', () => {
   const internals = loadLlmInternals();
   const risks = internals._extractRiskCandidates(

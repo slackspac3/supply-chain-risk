@@ -541,6 +541,14 @@ function scenarioClassificationByKey(key = 'general', extra = {}) {
       eventPath: 'Unsafe condition, incident, or environmental failure',
       effect: 'Harm, interruption, and remediation exposure'
     },
+    esg: {
+      key: 'esg',
+      label: 'ESG',
+      scenarioType: 'ESG Risk Scenario',
+      primaryDriver: 'Weak sustainability, human-rights, or disclosure governance',
+      eventPath: 'ESG performance, claim, or supply-base conduct challenge',
+      effect: 'Stakeholder scrutiny, remediation pressure, and governance challenge'
+    },
     strategic: {
       key: 'strategic',
       label: 'Strategic',
@@ -584,8 +592,28 @@ function hasOperationalOutageSignals(text = '') {
   return /(downtime|outage|service disruption|operational disruption|critical operational disruption|availability|unavailable|degrad|aging infrastructure|ageing infrastructure|legacy infrastructure|human error|manual error|platform instability|system instability|service failure|process failure|recovery effort|recovery strain|core service)/.test(String(text || '').toLowerCase());
 }
 
+function hasContinuityGapSignals(text = '') {
+  return /(?:^|[^a-z0-9])no dr(?:$|[^a-z0-9])|without dr|dr gap|no disaster recovery|without disaster recovery|disaster recovery gap|continuity gap|recovery gap|failover gap|no failover|without failover|\brto\b|\brpo\b|recovery objective|disaster recovery|business continuity/.test(String(text || '').toLowerCase());
+}
+
+function hasCriticalMessagingServiceSignals(text = '') {
+  return /(outlook(?: online)?|exchange(?: online)?|email system|mail system|mail service|messaging service|critical email|critical communication service|microsoft 365|office 365|email platform|messaging platform)/.test(String(text || '').toLowerCase());
+}
+
 function hasExplicitCyberCompromiseSignals(text = '') {
   return /(cyber|security|identity|credential|ransom|malware|phish|breach|exfil|privileged|unauthori[sz]ed|misconfig|vulnerability|token theft|session hijack|attacker|threat actor|compromise|account takeover|tenant change|public exposure|storage exposure|data exposure)/.test(String(text || '').toLowerCase());
+}
+
+function hasCounterpartyCreditSignals(text = '') {
+  return /(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write-off|write off|counterparty|customer default|client default|credit loss|credit exposure|collections|collectability|provisioning|working capital|cashflow)/.test(String(text || '').toLowerCase());
+}
+
+function hasSupplierLabourSignals(text = '') {
+  return /(exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights|living wage)/.test(String(text || '').toLowerCase());
+}
+
+function hasEsgDisclosureSignals(text = '') {
+  return /(esg|sustainability|greenwashing|climate disclosure|sustainability disclosure|carbon|emission|net zero|scope 1|scope 2|scope 3|social impact)/.test(String(text || '').toLowerCase());
 }
 
 function collectScenarioSecondaryKeys({
@@ -620,10 +648,17 @@ function classifyScenario(narrative = '', options = {}) {
   const n = String(directScenarioText || businessContext || '').toLowerCase();
   const hintKey = normaliseScenarioHintKey(options.scenarioLensHint);
   const outageSignals = hasOperationalOutageSignals(n);
+  const continuityGapSignals = hasContinuityGapSignals(n);
+  const criticalMessagingServiceSignals = hasCriticalMessagingServiceSignals(n);
   const cyberSignals = hasExplicitCyberCompromiseSignals(n);
+  const counterpartyCreditSignals = hasCounterpartyCreditSignals(n);
+  const supplierLabourSignals = hasSupplierLabourSignals(n);
+  const esgDisclosureSignals = hasEsgDisclosureSignals(n);
   const mentionsCloudPlatform = n.includes('cloud') || n.includes('azure') || n.includes('aws') || n.includes('gcp') || n.includes('infrastructure') || n.includes('platform');
+  const emailCompromiseSignals = /(mailbox|email account|email compromise|business email compromise|\bbec\b)/.test(n);
 
-  const isIdentity = /(azure ad|active directory|entra|identity|sso|directory service|account takeover|account hijack|\bhijack(?:ed|ing)?\b|mailbox|email account|email compromise|business email compromise|credential|password|dark web|darkweb|admin account|azure admin|tenant admin|privileged account|session hijack)/.test(n);
+  const isIdentity = /(azure ad|active directory|entra|identity|sso|directory service|account takeover|account hijack|\bhijack(?:ed|ing)?\b|credential|password|dark web|darkweb|admin account|azure admin|tenant admin|privileged account|session hijack)/.test(n)
+    || emailCompromiseSignals;
   const isPhishing = !isIdentity && /(phish|\bbec\b|business email compromise|email compromise|spoof)/.test(n);
   const isRansomware = /(ransomware|encrypt|ransom)/.test(n);
   const isDataBreach = /(breach|data theft|exfil|data exposure)/.test(n);
@@ -636,19 +671,21 @@ function classifyScenario(narrative = '', options = {}) {
   const isSupplyChain = /(supply chain|logistics|shipment|inventory|single source|single-source|upstream|shortfall)/.test(n) || (hasSupplierDependency && /delivery date|delivery commitment|shipment|logistics/.test(n));
   const isTransformationDelivery = /(transformation delivery|programme delivery|program delivery|project delivery|go-live|milestone|benefit realisation|benefit realization|deployment)/.test(n) || (hasSupplierDependency && hasDeliveryProgrammeDelay);
   const isThirdParty = hasSupplierDependency;
-  const isOperational = outageSignals || /(operational|process failure|breakdown|capacity|service failure|backlog)/.test(n);
-  const isContinuity = /(business continuity|disaster recovery|continuity|recovery|rto|rpo|crisis management)/.test(n);
-  const isFinancial = /(bankrupt|bankruptcy|insolv|receivable|bad debt|write-off|write off|counterparty|customer default|client default|credit loss|credit exposure|collections|provisioning|working capital|fraud|payment|invoice|treasury|liquidity|capital|financial)/.test(n);
-  const isFraudIntegrity = /(financial crime|money laundering|bribery|corruption|kickback|embezzlement)/.test(n) || (n.includes('integrity') && !n.includes('data integrity'));
+  const isOperational = outageSignals || continuityGapSignals || /(operational|process failure|breakdown|capacity|service failure|backlog)/.test(n);
+  const isContinuity = /(business continuity|disaster recovery|\bcontinuity\b|\brto\b|\brpo\b|crisis management|recovery objective|failover)/.test(n)
+    || continuityGapSignals
+    || (criticalMessagingServiceSignals && (continuityGapSignals || outageSignals || /critical|recover|failover|availability|unavailable/.test(n)));
+  const isFinancial = counterpartyCreditSignals || /(fraud|payment|invoice|treasury|liquidity|capital|financial)/.test(n);
+  const isFraudIntegrity = /(invoice fraud|payment fraud|false invoice|fake invoice|financial crime|money laundering|bribery|corruption|kickback|embezzlement|\bfraud\b)/.test(n) || (n.includes('integrity') && !n.includes('data integrity'));
   const isRegulatory = /(regulator|regulatory|licen|sanction|export control|filing)/.test(n);
   const isCompliance = /(compliance|non-compliance|policy breach|conduct|ethics|assurance)/.test(n);
   const isLegalContract = /(contract|indemnity|litigation|licensing dispute|intellectual property|\bip\b)/.test(n);
   const isGeopolitical = /(geopolitical|market access|sovereign|tariff|entity list|cross-border restriction)/.test(n);
   const isPhysicalSecurity = /(physical security|badge control|visitor management|perimeter|executive protection|site intrusion|facility breach)/.test(n);
   const isOtResilience = /\bot\b/.test(n) || /(operational technology|industrial control|ics|scada|plant network|site systems|control room)/.test(n);
-  const isPeopleWorkforce = /(workforce|attrition|fatigue|staffing|worker welfare|labou?r|strike)/.test(n);
+  const isPeopleWorkforce = /(workforce|attrition|fatigue|staffing|worker welfare|labou?r|strike)/.test(n) && !supplierLabourSignals;
   const isHse = /(hse|health and safety|safety|injury|environmental|spill|worker)/.test(n);
-  const isEsg = /(esg|sustainability|climate|emission|carbon|greenwashing)/.test(n);
+  const isEsg = /(esg|sustainability|climate|emission|carbon|greenwashing)/.test(n) || supplierLabourSignals || esgDisclosureSignals;
   const isStrategic = /(strategy|strategic|market|competitive|transformation|portfolio|investment|operating model|programme)/.test(n);
   const isInvestmentJv = /(merger|acquisition|m&a|joint venture|\bjv\b|integration thesis|synergy)/.test(n);
 
@@ -669,6 +706,7 @@ function classifyScenario(narrative = '', options = {}) {
     ['investment-jv', isInvestmentJv],
     ['transformation-delivery', isTransformationDelivery],
     ['strategic', isStrategic],
+    ['business-continuity', isContinuity],
     ['operational', isOperational || isContinuity],
     ['regulatory', isRegulatory],
     ['financial', isFinancial],
@@ -676,7 +714,6 @@ function classifyScenario(narrative = '', options = {}) {
     ['compliance', isCompliance],
     ['procurement', isProcurement],
     ['supply-chain', isSupplyChain],
-    ['business-continuity', isContinuity],
     ['hse', isHse],
     ['third-party', isThirdParty]
   ];
@@ -829,6 +866,13 @@ function buildRiskContextLinkAnalysis({ classification, riskTitles = [] } = {}) 
 
 function buildFallbackRiskCards(classification = {}, input = {}) {
   const regulations = Array.from(new Set((Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []).map(String).filter(Boolean))).slice(0, 4);
+  const intakeText = [
+    input.riskStatement,
+    input.guidedInput?.event,
+    input.guidedInput?.asset,
+    input.guidedInput?.cause,
+    input.guidedInput?.impact
+  ].filter(Boolean).join(' ').toLowerCase();
   const byKey = {
     identity: [
       { title: 'Privileged account takeover through identity platform compromise', category: 'Identity & Access', description: 'Compromised administrator or federated credentials could allow account takeover, privilege escalation, and control disruption.' },
@@ -847,6 +891,10 @@ function buildFallbackRiskCards(classification = {}, input = {}) {
       { title: 'Operational disruption across the affected service path', category: 'Operational', description: 'A breakdown in the current operating path could create service instability, manual workarounds, and management escalation.' },
       { title: 'Recovery strain and backlog growth after disruption', category: 'Business Continuity', description: 'Once disruption starts, backlog, error rates, and recovery burden can grow faster than management expects.' }
     ],
+    'business-continuity': [
+      { title: 'Business continuity and recovery failure', category: 'Business Continuity', description: 'Weak continuity planning or failover readiness could turn a contained incident into a prolonged service disruption.' },
+      { title: 'Extended outage from missing fallback operations', category: 'Operational Resilience', description: 'When fallback operations are not ready, service restoration can take longer than management expects.' }
+    ],
     'transformation-delivery': [
       { title: 'Programme delay from a delivery-critical supplier dependency', category: 'Transformation Delivery', description: 'A committed delivery miss can push back deployment activity and delay dependent projects or business milestones.' },
       { title: 'Supply dependency delay affecting deployment timing', category: 'Supply Chain', description: 'A late supplier delivery can create knock-on timing pressure across downstream projects, workarounds, and sequencing decisions.' }
@@ -862,6 +910,10 @@ function buildFallbackRiskCards(classification = {}, input = {}) {
     financial: [
       { title: 'Direct financial loss from control or counterparty weakness', category: 'Financial', description: 'The event could create direct monetary loss, provisioning pressure, or delayed recovery of expected value.' },
       { title: 'Assurance and management pressure after financial exposure', category: 'Compliance', description: 'Financial events often trigger stronger control challenge, assurance pressure, and scrutiny over the original decision path.' }
+    ],
+    'fraud-integrity': [
+      { title: 'Fraud or integrity-control failure', category: 'Fraud / Integrity', description: 'The event suggests a financial-crime, bribery, or approval-integrity weakness that could create direct loss and investigation pressure.' },
+      { title: 'Investigation and remediation burden after integrity failure', category: 'Compliance', description: 'Once the issue is visible, management may face assurance, disciplinary, and regulatory follow-up.' }
     ],
     compliance: [
       { title: 'Compliance lapse creating remediation burden', category: 'Compliance', description: 'A control or obligation failure could create immediate remediation effort and challenge over how the issue was governed.' },
@@ -887,11 +939,42 @@ function buildFallbackRiskCards(classification = {}, input = {}) {
       { title: 'Strategic execution drift against the intended objective', category: 'Strategic', description: 'A weak strategic assumption or execution path can reduce value, delay benefits, and trigger management challenge.' },
       { title: 'Operational or financial drag from the same strategic issue', category: 'Operational', description: 'Strategic issues often surface first through delayed delivery, cost pressure, or underperformance in the operating model.' }
     ],
+    esg: [
+      { title: 'ESG disclosure or governance challenge', category: 'ESG', description: 'The event could trigger sustainability, human-rights, or disclosure challenge over how the issue was governed and evidenced.' },
+      { title: 'Remediation and stakeholder scrutiny after ESG failure', category: 'Compliance', description: 'Once visible, the issue may require remediation, assurance work, and stronger management response to stakeholder pressure.' }
+    ],
+    geopolitical: [
+      { title: 'Market-access or sanctions-driven execution pressure', category: 'Geopolitical', description: 'A cross-border restriction, sanctions condition, or tariff shift could delay execution and reduce operating flexibility.' },
+      { title: 'Supply or delivery disruption from geopolitical change', category: 'Supply Chain', description: 'Policy or market-access changes can create knock-on supplier, routing, or delivery strain across the footprint.' }
+    ],
     general: [
       { title: 'Material enterprise risk requiring structured assessment', category: 'General', description: 'The event path described by the user requires a focused structured assessment before it can be quantified credibly.' }
     ]
   };
-  return (byKey[classification?.key] || byKey.general).map((risk, index) => ({
+  const risks = classification?.key === 'business-continuity'
+    && hasCriticalMessagingServiceSignals(intakeText)
+    && !hasExplicitCyberCompromiseSignals(intakeText)
+    ? [
+        { title: 'Email outage business disruption', category: 'Operational Resilience', description: 'Prolonged unavailability of the core email and communications service could disrupt coordination, approvals, and incident response activity.' },
+        { title: 'Business continuity and recovery failure', category: 'Business Continuity', description: 'Without disaster recovery or failover for the messaging platform, recovery could take materially longer than expected.' },
+        { title: 'Elevated response and recovery cost', category: 'Financial and Resource Impact', description: 'A prolonged recovery effort may require emergency tooling, specialist support, and diverted internal resources to restore service.' }
+      ]
+    : classification?.key === 'financial'
+      && hasCounterpartyCreditSignals(intakeText)
+      ? [
+          { title: 'Counterparty default and bad-debt exposure', category: 'Financial', description: 'A client insolvency or payment default could force a material write-off and a reassessment of expected recoveries.' },
+          { title: 'Receivables recovery shortfall after customer insolvency', category: 'Financial', description: 'Collections may deteriorate quickly once the customer fails, creating cashflow strain and weaker recovery than management expected.' },
+          { title: 'Legal recovery or contractual claim uncertainty', category: 'Legal / Contract', description: 'Recovery may depend on the enforceability of payment terms, guarantees, or the speed of insolvency-related legal action.' }
+        ]
+      : classification?.key === 'esg'
+        && hasSupplierLabourSignals(intakeText)
+        ? [
+            { title: 'Supplier labour-practice and due-diligence failure', category: 'ESG', description: 'Weak sub-tier oversight or sourcing due diligence may have allowed exploitative labour practices to persist inside the supply base.' },
+            { title: 'ESG and human-rights disclosure or remediation exposure', category: 'ESG', description: 'Once abusive labour practices are identified, management may face disclosure, remediation, and stakeholder scrutiny over the wider operating model.' },
+            { title: 'Regulatory or compliance action over supplier conduct', category: 'Compliance', description: 'Exploitative labour practices can trigger investigation, fines, contract challenge, and assurance pressure around supplier governance.' }
+          ]
+    : (byKey[classification?.key] || byKey.general);
+  return risks.map((risk, index) => ({
     id: `server-fallback-risk-${index + 1}`,
     title: risk.title,
     category: risk.category,
@@ -929,6 +1012,27 @@ function buildScenarioExpansion(input = {}, classification = classifyScenario(in
         ? 'This should be treated as an active material scenario requiring rapid containment, privileged-account review, and assessment of downstream operational and financial exposure.'
         : 'This should be assessed as a gateway scenario that can trigger fraud, service disruption, data exposure, and regulatory consequences across connected services.'
     ].join(' ');
+  } else if (classification.key === 'business-continuity') {
+    if (hasCriticalMessagingServiceSignals(intakeText) && !hasExplicitCyberCompromiseSignals(intakeText)) {
+      scenarioExpansion = [
+        buildScenarioLead({
+          geography,
+          businessUnit,
+          asset: asset || 'the critical email and communications service',
+          cause: cause || 'missing disaster recovery or failover capability',
+          impact: impact || 'prolonged service outage and delayed recovery',
+          scenarioLabel: 'business continuity risk scenario'
+        }),
+        'The most likely progression is a failure in the core messaging service outlasting normal incident handling because recovery, failover, or fallback communications are not ready.',
+        'This should be assessed for business disruption, delayed decision-making, recovery pressure, and whether the lack of continuity cover turns a manageable outage into a wider resilience failure.'
+      ].join(' ');
+    } else {
+      scenarioExpansion = [
+        buildScenarioLead({ geography, businessUnit, asset: asset || 'the recovery-critical service or process', cause: cause || 'weak continuity or recovery execution', impact: impact || 'extended outage and recovery pressure', scenarioLabel: 'business continuity risk scenario' }),
+        'The most likely progression is an incident outlasting recovery assumptions, exposing gaps in continuity planning, fallback operations, communications, and executive decision-making.',
+        'This should be assessed for downtime, missed recovery objectives, workaround viability, and the cost of prolonged disruption.'
+      ].join(' ');
+    }
   } else if (classification.key === 'operational') {
     scenarioExpansion = [
       buildScenarioLead({ geography, businessUnit, asset: asset || 'the affected operating process or service', cause: cause || 'process breakdown or control failure', impact: impact || 'service degradation and execution strain', scenarioLabel: 'operational risk scenario' }),
@@ -958,11 +1062,19 @@ function buildScenarioExpansion(input = {}, classification = classifyScenario(in
       'This should be assessed for commercial exposure, control weakness, supplier dependence, and whether the decision creates broader compliance or continuity risk.'
     ].join(' ');
   } else if (classification.key === 'financial') {
-    scenarioExpansion = [
-      buildScenarioLead({ geography, businessUnit, asset: asset || 'the affected financial process or exposure', cause: cause || 'fraud, financial control weakness, or commercial failure', impact: impact || 'direct financial loss and control pressure', scenarioLabel: 'financial risk scenario' }),
-      'The most likely progression is payment manipulation, weak approvals, or financial-control failure leading to direct loss, delayed detection, escalation, and remediation work.',
-      'This should be assessed for direct loss, control weakness, liquidity or capital impact, and any related regulatory or stakeholder consequences.'
-    ].join(' ');
+    if (hasCounterpartyCreditSignals(intakeText)) {
+      scenarioExpansion = [
+        buildScenarioLead({ geography, businessUnit, asset: asset || 'the customer exposure, receivables position, or commercial counterparty relationship in scope', cause: cause || 'customer insolvency, payment default, or weakening collectability', impact: impact || 'bad-debt write-off and cashflow strain', scenarioLabel: 'counterparty-credit risk scenario' }),
+        'The most likely progression is a major client failure reducing collectability, forcing provisioning or write-off decisions, and escalating management scrutiny over concentration, recovery options, and the speed of financial response.',
+        'This should be assessed for direct loss, collections recovery, working-capital strain, and whether legal or contractual action can materially reduce the downside.'
+      ].join(' ');
+    } else {
+      scenarioExpansion = [
+        buildScenarioLead({ geography, businessUnit, asset: asset || 'the affected financial process or exposure', cause: cause || 'fraud, financial control weakness, or commercial failure', impact: impact || 'direct financial loss and control pressure', scenarioLabel: 'financial risk scenario' }),
+        'The most likely progression is payment manipulation, weak approvals, or financial-control failure leading to direct loss, delayed detection, escalation, and remediation work.',
+        'This should be assessed for direct loss, control weakness, liquidity or capital impact, and any related regulatory or stakeholder consequences.'
+      ].join(' ');
+    }
   } else if (classification.key === 'regulatory') {
     scenarioExpansion = [
       buildScenarioLead({ geography, businessUnit, asset: asset || 'the regulated activity or obligation', cause: cause || 'a breach of regulatory or licence requirements', impact: impact || 'enforcement and remediation exposure', scenarioLabel: 'regulatory risk scenario' }),
@@ -999,6 +1111,20 @@ function buildScenarioExpansion(input = {}, classification = classifyScenario(in
       'The most likely progression is service dependency failure, inherited control weakness, or privileged supplier access creating operational, data, and contractual consequences across connected processes.',
       'This should be assessed for immediate disruption as well as follow-on regulatory, commercial, and assurance impacts.'
     ].join(' ');
+  } else if (classification.key === 'esg') {
+    if (hasSupplierLabourSignals(intakeText)) {
+      scenarioExpansion = [
+        buildScenarioLead({ geography, businessUnit, asset: asset || 'the sourcing category or supplier relationship in scope', cause: cause || 'weak sub-tier supplier oversight or delayed detection of exploitative labour practices', impact: impact || 'remediation cost, stakeholder scrutiny, and governance pressure', scenarioLabel: 'ESG and human-rights scenario' }),
+        'The most likely progression is discovery of abusive labour conditions in the supply base, followed by urgent due-diligence review, supplier remediation decisions, and challenge over how the relationship was governed.',
+        'This should be assessed for remediation credibility, disclosure pressure, supplier continuity, and whether management can evidence a defensible human-rights response.'
+      ].join(' ');
+    } else {
+      scenarioExpansion = [
+        buildScenarioLead({ geography, businessUnit, asset: asset || 'the sustainability commitment or disclosure area', cause: cause || 'weak ESG controls or disclosure assumptions', impact: impact || 'stakeholder, disclosure, and remediation pressure', scenarioLabel: 'ESG risk scenario' }),
+        'The most likely progression is a performance or disclosure gap becoming visible to regulators, investors, employees, or customers, with management forced into reactive remediation.',
+        'This should be assessed for reporting credibility, remediation cost, stakeholder trust, and whether wider governance or operational issues are exposed.'
+      ].join(' ');
+    }
   } else if (classification.key === 'strategic') {
     scenarioExpansion = [
       buildScenarioLead({ geography, businessUnit, asset: asset || 'the strategic initiative or business objective', cause: cause || 'strategy execution weakness or market shift', impact: impact || 'material pressure on objectives and value creation', scenarioLabel: 'strategic risk scenario' }),

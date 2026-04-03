@@ -156,6 +156,159 @@ test('scenario-draft route returns deterministic server fallback when hosted AI 
   assert.equal(String(res.payload.trace?.label || ''), 'Step 1 guided draft');
 });
 
+test('scenario-draft route keeps no-DR Outlook continuity scenarios out of cyber, AI, and fraud drift in deterministic fallback', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return {
+        ok: true,
+        json: async () => ({ result: null })
+      };
+    }
+    throw new Error(`Unexpected fetch in continuity fallback scenario-draft test: ${url}`);
+  };
+
+  const handler = loadFresh('../../api/ai/scenario-draft');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const res = createRes();
+
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      riskStatement: 'There is no DR for the critical email system in place, which is MS Outlook online.',
+      guidedInput: {
+        event: 'There is no DR for the critical email system in place, which is MS Outlook online.',
+        asset: 'MS Outlook online',
+        cause: 'No disaster recovery or failover capability',
+        impact: 'Extended outage and recovery pressure'
+      }
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
+  assert.equal(res.payload.scenarioLens?.key, 'business-continuity');
+  assert.match(String(res.payload.draftNarrative || ''), /email|communications|recovery/i);
+  assert.doesNotMatch(String(res.payload.draftNarrative || ''), /responsible ai|model|fraud|data exposure/i);
+  const titles = (Array.isArray(res.payload.risks) ? res.payload.risks : []).map((risk) => String(risk?.title || '')).join(' | ');
+  assert.match(titles, /business continuity|email outage|recovery/i);
+  assert.doesNotMatch(titles, /responsible ai|fraud|data exposure/i);
+});
+
+test('scenario-draft route keeps counterparty default fallback in the credit-loss lane instead of payment-fraud drift', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return {
+        ok: true,
+        json: async () => ({ result: null })
+      };
+    }
+    throw new Error(`Unexpected fetch in financial fallback scenario-draft test: ${url}`);
+  };
+
+  const handler = loadFresh('../../api/ai/scenario-draft');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const res = createRes();
+
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      riskStatement: 'A major client files for bankruptcy, creating receivables recovery pressure and a likely write-off.',
+      guidedInput: {
+        event: 'A major client files for bankruptcy, creating receivables recovery pressure and a likely write-off.',
+        asset: 'Major customer receivables balance',
+        cause: 'Customer insolvency',
+        impact: 'Bad-debt write-off and cashflow strain'
+      }
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
+  assert.equal(res.payload.scenarioLens?.key, 'financial');
+  assert.match(String(res.payload.draftNarrative || ''), /receivables|write-off|collectability|cashflow/i);
+  assert.doesNotMatch(String(res.payload.draftNarrative || ''), /payment manipulation|invoice fraud|responsible ai/i);
+  const titles = (Array.isArray(res.payload.risks) ? res.payload.risks : []).map((risk) => String(risk?.title || '')).join(' | ');
+  assert.match(titles, /counterparty|receivables|recovery/i);
+  assert.doesNotMatch(titles, /payment fraud|responsible ai|cyber/i);
+});
+
+test('scenario-draft route keeps supplier labour fallback in the ESG lane instead of cyber or pure procurement drift', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return {
+        ok: true,
+        json: async () => ({ result: null })
+      };
+    }
+    throw new Error(`Unexpected fetch in ESG fallback scenario-draft test: ${url}`);
+  };
+
+  const handler = loadFresh('../../api/ai/scenario-draft');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const res = createRes();
+
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      riskStatement: 'A supplier is linked to forced labour practices in a critical sourcing category.',
+      guidedInput: {
+        event: 'A supplier is linked to forced labour practices in a critical sourcing category.',
+        asset: 'Critical supplier relationship',
+        cause: 'Weak sub-tier due diligence',
+        impact: 'Human-rights scrutiny and remediation pressure'
+      }
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
+  assert.equal(res.payload.scenarioLens?.key, 'esg');
+  assert.match(String(res.payload.draftNarrative || ''), /labou?r|human-rights|remediation|supplier/i);
+  assert.doesNotMatch(String(res.payload.draftNarrative || ''), /responsible ai|cyber|fraud/i);
+  const titles = (Array.isArray(res.payload.risks) ? res.payload.risks : []).map((risk) => String(risk?.title || '')).join(' | ');
+  assert.match(titles, /labou?r|human-rights|supplier/i);
+  assert.doesNotMatch(titles, /responsible ai|cyber compromise|payment fraud/i);
+});
+
 test('scenario-draft route orchestrates live generation and quality-gate server-side for Step 1 guided draft', async () => {
   process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
   process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';

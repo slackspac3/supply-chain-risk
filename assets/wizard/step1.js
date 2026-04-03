@@ -72,6 +72,10 @@ const STEP1_FUNCTION_TO_SCENARIO_LENS = {
   general: { key: 'general', label: 'General enterprise risk', functionKey: 'general', estimatePresetKey: 'general' }
 };
 
+// Keep Step 1 on one authoritative server draft call. Prompt ideas and pre-build preview
+// remain deterministic local UX only so they do not add extra hosted backend load.
+const STEP1_USE_GUIDED_SERVER_HELPERS = false;
+
 const STEP1_LENS_REGULATION_SUGGESTIONS = {
   cyber: ['UAE PDPL', 'UAE Cybersecurity Council Guidance', 'NIST SP 800-53', 'NIST RMF', 'ISO 27001'],
   'data-governance': ['UAE PDPL', 'ISO 27701', 'ISO 27018'],
@@ -340,7 +344,13 @@ function createStep1DryRunScenario(input = {}) {
 function inferStep1FunctionKeyFromText(text = '') {
   const haystack = String(text || '').toLowerCase();
   if (!haystack.trim()) return 'general';
+  const hasContinuityGapSignal = /(?:^|[^a-z0-9])no dr(?:$|[^a-z0-9])|without dr|dr gap|no disaster recovery|without disaster recovery|no failover|without failover|failover gap|recovery gap|rto|rpo|business continuity|disaster recovery/.test(haystack);
+  const hasCriticalMessagingServiceSignal = /(outlook(?: online)?|exchange(?: online)?|email system|mail system|mail service|messaging service|critical email|critical communication service|microsoft 365)/.test(haystack);
   const hasOperationalOutageSignal = /(downtime|outage|service disruption|operational disruption|critical operational disruption|availability|unavailable|degrad|continuity|resilience|recovery|backlog|capacity|human error|manual error|aging infrastructure|ageing infrastructure|legacy infrastructure|platform instability|system instability|service failure|process failure)/.test(haystack);
+  const hasCounterpartyCreditSignal = /(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collectability|collections|cashflow|working capital|provisioning|provision)/.test(haystack);
+  const hasSupplierLabourSignal = /(exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights|living wage)/.test(haystack);
+  const hasEsgDisclosureSignal = /(esg|sustainability|greenwashing|climate disclosure|sustainability disclosure|carbon|emission|net zero|scope 1|scope 2|scope 3|social impact)/.test(haystack);
+  const hasGeopoliticalSignal = /(geopolitical|market access|sanctions|export control|tariff|sovereign|entity list|cross-border restriction)/.test(haystack);
   const hasAiModelSignal = /ai\b|model risk|responsible ai|machine learning|llm|algorithm/.test(haystack);
   const hasExplicitCyberSignal = /(cyber|security|identity|credential|ransom|malware|phish|breach|exfil|privileged|unauthori[sz]ed|misconfig|vulnerability|token theft|session hijack|compromise|account takeover|account hijack|hijack(?:ed|ing)?|mailbox|email compromise|email account|business email compromise|\bbec\b|dark ?web|credential dump|credential leak|leaked credential|stolen credential|admin account|tenant admin|azure admin|executive mailbox|ceo fraud)/.test(haystack);
   const hasTechnologyScopeSignal = /(technology|cloud|infrastructure|it\b|digital|platform|system|application|network|ot\b|ics|scada|site systems)/.test(haystack);
@@ -348,10 +358,12 @@ function inferStep1FunctionKeyFromText(text = '') {
   const hasProcurementGovernanceSignal = /(procurement|sourcing|purchase|supplier assurance|supplier due diligence|tender|bid|contract award|vendor selection|critical spend|commercial category|pricing|award decision|spend category)/.test(haystack);
   const hasSupplierDelayProgrammeSignal = hasSupplierDependencySignal
     && /(miss(?:es|ed)?|delay(?:ed|ing)?|slip(?:ped|page)?|late|delivery date|delivery commitment|deployment|go-live|rollout|milestone|dependent business project|dependent project|programme|program|project)/.test(haystack);
-  if (/(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collectability|collections|cashflow|working capital|provisioning|provision)/.test(haystack)) return 'finance';
+  if (hasCounterpartyCreditSignal) return 'finance';
+  if (hasSupplierLabourSignal || hasEsgDisclosureSignal || hasGeopoliticalSignal) return 'strategic';
   if (hasSupplierDelayProgrammeSignal && !hasProcurementGovernanceSignal && !/single[- ]source|sole source|supplier concentration|concentrated spend|critical spend/.test(haystack)) return 'operations';
   if (hasProcurementGovernanceSignal || /single[- ]source|sole source|supplier concentration|concentrated spend/.test(haystack)) return 'procurement';
   if (/finance|treasury|accounting|financial|cash|payment|payroll|credit|collections|ledger|fraud|aml|financial crime|integrity/.test(haystack)) return 'finance';
+  if ((hasContinuityGapSignal && !hasExplicitCyberSignal) || (hasContinuityGapSignal && hasCriticalMessagingServiceSignal)) return 'operations';
   if (hasOperationalOutageSignal && (!hasExplicitCyberSignal || hasTechnologyScopeSignal)) return 'operations';
   if (hasAiModelSignal || (hasExplicitCyberSignal && !/compliance|regulatory|legal|privacy|data governance|policy|governance|controls|audit|contract|litigation|intellectual property/.test(haystack)) || (hasTechnologyScopeSignal && hasExplicitCyberSignal)) return 'technology';
   if (/compliance|regulatory|legal|privacy|data governance|policy|governance|controls|audit|contract|litigation|ip\b|intellectual property/.test(haystack)) return 'compliance';
@@ -404,14 +416,60 @@ function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppSta
 }
 
 function getStep1PreferredScenarioLens(settings = getEffectiveSettings(), draft = AppState.draft || {}, narrativeOverride = '') {
+  const scenarioText = String([
+    narrativeOverride,
+    draft?.narrative,
+    draft?.sourceNarrative,
+    draft?.enhancedNarrative,
+    draft?.guidedInput?.event,
+    draft?.guidedInput?.asset,
+    draft?.guidedInput?.cause,
+    draft?.guidedInput?.impact
+  ].filter(Boolean).join(' ')).toLowerCase();
+  const continuityGapSignal = /(?:^|[^a-z0-9])no dr(?:$|[^a-z0-9])|without dr|dr gap|no disaster recovery|without disaster recovery|no failover|without failover|failover gap|recovery gap|rto|rpo|business continuity|disaster recovery/.test(scenarioText);
+  const criticalMessagingServiceSignal = /(outlook(?: online)?|exchange(?: online)?|email system|mail system|mail service|messaging service|critical email|critical communication service|microsoft 365)/.test(scenarioText);
+  const explicitCyberCompromiseSignal = /(cyber|security|identity|credential|ransom|malware|phish|breach|exfil|privileged|unauthori[sz]ed|misconfig|vulnerability|token theft|session hijack|compromise|account takeover|account hijack|hijack(?:ed|ing)?|mailbox|email compromise|email account|business email compromise|\bbec\b|dark ?web|credential dump|credential leak|leaked credential|stolen credential|admin account|tenant admin|azure admin|executive mailbox|ceo fraud)/.test(scenarioText);
+  const supplierLabourSignal = /(exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights|living wage)/.test(scenarioText);
+  const esgDisclosureSignal = /(esg|sustainability|greenwashing|climate disclosure|sustainability disclosure|carbon|emission|net zero|scope 1|scope 2|scope 3|social impact)/.test(scenarioText);
+  const geopoliticalSignal = /(geopolitical|market access|sanctions|export control|tariff|sovereign|entity list|cross-border restriction)/.test(scenarioText);
+  const continuityPreferredLens = continuityGapSignal
+    && criticalMessagingServiceSignal
+    && !explicitCyberCompromiseSignal
+    ? {
+        key: 'business-continuity',
+        label: 'Business continuity',
+        functionKey: 'operations',
+        estimatePresetKey: 'businessContinuity',
+        secondaryKeys: ['operational']
+      }
+    : null;
+  const esgPreferredLens = supplierLabourSignal || esgDisclosureSignal
+    ? {
+        key: 'esg',
+        label: 'ESG',
+        functionKey: 'strategic',
+        estimatePresetKey: 'esg',
+        secondaryKeys: supplierLabourSignal ? ['procurement', 'compliance'] : ['compliance']
+      }
+    : null;
+  const geopoliticalPreferredLens = geopoliticalSignal
+    ? {
+        key: 'geopolitical',
+        label: 'Geopolitical / market access',
+        functionKey: 'strategic',
+        estimatePresetKey: 'geopolitical',
+        secondaryKeys: ['regulatory', 'supply-chain']
+      }
+    : null;
   const inferred = {
     ...(STEP1_FUNCTION_TO_SCENARIO_LENS[inferStep1FunctionKey(settings, {
       ...draft,
       __step1NarrativeOverride: narrativeOverride
     })] || STEP1_FUNCTION_TO_SCENARIO_LENS.general)
   };
+  const preferredInferred = continuityPreferredLens || esgPreferredLens || geopoliticalPreferredLens || inferred;
   const stored = draft?.scenarioLens?.key ? { ...draft.scenarioLens } : null;
-  if (!stored) return inferred;
+  if (!stored) return preferredInferred;
   const hasScenarioContext = !!String(
     narrativeOverride
     || draft?.narrative
@@ -424,10 +482,10 @@ function getStep1PreferredScenarioLens(settings = getEffectiveSettings(), draft 
     || ''
   ).trim();
   if (!hasScenarioContext) return stored;
-  if (!stored.key || stored.key === 'general') return inferred.key && inferred.key !== 'general' ? inferred : stored;
-  if (inferred.key && inferred.key !== 'general' && inferred.key !== stored.key) {
+  if (!stored.key || stored.key === 'general') return preferredInferred.key && preferredInferred.key !== 'general' ? preferredInferred : stored;
+  if (preferredInferred.key && preferredInferred.key !== 'general' && preferredInferred.key !== stored.key) {
     return {
-      ...inferred,
+      ...preferredInferred,
       secondaryKeys: Array.from(new Set([
         ...(Array.isArray(stored.secondaryKeys) ? stored.secondaryKeys : []),
         stored.key
@@ -467,6 +525,12 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
   const haystack = ` ${String(sourceText || '').toLowerCase()} `;
   const suggestions = [];
   const seen = new Set();
+  const hasCounterpartyCreditSignal = /(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|delinquen|default|collectability|collections|cashflow|working capital|provisioning|provision)/.test(haystack);
+  const hasExplicitFraudOrManipulationSignal = /(payment fraud|invoice fraud|false invoice|fake invoice|approval manipulation|vendor fraud|financial crime|money laundering|embezzlement|bribery|corruption|kickback|\bfraud\b)/.test(haystack);
+  const hasSupplierLabourSignal = /(exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights|living wage)/.test(haystack);
+  const hasEsgDisclosureSignal = /(esg|sustainability|greenwashing|climate disclosure|sustainability disclosure|carbon|emission|net zero|scope 1|scope 2|scope 3|social impact)/.test(haystack);
+  const hasGeopoliticalSignal = /(geopolitical|market access|sanctions|export control|tariff|sovereign|entity list|cross-border restriction)/.test(haystack);
+  const hasProcurementCollusionSignal = /(collud|price fix|bid rig|cartel|anti-?competitive|competition law)/.test(haystack);
   const pushSuggestion = (label, prompt) => {
     const safeLabel = String(label || '').trim();
     const safePrompt = String(prompt || '').trim();
@@ -477,7 +541,7 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
     suggestions.push({ label: safeLabel, prompt: safePrompt });
   };
 
-  if (/(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|delinquen|default)/.test(haystack)) {
+  if (hasCounterpartyCreditSignal) {
     pushSuggestion(
       'Counterparty insolvency',
       'A major client becomes insolvent and recoverable receivables become materially harder to collect.'
@@ -486,6 +550,10 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
       'Receivables write-off',
       'A customer default forces a significant receivables write-off, provisioning increase, and finance escalation.'
     );
+    pushSuggestion(
+      'Working-capital strain after default',
+      'A major client failure creates cashflow strain and management pressure over how quickly recoveries can be secured.'
+    );
   }
 
   if (/(major client|key client|single client|single customer|customer concentration|client concentration|customer default|client default|customer failure|client failure|counterparty exposure)/.test(haystack)
@@ -493,6 +561,23 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
     pushSuggestion(
       'Customer concentration exposure',
       'One major client failure cascades into concentration exposure, delayed collections, and a broader commercial recovery problem.'
+    );
+  }
+
+  if ((/(?:^|[^a-z0-9])no dr(?:$|[^a-z0-9])|without dr|dr gap|no disaster recovery|without disaster recovery|no failover|without failover|failover gap|recovery gap|rto|rpo|business continuity|disaster recovery/.test(haystack))
+    && /(outlook(?: online)?|exchange(?: online)?|email system|mail system|mail service|messaging service|critical email|critical communication service|microsoft 365)/.test(haystack)
+    && !/(credential|account takeover|account hijack|hijack(?:ed|ing)?|email compromise|business email compromise|\bbec\b|malware|phish|breach|unauthori[sz]ed|privileged|identity)/.test(haystack)) {
+    pushSuggestion(
+      'Email service continuity gap',
+      'A critical email and communication service lacks workable disaster recovery, raising the risk of prolonged outage and delayed recovery.'
+    );
+    pushSuggestion(
+      'Recovery failure in core communications',
+      'A disruption affecting Outlook or the core email service could persist because failover and recovery arrangements are not in place.'
+    );
+    pushSuggestion(
+      'Core messaging outage without failover',
+      'A failure in the core messaging platform could disrupt coordination, approvals, and operational response because no DR path is available.'
     );
   }
 
@@ -520,6 +605,46 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
     );
   }
 
+  if (hasSupplierLabourSignal) {
+    pushSuggestion(
+      'Supplier labour-practice failure',
+      'Weak supplier oversight allows exploitative labour or human-rights practices to persist in the supply base and trigger remediation pressure.'
+    );
+    pushSuggestion(
+      'Human-rights due-diligence gap',
+      'Sub-tier labour practices create ESG, disclosure, and governance pressure because due diligence and remediation controls are not strong enough.'
+    );
+  }
+
+  if (hasEsgDisclosureSignal && !hasSupplierLabourSignal) {
+    pushSuggestion(
+      'Sustainability disclosure challenge',
+      'A sustainability claim or disclosure cannot be supported convincingly, creating stakeholder scrutiny and remediation pressure.'
+    );
+    pushSuggestion(
+      'Greenwashing or claim-substantiation failure',
+      'Management statements about climate, ESG, or sustainability performance come under challenge because evidence and controls are weak.'
+    );
+  }
+
+  if (hasGeopoliticalSignal) {
+    pushSuggestion(
+      'Market-access restriction',
+      'A sanctions, tariff, or market-access shift disrupts the original operating or growth path and forces management to rethink the route to market.'
+    );
+    pushSuggestion(
+      'Cross-border execution disruption',
+      'A sovereign or export-control change delays execution, supplier access, or delivery commitments across the affected footprint.'
+    );
+  }
+
+  if (hasProcurementCollusionSignal) {
+    pushSuggestion(
+      'Bid-rigging or supplier collusion',
+      'Supplier collusion distorts price discovery and weakens confidence in the sourcing decision and contract award.'
+    );
+  }
+
   if (/(supplier|vendor|third party|third-party|delivery date|delivery commitment|delay|deployment|go-live|milestone|dependent business project|dependent project)/.test(haystack)
     && !/(procurement|sourcing|tender|bid|contract award|vendor selection|critical spend|award decision|single[- ]source|sole source|concentration|fallback|substitute)/.test(haystack)) {
     pushSuggestion(
@@ -532,7 +657,10 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
     );
   }
 
-  if (/(single[- ]source|sole source|concentration|procurement|sourcing|tender|bid|contract award|critical spend|fallback|substitute|supplier assurance|supplier due diligence)/.test(haystack)) {
+  if (/(single[- ]source|sole source|concentration|procurement|sourcing|tender|bid|contract award|critical spend|fallback|substitute|supplier assurance|supplier due diligence)/.test(haystack)
+    && !hasSupplierLabourSignal
+    && !hasEsgDisclosureSignal
+    && !hasGeopoliticalSignal) {
     pushSuggestion(
       'Single-source shortfall',
       'A critical supplier cannot meet a key delivery commitment and no ready substitute is available in the current sourcing plan.'
@@ -543,7 +671,7 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
     );
   }
 
-  if (/(payment|payable|invoice|collections|settlement|treasury|disbursement)/.test(haystack)) {
+  if ((/(payment|payable|invoice|collections|settlement|treasury|disbursement)/.test(haystack) && !hasCounterpartyCreditSignal) || hasExplicitFraudOrManipulationSignal) {
     pushSuggestion(
       'Payment control failure',
       'A breakdown in payment or collections controls creates avoidable financial loss, delayed recovery, or reconciliation strain.'
@@ -695,6 +823,7 @@ function getStep1GuidedPreviewSignature(draft = AppState.draft || {}) {
 }
 
 function shouldUseStep1LivePreview(draft = AppState.draft || {}) {
+  if (!STEP1_USE_GUIDED_SERVER_HELPERS) return false;
   if (String(draft?.step1Path || '').trim() !== 'guided') return false;
   if (String(draft?.guidedDraftSource || '').trim()) return false;
   if (!window.Step1Assist || typeof window.Step1Assist.previewGuidedScenarioDraft !== 'function') return false;
@@ -855,6 +984,7 @@ function getStep1GuidedPromptIdeaSignature(draft = AppState.draft || {}) {
 }
 
 function shouldUseStep1LivePromptIdeas(draft = AppState.draft || {}) {
+  if (!STEP1_USE_GUIDED_SERVER_HELPERS) return false;
   if (String(draft?.step1Path || '').trim() !== 'guided') return false;
   if (!window.Step1Assist || typeof window.Step1Assist.suggestGuidedPromptIdeas !== 'function') return false;
   return normaliseAssessmentTokens(getStep1GuidedPromptIdeaSourceText(draft)).length >= STEP1_LIVE_PROMPT_IDEA_MIN_TOKENS;
@@ -3318,6 +3448,16 @@ function seedRisksFromScenarioDraft(narrative, { force = false, replaceGenerated
   return extractedRisks.length;
 }
 
+function hasReusableAiBuiltShortlistForCurrentDraft(draft = AppState.draft || {}) {
+  const source = String(draft?.guidedDraftSource || draft?.aiQualityState || '').trim().toLowerCase();
+  if (!['ai', 'fallback'].includes(source)) return false;
+  if (isStep1AiDraftMateriallyReshaped(draft)) return false;
+  return getRiskCandidates().some((risk) => {
+    const riskSource = String(risk?.source || '').trim().toLowerCase();
+    return riskSource === 'ai' || riskSource === 'scenario-draft';
+  });
+}
+
 function syncStep1ScenarioTitle(narrative = '') {
   const nextNarrative = String(narrative || AppState.draft.enhancedNarrative || AppState.draft.narrative || AppState.draft.sourceNarrative || '').trim();
   const matchingEnhancedNarrative = normaliseScenarioSeedText(AppState.draft.enhancedNarrative || '') === normaliseScenarioSeedText(nextNarrative)
@@ -3740,6 +3880,10 @@ function bindStep1ScenarioActions({ buList, settings, exampleModel }) {
     const narrative = document.getElementById('intake-risk-statement')?.value.trim() || AppState.draft.narrative || '';
     if (!narrative) {
       UI.toast('Enter or build a scenario draft first.', 'warning');
+      return;
+    }
+    if (hasReusableAiBuiltShortlistForCurrentDraft(AppState.draft)) {
+      UI.toast('The current shortlist already reflects the latest AI-built draft. Change the draft first if you want a different shortlist.', 'info', 5000);
       return;
     }
     clearStep1StaleAssistState(narrative, { clearGeneratedRisks: true });

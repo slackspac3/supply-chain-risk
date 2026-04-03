@@ -956,18 +956,18 @@ Return corrected JSON only.`;
     if (/exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights/.test(source)) {
       return [
         {
-          key: 'procurement',
-          title: 'Supplier labor-practice and due-diligence failure',
-          category: 'Procurement',
-          regulations: ['ISO 20400', 'ISO 37301'],
-          description: 'Weak sub-tier oversight or sourcing due diligence may have allowed exploitative labor practices to persist inside the supply base.'
-        },
-        {
           key: 'esg',
           title: 'ESG and human-rights disclosure or remediation exposure',
           category: 'ESG',
           regulations: ['IFRS S1', 'GRI Universal Standards'],
           description: 'Once abusive labor practices are identified, management may face disclosure, remediation, and stakeholder scrutiny over the wider operating model.'
+        },
+        {
+          key: 'procurement',
+          title: 'Supplier labor-practice and due-diligence failure',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'Weak sub-tier oversight or sourcing due diligence may have allowed exploitative labor practices to persist inside the supply base.'
         },
         {
           key: 'compliance',
@@ -1055,6 +1055,33 @@ Return corrected JSON only.`;
         }
       ];
     }
+    if (_hasContinuityGapSignals(source)
+      && _hasCriticalMessagingServiceSignals(source)
+      && !_hasExplicitCyberCompromiseSignals(source)) {
+      return [
+        {
+          key: 'business-continuity',
+          title: 'Business continuity and recovery failure',
+          category: 'Business Continuity',
+          regulations: ['ISO 22301', 'NFPA 1600'],
+          description: 'Missing disaster recovery or failover for the core messaging service could turn a manageable outage into a prolonged continuity event.'
+        },
+        {
+          key: 'operational',
+          title: 'Email outage business disruption',
+          category: 'Operational Resilience',
+          regulations: ['ISO 22301', 'ISO 31000'],
+          description: 'A prolonged loss of the core email and communications service could disrupt coordination, approvals, and incident response activity.'
+        },
+        {
+          key: 'financial',
+          title: 'Elevated response and recovery cost',
+          category: 'Financial and Resource Impact',
+          regulations: ['ISO 22301'],
+          description: 'Extended recovery may require emergency tooling, external support, and diverted internal resources to restore service.'
+        }
+      ];
+    }
     const catalog = [
       { key: 'ai-model-risk', title: 'AI model governance or responsible-AI failure', category: 'AI / Model Risk', regulations: ['ISO/IEC 42001', 'NIST AI RMF', 'EU AI Act'], terms: ['ai', 'model risk', 'responsible ai', 'model drift', 'hallucination', 'bias', 'algorithm', 'llm', 'training data', 'ai act'] },
       { key: 'data-governance', title: 'Data-governance or privacy-control breakdown', category: 'Data Governance', regulations: ['ISO 27701', 'GDPR', 'UAE PDPL'], terms: ['data governance', 'data quality', 'data lineage', 'retention', 'purpose limitation', 'privacy', 'personal data', 'consent', 'data residency', 'master data'] },
@@ -1065,13 +1092,13 @@ Return corrected JSON only.`;
       { key: 'regulatory', title: 'Regulatory or licensing exposure', category: 'Regulatory', regulations: ['BIS Export Controls', 'OFAC Sanctions', 'UAE PDPL'], terms: ['regulator', 'regulatory', 'licence', 'license', 'filing', 'notification', 'sanction', 'export control'] },
       { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'misstatement', 'bankruptcy', 'insolvency', 'receivable', 'bad debt', 'write-off', 'counterparty', 'customer default', 'client default', 'collections', 'working capital', 'provisioning'] },
       { key: 'fraud-integrity', title: 'Fraud, integrity, or financial-crime exposure', category: 'Fraud / Integrity', regulations: ['ISO 37001', 'UAE AML/CFT'], terms: ['fraud', 'integrity', 'financial crime', 'money laundering', 'kickback', 'bribery', 'corruption', 'embezzlement'] },
-      { key: 'esg', title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2', 'GRI Universal Standards'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure'] },
+      { key: 'esg', title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2', 'GRI Universal Standards'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure', 'human rights', 'modern slavery', 'forced labour', 'forced labor', 'child labour', 'child labor'] },
       { key: 'compliance', title: 'Compliance control or policy breakdown', category: 'Compliance', regulations: ['ISO 37301', 'UAE PDPL'], terms: ['policy breach', 'control failure', 'non-compliance', 'compliance', 'obligation', 'conduct', 'ethics'] },
       { key: 'legal-contract', title: 'Legal, contract, or IP exposure', category: 'Legal / Contract', regulations: ['ISO 37301'], terms: ['contract', 'indemnity', 'litigation', 'ip', 'intellectual property', 'licensing dispute', 'dispute', 'terms breach'] },
       { key: 'geopolitical', title: 'Geopolitical, sanctions, or market-access exposure', category: 'Geopolitical', regulations: ['OFAC Sanctions', 'BIS Export Controls'], terms: ['geopolitical', 'market access', 'sanctions', 'export control', 'sovereign', 'entity list', 'tariff', 'cross-border restriction'] },
       { key: 'supply-chain', title: 'Supply chain resilience disruption', category: 'Supply Chain', regulations: ['ISO 28000', 'ISO 22301'], terms: ['supply chain', 'logistics', 'inventory', 'shipment', 'fulfilment', 'single source', 'upstream'] },
       { key: 'procurement', title: 'Procurement governance or sourcing risk', category: 'Procurement', regulations: ['ISO 20400', 'ISO 37301'], terms: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'vendor selection', 'purchasing', 'critical spend', 'single-source spend'] },
-      { key: 'business-continuity', title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management'] },
+      { key: 'business-continuity', title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management', 'failover', 'email system', 'mail system', 'outlook', 'exchange', 'messaging service'] },
       { key: 'physical-security', title: 'Physical security or facilities-protection breakdown', category: 'Physical Security', regulations: ['ISO 22301', 'UAE Fire and Life Safety Code'], terms: ['physical security', 'perimeter', 'site intrusion', 'badge control', 'facility breach', 'executive protection', 'visitor management'] },
       { key: 'ot-resilience', title: 'OT or industrial-control resilience failure', category: 'OT Resilience', regulations: ['IEC 62443', 'ISO 22301'], terms: ['ot', 'operational technology', 'industrial control', 'ics', 'scada', 'plant network', 'site systems', 'control room'] },
       { key: 'people-workforce', title: 'People, workforce, or labour-practice exposure', category: 'People / Workforce', regulations: ['UN Guiding Principles', 'SA8000', 'ILO-OSH 2001'], terms: ['workforce', 'labour', 'labor', 'attrition', 'staffing', 'fatigue', 'strike', 'worker welfare', 'human rights'] },
@@ -2231,6 +2258,26 @@ ${businessUnit.selectedDepartmentContext}` : ''
     return /(downtime|outage|service disruption|operational disruption|critical operational disruption|availability|unavailable|degrad|aging infrastructure|ageing infrastructure|legacy infrastructure|human error|manual error|platform instability|system instability|service failure|process failure|recovery effort|recovery strain|core service)/.test(String(text || '').toLowerCase());
   }
 
+  function _hasContinuityGapSignals(text = '') {
+    return /(?:^|[^a-z0-9])no dr(?:$|[^a-z0-9])|without dr|dr gap|no disaster recovery|without disaster recovery|disaster recovery gap|continuity gap|recovery gap|failover gap|no failover|without failover|\brto\b|\brpo\b|recovery objective|disaster recovery|business continuity/.test(String(text || '').toLowerCase());
+  }
+
+  function _hasCriticalMessagingServiceSignals(text = '') {
+    return /(outlook(?: online)?|exchange(?: online)?|email system|mail system|mail service|messaging service|critical email|critical communication service|microsoft 365|office 365|email platform|messaging platform)/.test(String(text || '').toLowerCase());
+  }
+
+  function _hasCounterpartyCreditSignals(text = '') {
+    return /(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write-off|write off|counterparty|customer default|client default|credit loss|credit exposure|collections|collectability|provisioning|working capital|cashflow)/.test(String(text || '').toLowerCase());
+  }
+
+  function _hasSupplierLabourSignals(text = '') {
+    return /(exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights|living wage)/.test(String(text || '').toLowerCase());
+  }
+
+  function _hasEsgDisclosureSignals(text = '') {
+    return /(esg|sustainability|greenwashing|climate disclosure|sustainability disclosure|carbon|emission|net zero|scope 1|scope 2|scope 3|social impact)/.test(String(text || '').toLowerCase());
+  }
+
   function _hasExplicitCyberCompromiseSignals(text = '') {
     return /(cyber|security|identity|credential|ransom|malware|phish|breach|exfil|privileged|unauthori[sz]ed|misconfig|vulnerability|token theft|session hijack|attacker|threat actor|compromise|account takeover|tenant change|public exposure|storage exposure|data exposure)/.test(String(text || '').toLowerCase());
   }
@@ -2258,8 +2305,14 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const n = String(directScenarioText || businessContext || '').toLowerCase();
     const hintKey = _normaliseScenarioHintKey(options.scenarioLensHint);
     const hasOperationalOutageSignals = _hasOperationalOutageSignals(n);
+    const hasContinuityGapSignals = _hasContinuityGapSignals(n);
+    const hasCriticalMessagingServiceSignals = _hasCriticalMessagingServiceSignals(n);
     const hasExplicitCyberCompromiseSignals = _hasExplicitCyberCompromiseSignals(n);
+    const hasCounterpartyCreditSignals = _hasCounterpartyCreditSignals(n);
+    const hasSupplierLabourSignals = _hasSupplierLabourSignals(n);
+    const hasEsgDisclosureSignals = _hasEsgDisclosureSignals(n);
     const mentionsCloudPlatform = n.includes('cloud') || n.includes('azure') || n.includes('aws') || n.includes('gcp') || n.includes('infrastructure') || n.includes('platform');
+    const emailCompromiseSignals = /(mailbox|email account|email compromise|business email compromise|\bbec\b)/.test(n);
 
     const isRansomware = n.includes('ransomware') || n.includes('encrypt') || n.includes('ransom');
     const isIdentity = n.includes('azure ad')
@@ -2271,10 +2324,6 @@ ${businessUnit.selectedDepartmentContext}` : ''
       || n.includes('account takeover')
       || n.includes('account hijack')
       || /\bhijack(?:ed|ing)?\b/.test(n)
-      || n.includes('mailbox')
-      || n.includes('email account')
-      || n.includes('email compromise')
-      || n.includes('business email compromise')
       || n.includes('credential')
       || n.includes('password')
       || n.includes('dark web')
@@ -2283,7 +2332,8 @@ ${businessUnit.selectedDepartmentContext}` : ''
       || n.includes('azure admin')
       || n.includes('tenant admin')
       || n.includes('privileged account')
-      || n.includes('session hijack');
+      || n.includes('session hijack')
+      || emailCompromiseSignals;
     const isPhishing = !isIdentity && (
       n.includes('phish')
       || /\bbec\b/.test(n)
@@ -2304,12 +2354,12 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const isAiModel = n.includes('responsible ai') || n.includes('model risk') || n.includes('model drift') || n.includes('hallucination') || n.includes('algorithmic bias') || n.includes('training data') || /\bai\b/.test(n);
     const isDataGovernance = n.includes('data governance') || n.includes('data quality') || n.includes('data lineage') || n.includes('retention') || n.includes('purpose limitation') || n.includes('consent') || n.includes('data residency') || n.includes('master data') || (n.includes('privacy') && !n.includes('breach') && !n.includes('exfil'));
     const isStrategic = n.includes('strategy') || n.includes('strategic') || n.includes('market') || n.includes('competitive') || n.includes('transformation') || n.includes('portfolio') || n.includes('investment') || n.includes('operating model') || n.includes('programme');
-    const isOperational = hasOperationalOutageSignals || n.includes('operational') || n.includes('process failure') || n.includes('breakdown') || n.includes('capacity') || n.includes('service failure') || n.includes('backlog');
+    const isOperational = hasOperationalOutageSignals || hasContinuityGapSignals || n.includes('operational') || n.includes('process failure') || n.includes('breakdown') || n.includes('capacity') || n.includes('service failure') || n.includes('backlog');
     const isRegulatory = n.includes('regulator') || n.includes('regulatory') || n.includes('licen') || n.includes('sanction') || n.includes('export control') || n.includes('filing');
-    const isCounterpartyCredit = n.includes('bankrupt') || n.includes('bankruptcy') || n.includes('insolv') || n.includes('receivable') || n.includes('bad debt') || n.includes('write-off') || n.includes('write off') || n.includes('counterparty') || n.includes('customer default') || n.includes('client default') || n.includes('credit loss') || n.includes('credit exposure') || n.includes('collections') || n.includes('provisioning') || n.includes('working capital');
+    const isCounterpartyCredit = hasCounterpartyCreditSignals;
     const isFinancial = isCounterpartyCredit || n.includes('fraud') || n.includes('payment') || n.includes('invoice') || n.includes('treasury') || n.includes('liquidity') || n.includes('capital') || n.includes('financial');
-    const isFraudIntegrity = n.includes('financial crime') || n.includes('money laundering') || n.includes('bribery') || n.includes('corruption') || n.includes('kickback') || n.includes('embezzlement') || (n.includes('integrity') && !n.includes('data integrity'));
-    const isEsg = n.includes('esg') || n.includes('sustainability') || n.includes('climate') || n.includes('emission') || n.includes('carbon') || n.includes('greenwashing');
+    const isFraudIntegrity = n.includes('invoice fraud') || n.includes('payment fraud') || n.includes('false invoice') || n.includes('fake invoice') || n.includes('financial crime') || n.includes('money laundering') || n.includes('bribery') || n.includes('corruption') || n.includes('kickback') || n.includes('embezzlement') || /\bfraud\b/.test(n) || (n.includes('integrity') && !n.includes('data integrity'));
+    const isEsg = n.includes('esg') || n.includes('sustainability') || n.includes('climate') || n.includes('emission') || n.includes('carbon') || n.includes('greenwashing') || hasSupplierLabourSignals || hasEsgDisclosureSignals;
     const isCompliance = n.includes('compliance') || n.includes('non-compliance') || n.includes('policy breach') || n.includes('conduct') || n.includes('ethics') || n.includes('assurance');
     const isLegalContract = n.includes('contract') || n.includes('indemnity') || n.includes('litigation') || n.includes('licensing dispute') || n.includes('intellectual property') || /\bip\b/.test(n);
     const isGeopolitical = n.includes('geopolitical') || n.includes('market access') || n.includes('sovereign') || n.includes('tariff') || n.includes('entity list') || n.includes('cross-border restriction');
@@ -2318,10 +2368,19 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const isSupplyChain = n.includes('supply chain') || n.includes('logistics') || n.includes('shipment') || n.includes('inventory') || n.includes('single source') || n.includes('single-source') || n.includes('upstream') || n.includes('shortfall') || (hasSupplierDependency && /delivery date|delivery commitment|shipment|logistics/.test(n));
     const isProcurement = n.includes('procurement') || n.includes('sourcing') || n.includes('tender') || n.includes('bid') || n.includes('contract award') || n.includes('vendor selection') || n.includes('critical spend') || n.includes('spend category') || n.includes('commercial category');
     const isThirdParty = hasSupplierDependency;
-    const isContinuity = n.includes('business continuity') || n.includes('disaster recovery') || n.includes('continuity') || n.includes('recovery') || n.includes('rto') || n.includes('rpo') || n.includes('crisis management');
+    const isContinuity = n.includes('business continuity')
+      || n.includes('disaster recovery')
+      || /\bcontinuity\b/.test(n)
+      || /\brto\b/.test(n)
+      || /\brpo\b/.test(n)
+      || n.includes('crisis management')
+      || n.includes('recovery objective')
+      || n.includes('failover')
+      || hasContinuityGapSignals
+      || (hasCriticalMessagingServiceSignals && (hasContinuityGapSignals || hasOperationalOutageSignals || /critical|recover|failover|availability|unavailable/.test(n)));
     const isPhysicalSecurity = n.includes('physical security') || n.includes('badge control') || n.includes('visitor management') || n.includes('perimeter') || n.includes('executive protection') || n.includes('site intrusion') || n.includes('facility breach');
     const isOtResilience = /\bot\b/.test(n) || n.includes('operational technology') || n.includes('industrial control') || n.includes('ics') || n.includes('scada') || n.includes('plant network') || n.includes('site systems') || n.includes('control room');
-    const isPeopleWorkforce = n.includes('workforce') || n.includes('attrition') || n.includes('fatigue') || n.includes('staffing') || n.includes('worker welfare') || n.includes('labour') || n.includes('labor') || n.includes('strike');
+    const isPeopleWorkforce = (n.includes('workforce') || n.includes('attrition') || n.includes('fatigue') || n.includes('staffing') || n.includes('worker welfare') || n.includes('labour') || n.includes('labor') || n.includes('strike')) && !hasSupplierLabourSignals;
     const isHse = n.includes('hse') || n.includes('health and safety') || n.includes('safety') || n.includes('injury') || n.includes('environmental') || n.includes('spill') || n.includes('worker');
     const isInvestmentJv = n.includes('merger') || n.includes('acquisition') || n.includes('m&a') || n.includes('joint venture') || /\bjv\b/.test(n) || n.includes('integration thesis') || n.includes('synergy');
     const isTransformationDelivery = n.includes('transformation delivery') || n.includes('programme delivery') || n.includes('program delivery') || n.includes('project delivery') || n.includes('go-live') || n.includes('milestone') || n.includes('benefit realisation') || n.includes('benefit realization') || n.includes('deployment') || (hasSupplierDependency && hasDeliveryProgrammeDelay);
@@ -2367,6 +2426,7 @@ ${businessUnit.selectedDepartmentContext}` : ''
       ['investment-jv', isInvestmentJv],
       ['transformation-delivery', isTransformationDelivery],
       ['strategic', isStrategic],
+      ['business-continuity', isContinuity],
       ['operational', isOperational],
       ['regulatory', isRegulatory],
       ['financial', isFinancial],
@@ -2374,7 +2434,6 @@ ${businessUnit.selectedDepartmentContext}` : ''
       ['compliance', isCompliance],
       ['procurement', isProcurement],
       ['supply-chain', isSupplyChain],
-      ['business-continuity', isContinuity],
       ['hse', isHse],
       ['third-party', isThirdParty]
     ];
@@ -3354,11 +3413,19 @@ ${schema}`;
         'This should be assessed for direct loss, recovery effort, investigation cost, and whether broader assurance or regulatory scrutiny could follow.'
       ].join(' ');
     } else if (resolvedClassificationKey === 'esg') {
-      scenarioExpansion = [
-        _buildScenarioLead({ geography, businessUnit, asset: asset || 'the sustainability commitment or disclosure area', cause: cause || 'weak ESG controls or disclosure assumptions', impact: impact || 'stakeholder, disclosure, and remediation pressure', scenarioLabel: 'ESG risk scenario' }),
-        'The most likely progression is a performance or disclosure gap becoming visible to regulators, investors, employees, or customers, with management forced into reactive remediation.',
-        'This should be assessed for reporting credibility, remediation cost, stakeholder trust, and whether wider governance or operational issues are exposed.'
-      ].join(' ');
+      if (_hasSupplierLabourSignals(intakeText)) {
+        scenarioExpansion = [
+          _buildScenarioLead({ geography, businessUnit, asset: asset || 'the sourcing category or supplier relationship in scope', cause: cause || 'weak sub-tier supplier oversight or delayed detection of exploitative labour practices', impact: impact || 'remediation cost, stakeholder scrutiny, and governance pressure', scenarioLabel: 'ESG and human-rights scenario' }),
+          'The most likely progression is discovery of abusive labour conditions in the supply base, followed by urgent due-diligence review, supplier remediation decisions, and challenge over how the relationship was governed.',
+          'This should be assessed for remediation credibility, disclosure pressure, supplier continuity, and whether management can evidence a defensible human-rights response.'
+        ].join(' ');
+      } else {
+        scenarioExpansion = [
+          _buildScenarioLead({ geography, businessUnit, asset: asset || 'the sustainability commitment or disclosure area', cause: cause || 'weak ESG controls or disclosure assumptions', impact: impact || 'stakeholder, disclosure, and remediation pressure', scenarioLabel: 'ESG risk scenario' }),
+          'The most likely progression is a performance or disclosure gap becoming visible to regulators, investors, employees, or customers, with management forced into reactive remediation.',
+          'This should be assessed for reporting credibility, remediation cost, stakeholder trust, and whether wider governance or operational issues are exposed.'
+        ].join(' ');
+      }
     } else if (resolvedClassificationKey === 'compliance') {
       scenarioExpansion = [
         _buildScenarioLead({ geography, businessUnit, asset: asset || 'the control framework or obligation', cause: cause || 'policy non-compliance or weak assurance', impact: impact || 'remediation and assurance pressure', scenarioLabel: 'compliance risk scenario' }),
@@ -3404,11 +3471,26 @@ ${schema}`;
         ].join(' ');
       }
     } else if (resolvedClassificationKey === 'business-continuity') {
-      scenarioExpansion = [
-        _buildScenarioLead({ geography, businessUnit, asset: asset || 'the recovery-critical service or process', cause: cause || 'weak continuity or recovery execution', impact: impact || 'extended outage and recovery pressure', scenarioLabel: 'business continuity risk scenario' }),
-        'The most likely progression is an incident outlasting recovery assumptions, exposing gaps in continuity planning, fallback operations, communications, and executive decision-making.',
-        'This should be assessed for downtime, missed recovery objectives, workaround viability, and the cost of prolonged disruption.'
-      ].join(' ');
+      if (_hasCriticalMessagingServiceSignals(intakeText) && !_hasExplicitCyberCompromiseSignals(intakeText)) {
+        scenarioExpansion = [
+          _buildScenarioLead({
+            geography,
+            businessUnit,
+            asset: asset || 'the critical email and communications service',
+            cause: cause || 'missing disaster recovery or failover capability',
+            impact: impact || 'prolonged service outage and delayed recovery',
+            scenarioLabel: 'business continuity risk scenario'
+          }),
+          'The most likely progression is a failure in the core messaging service outlasting normal incident handling because recovery, failover, or fallback communications are not ready.',
+          'This should be assessed for business disruption, delayed decision-making, recovery pressure, and whether the lack of continuity cover turns a manageable outage into a wider resilience failure.'
+        ].join(' ');
+      } else {
+        scenarioExpansion = [
+          _buildScenarioLead({ geography, businessUnit, asset: asset || 'the recovery-critical service or process', cause: cause || 'weak continuity or recovery execution', impact: impact || 'extended outage and recovery pressure', scenarioLabel: 'business continuity risk scenario' }),
+          'The most likely progression is an incident outlasting recovery assumptions, exposing gaps in continuity planning, fallback operations, communications, and executive decision-making.',
+          'This should be assessed for downtime, missed recovery objectives, workaround viability, and the cost of prolonged disruption.'
+        ].join(' ');
+      }
     } else if (resolvedClassificationKey === 'physical-security') {
       scenarioExpansion = [
         _buildScenarioLead({ geography, businessUnit, asset: asset || 'the sensitive site, facility, or executive movement in scope', cause: cause || 'weak physical access or perimeter control', impact: impact || 'site disruption and leadership concern', scenarioLabel: 'physical-security scenario' }),

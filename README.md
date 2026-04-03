@@ -102,6 +102,7 @@ The product is assistant-driven, not chat-first. AI is used to:
 Current AI behavior:
 - the browser is now a thin client for the key AI workflows rather than the authoritative orchestration layer
 - server routes own prompt construction, structured-output repair, quality gates, readiness evaluation, and fallback policy for the main guided, register, treatment, and reviewer/challenge flows
+- `Build scenario draft` remains the single authoritative Step 1 intelligence call; guided prompt ideas and pre-build preview are now deterministic/local so they do not add extra hosted backend traffic
 - browser API base-URL resolution is now config-driven: Vercel-hosted fronts stay same-origin, while static fronts use the configured hosted API origin without extra discovery requests
 - client workflow requests are normalized before transport so semantically identical inputs produce a stable request shape
 - duplicate suppression now happens on both sides:
@@ -112,7 +113,8 @@ Current AI behavior:
 - bounded AI rewriting is used where draft quality matters
 - explicit fallback and unavailable states are surfaced instead of silently masquerading as live AI
 - retrieval uses a stronger local hybrid scorer with lens-aware and concept-aware matching, but browser-local learning weights no longer authoritatively shape inference quality
-- remaining browser-side helper AI stays assistive-only for optional UX features such as prompt ideas, company-context drafting, and scenario memory; it is not part of the trusted assessment or review path
+- domain guardrails now explicitly keep common continuity, counterparty-credit, ESG/human-rights, and geopolitical scenarios from drifting into adjacent cyber, fraud, or procurement lanes unless the user input actually supports that crossover
+- remaining browser-side helper AI stays assistive-only for bounded UX features such as company-context drafting and scenario memory; it is not part of the trusted assessment or review path
 - supporting documents and standards are cited into the workflow and results
 
 The product is grounded by a growing enterprise corpus that includes ISO, NIST, COSO, IFRS/ESRS, OECD, UNGP, sector guidance, and UAE/GCC-relevant references.
@@ -276,6 +278,8 @@ Current global-admin priorities:
 Current productization work now includes:
 - premium UI polish across dashboard, wizard, results, settings, admin, and document library
 - committed Step 1 start modes for guided, draft, and import/example paths instead of a single long scroll
+- Step 1 now avoids background AI preview/prompt-idea traffic and keeps the authoritative draft path on one explicit server call
+- tighter Step 1 domain hardening for continuity, finance, ESG, and geopolitical scenarios so shortlist and narrative drift is reduced even in deterministic fallback mode
 - scenario memory and overlap checks in Step 1 without letting browser-local precedent silently steer inference quality
 - stronger AI quality and coherence signaling
 - role-aware examples and focus areas
@@ -375,6 +379,7 @@ Current AI runtime efficiency measures:
 Current persistence spans:
 - saved assessments
 - draft state and draft recovery
+- shared/server draft workspace is preferred on refresh; local browser draft recovery is now a one-time safety net instead of the default restore source
 - personal user state
 - shared admin settings
 - organisation structure and scoped defaults

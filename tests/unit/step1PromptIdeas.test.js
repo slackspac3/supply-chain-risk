@@ -61,6 +61,8 @@ function loadStep1Internals() {
     setStep1ButtonBusy: context._setStep1ButtonBusy,
     inferStep1FunctionKeyFromText: context.inferStep1FunctionKeyFromText,
     getStep1PreferredScenarioLens: context.getStep1PreferredScenarioLens,
+    shouldUseStep1LivePreview: context.shouldUseStep1LivePreview,
+    shouldUseStep1LivePromptIdeas: context.shouldUseStep1LivePromptIdeas,
     getStep1GuidedPreviewSignature: context.getStep1GuidedPreviewSignature,
     rememberStep1LivePreview: context.rememberStep1LivePreview,
     getStep1DisplayedGuidedPreviewModel: context.getStep1DisplayedGuidedPreviewModel,
@@ -169,6 +171,98 @@ test('guided prompt ideas and lens ignore stale prior outage narratives', () => 
   const lens = internals.getStep1PreferredScenarioLens({}, draft, event);
   assert.equal(lens.key, 'cyber');
   assert.equal(lens.functionKey, 'technology');
+});
+
+test('no-DR Outlook continuity scenario stays in continuity prompt ideas and keeps guided helper traffic local-only', () => {
+  const internals = loadStep1Internals();
+  const event = 'There is no DR for the critical email system in place, which is MS Outlook online.';
+  const draft = {
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'MS Outlook online',
+      cause: 'No disaster recovery or failover capability',
+      impact: 'Extended outage and recovery pressure',
+      urgency: 'high'
+    }
+  };
+
+  assert.equal(internals.inferStep1FunctionKeyFromText(event), 'operations');
+
+  const lens = internals.getStep1PreferredScenarioLens({}, draft, event);
+  assert.equal(lens.functionKey, 'operations');
+  assert.equal(lens.key, 'business-continuity');
+
+  const suggestions = internals.buildStep1GuidedPromptSuggestions(draft, {
+    recommendedExamples: [
+      { promptLabel: 'Responsible AI drift', event: 'An AI assistant drifts.', functionKey: 'technology' },
+      { promptLabel: 'Cloud exposure', event: 'A cloud control weakness exposes a service.', functionKey: 'technology' },
+      { promptLabel: 'Release failure', event: 'A release failure breaks a service.', functionKey: 'operations' }
+    ]
+  });
+  const labels = suggestions.map((item) => item.label);
+  assert.ok(labels.includes('Email service continuity gap'));
+  assert.ok(labels.includes('Recovery failure in core communications'));
+  assert.equal(labels.includes('Responsible AI drift'), false);
+  assert.equal(labels.includes('Cloud exposure'), false);
+  assert.equal(internals.shouldUseStep1LivePreview(draft), false);
+  assert.equal(internals.shouldUseStep1LivePromptIdeas(draft), false);
+});
+
+test('counterparty default scenario stays in finance suggestions and avoids payment-fraud prompt drift', () => {
+  const internals = loadStep1Internals();
+  const event = 'A major client files for bankruptcy, creating receivables recovery pressure and a likely write-off.';
+  const draft = {
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Major customer receivables balance',
+      cause: 'Customer insolvency',
+      impact: 'Bad-debt write-off and cashflow strain'
+    }
+  };
+
+  assert.equal(internals.inferStep1FunctionKeyFromText(event), 'finance');
+
+  const suggestions = internals.buildStep1GuidedPromptSuggestions(draft, {
+    recommendedExamples: [
+      { promptLabel: 'Payment control failure', event: 'A payment-control issue causes avoidable financial loss.', functionKey: 'finance' },
+      { promptLabel: 'Responsible AI drift', event: 'An AI assistant drifts.', functionKey: 'technology' }
+    ]
+  });
+  const labels = suggestions.map((item) => item.label);
+  assert.ok(labels.includes('Counterparty insolvency'));
+  assert.ok(labels.includes('Working-capital strain after default'));
+  assert.equal(labels.includes('Payment control failure'), false);
+  assert.equal(labels.includes('Responsible AI drift'), false);
+});
+
+test('supplier labour scenario stays in ESG prompt ideas instead of drifting into sourcing-only examples', () => {
+  const internals = loadStep1Internals();
+  const event = 'A supplier is linked to forced labour practices in a critical sourcing category.';
+  const draft = {
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Critical supplier relationship',
+      cause: 'Weak sub-tier due diligence',
+      impact: 'Human-rights scrutiny and remediation pressure'
+    }
+  };
+
+  const lens = internals.getStep1PreferredScenarioLens({}, draft, event);
+  assert.equal(lens.key, 'esg');
+  assert.equal(lens.functionKey, 'strategic');
+
+  const suggestions = internals.buildStep1GuidedPromptSuggestions(draft, {
+    recommendedExamples: [
+      { promptLabel: 'Single-source shortfall', event: 'A single source fails.', functionKey: 'procurement' }
+    ]
+  });
+  const labels = suggestions.map((item) => item.label);
+  assert.ok(labels.includes('Supplier labour-practice failure'));
+  assert.ok(labels.includes('Human-rights due-diligence gap'));
+  assert.equal(labels.includes('Single-source shortfall'), false);
 });
 
 test('guided lens ignores stale financial preview wording when the event is identity-led', () => {
