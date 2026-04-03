@@ -58,6 +58,7 @@ function loadStep1Internals() {
   vm.createContext(context);
   vm.runInContext(source, context, { filename: 'step1.js' });
   return {
+    setStep1ButtonBusy: context._setStep1ButtonBusy,
     inferStep1FunctionKeyFromText: context.inferStep1FunctionKeyFromText,
     getStep1PreferredScenarioLens: context.getStep1PreferredScenarioLens,
     getStep1GuidedPreviewSignature: context.getStep1GuidedPreviewSignature,
@@ -170,6 +171,26 @@ test('guided prompt ideas and lens ignore stale prior outage narratives', () => 
   assert.equal(lens.functionKey, 'technology');
 });
 
+test('guided lens ignores stale financial preview wording when the event is identity-led', () => {
+  const internals = loadStep1Internals();
+  const draft = {
+    step1Path: 'guided',
+    scenarioLens: { key: 'financial', label: 'Financial', functionKey: 'finance' },
+    guidedInput: {
+      event: 'Azure global admin credentials discovered on darkweb',
+      asset: '',
+      cause: '',
+      impact: '',
+      urgency: 'high'
+    }
+  };
+
+  const lens = internals.getStep1PreferredScenarioLens({}, draft, 'High-urgency Financial scenario: Azure global admin credentials discovered on darkweb. The area most exposed is the financial process, transaction flow, or commercial exposure in scope.');
+  assert.equal(lens.key, 'cyber');
+  assert.equal(lens.functionKey, 'technology');
+  assert.deepEqual(Array.from(lens.secondaryKeys || []), ['financial']);
+});
+
 test('supplier delivery slippage for infrastructure deployment stays out of procurement prompt ideas', () => {
   const internals = loadStep1Internals();
   const event = 'A key server supplier misses a committed delivery date, delaying planned infrastructure deployment and dependent business projects.';
@@ -224,4 +245,38 @@ test('displayed guided preview prefers the live AI-checked preview for the curre
   const preview = internals.getStep1DisplayedGuidedPreviewModel(draft);
   assert.equal(preview.preview, 'AI-checked preview: A senior executive mailbox is compromised and used to manipulate approvals.');
   assert.equal(preview.source, 'ai');
+});
+
+test('step 1 busy helper marks AI buttons as active work instead of plain disabled state', () => {
+  const internals = loadStep1Internals();
+  const classes = new Set();
+  const button = {
+    textContent: 'Build scenario draft',
+    disabled: false,
+    dataset: {},
+    attributes: {},
+    classList: {
+      add(name) { classes.add(name); },
+      remove(name) { classes.delete(name); }
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+    removeAttribute(name) {
+      delete this.attributes[name];
+    }
+  };
+
+  const restore = internals.setStep1ButtonBusy(button, 'Building…');
+  assert.equal(button.disabled, true);
+  assert.equal(button.textContent, 'Building…');
+  assert.equal(button.dataset.idleLabel, 'Build scenario draft');
+  assert.equal(button.attributes['aria-busy'], 'true');
+  assert.equal(classes.has('btn--step1-ai-busy'), true);
+
+  restore();
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, 'Build scenario draft');
+  assert.equal(button.attributes['aria-busy'], undefined);
+  assert.equal(classes.has('btn--step1-ai-busy'), false);
 });

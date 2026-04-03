@@ -662,6 +662,42 @@ code { font-family: var(--font-mono); font-size: 0.875em; background: var(--bg-e
   line-height: 1;
 }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.btn--step1-ai-busy {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding-right: 44px;
+}
+.btn.btn--step1-ai-busy:disabled {
+  opacity: 0.9;
+  cursor: progress;
+}
+.btn.btn--step1-ai-busy::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 18%, rgba(255,255,255,0.2) 48%, transparent 78%);
+  background-size: 180% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+.btn.btn--step1-ai-busy::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 999px;
+  border: 2px solid rgba(246,243,242,0.34);
+  border-top-color: rgba(246,243,242,0.96);
+  border-right-color: rgba(242,251,90,0.96);
+  animation: step1ButtonSpin 0.85s linear infinite;
+  z-index: 1;
+  pointer-events: none;
+}
 .btn:active:not(:disabled) {
   transform: translateY(0);
 }
@@ -713,6 +749,10 @@ code { font-family: var(--font-mono); font-size: 0.875em; background: var(--bg-e
   background: var(--color-success-600);
   color: var(--color-white);
   border-color: var(--color-success-600);
+}
+@keyframes step1ButtonSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .btn--sm { font-size: var(--text-xs); padding: 6px 14px; border-radius: var(--radius-md); }
 .btn--lg { font-size: var(--text-base); padding: 14px 28px; border-radius: var(--radius-xl); }
@@ -6669,6 +6709,8 @@ canvas { display: block; width: 100%; }
   .anim-fade-in,
   .anim-slide-up,
   .step-dot.active,
+  .btn.btn--step1-ai-busy::before,
+  .btn.btn--step1-ai-busy::after,
   #app-bar::after,
   .sim-progress-fill,
   .page-enter,

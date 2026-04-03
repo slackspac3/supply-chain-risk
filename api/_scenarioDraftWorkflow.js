@@ -1233,7 +1233,10 @@ function evaluateGuidedDraftCandidate(candidate = '', {
   const explicitLeadLens = extractExplicitScenarioLeadLens(candidate);
   const cleanedCandidate = cleanUserFacingText(stripScenarioLeadIns(candidate || ''), { maxSentences: 6 });
   if (!cleanedCandidate) return { accepted: false, reason: 'empty', narrative: '' };
-  const expectedLens = normaliseScenarioHintKey(scenarioLensHint) || classifyScenario(seedNarrative, { guidedInput, businessUnit, scenarioLensHint }).key;
+  const classifiedExpectedLens = classifyScenario(seedNarrative, { guidedInput, businessUnit, scenarioLensHint }).key;
+  const expectedLens = classifiedExpectedLens && classifiedExpectedLens !== 'general'
+    ? classifiedExpectedLens
+    : (normaliseScenarioHintKey(scenarioLensHint) || classifiedExpectedLens || 'general');
   if (explicitLeadLens && !isCompatibleScenarioLens(expectedLens, explicitLeadLens)) {
     return { accepted: false, reason: 'explicit-lens-drift', narrative: cleanedCandidate };
   }
@@ -1255,7 +1258,9 @@ function buildAiAlignment(input = {}, result = {}, {
   seedNarrative = '',
   fallbackScenarioExpansion = null
 } = {}) {
-  const expectedLens = normaliseScenarioHintKey(input.scenarioLensHint) || classification.key || 'general';
+  const expectedLens = (classification?.key && classification.key !== 'general')
+    ? classification.key
+    : (normaliseScenarioHintKey(input.scenarioLensHint) || classification.key || 'general');
   const resolvedLens = normaliseScenarioLens(result?.scenarioLens, buildScenarioLens(classification));
   const draftNarrative = cleanUserFacingText(result?.draftNarrative || result?.enhancedStatement || seedNarrative, { maxSentences: 6 });
   const draftCandidate = evaluateGuidedDraftCandidate(draftNarrative, {
@@ -1688,6 +1693,14 @@ ${feedbackPromptBlock}`;
     const finalRisks = useFallbackNarrative || !rerankedCandidateRisks.length
       ? rerankedFallbackRisks
       : rerankedCandidateRisks;
+    const finalScenarioLens = useFallbackNarrative
+      ? normaliseScenarioLens({
+          secondaryKeys: [
+            candidate?.scenarioLens?.key,
+            ...(Array.isArray(candidate?.scenarioLens?.secondaryKeys) ? candidate.scenarioLens.secondaryKeys : [])
+          ]
+        }, buildScenarioLens(classification))
+      : candidate.scenarioLens;
     const result = withEvidenceMeta({
       mode: useFallbackNarrative ? 'deterministic_fallback' : 'live',
       seedNarrative,
@@ -1699,7 +1712,7 @@ ${feedbackPromptBlock}`;
       linkAnalysis: candidate.linkAnalysis || buildRiskContextLinkAnalysis({ classification, riskTitles: finalRisks }),
       workflowGuidance: candidate.workflowGuidance?.length ? candidate.workflowGuidance : defaultWorkflowGuidance,
       benchmarkBasis: candidate.benchmarkBasis || defaultBenchmarkBasis,
-      scenarioLens: candidate.scenarioLens,
+      scenarioLens: finalScenarioLens,
       structuredScenario: {
         ...defaultStructuredScenario,
         ...(candidate.structuredScenario || {})

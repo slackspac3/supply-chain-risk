@@ -2,10 +2,12 @@ function _setStep1ButtonBusy(button, busyLabel, idleLabel) {
   if (!button) return () => {};
   const originalLabel = idleLabel || button.dataset.idleLabel || button.textContent || '';
   button.dataset.idleLabel = originalLabel;
+  button.classList?.add('btn--step1-ai-busy');
   button.disabled = true;
   button.setAttribute('aria-busy', 'true');
   button.textContent = busyLabel;
   return () => {
+    button.classList?.remove('btn--step1-ai-busy');
     button.disabled = false;
     button.removeAttribute('aria-busy');
     button.textContent = originalLabel;
@@ -364,23 +366,27 @@ function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppSta
   const profile = normaliseUserProfile(settings?.userProfile, AuthService.getCurrentUser());
   const guidedInput = draft?.guidedInput || {};
   const isGuidedPath = String(draft?.step1Path || '').trim() === 'guided';
+  const directGuidedSignals = [
+    guidedInput.event,
+    guidedInput.asset,
+    guidedInput.cause,
+    guidedInput.impact
+  ].filter(Boolean).join(' ');
+  if (isGuidedPath) {
+    const directGuidedMatch = inferStep1FunctionKeyFromText(directGuidedSignals);
+    if (directGuidedMatch !== 'general') return directGuidedMatch;
+  }
   const scenarioSignals = isGuidedPath
     ? [
-        draft?.__step1NarrativeOverride,
-        guidedInput.event,
-        guidedInput.asset,
-        guidedInput.cause,
-        guidedInput.impact
+        directGuidedSignals,
+        draft?.__step1NarrativeOverride
       ].filter(Boolean).join(' ')
     : [
         draft?.__step1NarrativeOverride,
         draft?.narrative,
         draft?.sourceNarrative,
         draft?.enhancedNarrative,
-        guidedInput.event,
-        guidedInput.asset,
-        guidedInput.cause,
-        guidedInput.impact
+        directGuidedSignals
       ].filter(Boolean).join(' ');
   const scenarioMatch = inferStep1FunctionKeyFromText(scenarioSignals);
   if (scenarioMatch !== 'general') return scenarioMatch;

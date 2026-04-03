@@ -254,6 +254,102 @@ test('scenario-draft route orchestrates live generation and quality-gate server-
   assert.equal(String(res.payload.trace?.label || ''), 'Step 1 guided draft');
 });
 
+test('scenario-draft route rejects a finance-led rewrite when the guided event is explicitly identity compromise', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  process.env.COMPASS_API_KEY = 'proxy-secret';
+  process.env.COMPASS_MODEL = 'gpt-5.1';
+
+  const aiPayload = JSON.stringify({
+    draftNarrative: 'High-urgency Financial scenario: Azure global admin credentials discovered on darkweb. The area most exposed is the financial process, transaction flow, or commercial exposure in scope. If this develops, it could create direct monetary loss, control pressure, and delayed detection.',
+    summary: 'The scenario points to financial loss exposure.',
+    linkAnalysis: 'The main chain is financial-control weakness and fraud exposure.',
+    workflowGuidance: [
+      'Review payment controls.',
+      'Assess fraud exposure.'
+    ],
+    benchmarkBasis: 'Prefer financial control comparators.',
+    scenarioLens: {
+      key: 'financial',
+      label: 'Financial',
+      functionKey: 'finance',
+      estimatePresetKey: 'financial',
+      secondaryKeys: []
+    },
+    structuredScenario: {
+      assetService: 'Financial process',
+      primaryDriver: 'Financial-control weakness',
+      eventPath: 'Financial exposure',
+      effect: 'Monetary loss'
+    },
+    risks: [
+      {
+        title: 'Direct financial loss from control weakness',
+        category: 'Financial',
+        description: 'Financial loss could follow from the event.',
+        confidence: 'high',
+        regulations: ['ISO 27001']
+      }
+    ]
+  });
+
+  global.fetch = async (url) => {
+    if (String(url).includes('/kv')) {
+      return {
+        ok: true,
+        json: async () => ({ result: null })
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: aiPayload
+            }
+          }
+        ]
+      }),
+      text: async () => aiPayload
+    };
+  };
+
+  const handler = loadFresh('../../api/ai/scenario-draft');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const res = createRes();
+
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      riskStatement: 'Azure global admin credentials discovered on darkweb.',
+      guidedInput: {
+        event: 'Azure global admin credentials discovered on darkweb',
+        urgency: 'high'
+      },
+      scenarioLensHint: 'financial'
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload.mode, 'deterministic_fallback');
+  assert.equal(res.payload.usedFallback, true);
+  assert.equal(String(res.payload.scenarioLens?.key || ''), 'identity');
+  assert.match(String(res.payload.draftNarrative || ''), /identity compromise/i);
+});
+
 test('scenario-draft route reuses identical in-flight work for simultaneous requests', async () => {
   process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
   process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
