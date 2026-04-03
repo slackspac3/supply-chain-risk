@@ -6197,8 +6197,6 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
   })();
   if (specialisedSeeds.length) return specialisedSeeds;
   const patterns = [
-    { key: 'ai-model-risk', title: 'AI model governance or responsible-AI failure', category: 'AI / Model Risk', regulations: ['ISO/IEC 42001', 'NIST AI RMF', 'EU AI Act'], terms: ['ai', 'model risk', 'responsible ai', 'model drift', 'hallucination', 'bias', 'algorithm', 'llm', 'training data', 'ai act'] },
-    { key: 'data-governance', title: 'Data-governance or privacy-control breakdown', category: 'Data Governance', regulations: ['ISO 27701', 'GDPR', 'UAE PDPL'], terms: ['data governance', 'data quality', 'data lineage', 'retention', 'purpose limitation', 'privacy', 'personal data', 'consent', 'residency', 'master data'] },
     { key: 'strategic', title: 'Strategic execution or market-position risk', category: 'Strategic', regulations: ['ISO 31000', 'COSO ERM'], terms: ['strategy', 'strategic', 'expansion', 'transformation', 'growth', 'market', 'competitive', 'portfolio', 'investment'] },
     { key: 'operational', title: 'Operational breakdown affecting core services', category: 'Operational', regulations: ['ISO 31000', 'ISO 22301'], terms: ['outage', 'downtime', 'availability', 'service disruption', 'operational disruption', 'failure', 'breakdown', 'backlog', 'capacity', 'process failure', 'human error', 'manual error', 'aging infrastructure', 'ageing infrastructure', 'legacy infrastructure', 'platform instability', 'system instability'] },
     { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'ISO 27001'], terms: ['ransom', 'malware', 'phish', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud compromise', 'cloud exposure', 'cloud breach', 'misconfig', 'vulnerability', 'privileged'] },
@@ -6207,7 +6205,7 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
     { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'financial reporting', 'misstatement', 'bankruptcy', 'insolvency', 'receivable', 'bad debt', 'write-off', 'counterparty', 'customer default', 'client default', 'collections', 'working capital', 'provisioning'] },
     { key: 'fraud-integrity', title: 'Fraud, integrity, or financial-crime exposure', category: 'Fraud / Integrity', regulations: ['ISO 37001', 'UAE AML/CFT'], terms: ['fraud', 'integrity', 'financial crime', 'money laundering', 'kickback', 'bribery', 'corruption', 'collusion', 'embezzlement'] },
     { key: 'esg', title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure'] },
-    { key: 'compliance', title: 'Compliance control or policy breakdown', category: 'Compliance', regulations: ['ISO 37301', 'UAE PDPL'], terms: ['policy breach', 'control failure', 'non-compliance', 'compliance', 'obligation', 'conduct', 'ethics'] },
+    { key: 'compliance', title: 'Compliance control or policy breakdown', category: 'Compliance', regulations: ['ISO 37301', 'UAE PDPL'], terms: ['policy breach', 'control failure', 'non-compliance', 'compliance', 'obligation', 'conduct', 'ethics', 'privacy', 'data protection', 'retention', 'lawful basis', 'cross-border transfer'] },
     { key: 'legal-contract', title: 'Legal, contract, or IP exposure', category: 'Legal / Contract', regulations: ['ISO 37301'], terms: ['contract', 'indemnity', 'litigation', 'ip', 'intellectual property', 'licensing dispute', 'dispute', 'terms breach'] },
     { key: 'geopolitical', title: 'Geopolitical, sanctions, or market-access exposure', category: 'Geopolitical', regulations: ['OFAC Sanctions', 'BIS Export Controls'], terms: ['geopolitical', 'market access', 'sanctions', 'export control', 'sovereign', 'cross-border restriction', 'entity list', 'tariff'] },
     { key: 'supply-chain', title: 'Supply chain resilience disruption', category: 'Supply Chain', regulations: ['ISO 28000', 'ISO 22301'], terms: ['supply chain', 'logistics', 'inventory', 'fulfilment', 'shipment', 'single source', 'upstream'] },
@@ -6221,8 +6219,6 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
     { key: 'hse', title: 'Health, safety, and environmental incident exposure', category: 'HSE', regulations: ['ISO 45001', 'ISO 14001'], terms: ['hse', 'health and safety', 'safety', 'injury', 'environmental', 'spill', 'incident', 'worker'] }
   ];
   const compatibilityBoosts = {
-    'ai-model-risk': new Set(['ai-model-risk', 'data-governance', 'compliance', 'cyber']),
-    'data-governance': new Set(['data-governance', 'compliance', 'regulatory', 'cyber']),
     procurement: new Set(['procurement', 'supply-chain', 'third-party']),
     'supply-chain': new Set(['supply-chain', 'procurement', 'third-party']),
     compliance: new Set(['compliance', 'regulatory']),

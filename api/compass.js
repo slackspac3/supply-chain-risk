@@ -54,7 +54,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const session = requireSession(req, res);
+  const session = await requireSession(req, res);
   if (!session) return;
 
   const rateLimit = await checkRateLimit(getRateLimitKey(req, session), { maxPerWindow: 20, windowMs: 60000 });

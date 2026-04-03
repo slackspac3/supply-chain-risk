@@ -1,8 +1,8 @@
 const crypto = require('crypto');
-const { appendAuditEvent, verifySessionToken } = require('./_audit');
-const { isRequestSecretValid, sendApiError, requireSession, sendConflictError } = require('./_apiAuth');
+const { appendAuditEvent } = require('./_audit');
+const { isRequestSecretValid, sendApiError, requireSession, sendConflictError, validateSessionFromRequest } = require('./_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
-const { get: kvGet, getKvConfig, set: kvSet } = require('./_kvStore');
+const { get: kvGet, getKvConfig, set: kvSet, withLock: withKvLock } = require('./_kvStore');
 const { normaliseEntityObligations } = require('../assets/state/obligationResolution.js');
 
 const SETTINGS_KEY = process.env.SETTINGS_STORE_KEY || 'risk_calculator_settings';
@@ -136,27 +136,32 @@ async function writeSettings(settings, expectedMeta = {}) {
   if (!hasWritableKv()) {
     throw new Error('Shared settings store is not writable.');
   }
-  const current = await readSettings();
-  if (isStaleWrite(current, expectedMeta)) {
-    return {
-      ok: false,
-      conflict: true,
-      settings: current
-    };
-  }
-  const next = normaliseSettings({
-    ...settings,
-    _meta: {
-      revision: Number(current._meta?.revision || 0) + 1,
-      updatedAt: Date.now()
+  return withKvLock(SETTINGS_KEY, async () => {
+    const current = await readSettings();
+    if (isStaleWrite(current, expectedMeta)) {
+      return {
+        ok: false,
+        conflict: true,
+        settings: current
+      };
     }
+    const next = normaliseSettings({
+      ...settings,
+      _meta: {
+        revision: Number(current._meta?.revision || 0) + 1,
+        updatedAt: Date.now()
+      }
+    });
+    await kvSet(SETTINGS_KEY, JSON.stringify(next));
+    return {
+      ok: true,
+      conflict: false,
+      settings: next
+    };
+  }, {
+    prefix: 'lock::settings::',
+    waitTimeoutMs: 2500
   });
-  await kvSet(SETTINGS_KEY, JSON.stringify(next));
-  return {
-    ok: true,
-    conflict: false,
-    settings: next
-  };
 }
 
 function isAdminSecretValid(req) {
@@ -340,7 +345,10 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       const settings = await readSettings();
       const response = { settings };
-      if (isAdminSecretValid(req) || verifySessionToken(req.headers['x-session-token'])?.role === 'admin') {
+      const validatedSession = req.headers['x-session-token']
+        ? await validateSessionFromRequest(req)
+        : { session: null, error: null };
+      if (isAdminSecretValid(req) || validatedSession.session?.role === 'admin') {
         response.storage = {
           writable: hasWritableKv(),
           mode: hasWritableKv() ? 'shared-kv' : 'fallback-defaults'
@@ -364,7 +372,7 @@ module.exports = async function handler(req, res) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'settings payload is required.');
         return;
       }
-      const session = isAdminSecretValid(req) ? { username: 'admin', role: 'admin' } : requireSession(req, res);
+      const session = isAdminSecretValid(req) ? { username: 'admin', role: 'admin' } : await requireSession(req, res);
       if (!session) return;
       const currentSettings = await readSettings();
       const nextSettings = normaliseSettings(body.settings || {});

@@ -24,6 +24,13 @@ global.fetch = async (url, options = {}) => {
       json: async () => ({ result: 'OK' })
     };
   }
+  if (command === 'DEL') {
+    kvStore.delete(key);
+    return {
+      ok: true,
+      json: async () => ({ result: 1 })
+    };
+  }
   throw new Error(`Unsupported KV command: ${command}`);
 };
 

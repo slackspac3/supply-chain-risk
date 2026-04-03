@@ -3,7 +3,7 @@ const { appendAuditEvent, getSessionSigningSecret } = require('./_audit');
 const { isRequestSecretValid, sendApiError, resolveAdminActor, requireSession } = require('./_apiAuth');
 const { validatePasswordPolicy, generateStrongPassword } = require('./_passwordPolicy');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
-const { del: kvDel, get: kvGet, getKvConfig, set: kvSet } = require('./_kvStore');
+const { del: kvDel, get: kvGet, getKvConfig, set: kvSet, withLock: withKvLock } = require('./_kvStore');
 
 const DEFAULT_ACCOUNTS = [];
 const PASSWORD_HASH_VERSION = 'scrypt-v1';
@@ -46,6 +46,7 @@ function normaliseAccount(account = {}) {
     passwordHash: String(account.passwordHash || '').trim(),
     passwordSalt: String(account.passwordSalt || '').trim(),
     passwordVersion: String(account.passwordVersion || '').trim(),
+    sessionVersion: Math.max(1, Number(account.sessionVersion || 1)),
     displayName: String(account.displayName || '').trim() || 'User',
     role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
@@ -151,6 +152,7 @@ function createSessionToken(account) {
     role: account.role,
     businessUnitEntityId: account.businessUnitEntityId || '',
     departmentEntityId: account.departmentEntityId || '',
+    sv: Math.max(1, Number(account.sessionVersion || 1)),
     exp: Date.now() + SESSION_TTL_MS
   });
   const payloadPart = encodeTokenSegment(payload);
@@ -183,28 +185,33 @@ async function checkLoginThrottle(key) {
 
 async function recordLoginAttempt(key, failed) {
   try {
-    const raw = await kvGet(LOGIN_ATTEMPT_PREFIX + key);
-    let entry = raw
-      ? JSON.parse(raw)
-      : { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
-    const windowMs = LOGIN_WINDOW_MS;
-    if (Date.now() - Number(entry.firstAttemptAt || 0) > windowMs) {
-      entry = { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
-    }
-    if (failed) {
-      entry.count += 1;
-      const stepIndex = Math.min(
-        entry.count - LOGIN_MAX_ATTEMPTS,
-        LOGIN_BACKOFF_STEPS_MS.length - 1
-      );
-      if (entry.count >= LOGIN_MAX_ATTEMPTS) {
-        const lockMs = LOGIN_BACKOFF_STEPS_MS[Math.max(0, stepIndex)];
-        entry.lockUntil = Date.now() + lockMs;
+    await withKvLock(LOGIN_ATTEMPT_PREFIX + key, async () => {
+      const raw = await kvGet(LOGIN_ATTEMPT_PREFIX + key);
+      let entry = raw
+        ? JSON.parse(raw)
+        : { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
+      const windowMs = LOGIN_WINDOW_MS;
+      if (Date.now() - Number(entry.firstAttemptAt || 0) > windowMs) {
+        entry = { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
       }
-    } else {
-      entry = { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
-    }
-    await kvSet(LOGIN_ATTEMPT_PREFIX + key, JSON.stringify(entry));
+      if (failed) {
+        entry.count += 1;
+        const stepIndex = Math.min(
+          entry.count - LOGIN_MAX_ATTEMPTS,
+          LOGIN_BACKOFF_STEPS_MS.length - 1
+        );
+        if (entry.count >= LOGIN_MAX_ATTEMPTS) {
+          const lockMs = LOGIN_BACKOFF_STEPS_MS[Math.max(0, stepIndex)];
+          entry.lockUntil = Date.now() + lockMs;
+        }
+      } else {
+        entry = { count: 0, firstAttemptAt: Date.now(), lockUntil: 0 };
+      }
+      await kvSet(LOGIN_ATTEMPT_PREFIX + key, JSON.stringify(entry));
+    }, {
+      prefix: 'lock::login::',
+      waitTimeoutMs: 2500
+    });
     return true;
   } catch (error) {
     console.error('recordLoginAttempt failed closed:', error);
@@ -214,10 +221,15 @@ async function recordLoginAttempt(key, failed) {
 
 async function clearLoginAttempts(key) {
   try {
-    await kvSet(
-      LOGIN_ATTEMPT_PREFIX + key,
-      JSON.stringify({ count: 0, firstAttemptAt: 0, lockUntil: 0 })
-    );
+    await withKvLock(LOGIN_ATTEMPT_PREFIX + key, async () => {
+      await kvSet(
+        LOGIN_ATTEMPT_PREFIX + key,
+        JSON.stringify({ count: 0, firstAttemptAt: 0, lockUntil: 0 })
+      );
+    }, {
+      prefix: 'lock::login::',
+      waitTimeoutMs: 2500
+    });
     return true;
   } catch (error) {
     console.error('clearLoginAttempts failed closed:', error);
@@ -246,13 +258,33 @@ async function readAccounts() {
   }
 }
 
-async function writeAccounts(accounts) {
+async function persistAccounts(accounts) {
   if (!hasWritableKv()) {
     throw new Error('Shared user store is not writable. Configure the shared store environment variables in Vercel.');
   }
   const storedAccounts = accounts.map(prepareAccountForStorage);
   await kvSet(USERS_KEY, JSON.stringify(storedAccounts));
   return storedAccounts.map(normaliseAccount);
+}
+
+async function writeAccounts(accounts) {
+  return withKvLock(USERS_KEY, async () => persistAccounts(accounts), {
+    prefix: 'lock::users::',
+    waitTimeoutMs: 2500
+  });
+}
+
+function hasAuthScopeChanged(current = {}, next = {}) {
+  return String(current.role || '') !== String(next.role || '')
+    || String(current.businessUnitEntityId || '') !== String(next.businessUnitEntityId || '')
+    || String(current.departmentEntityId || '') !== String(next.departmentEntityId || '');
+}
+
+function bumpSessionVersion(account = {}) {
+  return {
+    ...account,
+    sessionVersion: Math.max(1, Number(account.sessionVersion || 1)) + 1
+  };
 }
 
 
@@ -300,7 +332,7 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       if (String(req.query?.view || '').trim().toLowerCase() === 'self') {
-        const session = requireSession(req, res);
+        const session = await requireSession(req, res);
         if (!session) {
           return;
         }
@@ -315,7 +347,7 @@ module.exports = async function handler(req, res) {
         });
         return;
       }
-      const actor = resolveAdminActor(req, res, {
+      const actor = await resolveAdminActor(req, res, {
         isAdminSecretValid,
         allowRoles: ['admin']
       });
@@ -400,9 +432,24 @@ module.exports = async function handler(req, res) {
         const verification = verifyAccountPassword(matched, password);
         if (verification.needsUpgrade && hasWritableKv()) {
           const upgradedAccounts = accounts.slice();
-          upgradedAccounts[matchIndex] = withStoredPassword(matched, password);
+          upgradedAccounts[matchIndex] = {
+            ...withStoredPassword(matched, password),
+            sessionVersion: Math.max(1, Number(matched.sessionVersion || 1))
+          };
           try {
-            await writeAccounts(upgradedAccounts);
+            await withKvLock(USERS_KEY, async () => {
+              const latestAccounts = await readAccounts();
+              const latestIndex = latestAccounts.findIndex(account => account.username === matched.username);
+              if (latestIndex < 0) return;
+              latestAccounts[latestIndex] = {
+                ...withStoredPassword(latestAccounts[latestIndex], password),
+                sessionVersion: Math.max(1, Number(latestAccounts[latestIndex].sessionVersion || 1))
+              };
+              await persistAccounts(latestAccounts);
+            }, {
+              prefix: 'lock::users::',
+              waitTimeoutMs: 2500
+            });
           } catch (upgradeError) {
             console.warn('User login credential upgrade failed:', upgradeError.message);
           }
@@ -415,7 +462,7 @@ module.exports = async function handler(req, res) {
         return;
       }
 
-      const actor = resolveAdminActor(req, res, {
+      const actor = await resolveAdminActor(req, res, {
         isAdminSecretValid,
         allowRoles: ['admin']
       });
@@ -427,7 +474,6 @@ module.exports = async function handler(req, res) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the account request.');
         return;
       }
-      const accounts = await readAccounts();
       if (!isPlainObject(body.account || {})) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Account payload is required.');
         return;
@@ -441,18 +487,30 @@ module.exports = async function handler(req, res) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Username and password are required.');
         return;
       }
-      if (accounts.some(item => item.username === account.username)) {
-        sendApiError(res, 409, 'USERNAME_EXISTS', 'That username is already in use.');
-        return;
-      }
       const passwordCheck = validatePasswordPolicy(account.password);
       if (!passwordCheck.valid) {
         sendApiError(res, 400, 'PASSWORD_POLICY_FAILED', 'Password does not meet the current policy.');
         return;
       }
       const issuedPassword = account.password;
-      accounts.push(account);
-      const storedAccounts = await writeAccounts(accounts);
+      let storedAccounts = null;
+      const duplicateExists = await withKvLock(USERS_KEY, async () => {
+        const accounts = await readAccounts();
+        if (accounts.some(item => item.username === account.username)) return true;
+        accounts.push({
+          ...account,
+          sessionVersion: Math.max(1, Number(account.sessionVersion || 1))
+        });
+        storedAccounts = await persistAccounts(accounts);
+        return false;
+      }, {
+        prefix: 'lock::users::',
+        waitTimeoutMs: 2500
+      });
+      if (duplicateExists) {
+        sendApiError(res, 409, 'USERNAME_EXISTS', 'That username is already in use.');
+        return;
+      }
       await appendAuditEvent({ category: 'user_admin', eventType: 'user_created', actorUsername: actor.username, actorRole: actor.role, target: account.username, status: 'success', source: 'server', details: { role: account.role, businessUnitEntityId: account.businessUnitEntityId, departmentEntityId: account.departmentEntityId } });
       res.status(201).json({
         account: sanitiseAccount(account),
@@ -473,14 +531,8 @@ module.exports = async function handler(req, res) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the user update payload.');
         return;
       }
-      const accounts = await readAccounts();
-      const index = accounts.findIndex(account => account.username === username);
-      if (index < 0) {
-        sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
-        return;
-      }
       if (body.action === 'self-update') {
-        const session = requireSession(req, res);
+        const session = await requireSession(req, res);
         if (!session) return;
         if (!canSelfUpdateAccount(session, username)) {
           sendApiError(res, 403, 'FORBIDDEN', 'You are not allowed to modify this account.');
@@ -490,18 +542,42 @@ module.exports = async function handler(req, res) {
           sendApiError(res, 403, 'FORBIDDEN', 'Organisation assignment can only be changed by an admin.');
           return;
         }
+        let updatedAccount = null;
+        let allAccounts = null;
         if (typeof updates.displayName === 'string' && updates.displayName.trim()) {
-          accounts[index] = normaliseAccount({
-            ...accounts[index],
-            displayName: updates.displayName.trim()
+          const updated = await withKvLock(USERS_KEY, async () => {
+            const accounts = await readAccounts();
+            const index = accounts.findIndex(account => account.username === username);
+            if (index < 0) return null;
+            accounts[index] = normaliseAccount({
+              ...accounts[index],
+              displayName: updates.displayName.trim(),
+              sessionVersion: Math.max(1, Number(accounts[index].sessionVersion || 1))
+            });
+            allAccounts = await persistAccounts(accounts);
+            return allAccounts[index];
+          }, {
+            prefix: 'lock::users::',
+            waitTimeoutMs: 2500
           });
-          await writeAccounts(accounts);
-          await appendAuditEvent({ category: 'profile', eventType: 'self_profile_updated', actorUsername: accounts[index].username, actorRole: accounts[index].role, target: accounts[index].username, status: 'success', source: 'server', details: { displayName: accounts[index].displayName } });
+          if (!updated) {
+            sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+            return;
+          }
+          updatedAccount = updated;
+          await appendAuditEvent({ category: 'profile', eventType: 'self_profile_updated', actorUsername: updated.username, actorRole: updated.role, target: updated.username, status: 'success', source: 'server', details: { displayName: updated.displayName } });
         }
-        res.status(200).json({ accounts: accounts.map(sanitiseAccount) });
+        if (!allAccounts) {
+          allAccounts = await readAccounts();
+          if (!allAccounts.some(account => account.username === username)) {
+            sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+            return;
+          }
+        }
+        res.status(200).json({ accounts: allAccounts.map(sanitiseAccount) });
         return;
       }
-      const actor = resolveAdminActor(req, res, {
+      const actor = await resolveAdminActor(req, res, {
         isAdminSecretValid,
         allowRoles: ['admin']
       });
@@ -514,37 +590,84 @@ module.exports = async function handler(req, res) {
         if (!passwordCheck.valid) {
           throw new Error('Generated password failed policy validation.');
         }
-        accounts[index] = normaliseAccount({
-          ...accounts[index],
-          password: nextPassword
+        let updatedAccount = null;
+        const storedAccounts = await withKvLock(USERS_KEY, async () => {
+          const accounts = await readAccounts();
+          const index = accounts.findIndex(account => account.username === username);
+          if (index < 0) return null;
+          accounts[index] = bumpSessionVersion(normaliseAccount({
+            ...accounts[index],
+            password: nextPassword
+          }));
+          updatedAccount = accounts[index];
+          return persistAccounts(accounts);
+        }, {
+          prefix: 'lock::users::',
+          waitTimeoutMs: 2500
         });
-        const storedAccounts = await writeAccounts(accounts);
-        await appendAuditEvent({ category: 'user_admin', eventType: 'password_reset', actorUsername: actor.username, actorRole: actor.role, target: accounts[index].username, status: 'success', source: 'server' });
+        if (!storedAccounts || !updatedAccount) {
+          sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+          return;
+        }
+        await appendAuditEvent({ category: 'user_admin', eventType: 'password_reset', actorUsername: actor.username, actorRole: actor.role, target: updatedAccount.username, status: 'success', source: 'server' });
         res.status(200).json({
-          account: sanitiseAccount(accounts[index]),
+          account: sanitiseAccount(updatedAccount),
           password: nextPassword,
           accounts: storedAccounts.map(sanitiseAccount)
         });
         return;
       }
       if (body.action === 'delete-user') {
-        const removed = accounts.splice(index, 1)[0];
-        await writeAccounts(accounts);
+        let removed = null;
+        const storedAccounts = await withKvLock(USERS_KEY, async () => {
+          const accounts = await readAccounts();
+          const index = accounts.findIndex(account => account.username === username);
+          if (index < 0) return null;
+          removed = accounts.splice(index, 1)[0];
+          await persistAccounts(accounts);
+          return accounts;
+        }, {
+          prefix: 'lock::users::',
+          waitTimeoutMs: 2500
+        });
+        if (!storedAccounts || !removed) {
+          sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+          return;
+        }
         await deleteUserState(removed.username);
         await appendAuditEvent({ category: 'user_admin', eventType: 'user_deleted', actorUsername: actor.username, actorRole: actor.role, target: removed.username, status: 'success', source: 'server' });
-        res.status(200).json({ accounts: accounts.map(sanitiseAccount) });
+        res.status(200).json({ accounts: storedAccounts.map(sanitiseAccount) });
         return;
       }
-      accounts[index] = normaliseAccount({
-        ...accounts[index],
-        displayName: typeof updates.displayName === 'string' && updates.displayName.trim() ? updates.displayName.trim() : accounts[index].displayName,
-        role: typeof updates.role === 'string' ? updates.role : accounts[index].role,
-        businessUnitEntityId: typeof updates.businessUnitEntityId === 'string' ? updates.businessUnitEntityId : accounts[index].businessUnitEntityId,
-        departmentEntityId: typeof updates.departmentEntityId === 'string' ? updates.departmentEntityId : accounts[index].departmentEntityId
+      let updatedAccount = null;
+      const storedAccounts = await withKvLock(USERS_KEY, async () => {
+        const accounts = await readAccounts();
+        const index = accounts.findIndex(account => account.username === username);
+        if (index < 0) return null;
+        const currentAccount = accounts[index];
+        const nextAccount = normaliseAccount({
+          ...currentAccount,
+          displayName: typeof updates.displayName === 'string' && updates.displayName.trim() ? updates.displayName.trim() : currentAccount.displayName,
+          role: typeof updates.role === 'string' ? updates.role : currentAccount.role,
+          businessUnitEntityId: typeof updates.businessUnitEntityId === 'string' ? updates.businessUnitEntityId : currentAccount.businessUnitEntityId,
+          departmentEntityId: typeof updates.departmentEntityId === 'string' ? updates.departmentEntityId : currentAccount.departmentEntityId,
+          sessionVersion: Math.max(1, Number(currentAccount.sessionVersion || 1))
+        });
+        accounts[index] = hasAuthScopeChanged(currentAccount, nextAccount)
+          ? bumpSessionVersion(nextAccount)
+          : nextAccount;
+        updatedAccount = accounts[index];
+        return persistAccounts(accounts);
+      }, {
+        prefix: 'lock::users::',
+        waitTimeoutMs: 2500
       });
-      await writeAccounts(accounts);
-      await appendAuditEvent({ category: 'user_admin', eventType: body.action === 'admin-update' ? 'managed_user_updated' : 'user_updated', actorUsername: actor.username, actorRole: actor.role, target: accounts[index].username, status: 'success', source: 'server', details: { role: accounts[index].role, businessUnitEntityId: accounts[index].businessUnitEntityId, departmentEntityId: accounts[index].departmentEntityId } });
-      res.status(200).json({ accounts: accounts.map(sanitiseAccount) });
+      if (!storedAccounts || !updatedAccount) {
+        sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+        return;
+      }
+      await appendAuditEvent({ category: 'user_admin', eventType: body.action === 'admin-update' ? 'managed_user_updated' : 'user_updated', actorUsername: actor.username, actorRole: actor.role, target: updatedAccount.username, status: 'success', source: 'server', details: { role: updatedAccount.role, businessUnitEntityId: updatedAccount.businessUnitEntityId, departmentEntityId: updatedAccount.departmentEntityId } });
+      res.status(200).json({ accounts: storedAccounts.map(sanitiseAccount) });
       return;
     }
 

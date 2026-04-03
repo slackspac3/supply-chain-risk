@@ -27,6 +27,13 @@ global.fetch = async (_url, options = {}) => {
       json: async () => ({ result: 'OK' })
     };
   }
+  if (command === 'DEL') {
+    kvStore.delete(key);
+    return {
+      ok: true,
+      json: async () => ({ result: 1 })
+    };
+  }
   throw new Error(`Unsupported KV command: ${command}`);
 };
 
@@ -104,11 +111,16 @@ test('org intelligence stores and returns AI feedback events', async () => {
   assert.equal(postRes.payload.feedback.events.length, 1);
   assert.equal(postRes.payload.feedback.events[0].submittedBy, 'alex');
 
+  const adminToken = buildSessionToken({
+    username: 'admin',
+    role: 'admin',
+    exp: Date.now() + 60_000
+  });
   const getRes = createRes();
   await handler({
     method: 'GET',
     headers: {
-      'x-session-token': token
+      'x-session-token': adminToken
     }
   }, getRes);
 
@@ -181,6 +193,14 @@ test('org intelligence reset_feedback requires admin and can clear shared and us
       username: 'maya',
       displayName: 'Maya',
       role: 'user',
+      passwordHash: 'hash',
+      passwordSalt: 'salt',
+      passwordVersion: 'scrypt-v1'
+    },
+    {
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin',
       passwordHash: 'hash',
       passwordSalt: 'salt',
       passwordVersion: 'scrypt-v1'

@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { getKvConfig } = require('./_kvStore');
+const { getKvConfig, withLock: withKvLock } = require('./_kvStore');
 
 const AUDIT_KEY = process.env.AUDIT_LOG_KEY || 'risk_calculator_audit_log';
 const AUDIT_CAPACITY = Number(process.env.AUDIT_LOG_CAPACITY || 200);
@@ -60,9 +60,14 @@ async function appendAuditEvent(event = {}) {
     details: event.details && typeof event.details === 'object' ? event.details : {}
   };
   try {
-    const entries = await readAuditLog();
-    entries.push(entry);
-    await writeAuditLog(entries);
+    await withKvLock(AUDIT_KEY, async () => {
+      const entries = await readAuditLog();
+      entries.push(entry);
+      await writeAuditLog(entries);
+    }, {
+      prefix: 'lock::audit::',
+      waitTimeoutMs: 2500
+    });
   } catch (error) {
     console.error('api/_audit.appendAuditEvent failed to persist audit event:', error);
   }

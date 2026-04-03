@@ -400,6 +400,15 @@ function resolveApiUrl(path) {
     } catch (error) {
       warnAuthIssueOnce('session-clear', 'AuthService session cleanup failed:', error);
     }
+    try {
+      if (typeof OrgIntelligenceService !== 'undefined'
+        && OrgIntelligenceService
+        && typeof OrgIntelligenceService.clearCache === 'function') {
+        OrgIntelligenceService.clearCache();
+      }
+    } catch (error) {
+      warnAuthIssueOnce('org-intelligence-cache-clear', 'AuthService org intelligence cache cleanup failed:', error);
+    }
     accountsCache = [];
     adminSecretMemory = '';
 

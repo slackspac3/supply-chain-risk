@@ -2,7 +2,7 @@ const USER_STATE_PREFIX = process.env.USER_STATE_PREFIX || 'risk_calculator_user
 const { appendAuditEvent } = require('./_audit');
 const { sendApiError, requireSession, sendConflictError } = require('./_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
-const { get: kvGet, set: kvSet } = require('./_kvStore');
+const { get: kvGet, set: kvSet, withLock: withKvLock } = require('./_kvStore');
 const {
   normaliseUserWorkspaceState,
   applyUserWorkspacePatch,
@@ -57,40 +57,50 @@ function applyStatePatch(current, patch = {}) {
 }
 
 async function writeUserState(username, state, expectedMeta = {}) {
-  const current = await readUserState(username);
-  if (isStaleWrite(current, expectedMeta)) {
+  return withKvLock(buildStateKey(username), async () => {
+    const current = await readUserState(username);
+    if (isStaleWrite(current, expectedMeta)) {
+      return {
+        ok: false,
+        conflict: true,
+        state: current
+      };
+    }
+    const next = buildNextState(current, state);
+    await kvSet(buildStateKey(username), JSON.stringify(serializeUserWorkspaceState(next)));
     return {
-      ok: false,
-      conflict: true,
-      state: current
+      ok: true,
+      conflict: false,
+      state: next
     };
-  }
-  const next = buildNextState(current, state);
-  await kvSet(buildStateKey(username), JSON.stringify(serializeUserWorkspaceState(next)));
-  return {
-    ok: true,
-    conflict: false,
-    state: next
-  };
+  }, {
+    prefix: 'lock::user-state::',
+    waitTimeoutMs: 2500
+  });
 }
 
 async function patchUserState(username, patch, expectedMeta = {}) {
-  const current = await readUserState(username);
-  if (isStaleWrite(current, expectedMeta)) {
+  return withKvLock(buildStateKey(username), async () => {
+    const current = await readUserState(username);
+    if (isStaleWrite(current, expectedMeta)) {
+      return {
+        ok: false,
+        conflict: true,
+        state: current
+      };
+    }
+    const patched = applyStatePatch(current, patch);
+    const next = buildNextState(current, patched);
+    await kvSet(buildStateKey(username), JSON.stringify(serializeUserWorkspaceState(next)));
     return {
-      ok: false,
-      conflict: true,
-      state: current
+      ok: true,
+      conflict: false,
+      state: next
     };
-  }
-  const patched = applyStatePatch(current, patch);
-  const next = buildNextState(current, patched);
-  await kvSet(buildStateKey(username), JSON.stringify(serializeUserWorkspaceState(next)));
-  return {
-    ok: true,
-    conflict: false,
-    state: next
-  };
+  }, {
+    prefix: 'lock::user-state::',
+    waitTimeoutMs: 2500
+  });
 }
 
 
@@ -129,7 +139,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const username = String(req.method === 'GET' ? req.query?.username : body.username || '').trim().toLowerCase();
-    const session = requireSession(req, res);
+    const session = await requireSession(req, res);
     if (!session) return;
     if (!username) {
       sendApiError(res, 400, 'VALIDATION_ERROR', 'Username is required.');

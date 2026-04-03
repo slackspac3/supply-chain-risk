@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const session = requireSession(req, res, {
+  const session = await requireSession(req, res, {
     roles: ['admin'],
     forbiddenMessage: 'You are not allowed to view AI runtime status.'
   });

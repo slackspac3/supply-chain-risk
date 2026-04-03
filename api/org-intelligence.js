@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { sendApiError, requireSession } = require('./_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
-const { get: kvGet, set: kvSet } = require('./_kvStore');
+const { get: kvGet, set: kvSet, withLock: withKvLock } = require('./_kvStore');
 const { readAccounts } = require('./users');
 const { readUserState, writeUserState } = require('./user-state');
 
@@ -401,7 +401,10 @@ module.exports = async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const session = requireSession(req, res);
+      const session = await requireSession(req, res, {
+        roles: ['admin', 'bu_admin', 'function_admin'],
+        forbiddenMessage: 'You are not allowed to view shared org intelligence.'
+      });
       if (!session) return;
       const [patterns, calibration, decisions, coverageMap, feedback] = await Promise.all([
         readJsonKey(ORG_PATTERNS_KEY, []),
@@ -421,7 +424,7 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const session = requireSession(req, res);
+      const session = await requireSession(req, res);
       if (!session) return;
       if (getUnexpectedFields(body, ['calibration', 'coverage', 'decision', 'feedback', 'includeUserTier', 'pattern', 'type']).length) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the org intelligence request.');
@@ -436,39 +439,57 @@ module.exports = async function handler(req, res) {
         const pattern = normalisePattern(body.pattern || {});
         const calibrationPayload = isPlainObject(body.calibration) ? body.calibration : null;
         const coveragePayload = isPlainObject(body.coverage) ? body.coverage : null;
-        const [patterns, calibration, coverageMap] = await Promise.all([
-          readJsonKey(ORG_PATTERNS_KEY, []),
-          readJsonKey(ORG_CALIBRATION_KEY, createEmptyCalibrationStore()),
-          readJsonKey(COVERAGE_MAP_KEY, { updatedAt: 0, scenarioTypes: {} })
-        ]);
-        const nextPatterns = pattern.assessmentId ? appendPattern(patterns, pattern) : patterns;
-        const nextCalibration = calibrationPayload ? updateCalibrationStore(calibration, calibrationPayload) : calibration;
-        const nextCoverage = coveragePayload ? updateCoverageMap(coverageMap, coveragePayload) : coverageMap;
-        await Promise.all([
-          writeJsonKey(ORG_PATTERNS_KEY, nextPatterns),
-          writeJsonKey(ORG_CALIBRATION_KEY, nextCalibration),
-          writeJsonKey(COVERAGE_MAP_KEY, nextCoverage)
-        ]);
+        const { nextPatterns, nextCalibration, nextCoverage } = await withKvLock('org-intelligence-assessment', async () => {
+          const [patterns, calibration, coverageMap] = await Promise.all([
+            readJsonKey(ORG_PATTERNS_KEY, []),
+            readJsonKey(ORG_CALIBRATION_KEY, createEmptyCalibrationStore()),
+            readJsonKey(COVERAGE_MAP_KEY, { updatedAt: 0, scenarioTypes: {} })
+          ]);
+          const nextPatterns = pattern.assessmentId ? appendPattern(patterns, pattern) : patterns;
+          const nextCalibration = calibrationPayload ? updateCalibrationStore(calibration, calibrationPayload) : calibration;
+          const nextCoverage = coveragePayload ? updateCoverageMap(coverageMap, coveragePayload) : coverageMap;
+          await Promise.all([
+            writeJsonKey(ORG_PATTERNS_KEY, nextPatterns),
+            writeJsonKey(ORG_CALIBRATION_KEY, nextCalibration),
+            writeJsonKey(COVERAGE_MAP_KEY, nextCoverage)
+          ]);
+          return { nextPatterns, nextCalibration, nextCoverage };
+        }, {
+          prefix: 'lock::org-intelligence::',
+          waitTimeoutMs: 2500
+        });
         res.status(200).json({ ok: true, patterns: nextPatterns, calibration: nextCalibration, coverageMap: nextCoverage });
         return;
       }
       if (type === 'record_decision') {
         const decision = body.decision || {};
-        const decisions = await readJsonKey(DECISION_HISTORY_KEY, []);
-        const nextDecisions = appendDecision(decisions, decision);
-        await writeJsonKey(DECISION_HISTORY_KEY, nextDecisions);
+        const nextDecisions = await withKvLock(DECISION_HISTORY_KEY, async () => {
+          const decisions = await readJsonKey(DECISION_HISTORY_KEY, []);
+          const nextDecisions = appendDecision(decisions, decision);
+          await writeJsonKey(DECISION_HISTORY_KEY, nextDecisions);
+          return nextDecisions;
+        }, {
+          prefix: 'lock::org-intelligence::',
+          waitTimeoutMs: 2500
+        });
         res.status(200).json({ ok: true, decisions: nextDecisions });
         return;
       }
       if (type === 'record_feedback') {
-        const feedback = await readJsonKey(AI_FEEDBACK_KEY, createEmptyFeedbackStore());
-        const nextFeedback = appendFeedbackEvent(feedback, body.feedback || {}, session);
-        await writeJsonKey(AI_FEEDBACK_KEY, nextFeedback);
+        const nextFeedback = await withKvLock(AI_FEEDBACK_KEY, async () => {
+          const feedback = await readJsonKey(AI_FEEDBACK_KEY, createEmptyFeedbackStore());
+          const nextFeedback = appendFeedbackEvent(feedback, body.feedback || {}, session);
+          await writeJsonKey(AI_FEEDBACK_KEY, nextFeedback);
+          return nextFeedback;
+        }, {
+          prefix: 'lock::org-intelligence::',
+          waitTimeoutMs: 2500
+        });
         res.status(200).json({ ok: true, feedback: nextFeedback });
         return;
       }
       if (type === 'reset_feedback') {
-        const adminSession = requireSession(req, res, {
+        const adminSession = await requireSession(req, res, {
           roles: ['admin'],
           forbiddenMessage: 'You are not allowed to reset shared AI feedback.'
         });
@@ -479,7 +500,12 @@ module.exports = async function handler(req, res) {
           updatedAt: Date.now(),
           events: []
         };
-        await writeJsonKey(AI_FEEDBACK_KEY, nextFeedback);
+        await withKvLock(AI_FEEDBACK_KEY, async () => {
+          await writeJsonKey(AI_FEEDBACK_KEY, nextFeedback);
+        }, {
+          prefix: 'lock::org-intelligence::',
+          waitTimeoutMs: 2500
+        });
         const userTierReset = includeUserTier
           ? await resetUserTierAiFeedback()
           : { attemptedUsers: 0, clearedUsers: 0, skippedUsers: 0, failedUsers: [] };

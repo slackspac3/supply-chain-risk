@@ -1,7 +1,8 @@
 'use strict';
 
 const OrgIntelligenceService = (() => {
-  const CACHE_KEY = 'rq_org_intelligence_cache';
+  const CACHE_KEY_PREFIX = 'rq_org_intelligence_cache::';
+  const LEGACY_CACHE_KEY = 'rq_org_intelligence_cache';
   const DEFAULT_AI_FEEDBACK_TUNING = Object.freeze({
     alignmentPriority: 'strict',
     draftStyle: 'executive-brief',
@@ -23,6 +24,7 @@ const OrgIntelligenceService = (() => {
     'vulnMin', 'vulnLikely', 'vulnMax'
   ]);
   let _memoryState = _clone(DEFAULT_STATE);
+  let _memoryCacheKey = '';
   let _refreshPromise = null;
 
   function resolveOrgIntelligenceApiUrl(path) {
@@ -42,9 +44,16 @@ const OrgIntelligenceService = (() => {
     }
   }
 
+  function _getCacheKey() {
+    const username = typeof AuthService !== 'undefined' && AuthService && typeof AuthService.getCurrentUser === 'function'
+      ? String(AuthService.getCurrentUser()?.username || '').trim().toLowerCase()
+      : '';
+    return `${CACHE_KEY_PREFIX}${username || 'anonymous'}`;
+  }
+
   function _safeGetCache() {
     try {
-      const raw = localStorage.getItem(CACHE_KEY);
+      const raw = localStorage.getItem(_getCacheKey()) || localStorage.getItem(LEGACY_CACHE_KEY);
       if (!raw) return _clone(DEFAULT_STATE, {
         patterns: [],
         calibration: { updatedAt: 0, scenarioTypes: {} },
@@ -70,10 +79,29 @@ const OrgIntelligenceService = (() => {
   function _saveCache(state) {
     const next = _normaliseState(state);
     _memoryState = next;
+    _memoryCacheKey = _getCacheKey();
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+      localStorage.setItem(_getCacheKey(), JSON.stringify(next));
+      localStorage.removeItem(LEGACY_CACHE_KEY);
     } catch {}
     return next;
+  }
+
+  function clearCache({ allUsers = false } = {}) {
+    _memoryState = _clone(DEFAULT_STATE);
+    _memoryCacheKey = '';
+    try {
+      localStorage.removeItem(_getCacheKey());
+      localStorage.removeItem(LEGACY_CACHE_KEY);
+      if (allUsers && typeof localStorage.length === 'number' && typeof localStorage.key === 'function') {
+        const keys = [];
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (String(key || '').startsWith(CACHE_KEY_PREFIX)) keys.push(key);
+        }
+        keys.forEach(key => localStorage.removeItem(key));
+      }
+    } catch {}
   }
 
   function _normaliseScenarioKey(value) {
@@ -274,6 +302,11 @@ const OrgIntelligenceService = (() => {
   }
 
   function getCachedState() {
+    const cacheKey = _getCacheKey();
+    if (_memoryCacheKey !== cacheKey) {
+      _memoryState = _clone(DEFAULT_STATE);
+      _memoryCacheKey = cacheKey;
+    }
     if (!_memoryState?.updatedAt && typeof localStorage !== 'undefined') {
       _memoryState = _safeGetCache();
     }
@@ -1208,6 +1241,7 @@ const OrgIntelligenceService = (() => {
     recordReviewDecision,
     recordAiFeedback,
     resetAiFeedback,
+    clearCache,
     getMergedScenarioPatterns,
     getFeedbackEvents,
     getFeedbackTierThresholds,

@@ -529,14 +529,16 @@ function applyPrecedence(scoredFamilies = [], text = '', meta = {}) {
   };
 }
 
-function resolveOverlays(text = '', primaryFamily = null, secondaryFamilies = []) {
+function resolveOverlays(text = '', primaryFamily = null, secondaryFamilies = [], { includeDefaultOverlays = true } = {}) {
   const explicit = Object.entries(OVERLAY_SIGNAL_MAP)
     .filter(([, signals]) => signals.some((signal) => hasSignal(text, signal)))
     .map(([key]) => key);
-  const defaults = [
-    ...(Array.isArray(primaryFamily?.defaultOverlays) ? primaryFamily.defaultOverlays : []),
-    ...secondaryFamilies.flatMap((family) => Array.isArray(family?.defaultOverlays) ? family.defaultOverlays.slice(0, 1) : [])
-  ];
+  const defaults = includeDefaultOverlays
+    ? [
+        ...(Array.isArray(primaryFamily?.defaultOverlays) ? primaryFamily.defaultOverlays : []),
+        ...secondaryFamilies.flatMap((family) => Array.isArray(family?.defaultOverlays) ? family.defaultOverlays.slice(0, 1) : [])
+      ]
+    : [];
   return uniqueStrings([...defaults, ...explicit])
     .filter((key) => SCENARIO_TAXONOMY_OVERLAY_BY_KEY[key])
     .map((key) => SCENARIO_TAXONOMY_OVERLAY_BY_KEY[key]);
@@ -633,7 +635,9 @@ function classifyScenario(narrative = '', options = {}) {
         .filter(Boolean)
         .slice(0, 4)
     : [];
-  const overlays = resolveOverlays(text, primaryFamily, secondaryFamilies);
+  const overlays = resolveOverlays(text, primaryFamily, secondaryFamilies, {
+    includeDefaultOverlays: hasUsablePrimary || weakExplicitPrimary
+  });
   const primaryProfile = buildPrimaryProfile(primaryFamily);
   const confidence = hasUsablePrimary
     ? buildConfidence(best, second, hasExplicitPrimarySignals)
@@ -653,7 +657,7 @@ function classifyScenario(narrative = '', options = {}) {
   if (precedence.applied.length) reasonCodes.push('PRECEDENCE_RULE_APPLIED');
   if (overlayHeavy) reasonCodes.push('CONSEQUENCE_ONLY_NOT_PRIMARY');
   if (!hasUsablePrimary) reasonCodes.push('INSUFFICIENT_PRIMARY_SIGNAL');
-  if (secondaryFamilies.length) reasonCodes.push('SECONDARY_ONLY');
+  if (!hasUsablePrimary && best?.matchedSignals?.length) reasonCodes.push('SECONDARY_ONLY');
   if (topDomainSet.size > 1) reasonCodes.push('MIXED_DOMAIN_SIGNALS');
   if (!hasUsablePrimary && topDomainSet.size > 1) reasonCodes.push('AMBIGUOUS_EVENT_PATH');
 

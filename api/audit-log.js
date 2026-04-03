@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const session = isAdminSecretValid(req) ? { username: 'admin', role: 'admin' } : requireSession(req, res, { roles: ['admin'] });
+      const session = isAdminSecretValid(req) ? { username: 'admin', role: 'admin' } : await requireSession(req, res, { roles: ['admin'] });
       if (!session) return;
       const entries = await readAuditLog();
       res.status(200).json({ entries: [...entries].reverse(), summary: summariseAuditLog(entries) });
@@ -48,7 +48,7 @@ module.exports = async function handler(req, res) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the audit request.');
         return;
       }
-      const session = isAdminSecretValid(req) ? { username: 'admin', role: 'admin' } : requireSession(req, res);
+      const session = isAdminSecretValid(req) ? { username: 'admin', role: 'admin' } : await requireSession(req, res);
       if (!session) return;
       const entry = await appendAuditEvent({
         category: String(body.category || 'general').trim().slice(0, 80),

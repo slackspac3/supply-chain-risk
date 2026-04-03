@@ -79,4 +79,43 @@ async function del(key) {
   return runKvCommand(['DEL', key]);
 }
 
-module.exports = { del, get, getKvConfig, set, setex };
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, Math.max(0, Number(ms || 0))));
+}
+
+async function withLock(key, callback, {
+  prefix = 'lock::',
+  ttlSeconds = 10,
+  waitTimeoutMs = 2000,
+  retryDelayMs = 60
+} = {}) {
+  const lockKey = `${String(prefix || 'lock::')}${String(key || '').trim()}`;
+  const ownerToken = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  const expiresIn = Math.max(1, Math.ceil(Number(ttlSeconds || 10)));
+  const deadline = Date.now() + Math.max(100, Number(waitTimeoutMs || 0));
+  let acquired = false;
+  while (!acquired) {
+    const response = await runKvCommand(['SET', lockKey, ownerToken, 'NX', 'EX', expiresIn]);
+    acquired = String(response?.result || '').toUpperCase() === 'OK';
+    if (acquired) break;
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for KV lock: ${lockKey}`);
+    }
+    await delay(retryDelayMs);
+  }
+
+  try {
+    return await callback();
+  } finally {
+    try {
+      const current = await get(lockKey);
+      if (String(current || '') === ownerToken) {
+        await del(lockKey);
+      }
+    } catch (error) {
+      console.error(`api/_kvStore.withLock failed to release lock ${lockKey}:`, error);
+    }
+  }
+}
+
+module.exports = { del, get, getKvConfig, runKvCommand, set, setex, withLock };

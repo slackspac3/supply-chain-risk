@@ -86,6 +86,22 @@ function isPrivateAddress(address = '') {
   return true;
 }
 
+async function resolvePublicAddresses(hostname = '') {
+  const resolved = await dns.lookup(String(hostname || '').trim().toLowerCase(), { all: true, verbatim: true });
+  if (!Array.isArray(resolved) || !resolved.length) {
+    throw new Error('Website host could not be resolved.');
+  }
+  const addresses = Array.from(new Set(
+    resolved
+      .map(record => String(record?.address || '').trim())
+      .filter(Boolean)
+  ));
+  if (!addresses.length || addresses.some(address => isPrivateAddress(address))) {
+    throw new Error('Private or local network hosts are not allowed.');
+  }
+  return addresses;
+}
+
 async function assertPublicHttpUrl(rawUrl) {
   const candidate = new URL(rawUrl);
   if (!['http:', 'https:'].includes(candidate.protocol)) {
@@ -107,19 +123,29 @@ async function assertPublicHttpUrl(rawUrl) {
     }
     return candidate;
   }
-  const resolved = await dns.lookup(hostname, { all: true, verbatim: true });
-  if (!Array.isArray(resolved) || !resolved.length) {
-    throw new Error('Website host could not be resolved.');
-  }
-  if (resolved.some(record => isPrivateAddress(record.address))) {
-    // Validate DNS results before fetching so public-looking hostnames cannot resolve into private ranges.
-    throw new Error('Private or local network hosts are not allowed.');
-  }
+  const resolvedAddresses = await resolvePublicAddresses(hostname);
+  Object.defineProperty(candidate, '__resolvedAddresses', {
+    value: resolvedAddresses,
+    enumerable: false,
+    configurable: true,
+    writable: false
+  });
   return candidate;
+}
+
+async function assertDnsStillPublic(url) {
+  const hostname = String(url?.hostname || '').trim().toLowerCase();
+  if (!hostname || net.isIP(hostname)) return;
+  const priorAddresses = Array.isArray(url?.__resolvedAddresses) ? url.__resolvedAddresses : [];
+  const currentAddresses = await resolvePublicAddresses(hostname);
+  if (priorAddresses.length && !currentAddresses.some(address => priorAddresses.includes(address))) {
+    throw new Error('Website DNS changed during fetch validation.');
+  }
 }
 
 async function fetchText(url, timeoutMs = 7000, redirectCount = 0) {
   const safeUrl = await assertPublicHttpUrl(url);
+  await assertDnsStillPublic(safeUrl);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -659,7 +685,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const actor = resolveAdminActor(req, res, {
+  const actor = await resolveAdminActor(req, res, {
     isAdminSecretValid,
     allowRoles: ['admin']
   });

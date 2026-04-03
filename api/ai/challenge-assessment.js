@@ -36,7 +36,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return void res.status(405).json({ error: 'Method not allowed' });
   const origin = req.headers.origin;
   if (!origin || !isAllowedOrigin(origin)) return void res.status(403).json({ error: 'Origin not allowed' });
-  const session = requireSession(req, res);
+  const session = await requireSession(req, res);
   if (!session) return;
   const rateLimit = await checkRateLimit(getRateLimitKey(req, session), { maxPerWindow: 30, windowMs: 60000 });
   if (!rateLimit.allowed) {

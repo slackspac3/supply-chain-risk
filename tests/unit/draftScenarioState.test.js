@@ -223,3 +223,39 @@ test('applyScenarioAssistResultToDraft aligns hinted risks against the new scena
     ['Operational breakdown affecting core services']
   );
 });
+
+test('applyScenarioShortlistResultToDraft preserves server-authoritative risks instead of re-merging stale local guesses', () => {
+  const { api, appState, context } = loadDraftScenarioStateRuntime();
+  context.guessRisksFromText = () => ([
+    {
+      title: 'AI model governance or responsible-AI failure',
+      category: 'AI / Model Risk',
+      description: 'Stale local guess'
+    }
+  ]);
+
+  appState.draft = {
+    riskCandidates: [],
+    selectedRiskIds: [],
+    selectedRisks: [],
+    scenarioLens: { key: 'cyber', label: 'Cyber' },
+    applicableRegulations: [],
+    registerFindings: ''
+  };
+
+  api.applyScenarioShortlistResultToDraft({
+    risks: [{
+      title: 'Identity compromise of privileged tenant administration',
+      category: 'Cyber',
+      description: 'Server-authored shortlist risk.'
+    }],
+    scenarioLens: { key: 'cyber', label: 'Cyber' }
+  }, {
+    narrative: 'Azure global admin credentials discovered on the dark web are used to access the tenant and modify critical configurations.'
+  });
+
+  assert.deepEqual(
+    Array.from(appState.draft.riskCandidates, (risk) => risk.title),
+    ['Identity compromise of privileged tenant administration']
+  );
+});

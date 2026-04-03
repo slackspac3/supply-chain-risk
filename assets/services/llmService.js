@@ -2363,8 +2363,8 @@ ${businessUnit.selectedDepartmentContext}` : ''
       || n.includes('public exposure')
       || (mentionsCloudPlatform && hasExplicitCyberCompromiseSignals && !hasOperationalOutageSignals)
     );
-    const isAiModel = n.includes('responsible ai') || n.includes('model risk') || n.includes('model drift') || n.includes('hallucination') || n.includes('algorithmic bias') || n.includes('training data') || /\bai\b/.test(n);
-    const isDataGovernance = n.includes('data governance') || n.includes('data quality') || n.includes('data lineage') || n.includes('retention') || n.includes('purpose limitation') || n.includes('consent') || n.includes('data residency') || n.includes('master data') || (n.includes('privacy') && !n.includes('breach') && !n.includes('exfil'));
+    const isAiModel = false;
+    const isDataGovernance = false;
     const isStrategic = n.includes('strategy') || n.includes('strategic') || n.includes('market') || n.includes('competitive') || n.includes('transformation') || n.includes('portfolio') || n.includes('investment') || n.includes('operating model') || n.includes('programme');
     const isOperational = hasOperationalOutageSignals || hasContinuityGapSignals || n.includes('operational') || n.includes('process failure') || n.includes('breakdown') || n.includes('capacity') || n.includes('service failure') || n.includes('backlog');
     const isRegulatory = n.includes('regulator') || n.includes('regulatory') || n.includes('licen') || n.includes('sanction') || n.includes('export control') || n.includes('filing');
@@ -2372,7 +2372,15 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const isFinancial = isCounterpartyCredit || n.includes('fraud') || n.includes('payment') || n.includes('invoice') || n.includes('treasury') || n.includes('liquidity') || n.includes('capital') || n.includes('financial');
     const isFraudIntegrity = n.includes('invoice fraud') || n.includes('payment fraud') || n.includes('false invoice') || n.includes('fake invoice') || n.includes('financial crime') || n.includes('money laundering') || n.includes('bribery') || n.includes('corruption') || n.includes('kickback') || n.includes('embezzlement') || /\bfraud\b/.test(n) || (n.includes('integrity') && !n.includes('data integrity'));
     const isEsg = n.includes('esg') || n.includes('sustainability') || n.includes('climate') || n.includes('emission') || n.includes('carbon') || n.includes('greenwashing') || hasSupplierLabourSignals || hasEsgDisclosureSignals;
-    const isCompliance = n.includes('compliance') || n.includes('non-compliance') || n.includes('policy breach') || n.includes('conduct') || n.includes('ethics') || n.includes('assurance');
+    const isCompliance = n.includes('compliance')
+      || n.includes('non-compliance')
+      || n.includes('policy breach')
+      || n.includes('conduct')
+      || n.includes('ethics')
+      || n.includes('assurance')
+      || ((n.includes('privacy') || n.includes('data protection') || n.includes('retention') || n.includes('lawful basis') || n.includes('cross-border transfer'))
+        && !n.includes('breach')
+        && !n.includes('exfil'));
     const isLegalContract = n.includes('contract') || n.includes('indemnity') || n.includes('litigation') || n.includes('licensing dispute') || n.includes('intellectual property') || /\bip\b/.test(n);
     const isGeopolitical = n.includes('geopolitical') || n.includes('market access') || n.includes('sovereign') || n.includes('tariff') || n.includes('entity list') || n.includes('cross-border restriction');
     const hasSupplierDependency = n.includes('supplier') || n.includes('vendor') || n.includes('third-party') || n.includes('third party') || n.includes('outsourc');
@@ -2398,8 +2406,6 @@ ${businessUnit.selectedDepartmentContext}` : ''
     const isTransformationDelivery = n.includes('transformation delivery') || n.includes('programme delivery') || n.includes('program delivery') || n.includes('project delivery') || n.includes('go-live') || n.includes('milestone') || n.includes('benefit realisation') || n.includes('benefit realization') || n.includes('deployment') || (hasSupplierDependency && hasDeliveryProgrammeDelay);
 
     const hintedEnterpriseMatch = {
-      'ai-model-risk': isAiModel || isDataGovernance,
-      'data-governance': isDataGovernance || isRegulatory,
       strategic: isStrategic || (!isRansomware && !isIdentity && !isPhishing && !isDataBreach && !isCloud && !isInsider && !isThirdParty && !isProcurement && !isSupplyChain && /\bprogramme|initiative|operating model|portfolio|market|transformation\b/.test(n)),
       operational: isOperational || isContinuity,
       regulatory: isRegulatory || isCompliance,
@@ -2427,8 +2433,6 @@ ${businessUnit.selectedDepartmentContext}` : ''
       ['cloud', isCloud],
       ['phishing', isPhishing],
       ['insider', isInsider],
-      ['ai-model-risk', isAiModel],
-      ['data-governance', isDataGovernance],
       ['fraud-integrity', isFraudIntegrity],
       ['legal-contract', isLegalContract],
       ['geopolitical', isGeopolitical],

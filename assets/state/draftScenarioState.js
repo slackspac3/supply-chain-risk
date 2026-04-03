@@ -247,7 +247,7 @@
     return activeLensKeys.some((key) => (compatibility[key] || [key]).some(term => category.includes(term) || title.includes(term)));
   }
 
-  function getAlignedRiskSeed(aiRisks, narrative, lens, { riskSource = 'ai' } = {}) {
+  function getAlignedRiskSeed(aiRisks, narrative, lens, { riskSource = 'ai', serverAuthoritative = false } = {}) {
     const resolvedAiRisks = (Array.isArray(aiRisks) ? aiRisks : []).map((risk) => ({
       ...risk,
       source: normaliseRiskSource(risk?.source, riskSource)
@@ -257,7 +257,8 @@
       source: normaliseRiskSource(risk?.source, riskSource)
     }));
     const alignedAiRisks = resolvedAiRisks.filter((risk) => riskMatchesLens(risk, lens));
-    if (alignedAiRisks.length) return mergeRisks(alignedAiRisks, hintedRisks);
+    if (alignedAiRisks.length) return serverAuthoritative ? alignedAiRisks : mergeRisks(alignedAiRisks, hintedRisks);
+    if (serverAuthoritative && resolvedAiRisks.length) return resolvedAiRisks;
     return hintedRisks.length ? hintedRisks : resolvedAiRisks;
   }
 
@@ -427,7 +428,8 @@
       ? { ...result.scenarioLens }
       : (AppState.draft.scenarioLens || null);
     const alignedRisks = getAlignedRiskSeed(result.risks, resolvedNarrative || narrative, nextScenarioLens, {
-      riskSource: suggestedRiskSource
+      riskSource: suggestedRiskSource,
+      serverAuthoritative: true
     });
     AppState.draft.llmAssisted = true;
     AppState.draft.sourceNarrative = assistSeed || narrative;
@@ -485,7 +487,8 @@
       ? { ...result.scenarioLens }
       : (AppState.draft.scenarioLens || null);
     const alignedRisks = getAlignedRiskSeed(result.risks, resolvedNarrative, nextScenarioLens, {
-      riskSource: suggestedRiskSource
+      riskSource: suggestedRiskSource,
+      serverAuthoritative: true
     });
     AppState.draft.llmAssisted = true;
     AppState.draft.intakeSummary = result.summary || AppState.draft.intakeSummary || '';

@@ -211,3 +211,14 @@ test('consequence-heavy ambiguous text does not create fake precision', () => {
   assert.ok(classification.ambiguityFlags.includes('WEAK_EVENT_PATH'));
   assert.ok(classification.ambiguityFlags.includes('CONSEQUENCE_HEAVY_TEXT'));
 });
+
+test('weak text does not inherit default overlays from a stale hint family', () => {
+  const classification = classifyScenario(
+    'Service issue affecting operations.',
+    { scenarioLensHint: 'financial' }
+  );
+
+  assert.ok(classification.reasonCodes.includes('INSUFFICIENT_PRIMARY_SIGNAL'));
+  assert.equal(classification.overlays.some((overlay) => overlay.key === 'direct_monetary_loss'), false);
+  assert.equal(classification.overlays.some((overlay) => overlay.key === 'control_breakdown'), false);
+});
