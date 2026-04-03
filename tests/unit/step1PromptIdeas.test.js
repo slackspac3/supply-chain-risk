@@ -9,6 +9,7 @@ const vm = require('node:vm');
 function loadStep1Internals() {
   const filePath = path.resolve(__dirname, '../../assets/wizard/step1.js');
   const source = fs.readFileSync(filePath, 'utf8');
+  let lastGuessRisksArgs = null;
 
   const noopStorage = {
     getItem() { return null; },
@@ -52,21 +53,35 @@ function loadStep1Internals() {
     saveDraft: () => {},
     markDraftDirty: () => {},
     persistAndRenderStep1: () => {},
-    normaliseAssessmentTokens: (text = '') => String(text || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+    normaliseAssessmentTokens: (text = '') => String(text || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
+    normaliseScenarioSeedText: (text = '') => String(text || '').trim().toLowerCase(),
+    guessRisksFromText: (text = '', options = {}) => {
+      lastGuessRisksArgs = { text, options };
+      return [{ title: 'Generated risk' }];
+    },
+    isNoiseRiskText: () => false,
+    replaceSuggestedRiskCandidates: () => {},
+    appendRiskCandidates: () => {},
+    syncStep1ScenarioTitle: () => {}
   };
 
   vm.createContext(context);
   vm.runInContext(source, context, { filename: 'step1.js' });
   return {
+    appState: context.AppState,
     setStep1ButtonBusy: context._setStep1ButtonBusy,
     inferStep1FunctionKeyFromText: context.inferStep1FunctionKeyFromText,
+    buildStep1ExplicitNarrativeLens: context.buildStep1ExplicitNarrativeLens,
     getStep1PreferredScenarioLens: context.getStep1PreferredScenarioLens,
+    getStep1ManualPreferredScenarioLens: context.getStep1ManualPreferredScenarioLens,
     shouldUseStep1LivePreview: context.shouldUseStep1LivePreview,
     shouldUseStep1LivePromptIdeas: context.shouldUseStep1LivePromptIdeas,
     getStep1GuidedPreviewSignature: context.getStep1GuidedPreviewSignature,
     rememberStep1LivePreview: context.rememberStep1LivePreview,
     getStep1DisplayedGuidedPreviewModel: context.getStep1DisplayedGuidedPreviewModel,
-    buildStep1GuidedPromptSuggestions: context.buildStep1GuidedPromptSuggestions
+    buildStep1GuidedPromptSuggestions: context.buildStep1GuidedPromptSuggestions,
+    seedRisksFromScenarioDraft: context.seedRisksFromScenarioDraft,
+    getLastGuessRisksArgs: () => lastGuessRisksArgs
   };
 }
 
@@ -283,6 +298,50 @@ test('guided lens ignores stale financial preview wording when the event is iden
   assert.equal(lens.key, 'cyber');
   assert.equal(lens.functionKey, 'technology');
   assert.deepEqual(Array.from(lens.secondaryKeys || []), ['financial']);
+});
+
+test('manual typed draft follows fresh identity text over stale financial lens state', () => {
+  const internals = loadStep1Internals();
+  const draft = {
+    scenarioLens: { key: 'financial', label: 'Financial', functionKey: 'finance' },
+    narrative: 'A payment-control failure creates direct monetary loss.'
+  };
+  const currentNarrative = 'Azure global admin credentials discovered on the dark web are used to access the tenant and modify critical configurations.';
+
+  const lens = internals.getStep1ManualPreferredScenarioLens({}, draft, currentNarrative);
+
+  assert.equal(lens.key, 'cyber');
+  assert.equal(lens.functionKey, 'technology');
+  assert.deepEqual(Array.from(lens.secondaryKeys || []), ['financial']);
+});
+
+test('manual typed payment-control failure stays financial even if stale state was cyber', () => {
+  const internals = loadStep1Internals();
+  const draft = {
+    scenarioLens: { key: 'cyber', label: 'Cyber', functionKey: 'technology' },
+    narrative: 'An administrator credential is exposed.'
+  };
+  const currentNarrative = 'A payment-control failure allows an unauthorised invoice to be approved and creates direct monetary loss.';
+
+  const lens = internals.getStep1ManualPreferredScenarioLens({}, draft, currentNarrative);
+
+  assert.equal(lens.key, 'financial');
+  assert.equal(lens.functionKey, 'finance');
+  assert.deepEqual(Array.from(lens.secondaryKeys || []), ['cyber']);
+});
+
+test('shortlist generation from typed narrative uses the current narrative lens instead of stale stored state', () => {
+  const internals = loadStep1Internals();
+  internals.appState.draft.scenarioLens = { key: 'financial', label: 'Financial', functionKey: 'finance' };
+
+  const seededCount = internals.seedRisksFromScenarioDraft('Azure global admin credentials discovered on the dark web are used to access the tenant and modify critical configurations.', {
+    force: true,
+    replaceGenerated: true
+  });
+
+  assert.equal(seededCount, 1);
+  assert.equal(internals.getLastGuessRisksArgs()?.options?.lensHint?.key, 'cyber');
+  assert.equal(internals.getLastGuessRisksArgs()?.options?.lensHint?.functionKey, 'technology');
 });
 
 test('supplier delivery slippage for infrastructure deployment stays out of procurement prompt ideas', () => {

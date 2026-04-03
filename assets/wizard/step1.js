@@ -415,6 +415,95 @@ function inferStep1FunctionKey(settings = getEffectiveSettings(), draft = AppSta
   return inferStep1FunctionKeyFromText(combinedHaystack);
 }
 
+function buildStep1ExplicitNarrativeLens(narrativeText = '') {
+  const haystack = String(narrativeText || '').toLowerCase();
+  if (!haystack.trim()) return null;
+  const hasContinuityGapSignal = /(?:^|[^a-z0-9])no dr(?:$|[^a-z0-9])|without dr|dr gap|no disaster recovery|without disaster recovery|no failover|without failover|failover gap|recovery gap|rto|rpo|business continuity|disaster recovery/.test(haystack);
+  const hasCriticalMessagingServiceSignal = /(outlook(?: online)?|exchange(?: online)?|email system|mail system|mail service|messaging service|critical email|critical communication service|microsoft 365)/.test(haystack);
+  const hasExplicitCyberSignal = /(cyber|security|identity|credential|ransom|malware|phish|breach|exfil|privileged|unauthori[sz]ed|misconfig|vulnerability|token theft|session hijack|compromise|account takeover|account hijack|hijack(?:ed|ing)?|mailbox|email compromise|email account|business email compromise|\bbec\b|dark ?web|credential dump|credential leak|leaked credential|stolen credential|admin account|tenant admin|azure admin|executive mailbox|ceo fraud)/.test(haystack);
+  const hasCounterpartyCreditSignal = /(bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collectability|collections|cashflow|working capital|provisioning|provision)/.test(haystack);
+  const hasPaymentControlSignal = /(payment|payable|invoice|collections|settlement|treasury|disbursement).*(control|failure|breakdown|approval|fraud|manipulation)|(?:control|failure|breakdown|approval|fraud|manipulation).*(payment|payable|invoice|collections|settlement|treasury|disbursement)/.test(haystack);
+  const hasSupplierLabourSignal = /(exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights|living wage)/.test(haystack);
+  const hasEsgDisclosureSignal = /(esg|sustainability|greenwashing|climate disclosure|sustainability disclosure|carbon|emission|net zero|scope 1|scope 2|scope 3|social impact)/.test(haystack);
+  const hasGeopoliticalSignal = /(geopolitical|market access|sanctions|export control|tariff|sovereign|entity list|cross-border restriction)/.test(haystack);
+  const hasSupplierDependencySignal = /(supplier|vendor|third[- ]party|third party|supply chain|delivery commitment|delivery date|shipment|logistics|fallback|substitute)/.test(haystack);
+  const hasProcurementGovernanceSignal = /(procurement|sourcing|purchase|supplier assurance|supplier due diligence|tender|bid|contract award|vendor selection|critical spend|commercial category|pricing|award decision|spend category)/.test(haystack);
+  const hasSupplierConcentrationSignal = /single[- ]source|sole source|supplier concentration|concentrated spend/.test(haystack);
+  const hasSupplierDelayProgrammeSignal = hasSupplierDependencySignal
+    && /(miss(?:es|ed)?|delay(?:ed|ing)?|slip(?:ped|page)?|late|delivery date|delivery commitment|deployment|go-live|rollout|milestone|dependent business project|dependent project|programme|program|project)/.test(haystack);
+  const hasOperationalOutageSignal = /(downtime|outage|service disruption|operational disruption|availability|unavailable|degrad|aging infrastructure|ageing infrastructure|legacy infrastructure|human error|manual error|platform instability|system instability|service failure|process failure)/.test(haystack);
+  const hasComplianceSignal = /compliance|regulatory|legal|privacy|data governance|policy|governance|controls|audit|contract|litigation|ip\b|intellectual property/.test(haystack);
+  const hasHseSignal = /hse|ehs|health|safety|environmental|workplace safety|incident response|worker welfare|labou?r/.test(haystack);
+
+  if (hasCounterpartyCreditSignal || hasPaymentControlSignal) {
+    return { ...STEP1_FUNCTION_TO_SCENARIO_LENS.finance };
+  }
+  if (hasSupplierLabourSignal || hasEsgDisclosureSignal) {
+    return {
+      key: 'esg',
+      label: 'ESG',
+      functionKey: 'strategic',
+      estimatePresetKey: 'esg',
+      secondaryKeys: hasSupplierLabourSignal ? ['procurement', 'compliance'] : ['compliance']
+    };
+  }
+  if (hasGeopoliticalSignal) {
+    return {
+      key: 'geopolitical',
+      label: 'Geopolitical / market access',
+      functionKey: 'strategic',
+      estimatePresetKey: 'geopolitical',
+      secondaryKeys: ['regulatory', 'supply-chain']
+    };
+  }
+  if (hasSupplierDelayProgrammeSignal && !hasProcurementGovernanceSignal && !hasSupplierConcentrationSignal) {
+    return { ...STEP1_FUNCTION_TO_SCENARIO_LENS.operations };
+  }
+  if (hasProcurementGovernanceSignal || hasSupplierConcentrationSignal) {
+    return { ...STEP1_FUNCTION_TO_SCENARIO_LENS.procurement };
+  }
+  if (hasContinuityGapSignal && hasCriticalMessagingServiceSignal && !hasExplicitCyberSignal) {
+    return {
+      key: 'business-continuity',
+      label: 'Business continuity',
+      functionKey: 'operations',
+      estimatePresetKey: 'businessContinuity',
+      secondaryKeys: ['operational']
+    };
+  }
+  if (hasExplicitCyberSignal) {
+    return { ...STEP1_FUNCTION_TO_SCENARIO_LENS.technology };
+  }
+  if (hasOperationalOutageSignal && !hasExplicitCyberSignal) {
+    return { ...STEP1_FUNCTION_TO_SCENARIO_LENS.operations };
+  }
+  if (hasComplianceSignal) {
+    return { ...STEP1_FUNCTION_TO_SCENARIO_LENS.compliance };
+  }
+  if (hasHseSignal) {
+    return { ...STEP1_FUNCTION_TO_SCENARIO_LENS.hse };
+  }
+  return null;
+}
+
+function getStep1ManualPreferredScenarioLens(settings = getEffectiveSettings(), draft = AppState.draft || {}, narrativeOverride = '') {
+  const narrativeText = String(narrativeOverride || '').trim();
+  const fallbackLens = getStep1PreferredScenarioLens(settings, draft, narrativeText);
+  const explicitLens = buildStep1ExplicitNarrativeLens(narrativeText);
+  if (!explicitLens) return fallbackLens;
+  const stored = draft?.scenarioLens?.key ? { ...draft.scenarioLens } : null;
+  if (!stored || !stored.key || stored.key === 'general' || stored.key === explicitLens.key) {
+    return explicitLens;
+  }
+  return {
+    ...explicitLens,
+    secondaryKeys: Array.from(new Set([
+      ...(Array.isArray(explicitLens.secondaryKeys) ? explicitLens.secondaryKeys : []),
+      stored.key
+    ])).filter(Boolean)
+  };
+}
+
 function getStep1PreferredScenarioLens(settings = getEffectiveSettings(), draft = AppState.draft || {}, narrativeOverride = '') {
   const scenarioText = String([
     narrativeOverride,
@@ -3434,7 +3523,9 @@ function seedRisksFromScenarioDraft(narrative, { force = false, replaceGenerated
   const existingCandidates = getRiskCandidates();
   const selectedRisks = getSelectedRisks();
   if (!force && (selectedRisks.length || existingCandidates.length)) return 0;
-  const extractedRisks = guessRisksFromText(draftText, { lensHint: AppState.draft.scenarioLens })
+  const preferredLens = getStep1ManualPreferredScenarioLens(getEffectiveSettings(), AppState.draft, draftText);
+  if (preferredLens?.key) AppState.draft.scenarioLens = preferredLens;
+  const extractedRisks = guessRisksFromText(draftText, { lensHint: preferredLens || AppState.draft.scenarioLens })
     .filter(risk => !isNoiseRiskText(risk.title))
     .map(risk => ({
       ...risk,
@@ -3828,8 +3919,8 @@ function bindStep1PrimaryInputs({ buList, wizardGeographyInput }) {
     clearStep1StaleAssistState(this.value);
     AppState.draft.narrative = this.value;
     AppState.draft.sourceNarrative = this.value;
-    // Preserve the current function-aware lens while the user edits so later shortlist and AI steps do not reclassify the draft from scratch on every keystroke.
-    AppState.draft.scenarioLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, this.value);
+    // Strong fresh narrative text should beat stale lens memory, while weaker text still falls back to the current draft context.
+    AppState.draft.scenarioLens = getStep1ManualPreferredScenarioLens(getEffectiveSettings(), AppState.draft, this.value);
     if (hadAssistedDraft) AppState.draft.aiQualityState = 'analyst-reshaped';
     clearLoadedDryRunFlag();
     markDraftDirty();

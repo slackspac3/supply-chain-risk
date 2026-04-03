@@ -430,7 +430,9 @@
     window.scheduleStep1ScenarioCrossReferenceRefresh?.({ immediate: true, force: true, narrativeOverride: assistSeed || narrative });
     if (output) output.innerHTML = UI.wizardAssistSkeleton();
     try {
-      const preferredLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
+      const preferredLens = typeof getStep1ManualPreferredScenarioLens === 'function'
+        ? getStep1ManualPreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative)
+        : getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
       const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
       _warnIfRagNotReady();
       const citations = await RAGService.retrieveRelevantDocs(bu?.id, buildAssessmentRetrievalQuery({
@@ -495,7 +497,9 @@
     }
     const button = document.getElementById('btn-enhance-risk-statement');
     const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
-    const preferredLens = getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
+    const preferredLens = typeof getStep1ManualPreferredScenarioLens === 'function'
+      ? getStep1ManualPreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative)
+      : getStep1PreferredScenarioLens(getEffectiveSettings(), AppState.draft, assistSeed || narrative);
     const requestPayload = {
       riskStatement: assistSeed || narrative,
       registerText: '',
