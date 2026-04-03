@@ -3209,6 +3209,9 @@ function ensureDraftShape() {
     workflowGuidance: Array.isArray(AppState.draft.workflowGuidance) ? AppState.draft.workflowGuidance : [],
     benchmarkBasis: AppState.draft.benchmarkBasis || '',
     inputRationale: AppState.draft.inputRationale || null,
+    aiFeedback: AppState.draft.aiFeedback && typeof AppState.draft.aiFeedback === 'object'
+      ? AppState.draft.aiFeedback
+      : {},
     confidenceLabel: AppState.draft.confidenceLabel || '',
     evidenceQuality: AppState.draft.evidenceQuality || '',
     evidenceSummary: AppState.draft.evidenceSummary || '',
