@@ -5,6 +5,21 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {
+  buildScenarioTaxonomyProjectionSnapshot
+} = require('../../scripts/lib/scenarioTaxonomyProjectionSnapshot');
+
+function loadProjectionData() {
+  const context = { console, globalThis: {} };
+  context.window = context.globalThis;
+  vm.createContext(context);
+  const source = fs.readFileSync(
+    path.resolve(__dirname, '../../assets/services/scenarioTaxonomyProjectionData.js'),
+    'utf8'
+  );
+  vm.runInContext(source, context, { filename: 'scenarioTaxonomyProjectionData.js' });
+  return context.globalThis.__SCENARIO_TAXONOMY_PROJECTION_DATA__;
+}
 
 function loadProjection() {
   const context = { console, globalThis: {} };
@@ -25,6 +40,12 @@ test('projection version matches canonical server taxonomy version', () => {
   const projection = loadProjection();
   const taxonomy = require('../../api/_scenarioTaxonomy.js');
   assert.equal(projection.taxonomyVersion, taxonomy.SCENARIO_TAXONOMY_VERSION);
+});
+
+test('committed browser projection data matches the canonical serializer snapshot', () => {
+  const committedData = JSON.parse(JSON.stringify(loadProjectionData()));
+  const expectedSnapshot = buildScenarioTaxonomyProjectionSnapshot();
+  assert.deepEqual(committedData, expectedSnapshot);
 });
 
 test('projection exposes the high-drift families needed for Step 1 hinting', () => {

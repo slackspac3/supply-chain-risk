@@ -72,6 +72,18 @@ const STEP1_FUNCTION_TO_SCENARIO_LENS = {
   general: { key: 'general', label: 'General enterprise risk', functionKey: 'general', estimatePresetKey: 'general' }
 };
 
+const STEP1_PROMPT_IDEA_CONFIDENCE_STATES = Object.freeze({
+  high: 'high_confidence_family',
+  candidate: 'candidate_families',
+  low: 'low_confidence_unknown'
+});
+
+const STEP1_PROMPT_REFINEMENT_HINTS = Object.freeze([
+  'Add what is affected',
+  'Add the likely trigger',
+  'Build the draft for stronger classification'
+]);
+
 const STEP1_RANSOMWARE_SIGNAL_RE = /(ransom|ransomware|extortion|ransom note|payment to unlock|unlock files?|encrypt(?:ed|s|ing)? (?:systems?|servers?|files?)|encrypted (?:systems?|servers?|files?)|decrypt(?:ion)? key|malware)/;
 const STEP1_EXPLICIT_CYBER_SIGNAL_RE = /(cyber|security|identity|credential|ransom|malware|phish|breach|exfil|privileged|unauthori[sz]ed|misconfig|vulnerability|token theft|session hijack|compromise|account takeover|account hijack|hijack(?:ed|ing)?|mailbox|email compromise|email account|business email compromise|\bbec\b|dark ?web|credential dump|credential leak|leaked credential|stolen credential|admin account|tenant admin|azure admin|executive mailbox|ceo fraud)/;
 const STEP1_PAYMENT_CONTROL_SIGNAL_RE = /(payment|payable|invoice|collections|settlement|treasury|disbursement).*(control|failure|breakdown|approval|fraud|manipulation)|(?:control|failure|breakdown|approval|fraud|manipulation).*(payment|payable|invoice|collections|settlement|treasury|disbursement)/;
@@ -263,6 +275,134 @@ function buildStep1ProjectionHintModel(text = '', scenarioLensHint = '') {
     topLens: analysis.topLens || preferredLens || null,
     topLensKey: String(analysis.topLensKey || preferredLens?.key || '').trim()
   };
+}
+
+function buildStep1PromptCandidateDirections(projectionHint = null, fallbackLens = null) {
+  const topFamilies = Array.isArray(projectionHint?.topFamilies) ? projectionHint.topFamilies.slice(0, 3) : [];
+  const distinctLensKeys = uniqueStep1Keys(topFamilies.map((family) => String(family?.lensKey || '').trim()).filter(Boolean));
+  if (topFamilies.length) {
+    if (distinctLensKeys.length > 1) {
+      const seenLensKeys = new Set();
+      return topFamilies
+        .filter((family) => {
+          const lensKey = String(family?.lensKey || '').trim();
+          if (!lensKey || seenLensKeys.has(lensKey)) return false;
+          seenLensKeys.add(lensKey);
+          return true;
+        })
+        .slice(0, 2)
+        .map((family) => ({
+          key: String(family?.lensKey || '').trim(),
+          label: String(family?.lensLabel || family?.familyLabel || '').trim(),
+          kind: 'lane'
+        }))
+        .filter((item) => item.key && item.label);
+    }
+    return topFamilies
+      .slice(0, 2)
+      .map((family) => ({
+        key: String(family?.familyKey || '').trim(),
+        label: String(family?.familyLabel || family?.lensLabel || '').trim(),
+        kind: 'family'
+      }))
+      .filter((item) => item.key && item.label);
+  }
+  if (fallbackLens?.key && fallbackLens.key !== 'general') {
+    return [{
+      key: String(fallbackLens.key || '').trim(),
+      label: String(fallbackLens.label || fallbackLens.key || '').trim(),
+      kind: 'lane'
+    }];
+  }
+  return [];
+}
+
+function getStep1PromptIdeaConfidenceState({
+  projectionHint = null,
+  fallbackLens = null,
+  hasLiveSignal = false
+} = {}) {
+  if (
+    projectionHint?.directional
+    && projectionHint.analysis?.classification?.familyKey
+    && Number(projectionHint.separationScore || 0) >= 0.75
+  ) {
+    return STEP1_PROMPT_IDEA_CONFIDENCE_STATES.high;
+  }
+  if (hasLiveSignal && (Array.isArray(projectionHint?.topFamilies) && projectionHint.topFamilies.length)) {
+    return STEP1_PROMPT_IDEA_CONFIDENCE_STATES.candidate;
+  }
+  if (hasLiveSignal && fallbackLens?.key && fallbackLens.key !== 'general') {
+    return STEP1_PROMPT_IDEA_CONFIDENCE_STATES.candidate;
+  }
+  return STEP1_PROMPT_IDEA_CONFIDENCE_STATES.low;
+}
+
+function getStep1PromptIdeaStateLabel(state = STEP1_PROMPT_IDEA_CONFIDENCE_STATES.low, projectionHint = null) {
+  if (state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.high) {
+    return `Likely local direction: ${String(projectionHint?.preferredLens?.label || projectionHint?.topLens?.label || 'Current strongest fit').trim()}`;
+  }
+  if (state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.candidate) {
+    if (Array.isArray(projectionHint?.ambiguityFlags) && projectionHint.ambiguityFlags.includes('MIXED_TOP_FAMILIES')) {
+      return 'Mixed scenario';
+    }
+    return 'Possible directions';
+  }
+  return 'Need one more detail';
+}
+
+function getStep1PromptIdeaHelperText(state = STEP1_PROMPT_IDEA_CONFIDENCE_STATES.low, projectionHint = null) {
+  if (state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.high) {
+    return 'These local prompt ideas follow the strongest current taxonomy fit.';
+  }
+  if (state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.candidate) {
+    if (Array.isArray(projectionHint?.ambiguityFlags) && projectionHint.ambiguityFlags.includes('MIXED_TOP_FAMILIES')) {
+      return 'The wording looks mixed, so the browser is showing plausible directions instead of forcing one prompt idea.';
+    }
+    if (Array.isArray(projectionHint?.ambiguityFlags) && projectionHint.ambiguityFlags.includes('LOW_SEPARATION')) {
+      return 'Two plausible directions are close. Add what is affected or the likely trigger, or build the draft for a stronger server classification.';
+    }
+    return 'The wording is still soft. The browser can see possible directions, but not a strong single lane yet.';
+  }
+  if (Array.isArray(projectionHint?.ambiguityFlags) && projectionHint.ambiguityFlags.includes('WEAK_EVENT_PATH')) {
+    return 'The wording is consequence-heavy or too broad to separate the event path yet. Add what is affected or the likely trigger, or build the draft for a stronger server classification.';
+  }
+  return 'The wording is still too weak or novel for a trustworthy local lane. Add what is affected, add the likely trigger, or build the draft for a stronger server classification.';
+}
+
+function buildStep1HighConfidencePromptSuggestions({
+  draft = AppState.draft || {},
+  sourceText = '',
+  projectionHint = null,
+  expectedLens = null,
+  fallbackExamples = []
+} = {}) {
+  const helper = getStep1ScenarioTaxonomyProjection();
+  if (!helper || !projectionHint?.analysis) return [];
+  const topFamilyKey = String(projectionHint.familyOrder?.[0] || projectionHint.analysis?.classification?.familyKey || '').trim();
+  if (!topFamilyKey) return [];
+  const localSuggestions = typeof helper.buildPromptIdeaSuggestionsForFamilyKeys === 'function'
+    ? helper.buildPromptIdeaSuggestionsForFamilyKeys([topFamilyKey], {
+        limit: 2,
+        perFamilyLimit: 2
+      })
+    : (typeof helper.buildPromptIdeaSuggestions === 'function'
+      ? helper.buildPromptIdeaSuggestions(projectionHint.analysis, {
+          limit: 2,
+          perFamilyLimit: 2,
+          maxFamilies: 1
+        })
+      : []);
+  const strictHint = {
+    ...projectionHint,
+    familyOrder: [topFamilyKey],
+    topFamilies: (Array.isArray(projectionHint.topFamilies) ? projectionHint.topFamilies : []).filter((family) => String(family?.familyKey || '').trim() === topFamilyKey)
+  };
+  const filteredExamples = filterStep1PromptExamplesByHint(fallbackExamples, strictHint, expectedLens);
+  return normaliseStep1PromptIdeaSuggestions([
+    ...localSuggestions.map((suggestion) => ({ label: suggestion.label, prompt: suggestion.prompt })),
+    ...filteredExamples
+  ]).slice(0, 2);
 }
 
 function buildStep1AmbiguousProjectionLens(hint = null, stored = null) {
@@ -792,88 +932,93 @@ function composeStep1GuidedNarrative(guidedInput = (AppState.draft?.guidedInput 
   });
 }
 
-function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, exampleModel = null) {
-  const guidedInput = draft?.guidedInput || {};
-  const isGuidedPath = String(draft?.step1Path || '').trim() === 'guided';
-  const sourceText = isGuidedPath
-    ? [
-        guidedInput.event,
-        guidedInput.impact,
-        guidedInput.cause,
-        guidedInput.asset
-      ].filter(Boolean).join(' ')
-    : [
-        guidedInput.event,
-        guidedInput.impact,
-        guidedInput.cause,
-        guidedInput.asset,
-        draft?.narrative,
-        draft?.enhancedNarrative,
-        draft?.sourceNarrative
-      ].filter(Boolean).join(' ');
-  const helper = getStep1ScenarioTaxonomyProjection();
+function buildStep1GuidedPromptIdeaModel(draft = AppState.draft || {}, exampleModel = null) {
+  const sourceText = getStep1GuidedPromptIdeaSourceText(draft);
   const expectedLens = draft?.scenarioLens || getStep1PreferredScenarioLens(getEffectiveSettings(), draft, sourceText);
   const fallbackExamples = (exampleModel && Array.isArray(exampleModel.recommendedExamples))
     ? exampleModel.recommendedExamples
     : getStep1ExampleExperienceModel(getEffectiveSettings(), draft).recommendedExamples || [];
-  if (helper && sourceText.trim()) {
-    const projectionHint = buildStep1ProjectionHintModel(sourceText, expectedLens || '');
-    const promptIdeaFamilyKeys = projectionHint
-      ? (projectionHint.directional
-        ? uniqueStep1Keys(projectionHint.familyOrder).slice(0, 2)
-        : uniqueStep1Keys([
-            ...(Array.isArray(projectionHint.familyOrder) ? projectionHint.familyOrder : []),
-            ...(Array.isArray(projectionHint.topFamilies) ? projectionHint.topFamilies.map((family) => family.familyKey) : [])
-          ]).slice(0, 3))
-      : [];
-    const localSuggestions = promptIdeaFamilyKeys.length && typeof helper.buildPromptIdeaSuggestionsForFamilyKeys === 'function'
-      ? helper.buildPromptIdeaSuggestionsForFamilyKeys(promptIdeaFamilyKeys, {
-          limit: 3,
-          perFamilyLimit: projectionHint?.directional ? 2 : 1
-        })
-      : (projectionHint?.analysis && typeof helper.buildPromptIdeaSuggestions === 'function'
-        ? helper.buildPromptIdeaSuggestions(projectionHint.analysis, {
-            limit: 3,
-            perFamilyLimit: projectionHint?.directional ? 2 : 1,
-            maxFamilies: projectionHint?.directional ? 2 : 3
-          })
-        : []);
-    const filteredExamples = filterStep1PromptExamplesByHint(fallbackExamples, projectionHint, expectedLens);
-    const combined = normaliseStep1PromptIdeaSuggestions([
-      ...localSuggestions.map((suggestion) => ({ label: suggestion.label, prompt: suggestion.prompt })),
-      ...filteredExamples
-    ]);
-    if (combined.length) return combined.slice(0, 3);
-  }
+  const projectionHint = sourceText.trim()
+    ? buildStep1ProjectionHintModel(sourceText, expectedLens || '')
+    : null;
+  const boundedFallbackLens = (projectionHint || !sourceText.trim())
+    ? null
+    : buildStep1BoundedFallbackLens(sourceText);
   const hasLiveSignal = normaliseAssessmentTokens(sourceText).length >= 2;
-  const boundedFallbackLens = buildStep1BoundedFallbackLens(sourceText);
-  const boundedFallbackExamples = boundedFallbackLens?.functionKey
-    ? fallbackExamples.filter((example) => String(example?.functionKey || '').trim() === String(boundedFallbackLens.functionKey || '').trim())
-    : fallbackExamples;
-  if (!hasLiveSignal) {
-    return boundedFallbackExamples.slice(0, 3).map((example) => ({
-      label: example.promptLabel,
-      prompt: example.event
-    }));
-  }
-  return boundedFallbackExamples.slice(0, 3).map((example) => ({
-    label: example.promptLabel,
-    prompt: example.event
-  }));
+  const state = getStep1PromptIdeaConfidenceState({
+    projectionHint,
+    fallbackLens: boundedFallbackLens,
+    hasLiveSignal
+  });
+  const promptSuggestions = state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.high
+    ? buildStep1HighConfidencePromptSuggestions({
+        draft,
+        sourceText,
+        projectionHint,
+        expectedLens,
+        fallbackExamples
+      })
+    : [];
+  const candidateDirections = state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.candidate
+    ? buildStep1PromptCandidateDirections(projectionHint, boundedFallbackLens)
+    : [];
+  return {
+    state,
+    stateLabel: getStep1PromptIdeaStateLabel(state, projectionHint),
+    helperText: getStep1PromptIdeaHelperText(state, projectionHint),
+    promptSuggestions,
+    candidateDirections,
+    refinementHints: state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.low
+      ? STEP1_PROMPT_REFINEMENT_HINTS.slice()
+      : [],
+    preferredLens: expectedLens,
+    projectionHint,
+    sourceText,
+    hasLiveSignal
+  };
+}
+
+function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, exampleModel = null) {
+  return buildStep1GuidedPromptIdeaModel(draft, exampleModel).promptSuggestions;
 }
 
 function renderStep1GuidedPromptIdeaChips(promptSuggestions = []) {
-  const promptCards = promptSuggestions.length
-    ? promptSuggestions
-    : [
-      { label: 'Commercial integrity issue', prompt: 'A sourcing, approval, or commercial decision is manipulated or poorly governed and starts creating avoidable downstream exposure.' },
-      { label: 'Disclosure or assurance gap', prompt: 'A control, policy, or reporting gap becomes visible and management now has to respond before the issue widens.' },
-      { label: 'Dependency or labour concern', prompt: 'A supplier, sub-tier dependency, or workforce practice issue becomes visible and starts creating continuity, compliance, or stakeholder pressure.' }
-    ];
-  return promptCards
+  return (Array.isArray(promptSuggestions) ? promptSuggestions : [])
     .slice(0, 3)
     .map(prompt => `<button class="citation-chip guided-prompt-chip" data-prompt="${escapeHtml(prompt.prompt)}">${escapeHtml(prompt.label)}</button>`)
     .join('');
+}
+
+function renderStep1GuidedPromptIdeaPanel(promptIdeaModel = null) {
+  const model = promptIdeaModel && typeof promptIdeaModel === 'object'
+    ? promptIdeaModel
+    : {
+        state: STEP1_PROMPT_IDEA_CONFIDENCE_STATES.low,
+        stateLabel: 'Need one more detail',
+        helperText: getStep1PromptIdeaHelperText(STEP1_PROMPT_IDEA_CONFIDENCE_STATES.low),
+        promptSuggestions: [],
+        candidateDirections: [],
+        refinementHints: STEP1_PROMPT_REFINEMENT_HINTS.slice()
+      };
+  const state = String(model.state || STEP1_PROMPT_IDEA_CONFIDENCE_STATES.low).trim();
+  const promptSuggestions = normaliseStep1PromptIdeaSuggestions(model.promptSuggestions || []);
+  const candidateDirections = Array.isArray(model.candidateDirections) ? model.candidateDirections : [];
+  const refinementHints = Array.isArray(model.refinementHints) ? model.refinementHints : [];
+  const chipMarkup = state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.high
+    ? renderStep1GuidedPromptIdeaChips(promptSuggestions)
+    : state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.candidate
+      ? candidateDirections
+        .slice(0, 2)
+        .map((candidate) => `<span class="badge badge--neutral">${escapeHtml(String(candidate?.label || '').trim())}</span>`)
+        .join('')
+      : refinementHints
+        .slice(0, 3)
+        .map((hint) => `<span class="badge badge--neutral">${escapeHtml(String(hint || '').trim())}</span>`)
+        .join('');
+  return `<div class="form-help" id="guided-prompt-ideas-status">${escapeHtml(String(model.stateLabel || 'Prompt ideas'))} ${escapeHtml(String(model.helperText || '').trim())}</div>
+    <div class="citation-chips" id="guided-prompt-ideas">
+      ${chipMarkup}
+    </div>`;
 }
 
 const STEP1_LIVE_PROMPT_IDEA_DEBOUNCE_MS = 900;
@@ -1134,14 +1279,29 @@ function rememberStep1LivePromptIdeaSuggestions(signature, suggestions = [], sou
   }
 }
 
-function getStep1DisplayedPromptSuggestions(draft = AppState.draft || {}, exampleModel = null) {
+function getStep1DisplayedPromptIdeaModel(draft = AppState.draft || {}, exampleModel = null) {
+  const localModel = buildStep1GuidedPromptIdeaModel(draft, exampleModel);
   const signature = getStep1GuidedPromptIdeaSignature(draft);
   if (signature && _step1LivePromptIdeaState.signature === signature && _step1LivePromptIdeaState.suggestions.length) {
-    return _step1LivePromptIdeaState.suggestions;
+    return {
+      ...localModel,
+      promptSuggestions: _step1LivePromptIdeaState.suggestions,
+      source: _step1LivePromptIdeaState.source || 'ai'
+    };
   }
   const cached = signature ? _step1LivePromptIdeaCache.get(signature) : null;
-  if (cached?.suggestions?.length) return cached.suggestions;
-  return buildStep1GuidedPromptSuggestions(draft, exampleModel);
+  if (cached?.suggestions?.length) {
+    return {
+      ...localModel,
+      promptSuggestions: cached.suggestions,
+      source: cached.source || 'ai'
+    };
+  }
+  return localModel;
+}
+
+function getStep1DisplayedPromptSuggestions(draft = AppState.draft || {}, exampleModel = null) {
+  return getStep1DisplayedPromptIdeaModel(draft, exampleModel).promptSuggestions;
 }
 
 async function refreshStep1LivePromptIdeaSuggestions({ force = false } = {}) {
@@ -2045,7 +2205,7 @@ function renderStep1ScenarioCrossReferenceBand(draft = AppState.draft, context =
   </div>`;
 }
 
-function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'your role', promptSuggestions = []) {
+function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'your role', promptIdeaModel = null) {
   const previewModel = getStep1DisplayedGuidedPreviewModel(draft);
   const draftPreview = String(previewModel.preview || '').trim();
   const draftPreviewStatus = String(previewModel.status || '').trim();
@@ -2054,10 +2214,15 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
     ? renderAIStatusBanner()
     : '';
   const optionalContextDisclosureKey = getDisclosureStateKey('/wizard/1', 'add more context only if you need it');
-  const promptCards = promptSuggestions.length
-    ? promptSuggestions
-    : buildStep1GuidedPromptSuggestions(draft);
-  const primaryPrompt = String(promptCards[0]?.prompt || 'Describe what happened or what could happen.').trim();
+  const safePromptIdeaModel = promptIdeaModel && typeof promptIdeaModel === 'object'
+    ? promptIdeaModel
+    : buildStep1GuidedPromptIdeaModel(draft);
+  const promptCards = Array.isArray(safePromptIdeaModel.promptSuggestions) ? safePromptIdeaModel.promptSuggestions : [];
+  const primaryPrompt = String(
+    safePromptIdeaModel.state === STEP1_PROMPT_IDEA_CONFIDENCE_STATES.high
+      ? (promptCards[0]?.prompt || 'Describe what happened or what could happen.')
+      : 'Describe what happened or what could happen.'
+  ).trim();
   return `<div class="card card--primary wizard-primary-card anim-fade-in anim-delay-1">
     <div class="wizard-premium-head" style="margin-bottom:var(--sp-5)">
       <div>
@@ -2106,8 +2271,8 @@ function renderStep1GuidedBuilderCard(draft, recommendation, functionLabel = 'yo
           </div>
           <div class="form-group">
             <label class="form-label">Prompt ideas</label>
-            <div class="citation-chips" id="guided-prompt-ideas">
-              ${renderStep1GuidedPromptIdeaChips(promptCards)}
+            <div id="guided-prompt-ideas-panel">
+              ${renderStep1GuidedPromptIdeaPanel(safePromptIdeaModel)}
             </div>
           </div>
         </div>
@@ -2470,7 +2635,7 @@ function renderStep1PathContent(path, {
   draft,
   recommendation,
   functionLabel,
-  promptSuggestions,
+  promptIdeaModel,
   exampleModel,
   hasScenarioDraft,
   hasImportedSource,
@@ -2499,7 +2664,7 @@ function renderStep1PathContent(path, {
       activeDryRun
     });
   } else {
-    content = `${renderStep1GuidedBuilderCard(draft, recommendation, functionLabel, promptSuggestions)}
+    content = `${renderStep1GuidedBuilderCard(draft, recommendation, functionLabel, promptIdeaModel)}
       ${renderStep1AiIntakeSummary(draft)}
       ${renderStep1AiAlignmentCard(draft.aiAlignment)}
       ${renderStep1HiddenNarrativeField(draft)}`;
@@ -3679,10 +3844,10 @@ function updateStep1GuidedPreview() {
       : '';
     previewStatus.style.display = status ? '' : 'none';
   }
-  const promptIdeasHost = document.getElementById('guided-prompt-ideas');
-  if (promptIdeasHost) {
-    promptIdeasHost.innerHTML = renderStep1GuidedPromptIdeaChips(getStep1DisplayedPromptSuggestions(AppState.draft));
-    bindStep1PromptIdeaChips(promptIdeasHost.parentElement || document, getEffectiveSettings());
+  const promptIdeasPanel = document.getElementById('guided-prompt-ideas-panel');
+  if (promptIdeasPanel) {
+    promptIdeasPanel.innerHTML = renderStep1GuidedPromptIdeaPanel(getStep1DisplayedPromptIdeaModel(AppState.draft));
+    bindStep1PromptIdeaChips(promptIdeasPanel, getEffectiveSettings());
   }
 }
 
@@ -4139,7 +4304,7 @@ function renderWizard1() {
   const hasImportedSource = !!String(draft.uploadedRegisterName || draft.loadedDryRunId || '').trim()
     || (riskCandidates || []).some(risk => risk.source === 'register' || risk.source === 'ai+register' || risk.source === 'manual');
   const canContinue = !!String(draft.buId || '').trim() && (!!narrative || selectedRisks.length > 0);
-  const promptSuggestions = getStep1DisplayedPromptSuggestions(draft, exampleModel);
+  const promptIdeaModel = getStep1DisplayedPromptIdeaModel(draft, exampleModel);
 
   setPage(`
     <main class="page">
@@ -4160,7 +4325,7 @@ function renderWizard1() {
             draft,
             recommendation,
             functionLabel: exampleModel.functionLabel,
-            promptSuggestions,
+            promptIdeaModel,
             exampleModel,
             hasScenarioDraft,
             hasImportedSource,

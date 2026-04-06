@@ -85,7 +85,9 @@ function loadStep1Internals() {
     getStep1GuidedPreviewSignature: context.getStep1GuidedPreviewSignature,
     rememberStep1LivePreview: context.rememberStep1LivePreview,
     getStep1DisplayedGuidedPreviewModel: context.getStep1DisplayedGuidedPreviewModel,
+    buildStep1GuidedPromptIdeaModel: context.buildStep1GuidedPromptIdeaModel,
     buildStep1GuidedPromptSuggestions: context.buildStep1GuidedPromptSuggestions,
+    renderStep1GuidedPromptIdeaPanel: context.renderStep1GuidedPromptIdeaPanel,
     seedRisksFromScenarioDraft: context.seedRisksFromScenarioDraft,
     getLastGuessRisksArgs: () => lastGuessRisksArgs
   };
@@ -285,6 +287,59 @@ test('ransomware extortion wording stays in cyber prompt ideas instead of collap
   assert.equal(labels.includes('Payment control failure'), false);
 });
 
+test('novel ransomware paraphrase still stays in cyber prompt ideas instead of drifting into finance wording', () => {
+  const internals = loadStep1Internals();
+  const event = 'Systems locked and attackers ask for money before core operations can resume.';
+  const draft = {
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Core systems',
+      cause: '',
+      impact: 'Operations cannot resume'
+    }
+  };
+
+  const model = internals.buildStep1GuidedPromptIdeaModel(draft, {
+    recommendedExamples: [
+      { promptLabel: 'Payment control failure', event: 'A payment-control issue causes avoidable financial loss.', functionKey: 'finance' }
+    ]
+  });
+
+  assert.equal(model.state, 'high_confidence_family');
+  assert.ok(model.promptSuggestions.some((item) => item.label === 'Ransomware Outage'));
+  assert.equal(model.promptSuggestions.some((item) => item.label === 'Payment control failure'), false);
+
+  const html = internals.renderStep1GuidedPromptIdeaPanel(model);
+  assert.ok(html.includes('Likely local direction: Cyber'));
+  assert.ok(html.includes('Ransomware Outage'));
+});
+
+test('high-confidence ransomware wording exposes a clear Step 1 prompt state with clickable chips', () => {
+  const internals = loadStep1Internals();
+  const event = 'Hackers encrypt company servers, halting operations and demanding a payment to unlock files.';
+  const model = internals.buildStep1GuidedPromptIdeaModel({
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Company servers and shared files',
+      cause: '',
+      impact: 'Operational halt and recovery pressure'
+    }
+  }, {
+    recommendedExamples: [
+      { promptLabel: 'Payment control failure', event: 'A payment-control issue causes avoidable financial loss.', functionKey: 'finance' }
+    ]
+  });
+
+  assert.equal(model.state, 'high_confidence_family');
+  assert.ok(model.promptSuggestions.some((item) => item.label === 'Ransomware Outage'));
+
+  const html = internals.renderStep1GuidedPromptIdeaPanel(model);
+  assert.ok(html.includes('Likely local direction: Cyber'));
+  assert.ok(html.includes('guided-prompt-chip'));
+});
+
 test('supplier labour scenario stays in ESG prompt ideas instead of drifting into sourcing-only examples', () => {
   const internals = loadStep1Internals();
   const event = 'A supplier is linked to forced labour practices in a critical sourcing category.';
@@ -310,6 +365,85 @@ test('supplier labour scenario stays in ESG prompt ideas instead of drifting int
   const labels = suggestions.map((item) => item.label);
   assert.ok(labels.includes('Forced Labour / Modern Slavery'));
   assert.equal(labels.includes('Single-source shortfall'), false);
+});
+
+test('ambiguous privacy-versus-disclosure wording stays soft instead of forcing a hard disclosure prompt', () => {
+  const internals = loadStep1Internals();
+  const event = 'Customer records were kept too long in breach of privacy obligations, with possible external visibility.';
+  const model = internals.buildStep1GuidedPromptIdeaModel({
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Customer records',
+      cause: '',
+      impact: ''
+    }
+  }, {
+    recommendedExamples: [
+      { promptLabel: 'External data breach', event: 'Stolen data is leaked externally.', functionKey: 'technology' }
+    ]
+  });
+
+  assert.equal(model.state, 'candidate_families');
+  assert.equal(model.promptSuggestions.length, 0);
+  assert.ok(model.candidateDirections.length >= 1);
+
+  const html = internals.renderStep1GuidedPromptIdeaPanel(model);
+  assert.ok(html.includes('Possible directions'));
+  assert.equal(html.includes('guided-prompt-chip'), false);
+  assert.equal(html.includes('Data Disclosure'), false);
+});
+
+test('supplier-versus-programme mixed wording stays in candidate mode when separation is weak', () => {
+  const internals = loadStep1Internals();
+  const event = 'A supplier delay is starting to push a major transformation milestone off track.';
+  const draft = {
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Transformation milestone',
+      cause: '',
+      impact: ''
+    }
+  };
+
+  const model = internals.buildStep1GuidedPromptIdeaModel(draft, {
+    recommendedExamples: [
+      { promptLabel: 'Single-source shortfall', event: 'A critical supplier fails without substitute cover.', functionKey: 'procurement' }
+    ]
+  });
+  assert.equal(model.state, 'candidate_families');
+  assert.equal(model.promptSuggestions.length, 0);
+
+  const lens = internals.getStep1PreferredScenarioLens({}, draft, event);
+  assert.equal(lens.key, 'general');
+  assert.ok(Array.from(lens.secondaryKeys || []).includes('supply-chain'));
+
+  const html = internals.renderStep1GuidedPromptIdeaPanel(model);
+  assert.ok(html.includes('Mixed scenario') || html.includes('Possible directions'));
+  assert.equal(html.includes('guided-prompt-chip'), false);
+});
+
+test('weak generic wording stays low-confidence unknown and asks for one more detail', () => {
+  const internals = loadStep1Internals();
+  const event = 'There could be disruption and customer impact.';
+  const model = internals.buildStep1GuidedPromptIdeaModel({
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: '',
+      cause: '',
+      impact: ''
+    }
+  });
+
+  assert.equal(model.state, 'low_confidence_unknown');
+  assert.equal(model.promptSuggestions.length, 0);
+  assert.ok(model.refinementHints.includes('Add what is affected'));
+
+  const html = internals.renderStep1GuidedPromptIdeaPanel(model);
+  assert.ok(html.includes('Need one more detail'));
+  assert.equal(html.includes('guided-prompt-chip'), false);
 });
 
 test('guided lens ignores stale financial preview wording when the event is identity-led', () => {
@@ -504,16 +638,19 @@ test('genuinely mixed wording stays ambiguity-aware instead of forcing a hard pr
   assert.ok(Array.from(lens.secondaryKeys || []).includes('supply-chain'));
   assert.ok(Array.from(lens.secondaryKeys || []).includes('compliance'));
 
-  const suggestions = internals.buildStep1GuidedPromptSuggestions(draft, {
+  const model = internals.buildStep1GuidedPromptIdeaModel(draft, {
     recommendedExamples: [
       { promptLabel: 'Payment control failure', event: 'A payment-control issue causes avoidable financial loss.', functionKey: 'finance' }
     ]
   });
+  assert.equal(model.state, 'candidate_families');
+  assert.equal(model.promptSuggestions.length, 0);
+  assert.ok(model.candidateDirections.some((item) => item.label === 'Supply chain'));
+  assert.ok(model.candidateDirections.some((item) => item.label === 'Compliance'));
 
-  const labels = suggestions.map((item) => item.label);
-  assert.ok(labels.includes('Delivery Slippage'));
-  assert.ok(labels.includes('Privacy Non Compliance'));
-  assert.equal(labels.includes('Payment control failure'), false);
+  const html = internals.renderStep1GuidedPromptIdeaPanel(model);
+  assert.equal(html.includes('guided-prompt-chip'), false);
+  assert.equal(html.includes('Payment control failure'), false);
 });
 
 test('displayed guided preview prefers the live AI-checked preview for the current signature', () => {

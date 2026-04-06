@@ -107,6 +107,8 @@ Current AI behavior:
   - the browser ranks competing taxonomy families, lenses, confidence, and separation before showing prompt ideas or a preferred local lens
   - ambiguous close-call wording stays soft instead of forcing a hard lane from a single generic token such as `payment`, `breach`, `outage`, or `supplier`
   - bounded browser fallback heuristics only run when the taxonomy projection is absent or clearly too weak
+  - the committed browser projection snapshot is now parity-checked against the canonical taxonomy, and can be regenerated with `npm run sync:taxonomy-projection`
+  - bounded novel-wording evals now cover paraphrase and near-miss phrasing across ransomware/extortion, privacy/retention/transfer, supplier delay, workforce fatigue, ESG, availability attack, payment-control-vs-fraud, and third-party access wording
 - browser API base-URL resolution is now config-driven: Vercel-hosted fronts stay same-origin, while static fronts use the configured hosted API origin without extra discovery requests
 - client workflow requests are normalized before transport so semantically identical inputs produce a stable request shape
 - duplicate suppression now happens on both sides:

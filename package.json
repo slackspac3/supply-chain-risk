@@ -8,6 +8,8 @@
   "scripts": {
     "check:syntax": "node scripts/syntax-check.js",
     "check:smoke": "node scripts/smoke-check.js",
+    "check:taxonomy-projection": "node scripts/sync-scenario-taxonomy-projection.js --check",
+    "sync:taxonomy-projection": "node scripts/sync-scenario-taxonomy-projection.js --write",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.js",
     "test:unit": "node --test tests/unit/**/*.test.js",

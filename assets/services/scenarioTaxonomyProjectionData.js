@@ -556,6 +556,14 @@
           "strength": "strong"
         },
         {
+          "text": "systems locked",
+          "strength": "strong"
+        },
+        {
+          "text": "servers encrypted",
+          "strength": "strong"
+        },
+        {
           "text": "encrypt server",
           "strength": "strong"
         },
@@ -569,6 +577,18 @@
         },
         {
           "text": "payment to unlock",
+          "strength": "strong"
+        },
+        {
+          "text": "pending payment",
+          "strength": "medium"
+        },
+        {
+          "text": "ask for money",
+          "strength": "medium"
+        },
+        {
+          "text": "attackers ask for money",
           "strength": "strong"
         },
         {
@@ -696,6 +716,10 @@
         },
         {
           "text": "hostile traffic",
+          "strength": "medium"
+        },
+        {
+          "text": "hostile traffic saturation",
           "strength": "medium"
         },
         {
@@ -1593,6 +1617,14 @@
         },
         {
           "text": "third-party access compromised",
+          "strength": "strong"
+        },
+        {
+          "text": "vendor is compromised",
+          "strength": "strong"
+        },
+        {
+          "text": "compromised vendor",
           "strength": "strong"
         },
         {
@@ -5983,6 +6015,18 @@
           "strength": "strong"
         },
         {
+          "text": "vendor delay",
+          "strength": "strong"
+        },
+        {
+          "text": "delivery slips",
+          "strength": "strong"
+        },
+        {
+          "text": "vendor delivery slips",
+          "strength": "strong"
+        },
+        {
           "text": "missed delivery date",
           "strength": "strong"
         },
@@ -5993,6 +6037,14 @@
         {
           "text": "late delivery",
           "strength": "medium"
+        },
+        {
+          "text": "blocks rollout",
+          "strength": "strong"
+        },
+        {
+          "text": "delays rollout",
+          "strength": "strong"
         },
         {
           "text": "delayed deployment",
@@ -6493,6 +6545,18 @@
         },
         {
           "text": "external vendor accounts have excessive access",
+          "strength": "strong"
+        },
+        {
+          "text": "vendor accounts have broad access",
+          "strength": "strong"
+        },
+        {
+          "text": "broad vendor access",
+          "strength": "strong"
+        },
+        {
+          "text": "broad access across critical systems",
           "strength": "strong"
         },
         {
@@ -7895,6 +7959,18 @@
         {
           "text": "delivery date",
           "strength": "medium"
+        },
+        {
+          "text": "staff exhaustion",
+          "strength": "medium"
+        },
+        {
+          "text": "understaffing",
+          "strength": "medium"
+        },
+        {
+          "text": "fatigue",
+          "strength": "medium"
         }
       ],
       "requiredSignals": [
@@ -8231,6 +8307,14 @@
         {
           "text": "fatigue",
           "strength": "medium"
+        },
+        {
+          "text": "staff exhaustion",
+          "strength": "medium"
+        },
+        {
+          "text": "unsafe delivery conditions",
+          "strength": "medium"
         }
       ],
       "antiSignals": [
@@ -8294,6 +8378,10 @@
         },
         {
           "text": "shift coverage weakness",
+          "strength": "medium"
+        },
+        {
+          "text": "staff exhaustion",
           "strength": "medium"
         }
       ],

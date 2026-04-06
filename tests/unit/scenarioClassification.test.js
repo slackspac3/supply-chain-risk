@@ -182,6 +182,37 @@ test('ransomware extortion wording stays cyber even when payment is mentioned', 
   assert.equal(buildScenarioLens(classification).key, 'cyber');
 });
 
+test('canonical classification survives bounded paraphrase wording across high-drift families', () => {
+  const cases = [
+    {
+      text: 'Systems locked and attackers ask for money before core operations can resume.',
+      expectedFamily: 'ransomware',
+      expectedLens: 'cyber'
+    },
+    {
+      text: 'Key vendor delivery slips and blocks rollout for dependent projects.',
+      expectedFamily: 'delivery_slippage',
+      expectedLens: 'supply-chain'
+    },
+    {
+      text: 'Staff exhaustion creates unsafe delivery conditions across repeated shifts.',
+      expectedFamily: 'workforce_fatigue_staffing_weakness',
+      expectedLens: 'people-workforce'
+    },
+    {
+      text: 'Vendor accounts have broad access across critical systems without clear segregation.',
+      expectedFamily: 'vendor_access_weakness',
+      expectedLens: 'third-party'
+    }
+  ];
+
+  cases.forEach(({ text, expectedFamily, expectedLens }) => {
+    const classification = classifyScenario(text, {});
+    assert.equal(classification.primaryFamily?.key, expectedFamily);
+    assert.equal(buildScenarioLens(classification).key, expectedLens);
+  });
+});
+
 test('delivery slippage stays supply chain and does not collapse into cyber from stale hints', () => {
   const classification = classifyScenario(
     'Key supplier misses committed delivery date, delaying infrastructure deployment and dependent projects.',
