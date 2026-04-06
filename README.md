@@ -80,7 +80,7 @@ Current behavior:
 - submitters now choose an explicit reviewer instead of sending into an anonymous scope queue
 - regular users can submit to reviewer-capable people in their own function, with BU fallback when no function reviewer exists
 - `function_admin` users can route the assessment to any reviewer-capable person in their BU
-- `bu_admin` users can escalate an assigned review to a holding-company `admin`
+- `bu_admin` users can escalate unresolved in-scope BU reviews to a named holding-company `admin`, even when they are not the current assignee
 - submitted items are stored in the shared review queue API
 - the queue item now stores:
   - submitter
@@ -92,6 +92,7 @@ Current behavior:
 - BU heads can escalate from the results page to a named holding-company reviewer
 - oversight dashboards now expose a compact review inbox for unresolved assigned items
 - Platform Home still shows the central queue for admins, with named assignees surfaced there as well
+- the central queue now supports the same named holding-company escalation path for BU heads instead of showing an inert escalate action
 - results surfaces now reflect:
   - pending
   - approved
