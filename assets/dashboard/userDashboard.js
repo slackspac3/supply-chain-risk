@@ -151,6 +151,14 @@ function buildBoardBriefTreatmentStatus(assessment = {}) {
   return 'Monitor';
 }
 
+function buildDashboardReviewQueueHref(item = {}) {
+  if (item?.sharedAssessment && typeof ShareService !== 'undefined' && typeof ShareService.generateShareURL === 'function') {
+    return ShareService.generateShareURL(item.sharedAssessment) || '';
+  }
+  const assessmentId = String(item?.assessmentId || item?.id || '').trim();
+  return assessmentId ? `#/results/${assessmentId}` : '';
+}
+
 function readAiFlagsSessionStore() {
   try {
     const parsed = JSON.parse(sessionStorage.getItem(AI_FLAGS_SESSION_KEY) || '{}');
@@ -1525,6 +1533,7 @@ function renderUserDashboard() {
               <button class="btn btn--secondary btn--lg" id="btn-dashboard-new-assessment-support" type="button">Start Guided Assessment</button>
             </div>
           </div>` : ''}
+          ${isOversightUser ? '<div id="dashboard-review-inbox-host"></div>' : ''}
           ${UI.dashboardSectionCard({
             title: roleFrontDoor.nextUpTitle,
             description: roleFrontDoor.nextUpDescription,
@@ -1970,6 +1979,65 @@ function renderUserDashboard() {
     }
     renderAiFlagsBodyToDom();
   };
+  const loadDashboardReviewInbox = async () => {
+    const host = document.getElementById('dashboard-review-inbox-host');
+    if (!isOversightUser || !host) return;
+    host.innerHTML = '<div class="form-help" style="margin-bottom:var(--sp-4)">Loading assigned review requests…</div>';
+    try {
+      const sessionToken = typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
+        ? AuthService.getApiSessionToken()
+        : '';
+      const response = await fetch('/api/review-queue', {
+        headers: {
+          'x-session-token': sessionToken
+        }
+      });
+      if (!response.ok) throw new Error('Failed to load review queue');
+      const { items } = await response.json();
+      const currentUsername = String(user?.username || '').trim().toLowerCase();
+      const unresolved = (Array.isArray(items) ? items : [])
+        .filter(item => ['pending', 'escalated'].includes(String(item?.reviewStatus || '').trim().toLowerCase()))
+        .sort((left, right) => {
+          const leftAssigned = String(left?.assignedReviewerUsername || '').trim().toLowerCase() === currentUsername ? 1 : 0;
+          const rightAssigned = String(right?.assignedReviewerUsername || '').trim().toLowerCase() === currentUsername ? 1 : 0;
+          if (rightAssigned !== leftAssigned) return rightAssigned - leftAssigned;
+          return Number(right?.submittedAt || 0) - Number(left?.submittedAt || 0);
+        })
+        .slice(0, 4);
+      if (!unresolved.length) {
+        host.innerHTML = '';
+        return;
+      }
+      host.innerHTML = UI.dashboardSectionCard({
+        title: 'Review inbox',
+        description: 'Open the assigned or visible review items here, then complete the decision on the results page.',
+        badge: unresolved.length,
+        className: 'dashboard-section-card--secondary',
+        body: unresolved.map(item => UI.dashboardAssessmentRow({
+          assessmentId: String(item?.assessmentId || '').trim(),
+          title: escapeDashboardText(item?.scenarioTitle || item?.sharedAssessment?.scenarioTitle || 'Review item'),
+          detail: `
+            Submitted by ${escapeDashboardText(item?.submittedByDisplayName || item?.submittedBy || 'Unknown')} ·
+            Assigned to ${escapeDashboardText(item?.assignedReviewerDisplayName || item?.assignedReviewerUsername || 'Unassigned')} ·
+            ${escapeDashboardText(new Date(item?.submittedAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'short', day: 'numeric' }))}
+            ${item?.reviewStatus === 'escalated' ? `<div class="dashboard-memory-cue">Escalated to holding-company review.</div>` : ''}
+          `,
+          badgeClass: String(item?.assignedReviewerUsername || '').trim().toLowerCase() === currentUsername ? 'badge--warning' : 'badge--neutral',
+          badgeLabel: String(item?.assignedReviewerUsername || '').trim().toLowerCase() === currentUsername ? 'Assigned to you' : 'Visible in scope',
+          actions: `
+            <button type="button" class="btn btn--ghost btn--sm dashboard-open-action"
+              data-assessment-id="${escapeDashboardText(String(item?.assessmentId || ''))}"
+              data-results-href="${escapeDashboardText(buildDashboardReviewQueueHref(item))}">
+              Open Review
+            </button>
+          `
+        })).join('')
+      });
+    } catch (error) {
+      console.error('dashboard review inbox load failed:', error);
+      host.innerHTML = '<div class="form-help" style="margin-bottom:var(--sp-4)">Could not load the review inbox right now.</div>';
+    }
+  };
   aiFlagsPanel?.addEventListener('toggle', () => {
     AppState.dashboardAiFlagsState = {
       ...(AppState.dashboardAiFlagsState && typeof AppState.dashboardAiFlagsState === 'object' ? AppState.dashboardAiFlagsState : {}),
@@ -1977,6 +2045,7 @@ function renderUserDashboard() {
     };
   });
   if (!isOversightUser) loadAiFlags();
+  if (isOversightUser) loadDashboardReviewInbox();
   const correlationPanel = document.getElementById('dashboard-correlation-panel');
   const correlationBody = document.getElementById('dashboard-correlation-body');
   const renderCorrelationBodyToDom = () => {
@@ -2150,6 +2219,12 @@ function renderUserDashboard() {
       if (target.classList.contains('dashboard-open-action')) {
         if (id === 'draft') {
           openDraftWorkspaceRoute();
+          return;
+        }
+        const resultsHref = String(target.dataset.resultsHref || row?.dataset.resultsHref || '').trim();
+        if (resultsHref) {
+          const hashIndex = resultsHref.indexOf('#');
+          window.location.hash = hashIndex > -1 ? resultsHref.slice(hashIndex) : resultsHref;
           return;
         }
         if (id) Router.navigate(`/results/${id}`);

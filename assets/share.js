@@ -26,10 +26,8 @@ const ShareService = (() => {
     return out;
   }
 
-  /**
-   * Generate a shareable URL for an assessment
-   */
-  function generateShareURL(assessment) {
+  function buildSharePayload(assessment) {
+    if (!assessment || typeof assessment !== 'object') return null;
     const payload = _pick(assessment, SHARE_FIELDS);
     const resolvedScenarioTitle = typeof resolveScenarioDisplayTitle === 'function'
       ? resolveScenarioDisplayTitle({
@@ -42,7 +40,6 @@ const ShareService = (() => {
     if (resolvedScenarioTitle) payload.scenarioTitle = resolvedScenarioTitle;
     if (currentNarrative) payload.narrative = currentNarrative;
 
-    // Trim heavy arrays to keep URL manageable
     if (payload.results) {
       payload.results = {
         lm: payload.results.lm,
@@ -51,7 +48,6 @@ const ShareService = (() => {
         toleranceDetail: payload.results.toleranceDetail,
         threshold: payload.results.threshold,
         iterations: payload.results.iterations,
-        // Drop histogram and LEC raw data — recalculate on load if needed
         histogram: payload.results.histogram?.slice(0, 40),
         lec: payload.results.lec?.slice(0, 50)
       };
@@ -65,6 +61,16 @@ const ShareService = (() => {
     if (payload.narrative?.length > 500) {
       payload.narrative = payload.narrative.substring(0, 500) + '…';
     }
+
+    return payload;
+  }
+
+  /**
+   * Generate a shareable URL for an assessment
+   */
+  function generateShareURL(assessment) {
+    const payload = buildSharePayload(assessment);
+    if (!payload?.id) return null;
 
     try {
       const json = JSON.stringify(payload);
@@ -116,5 +122,5 @@ const ShareService = (() => {
     }
   }
 
-  return { generateShareURL, parseShareFromURL, copyShareLink };
+  return { buildSharePayload, generateShareURL, parseShareFromURL, copyShareLink };
 })();

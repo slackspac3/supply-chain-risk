@@ -7,6 +7,7 @@ const USERS_KEY = process.env.USER_STORE_KEY || 'risk_calculator_users';
 function normaliseAccount(account = {}) {
   return {
     username: String(account.username || '').trim().toLowerCase(),
+    displayName: String(account.displayName || '').trim() || 'User',
     role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
     departmentEntityId: String(account.departmentEntityId || '').trim(),
@@ -30,22 +31,35 @@ async function readCurrentAccount(username = '') {
   const safeUsername = String(username || '').trim().toLowerCase();
   if (!safeUsername) return { account: null, enforce: false };
   try {
-    const raw = await kvGet(USERS_KEY);
-    let accounts = getBootstrapAccounts();
-    let enforce = accounts.length > 0;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      accounts = Array.isArray(parsed) ? parsed : [];
-      enforce = true;
-    }
+    const { accounts, enforce } = await readAccountsDirectory();
     const match = accounts.find(account => String(account?.username || '').trim().toLowerCase() === safeUsername);
     return {
-      account: match ? normaliseAccount(match) : null,
+      account: match || null,
       enforce
     };
   } catch (error) {
     console.error('api/_apiAuth.readCurrentAccount failed to read account store:', error);
     return { account: null, enforce: false };
+  }
+}
+
+async function readAccountsDirectory() {
+  try {
+    const raw = await kvGet(USERS_KEY);
+    let accounts = getBootstrapAccounts();
+    let enforce = accounts.length > 0;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      accounts = Array.isArray(parsed) ? parsed.map(normaliseAccount).filter(account => account.username) : [];
+      enforce = true;
+    }
+    return { accounts, enforce };
+  } catch (error) {
+    console.error('api/_apiAuth.readAccountsDirectory failed to read account store:', error);
+    return {
+      accounts: getBootstrapAccounts(),
+      enforce: false
+    };
   }
 }
 
@@ -114,6 +128,7 @@ async function validateSessionFromRequest(req) {
     return {
       session: {
         username: currentAccount.username,
+        displayName: currentAccount.displayName || '',
         role: currentAccount.role,
         businessUnitEntityId: currentAccount.businessUnitEntityId || '',
         departmentEntityId: currentAccount.departmentEntityId || '',
@@ -167,6 +182,7 @@ module.exports = {
   isRequestSecretValid,
   sendApiError,
   sendConflictError,
+  readAccountsDirectory,
   validateSessionFromRequest,
   requireSession,
   resolveAdminActor

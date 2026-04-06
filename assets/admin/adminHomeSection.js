@@ -270,7 +270,14 @@
           const assessmentById = new Map((Array.isArray(localAssessments) ? localAssessments : []).map(item => [String(item?.id || ''), item]));
           listEl.innerHTML = items.map(item => `
             <div class="review-queue-item" data-queue-id="${escapeAdminHomeText(item.id)}"
-                 data-assessment-id="${escapeAdminHomeText(item.assessmentId)}">
+                 data-assessment-id="${escapeAdminHomeText(item.assessmentId)}"
+                 data-results-href="${escapeAdminHomeText(
+                   assessmentById.get(String(item.assessmentId || ''))
+                     ? ''
+                     : (item.sharedAssessment && typeof ShareService !== 'undefined' && typeof ShareService.generateShareURL === 'function'
+                         ? (ShareService.generateShareURL(item.sharedAssessment) || '')
+                         : '')
+                 )}">
               <div class="review-queue-item__meta">
                 <strong>${escapeAdminHomeText(resolveAdminHomeScenarioTitle(assessmentById.get(String(item.assessmentId || '')) || item))}</strong>
                 <span class="badge ${item.toleranceBreached ? 'badge--danger' : item.nearTolerance ? 'badge--warning' : 'badge--neutral'}">
@@ -279,6 +286,7 @@
               </div>
               <div class="review-queue-item__detail">
                 Submitted by <strong>${escapeAdminHomeText(item.submittedBy)}</strong> ·
+                Assigned to <strong>${escapeAdminHomeText(item.assignedReviewerDisplayName || item.assignedReviewerUsername || 'Unassigned')}</strong> ·
                 ${escapeAdminHomeText(item.buName || 'Business unit not set')} ·
                 ${new Date(item.submittedAt).toLocaleDateString('en-GB')}
               </div>
@@ -289,11 +297,13 @@
               <div class="review-queue-item__actions">
                 <button class="btn btn--ghost btn--sm" data-queue-action="view"
                   data-assessment-id="${escapeAdminHomeText(item.assessmentId)}">View Result</button>
-                ${item.reviewStatus === 'pending' ? `
+                ${(item.currentUserCanReview && (item.reviewStatus === 'pending' || item.reviewStatus === 'escalated')) ? `
                   <button class="btn btn--sm btn--success" data-queue-action="approve"
                     data-queue-id="${escapeAdminHomeText(item.id)}">Approve</button>
                   <button class="btn btn--sm btn--warning" data-queue-action="changes"
                     data-queue-id="${escapeAdminHomeText(item.id)}">Request Changes</button>
+                ` : ''}
+                ${item.currentUserCanEscalate ? `
                   <button class="btn btn--sm btn--secondary" data-queue-action="escalate"
                     data-queue-id="${escapeAdminHomeText(item.id)}">Escalate</button>
                 ` : ''}
@@ -303,6 +313,13 @@
 
           listEl.querySelectorAll('[data-queue-action="view"]').forEach(btn => {
             btn.addEventListener('click', () => {
+              const row = btn.closest('.review-queue-item');
+              const resultsHref = String(row?.dataset?.resultsHref || '').trim();
+              if (resultsHref) {
+                const hashIndex = resultsHref.indexOf('#');
+                window.location.hash = hashIndex > -1 ? resultsHref.slice(hashIndex) : resultsHref;
+                return;
+              }
               Router.navigate('/results/' + btn.dataset.assessmentId);
             });
           });
@@ -317,11 +334,25 @@
                 ...current,
                 reviewSubmission: {
                   ...(current.reviewSubmission || {}),
+                  reviewId: queueItem.id || '',
                   reviewStatus: queueItem.reviewStatus || '',
+                  submittedAt: queueItem.submittedAt || 0,
+                  submittedByUsername: queueItem.submittedBy || '',
+                  submittedByDisplayName: queueItem.submittedByDisplayName || '',
+                  assignedReviewerUsername: queueItem.assignedReviewerUsername || '',
+                  assignedReviewerDisplayName: queueItem.assignedReviewerDisplayName || '',
+                  assignedReviewerRole: queueItem.assignedReviewerRole || '',
+                  reviewScope: queueItem.reviewScope || '',
                   reviewNote: queueItem.reviewNote || '',
                   reviewedBy: queueItem.reviewedBy || currentUsername,
                   reviewedAt: queueItem.reviewedAt || Date.now(),
-                  escalatedTo: queueItem.escalatedTo || ''
+                  escalatedTo: queueItem.escalatedTo || '',
+                  escalatedBy: queueItem.escalatedBy || '',
+                  escalatedAt: queueItem.escalatedAt || 0,
+                  currentUserCanReview: queueItem.currentUserCanReview === true,
+                  currentUserCanEscalate: queueItem.currentUserCanEscalate === true,
+                  currentUserCanView: queueItem.currentUserCanView === true,
+                  isAssignedToCurrentUser: queueItem.isAssignedToCurrentUser === true
                 },
                 reviewDecision: {
                   decision: queueItem.reviewStatus || '',
@@ -433,70 +464,8 @@
           });
 
           listEl.querySelectorAll('[data-queue-action="escalate"]').forEach(btn => {
-            const currentUser = typeof AuthService !== 'undefined' && typeof AuthService.getCurrentUser === 'function'
-              ? AuthService.getCurrentUser()
-              : null;
-            const resolvedManagedAccounts = Array.isArray(managedAccounts) && managedAccounts.length
-              ? managedAccounts
-              : (typeof getManagedAccountsForAdmin === 'function'
-                ? getManagedAccountsForAdmin(getAdminSettings())
-                  : (typeof AuthService !== 'undefined' && typeof AuthService.getManagedAccounts === 'function'
-                    ? AuthService.getManagedAccounts()
-                    : []));
-            const targets = (resolvedManagedAccounts || []).filter(u =>
-              u.role === 'admin' || u.role === 'bu_admin'
-            );
-            if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'bu_admin') && !targets.some(u => u.username === currentUser.username)) {
-              targets.unshift({
-                username: currentUser.username,
-                displayName: currentUser.displayName || currentUser.username,
-                role: currentUser.role
-              });
-            }
-            const options = targets.length
-              ? targets.map(u => `<option value="${escapeAdminHomeText(u.username)}">${escapeAdminHomeText(u.displayName || u.username)} (${escapeAdminHomeText(u.role)})</option>`).join('')
-              : '<option disabled>No escalation targets configured</option>';
             btn.addEventListener('click', () => {
-              const modal = UI.modal({
-                title: 'Escalate assessment',
-                body: `
-                  <label for="escalate-target" class="form-label">Escalate to</label>
-                  <select id="escalate-target" class="form-select"
-                    style="width:100%;margin-bottom:var(--sp-4)">
-                    ${options}
-                  </select>
-                  <div class="flex gap-3">
-                    <button type="button" class="btn btn--primary" id="btn-confirm-escalate">
-                      Escalate
-                    </button>
-                    <button type="button" class="btn btn--ghost" id="btn-cancel-escalate">Cancel</button>
-                  </div>
-                `
-              });
-              document.getElementById('btn-cancel-escalate')?.addEventListener('click', () => modal.close());
-              document.getElementById('btn-confirm-escalate')?.addEventListener('click', async () => {
-                const target = document.getElementById('escalate-target')?.value || '';
-                if (!target) {
-                  UI.toast('Select a target first.', 'warning');
-                  return;
-                }
-                const confirmBtn = document.getElementById('btn-confirm-escalate');
-                if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Escalating…'; }
-                try {
-                  const { item } = await patchQueueItem(btn.dataset.queueId, {
-                    reviewStatus: 'escalated',
-                    escalatedTo: target
-                  });
-                  await syncLocalReviewDecision(item);
-                  modal.close();
-                  UI.toast('Assessment escalated.', 'success');
-                  loadReviewQueue();
-                  loadDriftAlerts();
-                } catch {
-                  UI.toast('Could not escalate. Try again.', 'danger');
-                  if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Escalate'; }
-                }
-              });
+              UI.toast('Holding-company escalation now runs from the assignee results page.', 'info');
             });
           });
         } catch {

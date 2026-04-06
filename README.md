@@ -77,9 +77,21 @@ Completed assessments that breach tolerance, approach tolerance, or trigger annu
 
 Current behavior:
 - the results hero can prompt the user to submit the assessment for review
+- submitters now choose an explicit reviewer instead of sending into an anonymous scope queue
+- regular users can submit to reviewer-capable people in their own function, with BU fallback when no function reviewer exists
+- `function_admin` users can route the assessment to any reviewer-capable person in their BU
+- `bu_admin` users can escalate an assigned review to a holding-company `admin`
 - submitted items are stored in the shared review queue API
-- admins and BU admins can view the review queue from Platform Home
-- reviewers can approve, request changes, or escalate
+- the queue item now stores:
+  - submitter
+  - assigned reviewer
+  - review scope
+  - a bounded shared results snapshot so the assignee can open the result even if it is not already in their local browser workspace
+- results surfaces now show who the assessment is assigned to, not only that it is pending
+- the assigned reviewer can approve or request changes from the results page
+- BU heads can escalate from the results page to a named holding-company reviewer
+- oversight dashboards now expose a compact review inbox for unresolved assigned items
+- Platform Home still shows the central queue for admins, with named assignees surfaced there as well
 - results surfaces now reflect:
   - pending
   - approved
@@ -88,7 +100,8 @@ Current behavior:
 
 Pilot note:
 - the queue is backed by shared KV
-- notifications are currently local/browser-scoped for the pilot
+- notifications are currently in-app/browser-scoped for the pilot
+- there is no separate email or workflow-notification delivery path yet
 
 ## AI And Grounding Model
 

@@ -3338,20 +3338,120 @@ function withResultsActionBusy(button, busyLabel, resetDelayMs, callback) {
   }
 }
 
+function getResultsSessionToken() {
+  return typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
+    ? AuthService.getApiSessionToken()
+    : (JSON.parse(sessionStorage.getItem('rq_auth_session') || '{}')?.token || '');
+}
+
+function isReviewAwaitingDecision(status = '') {
+  const safeStatus = String(status || '').trim().toLowerCase();
+  return safeStatus === 'pending' || safeStatus === 'escalated';
+}
+
+function getResultsReviewScopeLabel(reviewScope = '') {
+  const safeScope = String(reviewScope || '').trim().toLowerCase();
+  if (safeScope === 'function') return 'function review';
+  if (safeScope === 'business_unit') return 'BU review';
+  if (safeScope === 'holding_company') return 'holding-company review';
+  return 'review';
+}
+
+function getResultsReviewActorLabel(reviewSubmission = {}, {
+  fallback = 'your reviewer'
+} = {}) {
+  return String(
+    reviewSubmission?.assignedReviewerDisplayName
+    || reviewSubmission?.assignedReviewerUsername
+    || reviewSubmission?.reviewedBy
+    || reviewSubmission?.submittedByDisplayName
+    || reviewSubmission?.submittedByUsername
+    || fallback
+  ).trim();
+}
+
+function buildLocalReviewSubmissionFromQueueItem(item = {}) {
+  return {
+    reviewId: String(item?.id || '').trim(),
+    reviewStatus: String(item?.reviewStatus || '').trim().toLowerCase(),
+    submittedAt: Number(item?.submittedAt || 0),
+    submittedByUsername: String(item?.submittedBy || '').trim().toLowerCase(),
+    submittedByDisplayName: String(item?.submittedByDisplayName || '').trim(),
+    assignedReviewerUsername: String(item?.assignedReviewerUsername || '').trim().toLowerCase(),
+    assignedReviewerDisplayName: String(item?.assignedReviewerDisplayName || '').trim(),
+    assignedReviewerRole: String(item?.assignedReviewerRole || '').trim().toLowerCase(),
+    reviewScope: String(item?.reviewScope || '').trim().toLowerCase(),
+    reviewNote: String(item?.reviewNote || '').trim(),
+    reviewedBy: String(item?.reviewedBy || '').trim().toLowerCase(),
+    reviewedAt: Number(item?.reviewedAt || 0),
+    escalatedTo: String(item?.escalatedTo || '').trim().toLowerCase(),
+    escalatedBy: String(item?.escalatedBy || '').trim().toLowerCase(),
+    escalatedAt: Number(item?.escalatedAt || 0),
+    currentUserCanReview: item?.currentUserCanReview === true,
+    currentUserCanEscalate: item?.currentUserCanEscalate === true,
+    currentUserCanView: item?.currentUserCanView === true,
+    isAssignedToCurrentUser: item?.isAssignedToCurrentUser === true
+  };
+}
+
+async function fetchReviewTargets(action = 'submit') {
+  const safeAction = String(action || 'submit').trim().toLowerCase() === 'escalate' ? 'escalate' : 'submit';
+  const response = await fetch(`/api/review-queue?view=targets&action=${encodeURIComponent(safeAction)}`, {
+    headers: {
+      'x-session-token': getResultsSessionToken()
+    }
+  });
+  if (!response.ok) throw new Error('Could not load review targets.');
+  return response.json();
+}
+
+async function patchReviewQueueItem(reviewId, patch = {}) {
+  const response = await fetch('/api/review-queue', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-token': getResultsSessionToken()
+    },
+    body: JSON.stringify({
+      id: reviewId,
+      ...patch
+    })
+  });
+  if (!response.ok) throw new Error('Review update failed.');
+  return response.json();
+}
+
 function renderResultsReviewSubmitBanner(assessment, r) {
   if (!assessment?.id || !assessment?.results) return '';
   const needsReview = !!(r?.toleranceBreached || r?.nearTolerance || r?.annualReviewTriggered);
   if (!needsReview) return '';
-  const reviewStatus = String(assessment.reviewSubmission?.reviewStatus || '').trim().toLowerCase();
-  if (reviewStatus === 'pending') {
+  const reviewSubmission = assessment.reviewSubmission || {};
+  const reviewStatus = String(reviewSubmission.reviewStatus || '').trim().toLowerCase();
+  const assignedReviewerLabel = escapeHtml(getResultsReviewActorLabel(reviewSubmission));
+  const reviewScopeLabel = escapeHtml(getResultsReviewScopeLabel(reviewSubmission.reviewScope));
+  if (isReviewAwaitingDecision(reviewStatus)) {
+    const actionButtons = reviewSubmission.currentUserCanReview ? `
+      <div class="review-submit-banner__actions" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn--success btn--sm" id="btn-review-approve">Approve</button>
+        <button type="button" class="btn btn--warning btn--sm" id="btn-review-request-changes">Request Changes</button>
+        ${reviewSubmission.currentUserCanEscalate ? '<button type="button" class="btn btn--secondary btn--sm" id="btn-review-escalate">Escalate</button>' : ''}
+      </div>
+    ` : '';
+    const label = reviewStatus === 'escalated' ? 'Escalated for review' : 'Submitted for review';
+    const copy = reviewStatus === 'escalated'
+      ? `Assigned to ${assignedReviewerLabel} for ${reviewScopeLabel}.`
+      : `Assigned to ${assignedReviewerLabel} for ${reviewScopeLabel}.`;
     return `<div class="review-submit-banner review-submit-banner--submitted" id="review-submit-banner" role="status">
-      <strong>Submitted for review</strong>
-      <span>Awaiting management sign-off.</span>
+      <div class="review-submit-banner__body">
+        <strong>${reviewSubmission.currentUserCanReview ? 'Assigned to you' : label}</strong>
+        <span>${copy}</span>
+      </div>
+      ${actionButtons}
     </div>`;
   }
   if (reviewStatus === 'approved') {
-    const reviewedBy = escapeHtml(String(assessment.reviewSubmission?.reviewedBy || ''));
-    const reviewedAt = Number(assessment.reviewSubmission?.reviewedAt || 0);
+    const reviewedBy = escapeHtml(String(reviewSubmission.reviewedBy || ''));
+    const reviewedAt = Number(reviewSubmission.reviewedAt || 0);
     const reviewedLabel = reviewedAt ? new Date(reviewedAt).toLocaleDateString('en-GB') : '';
     return `<div class="review-submit-banner review-submit-banner--approved" id="review-submit-banner" role="status">
       <strong>Approved</strong>
@@ -3362,17 +3462,11 @@ function renderResultsReviewSubmitBanner(assessment, r) {
     return `<div class="review-submit-banner review-submit-banner--changes" id="review-submit-banner" role="alert">
       <div class="review-submit-banner__body">
         <strong>Changes requested</strong>
-        <span>${escapeHtml(assessment.reviewSubmission?.reviewNote || 'Your reviewer has asked for changes before approving this assessment.')}</span>
+        <span>${escapeHtml(reviewSubmission.reviewNote || 'Your reviewer has asked for changes before approving this assessment.')}</span>
       </div>
       <button type="button" class="btn btn--warning btn--sm" id="btn-revise-assessment">
         Revise Assessment
       </button>
-    </div>`;
-  }
-  if (reviewStatus === 'escalated') {
-    return `<div class="review-submit-banner review-submit-banner--escalated" id="review-submit-banner" role="status">
-      <strong>Escalated</strong>
-      <span>This assessment has been escalated to ${escapeHtml(assessment.reviewSubmission?.escalatedTo || 'senior management')} for review.</span>
     </div>`;
   }
   const triggerLabel = r?.toleranceBreached
@@ -3923,61 +4017,296 @@ function renderReviewMeetingRoom(assessment) {
   </details>`;
 }
 
-function bindReviewBannerActions(assessment) {
+function bindReviewBannerActions(assessment, { isShared = false } = {}) {
   document.getElementById('btn-revise-assessment')?.addEventListener('click', () => {
     openAssessmentForRevision(assessment, { targetStep: '/wizard/3' });
+  });
+  document.getElementById('btn-submit-review')?.addEventListener('click', async () => {
+    try {
+      const targetState = await fetchReviewTargets('submit');
+      const targets = Array.isArray(targetState?.targets) ? targetState.targets : [];
+      if (!targets.length) {
+        UI.toast('No reviewer is configured for your current scope yet.', 'warning');
+        return;
+      }
+      const options = targets.map((target) => `
+        <option value="${escapeHtml(String(target.username || ''))}" ${target.username === targetState.defaultTargetUsername ? 'selected' : ''}>
+          ${escapeHtml(String(target.displayName || target.username || ''))} (${escapeHtml(getResultsReviewScopeLabel(target.reviewScope || ''))})
+        </option>
+      `).join('');
+      const modal = UI.modal({
+        title: 'Submit for review',
+        body: `
+          <div style="display:flex;flex-direction:column;gap:var(--sp-4)">
+            <div class="form-help">Choose who should own the next review step for this assessment.</div>
+            <div>
+              <label class="form-label" for="review-submit-target">Submit to</label>
+              <select id="review-submit-target" class="form-select" style="width:100%">
+                ${options}
+              </select>
+            </div>
+            <div class="flex gap-3" style="flex-wrap:wrap">
+              <button type="button" class="btn btn--primary" id="btn-confirm-submit-review">Submit</button>
+              <button type="button" class="btn btn--ghost" id="btn-cancel-submit-review">Cancel</button>
+            </div>
+          </div>
+        `
+      });
+      document.getElementById('btn-cancel-submit-review')?.addEventListener('click', () => modal.close());
+      document.getElementById('btn-confirm-submit-review')?.addEventListener('click', async () => {
+        const targetUsername = String(document.getElementById('review-submit-target')?.value || '').trim().toLowerCase();
+        if (!targetUsername) {
+          UI.toast('Select a reviewer first.', 'warning');
+          return;
+        }
+        const confirmButton = document.getElementById('btn-confirm-submit-review');
+        if (confirmButton) {
+          confirmButton.disabled = true;
+          confirmButton.textContent = 'Submitting…';
+        }
+        try {
+          const response = await fetch('/api/review-queue', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-session-token': getResultsSessionToken()
+            },
+            body: JSON.stringify({
+              assessment,
+              assignedReviewerUsername: targetUsername,
+              sharedAssessment: typeof ShareService !== 'undefined' && typeof ShareService.buildSharePayload === 'function'
+                ? ShareService.buildSharePayload(assessment)
+                : null
+            })
+          });
+          if (response.status === 409) {
+            UI.toast('This assessment is already in the review queue.', 'warning');
+            if (confirmButton) {
+              confirmButton.disabled = false;
+              confirmButton.textContent = 'Submit';
+            }
+            return;
+          }
+          if (!response.ok) throw new Error('Submit failed');
+          const { item } = await response.json();
+          updateAssessmentRecord(assessment.id, rec => ({
+            ...rec,
+            reviewSubmission: {
+              ...(rec.reviewSubmission || {}),
+              ...buildLocalReviewSubmissionFromQueueItem(item || {})
+            }
+          }));
+          modal.close();
+          UI.toast('Assessment submitted for review.', 'success');
+          renderResults(assessment.id, isShared || assessment._shared);
+        } catch {
+          UI.toast('Could not submit for review. Try again in a moment.', 'danger');
+          if (confirmButton) {
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Submit';
+          }
+        }
+      });
+    } catch {
+      UI.toast('Could not load the reviewer list right now.', 'danger');
+    }
+  });
+  document.getElementById('btn-review-approve')?.addEventListener('click', async function() {
+    const button = this;
+    const reviewId = String(assessment?.reviewSubmission?.reviewId || '').trim();
+    if (!reviewId) return;
+    button.disabled = true;
+    button.textContent = 'Approving…';
+    try {
+      const { item } = await patchReviewQueueItem(reviewId, {
+        reviewStatus: 'approved'
+      });
+      updateAssessmentRecord(assessment.id, rec => ({
+        ...rec,
+        reviewSubmission: {
+          ...(rec.reviewSubmission || {}),
+          ...buildLocalReviewSubmissionFromQueueItem(item || {})
+        }
+      }));
+      UI.toast('Assessment approved.', 'success');
+      renderResults(assessment.id, isShared || assessment._shared);
+    } catch {
+      UI.toast('Could not approve this assessment right now.', 'danger');
+      button.disabled = false;
+      button.textContent = 'Approve';
+    }
+  });
+  document.getElementById('btn-review-request-changes')?.addEventListener('click', () => {
+    const reviewId = String(assessment?.reviewSubmission?.reviewId || '').trim();
+    if (!reviewId) return;
+    const modal = UI.modal({
+      title: 'Request changes',
+      body: `
+        <label for="results-review-changes-reason" class="form-label">
+          Reason <span style="color:var(--danger)">*</span>
+        </label>
+        <textarea id="results-review-changes-reason" class="form-textarea" rows="4"
+          placeholder="Describe what needs to change before this can be approved…"
+          style="width:100%;margin-bottom:var(--sp-4)"></textarea>
+        <div class="flex gap-3">
+          <button type="button" class="btn btn--primary" id="btn-results-confirm-changes">
+            Send Request
+          </button>
+          <button type="button" class="btn btn--ghost" id="btn-results-cancel-changes">Cancel</button>
+        </div>
+      `
+    });
+    document.getElementById('btn-results-cancel-changes')?.addEventListener('click', () => modal.close());
+    document.getElementById('btn-results-confirm-changes')?.addEventListener('click', async () => {
+      const reason = String(document.getElementById('results-review-changes-reason')?.value || '').trim();
+      if (!reason) {
+        UI.toast('Please enter a reason before sending.', 'warning');
+        return;
+      }
+      const confirmButton = document.getElementById('btn-results-confirm-changes');
+      if (confirmButton) {
+        confirmButton.disabled = true;
+        confirmButton.textContent = 'Sending…';
+      }
+      try {
+        const { item } = await patchReviewQueueItem(reviewId, {
+          reviewStatus: 'changes_requested',
+          reviewNote: reason
+        });
+        updateAssessmentRecord(assessment.id, rec => ({
+          ...rec,
+          reviewSubmission: {
+            ...(rec.reviewSubmission || {}),
+            ...buildLocalReviewSubmissionFromQueueItem(item || {})
+          }
+        }));
+        modal.close();
+        UI.toast('Changes requested.', 'success');
+        renderResults(assessment.id, isShared || assessment._shared);
+      } catch {
+        UI.toast('Could not send the change request right now.', 'danger');
+        if (confirmButton) {
+          confirmButton.disabled = false;
+          confirmButton.textContent = 'Send Request';
+        }
+      }
+    });
+  });
+  document.getElementById('btn-review-escalate')?.addEventListener('click', async () => {
+    const reviewId = String(assessment?.reviewSubmission?.reviewId || '').trim();
+    if (!reviewId) return;
+    try {
+      const targetState = await fetchReviewTargets('escalate');
+      const targets = Array.isArray(targetState?.targets) ? targetState.targets : [];
+      if (!targets.length) {
+        UI.toast('No holding-company reviewer is configured yet.', 'warning');
+        return;
+      }
+      const modal = UI.modal({
+        title: 'Escalate assessment',
+        body: `
+          <label for="results-review-escalate-target" class="form-label">Escalate to</label>
+          <select id="results-review-escalate-target" class="form-select" style="width:100%;margin-bottom:var(--sp-4)">
+            ${targets.map(target => `
+              <option value="${escapeHtml(String(target.username || ''))}" ${target.username === targetState.defaultTargetUsername ? 'selected' : ''}>
+                ${escapeHtml(String(target.displayName || target.username || ''))}
+              </option>
+            `).join('')}
+          </select>
+          <div class="flex gap-3">
+            <button type="button" class="btn btn--primary" id="btn-results-confirm-escalate">Escalate</button>
+            <button type="button" class="btn btn--ghost" id="btn-results-cancel-escalate">Cancel</button>
+          </div>
+        `
+      });
+      document.getElementById('btn-results-cancel-escalate')?.addEventListener('click', () => modal.close());
+      document.getElementById('btn-results-confirm-escalate')?.addEventListener('click', async () => {
+        const target = String(document.getElementById('results-review-escalate-target')?.value || '').trim().toLowerCase();
+        if (!target) {
+          UI.toast('Select a target first.', 'warning');
+          return;
+        }
+        const confirmButton = document.getElementById('btn-results-confirm-escalate');
+        if (confirmButton) {
+          confirmButton.disabled = true;
+          confirmButton.textContent = 'Escalating…';
+        }
+        try {
+          const { item } = await patchReviewQueueItem(reviewId, {
+            reviewStatus: 'escalated',
+            escalatedTo: target
+          });
+          updateAssessmentRecord(assessment.id, rec => ({
+            ...rec,
+            reviewSubmission: {
+              ...(rec.reviewSubmission || {}),
+              ...buildLocalReviewSubmissionFromQueueItem(item || {})
+            }
+          }));
+          modal.close();
+          UI.toast('Assessment escalated.', 'success');
+          renderResults(assessment.id, isShared || assessment._shared);
+        } catch {
+          UI.toast('Could not escalate this assessment right now.', 'danger');
+          if (confirmButton) {
+            confirmButton.disabled = false;
+            confirmButton.textContent = 'Escalate';
+          }
+        }
+      });
+    } catch {
+      UI.toast('Could not load the escalation targets right now.', 'danger');
+    }
   });
 }
 
 async function refreshReviewStatus(assessment, r) {
   if (!assessment?.id || !assessment?.results) return;
   try {
-    const sessionToken = typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
-      ? AuthService.getApiSessionToken()
-      : '';
     const response = await fetch('/api/review-queue', {
-      headers: { 'x-session-token': sessionToken }
+      headers: { 'x-session-token': getResultsSessionToken() }
     });
     if (!response.ok) return;
     const { items } = await response.json();
     const matched = Array.isArray(items) ? items.find(item => String(item?.assessmentId || '') === String(assessment.id || '')) : null;
     if (!matched) return;
-    const localStatus = String(assessment.reviewSubmission?.reviewStatus || '').trim().toLowerCase();
-    const remoteStatus = String(matched.reviewStatus || '').trim().toLowerCase();
-    const localNote = String(assessment.reviewSubmission?.reviewNote || '').trim();
-    const remoteNote = String(matched.reviewNote || '').trim();
-    const localReviewedBy = String(assessment.reviewSubmission?.reviewedBy || '').trim();
-    const remoteReviewedBy = String(matched.reviewedBy || '').trim();
-    const localReviewedAt = Number(assessment.reviewSubmission?.reviewedAt || 0);
-    const remoteReviewedAt = Number(matched.reviewedAt || 0);
-    const localEscalatedTo = String(assessment.reviewSubmission?.escalatedTo || '').trim();
-    const remoteEscalatedTo = String(matched.escalatedTo || '').trim();
-    const hasChanged = !!remoteStatus && (
-      remoteStatus !== localStatus
-      || remoteNote !== localNote
-      || remoteReviewedBy !== localReviewedBy
-      || remoteReviewedAt !== localReviewedAt
-      || remoteEscalatedTo !== localEscalatedTo
-    );
+    const nextSubmission = buildLocalReviewSubmissionFromQueueItem(matched);
+    const currentSubmission = assessment.reviewSubmission || {};
+    const hasChanged = [
+      'reviewId',
+      'reviewStatus',
+      'submittedAt',
+      'submittedByUsername',
+      'assignedReviewerUsername',
+      'assignedReviewerDisplayName',
+      'assignedReviewerRole',
+      'reviewScope',
+      'reviewNote',
+      'reviewedBy',
+      'reviewedAt',
+      'escalatedTo',
+      'escalatedBy',
+      'escalatedAt',
+      'currentUserCanReview',
+      'currentUserCanEscalate',
+      'currentUserCanView',
+      'isAssignedToCurrentUser'
+    ].some(key => nextSubmission[key] !== currentSubmission[key]);
     if (!hasChanged) return;
     const next = updateAssessmentRecord(assessment.id, rec => ({
       ...rec,
       reviewSubmission: {
         ...(rec.reviewSubmission || {}),
-        reviewStatus: remoteStatus,
-        reviewNote: matched.reviewNote || '',
-        reviewedBy: matched.reviewedBy || '',
-        reviewedAt: Number(matched.reviewedAt || 0),
-        escalatedTo: matched.escalatedTo || ''
+        ...nextSubmission
       },
       reviewDecision: {
-        decision: remoteStatus,
+        decision: nextSubmission.reviewStatus,
         timeToDecide: matched.submittedAt && matched.reviewedAt
           ? Math.max(0, Number(matched.reviewedAt) - Number(matched.submittedAt))
           : 0,
-        challengedAssumption: matched.reviewNote || '',
-        reviewedBy: matched.reviewedBy || '',
-        reviewedAt: Number(matched.reviewedAt || 0)
+        challengedAssumption: nextSubmission.reviewNote || '',
+        reviewedBy: nextSubmission.reviewedBy || '',
+        reviewedAt: Number(nextSubmission.reviewedAt || 0)
       }
     }));
     if (!next) return;
@@ -4084,7 +4413,7 @@ function bindResultsInteractions({
   }
   if (activeTab === 'appendix' || activeTab === 'executive') drawResultsTechnicalCharts(r);
   else attachCitationHandlers();
-  bindReviewBannerActions(assessment);
+  bindReviewBannerActions(assessment, { isShared: isShared || assessment._shared });
   bindReviewerBriefFocusTracking(assessment);
   refreshReviewStatus(assessment, r);
   OrgIntelligenceService?.refresh?.().then?.(() => {
@@ -4594,50 +4923,6 @@ function bindResultsInteractions({
       UI.toast('Reviewer brief unavailable right now. Try again in a moment.', 'danger');
     } finally {
       resetBusy();
-    }
-  });
-
-  document.getElementById('btn-submit-review')?.addEventListener('click', async function() {
-    const btn = this;
-    btn.disabled = true;
-    btn.textContent = 'Submitting…';
-    try {
-      const sessionToken = typeof AuthService !== 'undefined' && typeof AuthService.getApiSessionToken === 'function'
-        ? AuthService.getApiSessionToken()
-        : (JSON.parse(sessionStorage.getItem('rq_auth_session') || '{}')?.token || '');
-      const res = await fetch('/api/review-queue', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-session-token': sessionToken
-        },
-        body: JSON.stringify({ assessment })
-      });
-      if (res.status === 409) {
-        UI.toast('This assessment is already in the review queue.', 'warning');
-        btn.disabled = false;
-        btn.textContent = 'Submit for Review';
-        return;
-      }
-      if (!res.ok) throw new Error('Submit failed');
-      updateAssessmentRecord(assessment.id, rec => ({
-        ...rec,
-        reviewSubmission: {
-          reviewStatus: 'pending',
-          submittedAt: Date.now(),
-          submittedByUsername: AuthService.getCurrentUser()?.username || ''
-        }
-      }));
-      UI.toast('Assessment submitted for review.', 'success');
-      const banner = document.getElementById('review-submit-banner');
-      if (banner) {
-        banner.className = 'review-submit-banner review-submit-banner--submitted';
-        banner.innerHTML = '<strong>Submitted for review</strong><span>Awaiting management sign-off.</span>';
-      }
-    } catch {
-      UI.toast('Could not submit for review. Try again in a moment.', 'danger');
-      btn.disabled = false;
-      btn.textContent = 'Submit for Review';
     }
   });
 

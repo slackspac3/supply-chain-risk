@@ -71,11 +71,27 @@ test.beforeEach(() => {
   kvStore.clear();
   kvStore.set('risk_calculator_users', JSON.stringify([
     {
+      username: 'holding-admin',
+      displayName: 'Holding Admin',
+      role: 'admin',
+      businessUnitEntityId: '',
+      departmentEntityId: '',
+      sessionVersion: 1
+    },
+    {
       username: 'analyst',
       displayName: 'Analyst',
       role: 'user',
       businessUnitEntityId: 'g42',
       departmentEntityId: 'technology',
+      sessionVersion: 1
+    },
+    {
+      username: 'legal-analyst',
+      displayName: 'Legal Analyst',
+      role: 'user',
+      businessUnitEntityId: 'g42',
+      departmentEntityId: 'legal',
       sessionVersion: 1
     },
     {
@@ -101,6 +117,14 @@ test.beforeEach(() => {
       businessUnitEntityId: 'g42',
       departmentEntityId: 'technology',
       sessionVersion: 1
+    },
+    {
+      username: 'finance-function-admin',
+      displayName: 'Finance Function Admin',
+      role: 'function_admin',
+      businessUnitEntityId: 'g42',
+      departmentEntityId: 'finance',
+      sessionVersion: 1
     }
   ]));
 });
@@ -109,7 +133,89 @@ test.after(() => {
   global.fetch = originalFetch;
 });
 
-test('review queue submission uses the session actor instead of trusting submittedBy from the client body', async () => {
+test('review queue exposes reviewer targets by session scope and falls back from function to BU when needed', async () => {
+  const analystToken = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    businessUnitEntityId: 'g42',
+    departmentEntityId: 'technology',
+    sv: 1,
+    exp: Date.now() + 60_000
+  });
+  const analystTargetsRes = createRes();
+  await handler({
+    method: 'GET',
+    query: {
+      view: 'targets',
+      action: 'submit'
+    },
+    headers: {
+      'x-session-token': analystToken
+    }
+  }, analystTargetsRes);
+
+  assert.equal(analystTargetsRes.statusCode, 200);
+  assert.equal(analystTargetsRes.payload.defaultTargetUsername, 'function-admin');
+  assert.deepEqual(Array.from(analystTargetsRes.payload.targets, item => item.username), ['function-admin']);
+
+  const financeToken = buildSessionToken({
+    username: 'legal-analyst',
+    role: 'user',
+    businessUnitEntityId: 'g42',
+    departmentEntityId: 'legal',
+    sv: 1,
+    exp: Date.now() + 60_000
+  });
+  const financeTargetsRes = createRes();
+  await handler({
+    method: 'GET',
+    query: {
+      view: 'targets',
+      action: 'submit'
+    },
+    headers: {
+      'x-session-token': financeToken
+    }
+  }, financeTargetsRes);
+
+  assert.equal(financeTargetsRes.statusCode, 200);
+  assert.equal(financeTargetsRes.payload.defaultTargetUsername, 'bu-admin');
+  assert.deepEqual(Array.from(financeTargetsRes.payload.targets, item => item.username), [
+    'bu-admin',
+    'finance-function-admin',
+    'function-admin'
+  ]);
+
+  const functionAdminToken = buildSessionToken({
+    username: 'function-admin',
+    role: 'function_admin',
+    businessUnitEntityId: 'g42',
+    departmentEntityId: 'technology',
+    sv: 1,
+    exp: Date.now() + 60_000
+  });
+  const functionTargetsRes = createRes();
+  await handler({
+    method: 'GET',
+    query: {
+      view: 'targets',
+      action: 'submit'
+    },
+    headers: {
+      'x-session-token': functionAdminToken
+    }
+  }, functionTargetsRes);
+
+  assert.equal(functionTargetsRes.statusCode, 200);
+  assert.equal(functionTargetsRes.payload.defaultTargetUsername, 'bu-admin');
+  assert.deepEqual(Array.from(functionTargetsRes.payload.targets, item => item.username), [
+    'bu-admin',
+    'function-admin',
+    'finance-function-admin'
+  ]);
+});
+
+test('review queue submission uses the session actor, stores the assignee, and rejects invalid targets', async () => {
   const token = buildSessionToken({
     username: 'analyst',
     role: 'user',
@@ -126,11 +232,21 @@ test('review queue submission uses the session actor instead of trusting submitt
       'x-session-token': token
     },
     body: {
+      assignedReviewerUsername: 'function-admin',
       assessment: {
         id: 'assessment-1',
         submittedBy: 'impersonated-user',
         buId: 'wrong-bu',
         scenarioTitle: 'Tolerance breach',
+        results: {
+          toleranceBreached: true
+        }
+      },
+      sharedAssessment: {
+        id: 'assessment-1',
+        scenarioTitle: 'Tolerance breach',
+        buName: 'G42',
+        narrative: 'A scenario snapshot for review.',
         results: {
           toleranceBreached: true
         }
@@ -142,37 +258,76 @@ test('review queue submission uses the session actor instead of trusting submitt
   assert.equal(postRes.payload.item.submittedBy, 'analyst');
   assert.equal(postRes.payload.item.buId, 'g42');
   assert.equal(postRes.payload.item.departmentEntityId, 'technology');
+  assert.equal(postRes.payload.item.assignedReviewerUsername, 'function-admin');
+  assert.equal(postRes.payload.item.assignedReviewerDisplayName, 'Function Admin');
+  assert.equal(postRes.payload.item.reviewScope, 'function');
+  assert.equal(postRes.payload.item.sharedAssessment.scenarioTitle, 'Tolerance breach');
+
+  const invalidTargetRes = createRes();
+  await handler({
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-session-token': token
+    },
+    body: {
+      assignedReviewerUsername: 'holding-admin',
+      assessment: {
+        id: 'assessment-2',
+        scenarioTitle: 'Wrong target'
+      }
+    }
+  }, invalidTargetRes);
+
+  assert.equal(invalidTargetRes.statusCode, 403);
 });
 
-test('review queue GET and PATCH are scoped to the admin actor ownership boundary', async () => {
+test('review queue GET is visible to the submitter and assigned reviewer, but only the assignee can approve', async () => {
   kvStore.set('risk_calculator_review_queue', JSON.stringify([
     {
       id: 'rq-1',
       assessmentId: 'a-1',
       submittedBy: 'analyst',
+      submittedByDisplayName: 'Analyst',
       submittedAt: Date.now(),
       buId: 'g42',
       buName: 'G42',
       departmentEntityId: 'technology',
       scenarioTitle: 'In-scope review',
-      reviewStatus: 'pending'
+      assignedReviewerUsername: 'function-admin',
+      assignedReviewerDisplayName: 'Function Admin',
+      assignedReviewerRole: 'function_admin',
+      reviewScope: 'function',
+      reviewStatus: 'pending',
+      sharedAssessment: {
+        id: 'a-1',
+        scenarioTitle: 'In-scope review',
+        results: {
+          toleranceBreached: true
+        }
+      }
     },
     {
       id: 'rq-2',
       assessmentId: 'a-2',
-      submittedBy: 'analyst',
+      submittedBy: 'finance-analyst',
+      submittedByDisplayName: 'Finance Analyst',
       submittedAt: Date.now(),
       buId: 'other-bu',
       buName: 'Other',
       departmentEntityId: 'finance',
       scenarioTitle: 'Out-of-scope review',
+      assignedReviewerUsername: 'other-bu-admin',
+      assignedReviewerDisplayName: 'Other BU Admin',
+      assignedReviewerRole: 'bu_admin',
+      reviewScope: 'business_unit',
       reviewStatus: 'pending'
     }
   ]));
 
-  const functionAdminToken = buildSessionToken({
-    username: 'function-admin',
-    role: 'function_admin',
+  const analystToken = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
     businessUnitEntityId: 'g42',
     departmentEntityId: 'technology',
     sv: 1,
@@ -182,40 +337,54 @@ test('review queue GET and PATCH are scoped to the admin actor ownership boundar
   await handler({
     method: 'GET',
     headers: {
-      'x-session-token': functionAdminToken
+      'x-session-token': analystToken
     }
   }, getRes);
 
   assert.equal(getRes.statusCode, 200);
   assert.deepEqual(Array.from(getRes.payload.items, item => item.id), ['rq-1']);
+  assert.equal(getRes.payload.items[0].currentUserCanReview, false);
 
   const forbiddenPatchRes = createRes();
   await handler({
     method: 'PATCH',
     headers: {
       'content-type': 'application/json',
-      'x-session-token': functionAdminToken
+      'x-session-token': analystToken
     },
     body: {
-      id: 'rq-2',
+      id: 'rq-1',
       reviewStatus: 'approved'
     }
   }, forbiddenPatchRes);
   assert.equal(forbiddenPatchRes.statusCode, 403);
 
-  const buAdminToken = buildSessionToken({
-    username: 'bu-admin',
-    role: 'bu_admin',
+  const functionAdminToken = buildSessionToken({
+    username: 'function-admin',
+    role: 'function_admin',
     businessUnitEntityId: 'g42',
+    departmentEntityId: 'technology',
     sv: 1,
     exp: Date.now() + 60_000
   });
+  const assigneeGetRes = createRes();
+  await handler({
+    method: 'GET',
+    headers: {
+      'x-session-token': functionAdminToken
+    }
+  }, assigneeGetRes);
+
+  assert.equal(assigneeGetRes.statusCode, 200);
+  assert.deepEqual(Array.from(assigneeGetRes.payload.items, item => item.id), ['rq-1']);
+  assert.equal(assigneeGetRes.payload.items[0].currentUserCanReview, true);
+
   const patchRes = createRes();
   await handler({
     method: 'PATCH',
     headers: {
       'content-type': 'application/json',
-      'x-session-token': buAdminToken
+      'x-session-token': functionAdminToken
     },
     body: {
       id: 'rq-1',
@@ -224,5 +393,85 @@ test('review queue GET and PATCH are scoped to the admin actor ownership boundar
   }, patchRes);
 
   assert.equal(patchRes.statusCode, 200);
-  assert.equal(patchRes.payload.item.reviewedBy, 'bu-admin');
+  assert.equal(patchRes.payload.item.reviewedBy, 'function-admin');
+});
+
+test('BU assignees can escalate only to holding-company reviewers', async () => {
+  kvStore.set('risk_calculator_review_queue', JSON.stringify([
+    {
+      id: 'rq-1',
+      assessmentId: 'a-1',
+      submittedBy: 'function-admin',
+      submittedByDisplayName: 'Function Admin',
+      submittedAt: Date.now(),
+      buId: 'g42',
+      buName: 'G42',
+      departmentEntityId: 'technology',
+      scenarioTitle: 'Escalation candidate',
+      assignedReviewerUsername: 'bu-admin',
+      assignedReviewerDisplayName: 'BU Admin',
+      assignedReviewerRole: 'bu_admin',
+      reviewScope: 'business_unit',
+      reviewStatus: 'pending'
+    }
+  ]));
+
+  const buAdminToken = buildSessionToken({
+    username: 'bu-admin',
+    role: 'bu_admin',
+    businessUnitEntityId: 'g42',
+    sv: 1,
+    exp: Date.now() + 60_000
+  });
+
+  const escalationTargetsRes = createRes();
+  await handler({
+    method: 'GET',
+    query: {
+      view: 'targets',
+      action: 'escalate'
+    },
+    headers: {
+      'x-session-token': buAdminToken
+    }
+  }, escalationTargetsRes);
+
+  assert.equal(escalationTargetsRes.statusCode, 200);
+  assert.deepEqual(Array.from(escalationTargetsRes.payload.targets, item => item.username), ['holding-admin']);
+
+  const invalidEscalationRes = createRes();
+  await handler({
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      'x-session-token': buAdminToken
+    },
+    body: {
+      id: 'rq-1',
+      reviewStatus: 'escalated',
+      escalatedTo: 'function-admin'
+    }
+  }, invalidEscalationRes);
+
+  assert.equal(invalidEscalationRes.statusCode, 403);
+
+  const escalationRes = createRes();
+  await handler({
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+      'x-session-token': buAdminToken
+    },
+    body: {
+      id: 'rq-1',
+      reviewStatus: 'escalated',
+      escalatedTo: 'holding-admin'
+    }
+  }, escalationRes);
+
+  assert.equal(escalationRes.statusCode, 200);
+  assert.equal(escalationRes.payload.item.assignedReviewerUsername, 'holding-admin');
+  assert.equal(escalationRes.payload.item.escalatedTo, 'holding-admin');
+  assert.equal(escalationRes.payload.item.escalatedBy, 'bu-admin');
+  assert.equal(escalationRes.payload.item.reviewScope, 'holding_company');
 });
