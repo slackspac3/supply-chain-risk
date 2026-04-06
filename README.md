@@ -402,6 +402,8 @@ Current persistence spans:
 - shared/server draft workspace is preferred on refresh; local browser draft recovery is now a one-time safety net instead of the default restore source
 - personal user state
 - shared admin settings
+- shared admin settings and shared user state both use revision-based conflict detection on the server-backed APIs rather than last-write-wins
+- settings screens now cancel stale autosave timers on rerender or `Load Latest`, so reloading the latest shared settings snapshot does not immediately re-trigger an old save callback from the previous screen instance
 - organisation structure and scoped defaults
 - feedback capture, templates, and local history caches
 - server-applied learning profiles and shared AI feedback state
