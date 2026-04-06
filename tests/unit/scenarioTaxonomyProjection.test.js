@@ -63,3 +63,71 @@ test('projection retains compatibility aliases for lookup but only classifies ac
   assert.equal(classification.familyKey, 'process_breakdown');
   assert.equal(projection.activeFamilies.some((family) => family.key === 'manual_error'), false);
 });
+
+test('projection competition keeps ransomware payment wording in cyber with strong separation', () => {
+  const projection = loadProjection();
+  const analysis = projection.evaluateScenarioCompetition(
+    'Hackers encrypt company servers, halting operations and demanding a payment to unlock files.',
+    {}
+  );
+
+  assert.equal(analysis.topFamilyKey, 'ransomware');
+  assert.equal(analysis.classification.familyKey, 'ransomware');
+  assert.equal(analysis.topLensKey, 'cyber');
+  assert.equal(analysis.confidenceBand, 'high');
+  assert.ok(analysis.separationScore > 3);
+  assert.equal(analysis.topFamilies[1]?.familyKey, 'payment_control_failure');
+});
+
+test('projection competition keeps privacy-obligation wording in compliance rather than disclosure', () => {
+  const projection = loadProjection();
+  const analysis = projection.evaluateScenarioCompetition(
+    'Customer records are retained for too long in breach of stated privacy obligations.',
+    {}
+  );
+
+  assert.equal(analysis.topFamilyKey, 'privacy_non_compliance');
+  assert.equal(analysis.classification.familyKey, 'privacy_non_compliance');
+  assert.equal(analysis.topLensKey, 'compliance');
+  assert.equal(analysis.topFamilies.some((family) => family.familyKey === 'data_disclosure'), false);
+});
+
+test('projection competition keeps supplier delay wording in the supply-chain lane', () => {
+  const projection = loadProjection();
+  const analysis = projection.evaluateScenarioCompetition(
+    'A key supplier misses committed delivery dates and delays dependent projects.',
+    {}
+  );
+
+  assert.equal(analysis.topFamilyKey, 'delivery_slippage');
+  assert.equal(analysis.classification.familyKey, 'delivery_slippage');
+  assert.equal(analysis.topLensKey, 'supply-chain');
+  assert.equal(analysis.topFamilies.some((family) => family.lensKey === 'cyber'), false);
+});
+
+test('projection competition keeps workforce fatigue wording in the people-workforce lane', () => {
+  const projection = loadProjection();
+  const analysis = projection.evaluateScenarioCompetition(
+    'Sustained understaffing and fatigue increase the likelihood of unsafe delivery.',
+    {}
+  );
+
+  assert.equal(analysis.topFamilyKey, 'workforce_fatigue_staffing_weakness');
+  assert.equal(analysis.classification.familyKey, 'workforce_fatigue_staffing_weakness');
+  assert.equal(analysis.topLensKey, 'people-workforce');
+  assert.equal(analysis.confidenceBand, 'high');
+});
+
+test('projection competition exposes ambiguity when mixed privacy and supplier-delay wording stays close', () => {
+  const projection = loadProjection();
+  const analysis = projection.evaluateScenarioCompetition(
+    'Privacy obligations are breached because customer records are retained too long, while a supplier delay also slows dependent projects.',
+    {}
+  );
+
+  assert.equal(analysis.topFamilyKey, 'delivery_slippage');
+  assert.equal(analysis.topFamilies[1]?.familyKey, 'privacy_non_compliance');
+  assert.equal(analysis.ambiguityFlags.includes('LOW_SEPARATION'), true);
+  assert.equal(analysis.ambiguityFlags.includes('MIXED_TOP_FAMILIES'), true);
+  assert.ok(analysis.confidenceScore < 0.7);
+});

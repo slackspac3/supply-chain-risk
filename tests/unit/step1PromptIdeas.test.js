@@ -256,6 +256,35 @@ test('counterparty default scenario stays in finance suggestions and avoids paym
   assert.equal(labels.includes('Responsible AI drift'), false);
 });
 
+test('ransomware extortion wording stays in cyber prompt ideas instead of collapsing into payment control failure', () => {
+  const internals = loadStep1Internals();
+  const event = 'Hackers encrypt company servers, halting operations and demanding a payment to unlock files.';
+  const draft = {
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Company servers and shared files',
+      cause: '',
+      impact: 'Operational halt and recovery pressure'
+    }
+  };
+
+  assert.equal(internals.inferStep1FunctionKeyFromText(event), 'technology');
+
+  const lens = internals.getStep1PreferredScenarioLens({}, draft, event);
+  assert.equal(lens.key, 'cyber');
+  assert.equal(lens.functionKey, 'technology');
+
+  const suggestions = internals.buildStep1GuidedPromptSuggestions(draft, {
+    recommendedExamples: [
+      { promptLabel: 'Payment control failure', event: 'A payment-control issue causes avoidable financial loss.', functionKey: 'finance' }
+    ]
+  });
+  const labels = suggestions.map((item) => item.label);
+  assert.ok(labels.includes('Ransomware Outage'));
+  assert.equal(labels.includes('Payment control failure'), false);
+});
+
 test('supplier labour scenario stays in ESG prompt ideas instead of drifting into sourcing-only examples', () => {
   const internals = loadStep1Internals();
   const event = 'A supplier is linked to forced labour practices in a critical sourcing category.';
@@ -423,6 +452,68 @@ test('privacy-obligation prompt hints stay in the compliance lane without implyi
   const labels = suggestions.map((item) => item.label);
   assert.ok(labels.includes('Privacy Non Compliance'));
   assert.equal(labels.includes('External data breach'), false);
+});
+
+test('workforce fatigue wording stays in the people-workforce lane instead of drifting into generic operational prompt ideas', () => {
+  const internals = loadStep1Internals();
+  const event = 'Sustained understaffing and fatigue increase the likelihood of unsafe delivery.';
+  const draft = {
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Frontline operations',
+      cause: 'Coverage gaps and fatigue buildup',
+      impact: 'Unsafe delivery and control failure'
+    }
+  };
+
+  assert.equal(internals.inferStep1FunctionKeyFromText(event), 'hse');
+
+  const lens = internals.getStep1PreferredScenarioLens({}, draft, event);
+  assert.equal(lens.key, 'people-workforce');
+  assert.equal(lens.functionKey, 'hse');
+
+  const suggestions = internals.buildStep1GuidedPromptSuggestions(draft, {
+    recommendedExamples: [
+      { promptLabel: 'Operational outage from aging infrastructure', event: 'Aging infrastructure causes a critical service outage.', functionKey: 'operations' }
+    ]
+  });
+
+  const labels = suggestions.map((item) => item.label);
+  assert.ok(labels.includes('Workforce Fatigue / Staffing Weakness'));
+  assert.equal(labels.includes('Operational outage from aging infrastructure'), false);
+});
+
+test('genuinely mixed wording stays ambiguity-aware instead of forcing a hard preferred lens', () => {
+  const internals = loadStep1Internals();
+  const event = 'Privacy obligations are breached because customer records are retained too long, while a supplier delay also slows dependent projects.';
+  const draft = {
+    step1Path: 'guided',
+    guidedInput: {
+      event,
+      asset: 'Customer records and dependent delivery milestones',
+      cause: 'Retention weakness and supplier delay',
+      impact: 'Customer complaints and remediation pressure'
+    }
+  };
+
+  assert.equal(internals.inferStep1FunctionKeyFromText(event), 'general');
+
+  const lens = internals.getStep1PreferredScenarioLens({}, draft, event);
+  assert.equal(lens.key, 'general');
+  assert.ok(Array.from(lens.secondaryKeys || []).includes('supply-chain'));
+  assert.ok(Array.from(lens.secondaryKeys || []).includes('compliance'));
+
+  const suggestions = internals.buildStep1GuidedPromptSuggestions(draft, {
+    recommendedExamples: [
+      { promptLabel: 'Payment control failure', event: 'A payment-control issue causes avoidable financial loss.', functionKey: 'finance' }
+    ]
+  });
+
+  const labels = suggestions.map((item) => item.label);
+  assert.ok(labels.includes('Delivery Slippage'));
+  assert.ok(labels.includes('Privacy Non Compliance'));
+  assert.equal(labels.includes('Payment control failure'), false);
 });
 
 test('displayed guided preview prefers the live AI-checked preview for the current signature', () => {

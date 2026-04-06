@@ -494,7 +494,17 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     label: 'Ransomware',
     domain: 'cyber',
     description: 'Malware or extortion event that encrypts systems and disrupts availability.',
-    positiveSignals: ['ransomware', 'encrypts systems', 'ransom note', 'extortion malware'],
+    positiveSignals: [
+      signal('ransomware', 'strong'),
+      signal('encrypts systems', 'strong'),
+      signal('encrypt server', 'strong'),
+      signal('encrypt files', 'strong'),
+      signal('unlock files', 'strong'),
+      signal('payment to unlock', 'strong'),
+      signal('ransom note', 'strong'),
+      signal('extortion malware', 'medium'),
+      signal('extortion demand', 'medium')
+    ],
     antiSignals: CYBER_ANTI,
     typicalAssets: ['servers', 'endpoints', 'shared drives'],
     typicalCauses: ['malware execution', 'initial access compromise'],
@@ -502,8 +512,17 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     allowedSecondaryFamilies: ['data_disclosure', 'endpoint_compromise'],
     forbiddenDriftFamilies: ['delivery_slippage', 'payment_control_failure'],
     defaultOverlays: ['service_outage', 'recovery_strain', 'reputational_damage'],
-    examplePhrases: ['ransomware encrypts critical services', 'extortion event after initial access'],
+    examplePhrases: [
+      'ransomware encrypts critical services',
+      'hackers encrypt servers and demand payment to unlock files',
+      'extortion event after initial access'
+    ],
     counterExamples: ['forced labour allegation in a supplier workforce', 'regulatory filing submitted late'],
+    promptIdeaTemplates: [
+      'Critical servers are encrypted and operations halt while attackers demand payment to unlock files',
+      'Ransomware disruption creates recovery strain and extortion pressure across core services'
+    ],
+    shortlistSeedThemes: ['ransomware outage', 'extortion after encryption'],
     legacyKey: 'ransomware',
     lensKey: 'cyber',
     lensLabel: 'Cyber',

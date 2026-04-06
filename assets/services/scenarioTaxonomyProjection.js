@@ -234,9 +234,162 @@
       antiMatches: anti.matches,
       requiredMatches: required.matches,
       eventMatches,
+      positiveScore: positive.score,
+      antiScore: anti.score,
+      requiredScore: required.score,
+      eventScore,
       score: eventScore + (Number(family.priorityScore || 0) / 100),
       strongPositiveMatchCount,
+      mediumOrStrongPositiveMatchCount,
+      blockedByRequiredSignals,
+      blockedByAntiSignals,
+      blockedByExplicitDisclosureRule,
       qualified: !blockedByRequiredSignals && !blockedByAntiSignals && !blockedByExplicitDisclosureRule && eventMatches.length > 0 && eventScore >= 2
+    };
+  }
+
+  function clamp(value = 0, min = 0, max = 1) {
+    return Math.min(max, Math.max(min, Number(value || 0)));
+  }
+
+  function roundScore(value = 0) {
+    return Number(Number(value || 0).toFixed(2));
+  }
+
+  function buildWeakClassification(hintKey = '', unsupportedSignals = [], matchedAntiSignals = []) {
+    const hintProfile = hintKey ? lensProfileByKey[hintKey] : null;
+    return {
+      familyKey: '',
+      legacyKey: hintProfile?.legacyKey || 'general',
+      key: hintProfile?.legacyKey || 'general',
+      lensKey: hintProfile?.key || 'general',
+      lensLabel: hintProfile?.label || 'General enterprise risk',
+      functionKey: hintProfile?.functionKey || 'general',
+      estimatePresetKey: hintProfile?.estimatePresetKey || 'general',
+      secondaryFamilyKeys: [],
+      secondaryKeys: [],
+      confidence: 'low',
+      matchedSignals: [],
+      matchedAntiSignals,
+      ambiguityFlags: ['WEAK_EVENT_PATH'],
+      unsupportedSignals,
+      taxonomyVersion: DATA.taxonomyVersion
+    };
+  }
+
+  function serialiseEvaluation(evaluation = null, primaryFamilyKey = '') {
+    if (!evaluation?.familyKey || !evaluation?.family) return null;
+    return {
+      familyKey: evaluation.familyKey,
+      familyLabel: String(evaluation.family.label || '').trim(),
+      domain: String(evaluation.family.domain || '').trim(),
+      legacyKey: String(evaluation.family.legacyKey || '').trim(),
+      lensKey: String(evaluation.family.lensKey || '').trim(),
+      lensLabel: String(evaluation.family.lensLabel || '').trim(),
+      functionKey: String(evaluation.family.functionKey || '').trim(),
+      estimatePresetKey: String(evaluation.family.estimatePresetKey || '').trim(),
+      score: roundScore(evaluation.score),
+      eventScore: roundScore(evaluation.eventScore),
+      positiveScore: roundScore(evaluation.positiveScore),
+      antiScore: roundScore(evaluation.antiScore),
+      requiredScore: roundScore(evaluation.requiredScore),
+      qualified: !!evaluation.qualified,
+      primary: evaluation.familyKey === primaryFamilyKey,
+      strongPositiveMatchCount: Number(evaluation.strongPositiveMatchCount || 0),
+      mediumOrStrongPositiveMatchCount: Number(evaluation.mediumOrStrongPositiveMatchCount || 0),
+      matchedSignals: (Array.isArray(evaluation.eventMatches) && evaluation.eventMatches.length ? evaluation.eventMatches : evaluation.positiveMatches).slice(0, 6),
+      matchedAntiSignals: (Array.isArray(evaluation.antiMatches) ? evaluation.antiMatches : []).slice(0, 6),
+      matchedRequiredSignals: (Array.isArray(evaluation.requiredMatches) ? evaluation.requiredMatches : []).slice(0, 4),
+      blockedByRequiredSignals: !!evaluation.blockedByRequiredSignals,
+      blockedByAntiSignals: !!evaluation.blockedByAntiSignals,
+      blockedByExplicitDisclosureRule: !!evaluation.blockedByExplicitDisclosureRule
+    };
+  }
+
+  function rankCompetitiveEvaluations(primaryEvaluation = null, qualified = [], competitive = []) {
+    const ranked = [];
+    const seen = new Set();
+    [primaryEvaluation, ...(Array.isArray(qualified) ? qualified : []), ...(Array.isArray(competitive) ? competitive : [])].forEach((evaluation) => {
+      if (!evaluation?.familyKey || seen.has(evaluation.familyKey)) return;
+      seen.add(evaluation.familyKey);
+      ranked.push(evaluation);
+    });
+    return ranked;
+  }
+
+  function buildCompetitionAmbiguityFlags({
+    primaryEvaluation = null,
+    topEvaluation = null,
+    runnerUpEvaluation = null,
+    unsupportedSignals = []
+  } = {}) {
+    const flags = new Set();
+    if (!topEvaluation) {
+      flags.add('WEAK_EVENT_PATH');
+      flags.add('NO_CLEAR_FAMILY');
+      return Array.from(flags);
+    }
+    const topScore = Number(topEvaluation.score || 0);
+    const runnerUpScore = Number(runnerUpEvaluation?.score || 0);
+    const separationScore = topScore - runnerUpScore;
+    if (!primaryEvaluation) flags.add('NO_CLEAR_FAMILY');
+    if (runnerUpEvaluation && separationScore < 1.25) {
+      flags.add('LOW_SEPARATION');
+      if (String(topEvaluation.family?.lensKey || '').trim() !== String(runnerUpEvaluation.family?.lensKey || '').trim()) {
+        flags.add('MIXED_TOP_FAMILIES');
+      }
+    }
+    if (Number(topEvaluation.eventMatches?.length || 0) < 2 && Number(topEvaluation.strongPositiveMatchCount || 0) === 0) {
+      flags.add('LIMITED_EVENT_EVIDENCE');
+    }
+    if (topScore < 3) flags.add('LOW_PRIMARY_CONFIDENCE');
+    if (Array.isArray(unsupportedSignals) && unsupportedSignals.length) flags.add('UNSUPPORTED_SIGNAL_PRESENT');
+    return Array.from(flags);
+  }
+
+  function buildCompetitionConfidence({
+    primaryEvaluation = null,
+    topEvaluation = null,
+    runnerUpEvaluation = null,
+    ambiguityFlags = [],
+    unsupportedSignals = []
+  } = {}) {
+    const evaluation = primaryEvaluation || topEvaluation;
+    if (!evaluation) {
+      return {
+        confidenceScore: 0,
+        confidenceBand: 'low',
+        separationScore: 0
+      };
+    }
+    const separationScore = Math.max(0, Number(evaluation.score || 0) - Number(runnerUpEvaluation?.score || 0));
+    const baseScore = clamp((Number(evaluation.score || 0) - 1.5) / 4.5, 0, 1);
+    const eventEvidence = clamp((Number(evaluation.eventMatches?.length || 0) + Number(evaluation.strongPositiveMatchCount || 0)) / 4, 0, 1);
+    const separationStrength = clamp(separationScore / 2, 0, 1);
+    const ambiguityPenalty = Array.isArray(ambiguityFlags) && ambiguityFlags.includes('LOW_SEPARATION') ? 0.18 : 0;
+    const weakPrimaryPenalty = Array.isArray(ambiguityFlags) && ambiguityFlags.includes('LOW_PRIMARY_CONFIDENCE') ? 0.08 : 0;
+    const unsupportedPenalty = Array.isArray(unsupportedSignals) && unsupportedSignals.length ? 0.06 : 0;
+    const noPrimaryPenalty = primaryEvaluation ? 0 : 0.15;
+    const confidenceScore = clamp(
+      (baseScore * 0.45)
+      + (eventEvidence * 0.3)
+      + (separationStrength * 0.25)
+      - ambiguityPenalty
+      - weakPrimaryPenalty
+      - unsupportedPenalty
+      - noPrimaryPenalty,
+      0,
+      1
+    );
+    const confidenceBand = primaryEvaluation && confidenceScore >= 0.74 && separationScore >= 1.25 && Number(evaluation.eventMatches?.length || 0) >= 2
+      ? 'high'
+      : primaryEvaluation && confidenceScore >= 0.46 && separationScore >= 0.55
+        ? 'medium'
+        : 'low';
+    return {
+      confidenceScore: roundScore(confidenceScore),
+      confidenceBand,
+      separationScore: roundScore(separationScore)
     };
   }
 
@@ -305,26 +458,28 @@
       .map((evaluation) => evaluation.familyKey);
   }
 
-  function classifyScenarioText(text = '', options = {}) {
+  function evaluateScenarioCompetition(text = '', options = {}) {
     const haystack = normaliseText(text);
     const hintKey = normaliseHintKey(options.scenarioLensHint);
     const unsupportedSignals = detectUnsupportedSignals(haystack);
     if (!haystack) {
-      const hintProfile = hintKey ? lensProfileByKey[hintKey] : null;
+      const classification = buildWeakClassification(hintKey, unsupportedSignals);
+      const topLens = buildScenarioLens(classification, hintKey);
       return {
-        familyKey: '',
-        legacyKey: hintProfile?.legacyKey || 'general',
-        key: hintProfile?.legacyKey || 'general',
-        lensKey: hintProfile?.key || 'general',
-        lensLabel: hintProfile?.label || 'General enterprise risk',
-        functionKey: hintProfile?.functionKey || 'general',
-        estimatePresetKey: hintProfile?.estimatePresetKey || 'general',
-        secondaryFamilyKeys: [],
-        secondaryKeys: [],
-        confidence: 'low',
+        text: String(text || ''),
+        classification,
+        topFamilyKey: '',
+        topFamily: null,
+        topFamilies: [],
+        topLens,
+        topLensKey: topLens.key,
+        topLensLabel: topLens.label,
+        confidenceScore: 0,
+        confidenceBand: 'low',
+        separationScore: 0,
+        ambiguityFlags: classification.ambiguityFlags.slice(),
         matchedSignals: [],
         matchedAntiSignals: [],
-        ambiguityFlags: ['WEAK_EVENT_PATH'],
         unsupportedSignals,
         taxonomyVersion: DATA.taxonomyVersion
       };
@@ -332,59 +487,97 @@
     const evaluations = activeFamilies.map((family) => buildFamilyEvaluation(family, haystack));
     const qualified = evaluations.filter((evaluation) => evaluation.qualified).sort((left, right) => right.score - left.score);
     const primaryEvaluation = applyPrecedenceRules(qualified[0] || null, qualified, haystack);
-    const ambiguous = qualified.length > 1 && Math.abs((qualified[0]?.score || 0) - (qualified[1]?.score || 0)) < 1.25;
+    const competitive = evaluations
+      .filter((evaluation) => evaluation.eventMatches.length || evaluation.requiredMatches.length || evaluation.positiveMatches.length)
+      .sort((left, right) => right.score - left.score);
+    const rankedCompetitive = rankCompetitiveEvaluations(primaryEvaluation, qualified, competitive);
+    const topEvaluation = primaryEvaluation || rankedCompetitive[0] || null;
+    const runnerUpEvaluation = rankedCompetitive.find((evaluation) => evaluation.familyKey !== topEvaluation?.familyKey) || null;
+    const ambiguityFlags = buildCompetitionAmbiguityFlags({
+      primaryEvaluation,
+      topEvaluation,
+      runnerUpEvaluation,
+      unsupportedSignals
+    });
+    const confidence = buildCompetitionConfidence({
+      primaryEvaluation,
+      topEvaluation,
+      runnerUpEvaluation,
+      ambiguityFlags,
+      unsupportedSignals
+    });
+    let classification = null;
     if (!primaryEvaluation) {
-      const hintProfile = hintKey ? lensProfileByKey[hintKey] : null;
-      return {
-        familyKey: '',
-        legacyKey: hintProfile?.legacyKey || 'general',
-        key: hintProfile?.legacyKey || 'general',
-        lensKey: hintProfile?.key || 'general',
-        lensLabel: hintProfile?.label || 'General enterprise risk',
-        functionKey: hintProfile?.functionKey || 'general',
-        estimatePresetKey: hintProfile?.estimatePresetKey || 'general',
-        secondaryFamilyKeys: [],
-        secondaryKeys: [],
-        confidence: 'low',
-        matchedSignals: [],
-        matchedAntiSignals: evaluations.flatMap((evaluation) => evaluation.antiMatches).slice(0, 6),
-        ambiguityFlags: ['WEAK_EVENT_PATH'],
+      classification = buildWeakClassification(
+        hintKey,
+        unsupportedSignals,
+        evaluations.flatMap((evaluation) => evaluation.antiMatches).slice(0, 6)
+      );
+    } else {
+      const primaryFamily = primaryEvaluation.family;
+      const secondaryFamilyKeys = deriveSecondaryFamilies(primaryEvaluation, qualified);
+      const secondaryKeys = secondaryFamilyKeys
+        .map((familyKey) => familyByKey[familyKey])
+        .map((family) => String(family?.legacyKey || '').trim())
+        .filter((key, index, values) => key && key !== primaryFamily.legacyKey && values.indexOf(key) === index)
+        .slice(0, 3);
+      classification = {
+        familyKey: primaryFamily.key,
+        familyLabel: primaryFamily.label,
+        domain: primaryFamily.domain,
+        legacyKey: primaryFamily.legacyKey,
+        key: primaryFamily.legacyKey,
+        lensKey: primaryFamily.lensKey,
+        lensLabel: primaryFamily.lensLabel,
+        functionKey: primaryFamily.functionKey,
+        estimatePresetKey: primaryFamily.estimatePresetKey,
+        secondaryFamilyKeys,
+        secondaryKeys,
+        confidence: primaryEvaluation.score >= 6 ? 'high' : primaryEvaluation.score >= 3 ? 'medium' : 'low',
+        matchedSignals: primaryEvaluation.eventMatches.length ? primaryEvaluation.eventMatches : primaryEvaluation.positiveMatches,
+        matchedAntiSignals: primaryEvaluation.antiMatches,
+        ambiguityFlags: [
+          ...(runnerUpEvaluation && Math.abs((primaryEvaluation.score || 0) - (runnerUpEvaluation.score || 0)) < 1.25 ? ['MIXED_DOMAIN_SIGNALS'] : []),
+          ...(primaryEvaluation.score < 3 ? ['LOW_PRIMARY_CONFIDENCE'] : []),
+          ...(primaryEvaluation.eventMatches.length === 0 ? ['CONSEQUENCE_HEAVY_TEXT'] : [])
+        ],
         unsupportedSignals,
         taxonomyVersion: DATA.taxonomyVersion
       };
     }
-
-    const primaryFamily = primaryEvaluation.family;
-    const secondaryFamilyKeys = deriveSecondaryFamilies(primaryEvaluation, qualified);
-    const secondaryKeys = secondaryFamilyKeys
-      .map((familyKey) => familyByKey[familyKey])
-      .map((family) => String(family?.legacyKey || '').trim())
-      .filter((key, index, values) => key && key !== primaryFamily.legacyKey && values.indexOf(key) === index)
-      .slice(0, 3);
-
+    const topLens = topEvaluation
+      ? buildScenarioLens({
+          familyKey: topEvaluation.familyKey,
+          key: topEvaluation.family?.legacyKey || topEvaluation.familyKey,
+          lensKey: topEvaluation.family?.lensKey || classification.lensKey,
+          secondaryFamilyKeys: classification.secondaryFamilyKeys || []
+        }, hintKey)
+      : buildScenarioLens(classification, hintKey);
     return {
-      familyKey: primaryFamily.key,
-      familyLabel: primaryFamily.label,
-      domain: primaryFamily.domain,
-      legacyKey: primaryFamily.legacyKey,
-      key: primaryFamily.legacyKey,
-      lensKey: primaryFamily.lensKey,
-      lensLabel: primaryFamily.lensLabel,
-      functionKey: primaryFamily.functionKey,
-      estimatePresetKey: primaryFamily.estimatePresetKey,
-      secondaryFamilyKeys,
-      secondaryKeys,
-      confidence: primaryEvaluation.score >= 6 ? 'high' : primaryEvaluation.score >= 3 ? 'medium' : 'low',
-      matchedSignals: primaryEvaluation.eventMatches.length ? primaryEvaluation.eventMatches : primaryEvaluation.positiveMatches,
-      matchedAntiSignals: primaryEvaluation.antiMatches,
-      ambiguityFlags: [
-        ...(ambiguous ? ['MIXED_DOMAIN_SIGNALS'] : []),
-        ...(primaryEvaluation.score < 3 ? ['LOW_PRIMARY_CONFIDENCE'] : []),
-        ...(primaryEvaluation.eventMatches.length === 0 ? ['CONSEQUENCE_HEAVY_TEXT'] : [])
-      ],
+      text: String(text || ''),
+      classification,
+      topFamilyKey: topEvaluation?.familyKey || '',
+      topFamily: serialiseEvaluation(topEvaluation, primaryEvaluation?.familyKey || ''),
+      topFamilies: rankedCompetitive.slice(0, Math.max(3, Number(options.limit || 5))).map((evaluation) => serialiseEvaluation(evaluation, primaryEvaluation?.familyKey || '')).filter(Boolean),
+      topLens,
+      topLensKey: topLens.key,
+      topLensLabel: topLens.label,
+      confidenceScore: confidence.confidenceScore,
+      confidenceBand: confidence.confidenceBand,
+      separationScore: confidence.separationScore,
+      ambiguityFlags: Array.from(new Set([
+        ...(Array.isArray(classification.ambiguityFlags) ? classification.ambiguityFlags : []),
+        ...ambiguityFlags
+      ])),
+      matchedSignals: topEvaluation ? ((topEvaluation.eventMatches.length ? topEvaluation.eventMatches : topEvaluation.positiveMatches).slice(0, 6)) : [],
+      matchedAntiSignals: topEvaluation ? topEvaluation.antiMatches.slice(0, 6) : classification.matchedAntiSignals || [],
       unsupportedSignals,
       taxonomyVersion: DATA.taxonomyVersion
     };
+  }
+
+  function classifyScenarioText(text = '', options = {}) {
+    return evaluateScenarioCompetition(text, options).classification;
   }
 
   function buildScenarioLens(classification = {}, fallback = null) {
@@ -426,18 +619,36 @@
       .join(' ');
   }
 
-  function buildPromptIdeaSuggestions(text = '', options = {}) {
-    const classification = classifyScenarioText(text, options);
-    const familyOrder = [classification.familyKey, ...(Array.isArray(classification.secondaryFamilyKeys) ? classification.secondaryFamilyKeys : [])].filter(Boolean);
+  function selectPromptIdeaFamilyOrder(analysis = {}, options = {}) {
+    const maxFamilies = Math.max(1, Number(options.maxFamilies || 3));
+    const classification = analysis?.classification?.familyKey
+      ? analysis.classification
+      : (analysis?.familyKey ? analysis : null);
+    const ambiguityFlags = Array.isArray(analysis?.ambiguityFlags) ? analysis.ambiguityFlags : [];
+    const lowConfidence = String(analysis?.confidenceBand || classification?.confidence || '').trim().toLowerCase() === 'low';
+    if (classification?.familyKey && !lowConfidence && !ambiguityFlags.includes('LOW_SEPARATION')) {
+      return [classification.familyKey, ...(Array.isArray(classification.secondaryFamilyKeys) ? classification.secondaryFamilyKeys : [])]
+        .filter(Boolean)
+        .slice(0, maxFamilies);
+    }
+    return (Array.isArray(analysis?.topFamilies) ? analysis.topFamilies : [])
+      .map((family) => String(family?.familyKey || '').trim())
+      .filter(Boolean)
+      .slice(0, maxFamilies);
+  }
+
+  function buildPromptIdeaSuggestionsForFamilyKeys(familyKeys = [], options = {}) {
+    const limit = Math.max(1, Number(options.limit || 3));
+    const perFamilyLimit = Math.max(1, Number(options.perFamilyLimit || (familyKeys.length > 1 ? 1 : limit)));
     const suggestions = [];
     const seen = new Set();
-    familyOrder.forEach((familyKey) => {
+    (Array.isArray(familyKeys) ? familyKeys : []).forEach((familyKey) => {
       const family = familyByKey[familyKey];
       if (!family) return;
       const promptSources = family.promptIdeaTemplates?.length
         ? family.promptIdeaTemplates
         : (family.examplePhrases?.length ? family.examplePhrases : family.shortlistSeedThemes || []);
-      promptSources.forEach((prompt, index) => {
+      promptSources.slice(0, perFamilyLimit).forEach((prompt, index) => {
         const cleanPrompt = String(prompt || '').trim();
         if (!cleanPrompt) return;
         const label = humaniseTheme(family.shortlistSeedThemes?.[index] || family.shortlistSeedThemes?.[0] || family.label);
@@ -447,7 +658,15 @@
         suggestions.push({ label, prompt: cleanPrompt, familyKey: family.key, lensKey: family.lensKey });
       });
     });
-    return suggestions.slice(0, Math.max(1, Number(options.limit || 3)));
+    return suggestions.slice(0, limit);
+  }
+
+  function buildPromptIdeaSuggestions(textOrAnalysis = '', options = {}) {
+    const analysis = typeof textOrAnalysis === 'string'
+      ? evaluateScenarioCompetition(textOrAnalysis, options)
+      : (textOrAnalysis || {});
+    const familyOrder = selectPromptIdeaFamilyOrder(analysis, options);
+    return buildPromptIdeaSuggestionsForFamilyKeys(familyOrder, options);
   }
 
   const api = Object.freeze({
@@ -459,9 +678,11 @@
     familyByKey,
     lensProfiles: Object.freeze(lensProfiles.slice()),
     normaliseHintKey,
+    evaluateScenarioCompetition,
     classifyScenarioText,
     buildScenarioLens,
     areLensesCompatible,
+    buildPromptIdeaSuggestionsForFamilyKeys,
     buildPromptIdeaSuggestions,
     detectUnsupportedSignals
   });

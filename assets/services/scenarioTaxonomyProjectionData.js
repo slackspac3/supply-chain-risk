@@ -549,18 +549,38 @@
       "positiveSignals": [
         {
           "text": "ransomware",
-          "strength": "medium"
+          "strength": "strong"
         },
         {
           "text": "encrypts systems",
-          "strength": "medium"
+          "strength": "strong"
+        },
+        {
+          "text": "encrypt server",
+          "strength": "strong"
+        },
+        {
+          "text": "encrypt files",
+          "strength": "strong"
+        },
+        {
+          "text": "unlock files",
+          "strength": "strong"
+        },
+        {
+          "text": "payment to unlock",
+          "strength": "strong"
         },
         {
           "text": "ransom note",
-          "strength": "medium"
+          "strength": "strong"
         },
         {
           "text": "extortion malware",
+          "strength": "medium"
+        },
+        {
+          "text": "extortion demand",
           "strength": "medium"
         }
       ],
@@ -630,14 +650,21 @@
       ],
       "examplePhrases": [
         "ransomware encrypts critical services",
+        "hackers encrypt servers and demand payment to unlock files",
         "extortion event after initial access"
       ],
       "counterExamples": [
         "forced labour allegation in a supplier workforce",
         "regulatory filing submitted late"
       ],
-      "promptIdeaTemplates": [],
-      "shortlistSeedThemes": [],
+      "promptIdeaTemplates": [
+        "Critical servers are encrypted and operations halt while attackers demand payment to unlock files",
+        "Ransomware disruption creates recovery strain and extortion pressure across core services"
+      ],
+      "shortlistSeedThemes": [
+        "ransomware outage",
+        "extortion after encryption"
+      ],
       "fallbackNarrativePatterns": [],
       "preferredFamilyKey": "",
       "legacyKey": "ransomware",

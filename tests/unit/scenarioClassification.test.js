@@ -168,6 +168,20 @@ test('payment control failure remains finance while explicit invoice deception e
   assert.equal(buildScenarioLens(fraud).key, 'fraud-integrity');
 });
 
+test('ransomware extortion wording stays cyber even when payment is mentioned', () => {
+  const classification = classifyScenario(
+    'Hackers encrypt company servers, halt operations, and demand payment to unlock files.',
+    { scenarioLensHint: 'financial' }
+  );
+
+  assert.equal(classification.domain, 'cyber');
+  assert.equal(classification.primaryFamily?.key, 'ransomware');
+  assert.ok(classification.reasonCodes.includes('DIRECT_SIGNAL_MATCH'));
+  assert.ok(classification.overlays.some((overlay) => overlay.key === 'service_outage'));
+  assert.ok(classification.overlays.some((overlay) => overlay.key === 'recovery_strain'));
+  assert.equal(buildScenarioLens(classification).key, 'cyber');
+});
+
 test('delivery slippage stays supply chain and does not collapse into cyber from stale hints', () => {
   const classification = classifyScenario(
     'Key supplier misses committed delivery date, delaying infrastructure deployment and dependent projects.',

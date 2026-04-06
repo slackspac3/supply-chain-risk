@@ -103,6 +103,10 @@ Current AI behavior:
 - the browser is now a thin client for the key AI workflows rather than the authoritative orchestration layer
 - server routes own prompt construction, structured-output repair, quality gates, readiness evaluation, and fallback policy for the main guided, register, treatment, and reviewer/challenge flows
 - `Build scenario draft` remains the single authoritative Step 1 intelligence call; guided prompt ideas and pre-build preview are now deterministic/local so they do not add extra hosted backend traffic
+- Step 1 pre-draft hinting is now projection-first:
+  - the browser ranks competing taxonomy families, lenses, confidence, and separation before showing prompt ideas or a preferred local lens
+  - ambiguous close-call wording stays soft instead of forcing a hard lane from a single generic token such as `payment`, `breach`, `outage`, or `supplier`
+  - bounded browser fallback heuristics only run when the taxonomy projection is absent or clearly too weak
 - browser API base-URL resolution is now config-driven: Vercel-hosted fronts stay same-origin, while static fronts use the configured hosted API origin without extra discovery requests
 - client workflow requests are normalized before transport so semantically identical inputs produce a stable request shape
 - duplicate suppression now happens on both sides:
