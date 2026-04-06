@@ -159,3 +159,60 @@ test('init refreshes the current user scope from the server session view', async
   const cachedAccounts = JSON.parse(localStorage.getItem('rq_auth_accounts_cache') || '[]');
   assert.equal(cachedAccounts[0]?.departmentEntityId, 'group-technology-risk');
 });
+
+test('createManagedAccount generates a password that satisfies the shared user-store policy', async () => {
+  let createPayload = null;
+  const { AuthService } = loadAuthService({
+    sessionSeed: {
+      rq_auth_session: JSON.stringify({
+        authenticated: true,
+        ts: Date.now(),
+        user: {
+          username: 'admin',
+          displayName: 'Global Admin',
+          role: 'admin'
+        },
+        apiSessionToken: 'session-token',
+        context: {}
+      })
+    },
+    fetchImpl: async (url, options = {}) => {
+      if (options.method === 'POST') {
+        createPayload = JSON.parse(String(options.body || '{}'));
+        return {
+          ok: true,
+          text: async () => JSON.stringify({
+            account: {
+              username: createPayload.account.username,
+              displayName: createPayload.account.displayName,
+              role: createPayload.account.role,
+              businessUnitEntityId: createPayload.account.businessUnitEntityId,
+              departmentEntityId: createPayload.account.departmentEntityId
+            },
+            password: createPayload.account.password,
+            accounts: []
+          })
+        };
+      }
+      return {
+        ok: true,
+        text: async () => JSON.stringify({ accounts: [] })
+      };
+    }
+  });
+
+  const created = await AuthService.createManagedAccount({
+    displayName: 'Jamie Clarke',
+    role: 'user',
+    businessUnitEntityId: 'bu-g42',
+    departmentEntityId: 'dept-sec'
+  });
+
+  assert.equal(createPayload.action, 'create');
+  assert.equal(created.username, 'jamie.clarke');
+  assert.match(createPayload.account.password, /[a-z]/);
+  assert.match(createPayload.account.password, /[A-Z]/);
+  assert.match(createPayload.account.password, /[0-9]/);
+  assert.match(createPayload.account.password, /[^A-Za-z0-9]/);
+  assert.ok(createPayload.account.password.length >= 12);
+});

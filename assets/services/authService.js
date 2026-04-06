@@ -310,7 +310,7 @@ function resolveApiUrl(path) {
 
   function generatePassword(accounts) {
     const nextNumber = accounts.filter(account => account.role !== 'admin').length + 1;
-    return `RiskUser@${String(nextNumber).padStart(2, '0')}`;
+    return `RiskPilot!${String(nextNumber).padStart(3, '0')}Aa`;
   }
 
   function persistSession(session, warningKey = 'session-write', warningMessage = 'AuthService session write failed:') {

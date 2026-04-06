@@ -453,9 +453,12 @@ Function: ${departmentLabel}`);
         UI.toast(`Created ${account.username}.`, 'success');
         rerenderCurrentAdminSection();
       } catch (error) {
-        AppState.adminNewUserStatus = 'User could not be created right now. Check the assigned role and scope, then try again.';
+        const message = String(error?.message || '').trim();
+        AppState.adminNewUserStatus = message
+          ? `User could not be created: ${message}`
+          : 'User could not be created right now. Check the assigned role and scope, then try again.';
         resultEl.textContent = AppState.adminNewUserStatus;
-        UI.toast('User creation failed.', 'danger');
+        UI.toast(AppState.adminNewUserStatus, 'danger');
         button.disabled = false;
         button.textContent = 'Add User';
       }
