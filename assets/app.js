@@ -9052,6 +9052,33 @@ function renderHelpShortcutCards(cards = []) {
   </div>`;
 }
 
+function getCommonHelpContent() {
+  return {
+    navCopy: 'Use this guide as the shared assessment reference for the PoC. The assessment workflow is the same for everyone, and the final section adds the extra responsibilities and controls relevant to your current role.',
+    heroCopy: 'This page starts with the common assessment workflow used across the platform, then adds the extra oversight or admin guidance relevant to your role. Use the shared sections first, then open the final role-specific section when you need the additional layer.',
+    overviewAudienceCopy: 'Every role uses the same core assessment path: turn one real scenario into a challengeable quantified view, review it in executive and technical language, and decide what needs to happen next.',
+    overviewUseCase: 'A user wants to understand whether one plausible disruption, control failure, third-party issue, or cyber event is material enough to explain, challenge, and escalate with evidence.',
+    contextExample: 'If the saved organisation context says the business runs regulated digital services in the UAE, the platform can surface geography, regulatory, resilience, and customer-impact considerations earlier before the user adds scenario-specific detail.',
+    pilotReadinessBody: 'Admins check the server-reported AI mode in Admin > System Access. If the platform is running in deterministic fallback or manual mode, treat that as continuity support rather than pilot-quality AI for important review sessions.',
+    feedbackChangeBody: 'Repeated feedback improves retrieval, ranking, and prompt assembly in stages. Stronger shared changes should come only after the same live-AI pattern repeats often enough to justify it.',
+    dashboardPurpose: 'Use the dashboard as the front door: resume active work, review what needs attention, and start something new only when you have one real scenario to work through.',
+    dashboardBestUse: 'Resume the assessment that already needs attention first, then start a new one only when there is a clear new scenario to model.',
+    stepChips: ['Dashboard', 'Step 1', 'Step 2', 'Step 3', 'Review & Run', 'Results', 'Settings'],
+    stepFinalCards: [
+      { title: 'Review & Run', body: 'Challenge the assumptions that matter most, then run. This is the place to tighten the decision before quantification, not to restart the drafting stage.' },
+      { title: 'Results', body: 'Read the executive story first, then open the technical detail only when you need to validate ranges, evidence, or drivers.' },
+      { title: 'Settings', body: 'Keep the context and preferences you own current so future drafts, guidance, and review cues stay grounded.' }
+    ],
+    shortcutCards: [
+      { keys: 'Alt/Option + N', label: 'Start a new assessment' },
+      { keys: 'Alt/Option + R', label: 'Resume your current draft' },
+      { keys: 'Alt/Option + 1 / 2 / 3', label: 'Switch results tabs' },
+      { keys: 'Alt/Option + /', label: 'Open the shortcuts overlay' }
+    ],
+    shortcutHint: 'These are the shared shortcuts available across the common assessment workflow. Role-specific tools may add extra controls in the relevant workspace.'
+  };
+}
+
 function getHelpAudienceModel({
   currentUser = AuthService.getCurrentUser(),
   isAdmin = currentUser?.role === 'admin',
@@ -9359,6 +9386,7 @@ function renderHelpPage() {
       : nonAdminCapability?.canManageDepartment
         ? 'Function admin'
         : 'Standard user';
+  const commonHelp = getCommonHelpContent();
   const helpAudience = getHelpAudienceModel({ currentUser, isAdmin, nonAdminCapability, roleSummary });
 
   const sections = [
@@ -9374,14 +9402,14 @@ function renderHelpPage() {
           summary: 'What it handles, who it is for, and what you get out at the end.',
           open: true,
           body: `
-            <p class="help-body-copy">This platform is for structured risk decisions, not generic brainstorming. ${escapeHtml(helpAudience.overviewAudienceCopy)}</p>
+            <p class="help-body-copy">This platform is for structured risk decisions, not generic brainstorming. ${escapeHtml(commonHelp.overviewAudienceCopy)}</p>
             ${renderHelpMiniCards([
               { title: 'Good fit', body: 'Cyber, resilience, vendor, control-failure, disruption, compliance, and third-party scenarios where management needs a defendable view of exposure and next steps.' },
               { title: 'What you get', body: 'A structured scenario, a plain-language estimate, Monte Carlo output, executive and technical results, treatment comparison, and exportable decision artefacts.' }
             ])}
             ${renderHelpExample({
               title: 'A realistic use case',
-              body: helpAudience.overviewUseCase
+              body: commonHelp.overviewUseCase
             })}
           `
         }),
@@ -9492,7 +9520,7 @@ function renderHelpPage() {
             ])}
             ${renderHelpExample({
               title: 'How company context shapes output',
-              body: helpAudience.contextExample
+              body: commonHelp.contextExample
             })}
           `
         }),
@@ -9503,7 +9531,7 @@ function renderHelpPage() {
             ${renderHelpMiniCards([
               { title: 'Live server mode', body: 'Use this state when Admin > System Access reports live mode from a server-side health check. This is the right state for pilot-quality AI review, provided the evidence and assumptions still hold up.' },
               { title: 'Fallback or degraded mode', body: 'The workflow may still continue, but the platform is no longer reporting a live server path. Treat this as continuity support, not as pilot-quality AI sign-off.' },
-              { title: 'Who checks it', body: helpAudience.pilotReadinessBody }
+              { title: 'Who checks it', body: commonHelp.pilotReadinessBody }
             ])}
             ${renderHelpCallout({
               tone: 'trust',
@@ -9518,7 +9546,7 @@ function renderHelpPage() {
           body: `
             ${renderHelpMiniCards([
               { title: 'What you rate', body: 'In Step 1, rate the generated scenario draft and generated shortlist on a 1-5 scale, then add short reason tags if the issue was wrong domain, weak citations, missed risks, unrelated risks, or generic wording.' },
-              { title: 'What changes first', body: helpAudience.feedbackChangeBody },
+              { title: 'What changes first', body: commonHelp.feedbackChangeBody },
               { title: 'What the platform learns', body: 'The app uses repeated signals to improve retrieval relevance, shortlist ordering, and prompt/context priors. It does not treat every single rating as instant model retraining.' }
             ])}
             ${renderHelpCallout({
@@ -9577,17 +9605,17 @@ function renderHelpPage() {
       title: 'How to use the main steps well',
       summary: 'Step-by-step help',
       intro: 'Each screen has one main job. Use the deeper detail only when it helps the current task.',
-      chips: helpAudience.stepChips,
+      chips: commonHelp.stepChips,
       disclosures: [
         renderHelpDisclosure('steps', {
           title: 'Dashboard',
           summary: 'Start, resume, review, and keep an eye on what needs attention.',
           body: `
-            <p class="help-body-copy"><strong>Purpose:</strong> ${escapeHtml(helpAudience.dashboardPurpose)}</p>
+            <p class="help-body-copy"><strong>Purpose:</strong> ${escapeHtml(commonHelp.dashboardPurpose)}</p>
             <p class="help-body-copy"><strong>Common mistake:</strong> treating the dashboard as a reporting page. It is a front door and oversight lane, not the place to inspect every detail.</p>
             ${renderHelpExample({
               title: 'Best use',
-              body: helpAudience.dashboardBestUse
+              body: commonHelp.dashboardBestUse
             })}
           `
         }),
@@ -9617,10 +9645,10 @@ function renderHelpPage() {
           `
         }),
         renderHelpDisclosure('steps', {
-          title: 'Review & Run, Results, Settings, and Admin',
-          summary: 'How to use the final stages and role-specific controls well.',
+          title: 'Review & Run, Results, and Settings',
+          summary: 'How to use the final assessment stages well before opening the role-specific add-on guidance below.',
           body: `
-            ${renderHelpMiniCards(helpAudience.stepFinalCards)}
+            ${renderHelpMiniCards(commonHelp.stepFinalCards)}
           `
         })
       ]
@@ -9733,10 +9761,10 @@ function renderHelpPage() {
           summary: 'The same shortcuts shown in the in-app overlay.',
           open: true,
           body: `
-            ${renderHelpShortcutCards(helpAudience.shortcutCards)}
+            ${renderHelpShortcutCards(commonHelp.shortcutCards)}
             <div class="flex items-center gap-3" style="margin-top:var(--sp-4);flex-wrap:wrap">
               <button type="button" class="btn btn--secondary btn--sm" data-open-shortcuts-help>Open shortcuts overlay</button>
-              <span class="form-help">${escapeHtml(helpAudience.shortcutHint)} Drafts and settings save automatically. Watch the save and sync cues rather than repeatedly hunting for a manual save button.</span>
+              <span class="form-help">${escapeHtml(commonHelp.shortcutHint)} Drafts and settings save automatically. Watch the save and sync cues rather than repeatedly hunting for a manual save button.</span>
             </div>
           `
         })
@@ -9746,7 +9774,7 @@ function renderHelpPage() {
       id: 'roles',
       title: 'Role-specific help',
       summary: 'What good use looks like by role',
-      intro: helpAudience.roleSectionIntro,
+      intro: `Everything above is shared assessment guidance. ${helpAudience.roleSectionIntro}`,
       chips: helpAudience.roleSectionChips,
       disclosures: helpAudience.roleDisclosures.map((disclosure, index) => renderHelpDisclosure('roles', {
         title: disclosure.title,
@@ -9763,10 +9791,10 @@ function renderHelpPage() {
         <aside class="help-nav card">
           <div class="help-nav__kicker">Help</div>
           <div class="help-nav__title">Risk Intelligence guide</div>
-          <div class="help-nav__copy">${escapeHtml(helpAudience.navCopy)}</div>
+          <div class="help-nav__copy">${escapeHtml(commonHelp.navCopy)}</div>
           <div class="help-nav__role">
             <span class="badge badge--neutral">${escapeHtml(helpAudience.roleSummary)}</span>
-            <span class="form-help">Tailored for the current product state</span>
+            <span class="form-help">Common assessment guidance first, role-specific guidance last</span>
           </div>
           <div class="help-nav__links">
             ${[
@@ -9789,7 +9817,7 @@ function renderHelpPage() {
               <div>
                 <div class="help-hero__kicker">Help and FAQ</div>
                 <h1 class="help-hero__title" data-page-focus>Use the platform well without learning the whole model first.</h1>
-                <p class="help-hero__copy">${escapeHtml(helpAudience.heroCopy)}</p>
+                <p class="help-hero__copy">${escapeHtml(commonHelp.heroCopy)}</p>
               </div>
               <div class="help-hero__actions">
                 <button type="button" class="btn btn--secondary" data-open-shortcuts-help>Shortcuts</button>

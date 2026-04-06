@@ -954,9 +954,11 @@ test('standard user help stays focused on the personal workspace', async ({ page
 
   await expectNoClientCrashOnRoute(page, '/#/help', async () => {
     await expect(page.getByText(/^Standard user$/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /how to use the main steps well/i })).toBeVisible();
+    await expect(page.getByText(/everything above is shared assessment guidance/i)).toBeVisible();
     await expect(page.getByText(/your standard user view/i)).toBeVisible();
-    await expect(page.getByText(/open personal settings/i)).toBeVisible();
     await expect(page.getByText(/Focus admin user search/i)).toHaveCount(0);
+    await expect(page.getByText(/resume your current draft/i)).toBeVisible();
   });
 });
 
@@ -999,10 +1001,12 @@ test('function admin help reflects owned function access', async ({ page }) => {
 
   await expectNoClientCrashOnRoute(page, '/#/help', async () => {
     await expect(page.getByText(/^Function admin$/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /how to use the main steps well/i })).toBeVisible();
+    await expect(page.getByText(/everything above is shared assessment guidance/i)).toBeVisible();
     await expect(page.getByText(/your function admin view/i)).toBeVisible();
     await expect(page.getByText('Security Operations', { exact: true })).toBeVisible();
-    await expect(page.getByText(/open your settings and managed context/i)).toBeVisible();
     await expect(page.getByText(/Focus admin user search/i)).toHaveCount(0);
+    await expect(page.getByText(/resume your current draft/i)).toBeVisible();
   });
 });
 
@@ -1043,10 +1047,50 @@ test('business unit admin help reflects business unit oversight access', async (
 
   await expectNoClientCrashOnRoute(page, '/#/help', async () => {
     await expect(page.getByText(/^BU admin$/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /how to use the main steps well/i })).toBeVisible();
+    await expect(page.getByText(/everything above is shared assessment guidance/i)).toBeVisible();
     await expect(page.getByText(/your business-unit admin view/i)).toBeVisible();
     await expect(page.getByText('Digital Services', { exact: true })).toBeVisible();
-    await expect(page.getByText(/open your settings and managed context/i)).toBeVisible();
     await expect(page.getByText(/Focus admin user search/i)).toHaveCount(0);
+    await expect(page.getByText(/resume your current draft/i)).toBeVisible();
+  });
+});
+
+test('global admin help keeps shared guidance first and admin add-ons last', async ({ page }) => {
+  await seedAuthenticatedUser(page, {
+    username: 'admin',
+    displayName: 'Global Admin',
+    role: 'admin',
+    adminSettings: {
+      geography: 'United Arab Emirates',
+      companyStructure: [],
+      entityContextLayers: [],
+      applicableRegulations: ['UAE PDPL'],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    }
+  });
+  await mockSharedApis(page, {
+    settings: {
+      geography: 'United Arab Emirates',
+      companyStructure: [],
+      entityContextLayers: [],
+      applicableRegulations: ['UAE PDPL'],
+      aiInstructions: 'Use British English.',
+      benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+      typicalDepartments: ['Security']
+    }
+  });
+
+  await expectNoClientCrashOnRoute(page, '/#/help', async () => {
+    await expect(page.getByText(/^Global admin$/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /how to use the main steps well/i })).toBeVisible();
+    await expect(page.getByText(/everything above is shared assessment guidance/i)).toBeVisible();
+    await expect(page.getByText(/your global admin view/i)).toBeVisible();
+    await expect(page.getByText(/creating managed pilot users/i)).toBeVisible();
+    await expect(page.getByText(/Focus admin user search/i)).toHaveCount(0);
+    await expect(page.getByText(/resume your current draft/i)).toBeVisible();
   });
 });
 
