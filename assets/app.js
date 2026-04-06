@@ -8722,7 +8722,7 @@ function renderLogin() {
   setPage(`
     <main class="page">
       <div class="container container--narrow" style="padding:var(--sp-16) var(--sp-6);max-width:640px">
-        <div class="banner banner--poc mb-6"><span class="banner-icon">⚠</span><span class="banner-text"><strong>PoC Security:</strong> Shared team credentials only. Replace with Microsoft Entra ID before production. [ENTRA-INTEGRATION]</span></div>
+        <div class="banner banner--poc mb-6"><span class="banner-icon">⚠</span><span class="banner-text"><strong>PoC Notice:</strong> Pilot environment only. Use approved test credentials and dummy scenarios only.</span></div>
         <div class="card card--elevated">
           <h2 style="margin-bottom:var(--sp-2)">Sign In</h2>
           <p style="margin-bottom:var(--sp-6);color:var(--text-muted)">Each user keeps their own draft state, saved assessments, and assigned BU/function context. Ask the global admin for your username and password.</p>
