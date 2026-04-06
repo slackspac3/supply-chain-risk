@@ -3627,6 +3627,9 @@ canvas { display: block; width: 100%; }
 .data-table tbody tr:hover {
   transform: translateY(-1px);
 }
+.data-table tbody tr:has(.results-actions-disclosure[open]) {
+  transform: none;
+}
 .data-table--workbench td {
   line-height: 1.5;
 }
@@ -6511,6 +6514,37 @@ canvas { display: block; width: 100%; }
   z-index: var(--z-dropdown);
   transform-origin: top right;
   animation: slideUpFade 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.results-actions-disclosure-menu--floating {
+  position: fixed;
+  right: auto;
+  top: 0;
+  left: 0;
+  margin: 0;
+  max-width: min(320px, calc(100vw - 16px));
+  overflow: auto;
+  z-index: calc(var(--z-dropdown) + 1);
+}
+
+.results-actions-disclosure-menu--floating[data-menu-placement="up"] {
+  transform-origin: bottom right;
+}
+
+.results-actions-disclosure-menu--floating[data-menu-variant="wide"] {
+  min-width: 220px;
+}
+
+.results-actions-disclosure-backdrop {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  z-index: var(--z-dropdown);
+}
+
+.results-actions-disclosure-backdrop[hidden] {
+  display: none;
 }
 
 .admin-table-toolbar {

@@ -1458,9 +1458,10 @@ test('dashboard archive helpers move the assessment into archived items after th
 
   await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
     const activeRow = page.locator('.dashboard-assessment-row[data-assessment-id="assess-1"]').first();
+    const floatingMenu = page.locator('.results-actions-disclosure-menu--floating');
     await expect(activeRow).toBeVisible();
     await activeRow.getByText(/^More$/).click();
-    await activeRow.getByRole('button', { name: /^Archive$/ }).click({ force: true });
+    await floatingMenu.getByRole('button', { name: /^Archive$/ }).click({ force: true });
     const confirmButton = page.getByRole('button', { name: /^Archive$/ }).last();
     await expect(confirmButton).toBeVisible();
     await expect(page.getByText('Recent work')).toBeVisible();
@@ -1507,9 +1508,10 @@ test('dashboard duplicate assessment creates a new editable draft', async ({ pag
 
   await expectNoClientCrashOnRoute(page, '/#/dashboard', async () => {
     const duplicateRow = page.locator('.dashboard-assessment-row[data-assessment-id="assess-2"]').first();
+    const floatingMenu = page.locator('.results-actions-disclosure-menu--floating');
     await expect(duplicateRow).toBeVisible();
     await duplicateRow.getByText(/^More$/).click();
-    const duplicateButton = duplicateRow.getByRole('button', { name: /^Duplicate$/ });
+    const duplicateButton = floatingMenu.getByRole('button', { name: /^Duplicate$/ });
     await expect(duplicateButton).toBeVisible();
   });
 });
@@ -1645,14 +1647,104 @@ test('admin user actions menu keeps only one current-user dropdown open at a tim
   await expectNoClientCrashOnRoute(page, '/#/admin/settings/users', async () => {
     const alexRow = page.locator('.managed-account-row[data-username="alex.trafton"]');
     const jamieRow = page.locator('.managed-account-row[data-username="jamie.clarke"]');
+    const floatingMenu = page.locator('.results-actions-disclosure-menu--floating');
 
     await alexRow.getByText(/^More$/).evaluate(button => button.click());
     await expect(alexRow.locator('.results-actions-disclosure[open]')).toHaveCount(1);
-    await expect(alexRow.locator('.results-actions-disclosure[open] .btn-reset-user-password')).toHaveCount(1);
+    await expect(floatingMenu.getByRole('button', { name: 'Reset Password' })).toBeVisible();
 
     await jamieRow.getByText(/^More$/).evaluate(button => button.click());
     await expect(jamieRow.locator('.results-actions-disclosure[open]')).toHaveCount(1);
-    await expect(jamieRow.locator('.results-actions-disclosure[open] .btn-reset-user-password')).toHaveCount(1);
+    await expect(floatingMenu.getByRole('button', { name: 'Reset Password' })).toBeVisible();
     await expect(alexRow.locator('.results-actions-disclosure[open]')).toHaveCount(0);
+  });
+});
+
+test('admin user actions menu blocks click-through and stays usable on the last row', async ({ page }) => {
+  const settings = {
+    geography: 'United Arab Emirates',
+    companyStructure: [
+      { id: 'bu-g42', name: 'G42', type: 'Holding company', parentId: '', ownerUsername: '' },
+      { id: 'dept-sec', name: 'Security', type: 'Department / function', parentId: 'bu-g42', ownerUsername: '' }
+    ],
+    entityContextLayers: [],
+    applicableRegulations: ['UAE PDPL'],
+    aiInstructions: 'Use British English.',
+    benchmarkStrategy: 'Prefer GCC and UAE benchmark references.',
+    typicalDepartments: ['Security']
+  };
+  const accounts = [
+    {
+      username: 'alex.trafton',
+      displayName: 'Alex Trafton',
+      role: 'user',
+      businessUnitEntityId: 'bu-g42',
+      departmentEntityId: 'dept-sec'
+    },
+    {
+      username: 'andy',
+      displayName: 'Andy',
+      role: 'user',
+      businessUnitEntityId: 'bu-g42',
+      departmentEntityId: 'dept-sec'
+    },
+    {
+      username: 'tarun.gupta',
+      displayName: 'Tarun Gupta',
+      role: 'user',
+      businessUnitEntityId: 'bu-g42',
+      departmentEntityId: 'dept-sec'
+    },
+    {
+      username: 'shanky',
+      displayName: 'shanky',
+      role: 'user',
+      businessUnitEntityId: 'bu-g42',
+      departmentEntityId: 'dept-sec'
+    }
+  ];
+
+  await seedAuthenticatedUser(page, {
+    username: 'admin',
+    displayName: 'Global Admin',
+    role: 'admin',
+    adminSettings: settings,
+    preferredAdminSection: 'users'
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('rq_admin_api_secret', 'test-admin-secret');
+  });
+  await page.route('**/api/users', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ accounts, storage: { writable: true, mode: 'shared-kv' } })
+    });
+  });
+  await mockSharedApis(page, { settings, skipUsers: true });
+
+  await expectNoClientCrashOnRoute(page, '/#/admin/settings/users', async () => {
+    const lastRow = page.locator('.managed-account-row[data-username="shanky"]');
+    const createUserPanel = page.locator('details.dashboard-disclosure.card').filter({ hasText: 'Create a user' }).first();
+    const floatingMenu = page.locator('.results-actions-disclosure-menu--floating');
+
+    await lastRow.scrollIntoViewIfNeeded();
+    await lastRow.getByText(/^More$/).evaluate(button => button.click());
+
+    const resetPasswordButton = floatingMenu.getByRole('button', { name: 'Reset Password' });
+    await expect(resetPasswordButton).toBeVisible();
+
+    const menuBox = await floatingMenu.boundingBox();
+    const createUserBox = await createUserPanel.locator('summary').boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(createUserBox).not.toBeNull();
+
+    await page.mouse.click(createUserBox.x + 32, createUserBox.y + (createUserBox.height / 2));
+
+    await expect(lastRow.locator('.results-actions-disclosure[open]')).toHaveCount(0);
+    await expect(createUserPanel).not.toHaveAttribute('open', '');
+
+    await lastRow.getByText(/^More$/).evaluate(button => button.click());
+    await expect(resetPasswordButton).toBeVisible();
   });
 });

@@ -9758,6 +9758,226 @@ function getDisclosureOpenState(stateKey, fallback = false) {
     : !!fallback;
 }
 
+const FloatingActionDisclosureController = (() => {
+  let isBound = false;
+  let activeDisclosure = null;
+  let backdropEl = null;
+  const WIDE_MENU_SELECTOR = '.dashboard-hero-overflow, .dashboard-row-overflow, .admin-footer-overflow, .admin-frontdoor-overflow';
+
+  function ensureBackdrop() {
+    const host = getFloatingDisclosureHost();
+    if (backdropEl && backdropEl.parentNode !== host) host.appendChild(backdropEl);
+    if (backdropEl && host.contains(backdropEl)) return backdropEl;
+    backdropEl = document.createElement('div');
+    backdropEl.className = 'results-actions-disclosure-backdrop';
+    backdropEl.setAttribute('aria-hidden', 'true');
+    host.appendChild(backdropEl);
+    return backdropEl;
+  }
+
+  function showBackdrop() {
+    const backdrop = ensureBackdrop();
+    backdrop.hidden = false;
+  }
+
+  function hideBackdrop() {
+    if (!backdropEl) return;
+    backdropEl.hidden = true;
+  }
+
+  function getFloatingDisclosureHost() {
+    return document.querySelector('main.page') || document.getElementById('main-content') || document.body;
+  }
+
+  function getMenuState(disclosure) {
+    return disclosure?._floatingActionMenuState || null;
+  }
+
+  function clearFloatingMenu(disclosure, { removeOnly = false } = {}) {
+    const state = getMenuState(disclosure);
+    if (!state) return;
+    const { menu, originalParent, originalNextSibling } = state;
+    menu.classList.remove('results-actions-disclosure-menu--floating');
+    delete menu.dataset.menuPlacement;
+    delete menu.dataset.menuVariant;
+    menu.style.removeProperty('top');
+    menu.style.removeProperty('left');
+    menu.style.removeProperty('maxHeight');
+    menu.style.removeProperty('visibility');
+    if (!removeOnly && originalParent && originalParent.isConnected) {
+      if (originalNextSibling && originalNextSibling.parentNode === originalParent) {
+        originalParent.insertBefore(menu, originalNextSibling);
+      } else {
+        originalParent.appendChild(menu);
+      }
+    } else {
+      menu.remove();
+    }
+    delete disclosure._floatingActionMenuState;
+    delete disclosure.dataset.menuPlacement;
+    delete disclosure.dataset.floatingMenu;
+  }
+
+  function setActiveDisclosure(disclosure) {
+    if (activeDisclosure && activeDisclosure !== disclosure) {
+      if (activeDisclosure.isConnected && activeDisclosure.open) {
+        activeDisclosure.open = false;
+      } else {
+        clearFloatingMenu(activeDisclosure, { removeOnly: true });
+      }
+    }
+    activeDisclosure = disclosure;
+  }
+
+  function closeActiveDisclosure({ restoreFocus = false } = {}) {
+    const disclosure = activeDisclosure;
+    if (!disclosure) return;
+    activeDisclosure = null;
+    hideBackdrop();
+    if (disclosure.isConnected && disclosure.open) {
+      disclosure.open = false;
+    } else {
+      clearFloatingMenu(disclosure, { removeOnly: true });
+    }
+    if (restoreFocus && disclosure.isConnected) {
+      disclosure.querySelector('summary')?.focus();
+    }
+  }
+
+  function getMenuVariant(disclosure) {
+    return disclosure.matches(WIDE_MENU_SELECTOR) ? 'wide' : 'default';
+  }
+
+  function ensureFloatingMenu(disclosure) {
+    const existing = getMenuState(disclosure);
+    if (existing?.menu?.isConnected) return existing.menu;
+    const menu = disclosure.querySelector('.results-actions-disclosure-menu');
+    if (!menu) return null;
+    disclosure._floatingActionMenuState = {
+      menu,
+      originalParent: menu.parentNode,
+      originalNextSibling: menu.nextSibling
+    };
+    menu.classList.add('results-actions-disclosure-menu--floating');
+    menu.dataset.menuVariant = getMenuVariant(disclosure);
+    getFloatingDisclosureHost().appendChild(menu);
+    disclosure.dataset.floatingMenu = 'true';
+    return menu;
+  }
+
+  function updateActiveDisclosurePosition() {
+    const disclosure = activeDisclosure;
+    if (!disclosure || !disclosure.open) return;
+    const menu = ensureFloatingMenu(disclosure);
+    const summary = disclosure.querySelector('summary');
+    if (!menu || !summary) return;
+
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const gap = 8;
+    const summaryRect = summary.getBoundingClientRect();
+    const maxHeight = Math.max(160, viewportHeight - (gap * 2));
+
+    menu.style.maxHeight = `${Math.round(maxHeight)}px`;
+    menu.style.visibility = 'hidden';
+
+    const measuredWidth = Math.max(menu.offsetWidth, Math.ceil(menu.getBoundingClientRect().width || 0), 180);
+    const measuredHeight = Math.min(menu.scrollHeight || menu.offsetHeight || 0, maxHeight);
+    const spaceBelow = viewportHeight - summaryRect.bottom - gap;
+    const spaceAbove = summaryRect.top - gap;
+    const placement = spaceBelow < measuredHeight && spaceAbove > spaceBelow ? 'up' : 'down';
+    const left = Math.min(
+      Math.max(gap, summaryRect.right - measuredWidth),
+      Math.max(gap, viewportWidth - measuredWidth - gap)
+    );
+    const preferredTop = placement === 'up'
+      ? summaryRect.top - measuredHeight - gap
+      : summaryRect.bottom + gap;
+    const top = Math.min(
+      Math.max(gap, preferredTop),
+      Math.max(gap, viewportHeight - measuredHeight - gap)
+    );
+
+    disclosure.dataset.menuPlacement = placement;
+    menu.dataset.menuPlacement = placement;
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.visibility = '';
+  }
+
+  function bindDocumentEvents() {
+    if (isBound || typeof document === 'undefined') return;
+    isBound = true;
+
+    document.addEventListener('pointerdown', event => {
+      if (!activeDisclosure) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const activeMenu = getMenuState(activeDisclosure)?.menu;
+      if (activeMenu?.contains(target)) return;
+      if (activeDisclosure.contains(target)) return;
+      closeActiveDisclosure();
+    }, true);
+
+    document.addEventListener('click', event => {
+      if (!activeDisclosure) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const activeMenu = getMenuState(activeDisclosure)?.menu;
+      const actionTarget = target.closest('button, a, [role="menuitem"]');
+      if (!actionTarget || !activeMenu?.contains(actionTarget)) return;
+      window.setTimeout(() => {
+        if (activeDisclosure) closeActiveDisclosure();
+      }, 0);
+    }, true);
+
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !activeDisclosure) return;
+      event.preventDefault();
+      closeActiveDisclosure({ restoreFocus: true });
+    }, true);
+
+    window.addEventListener('resize', () => {
+      if (!activeDisclosure) return;
+      updateActiveDisclosurePosition();
+    });
+
+    window.addEventListener('scroll', () => {
+      if (!activeDisclosure) return;
+      updateActiveDisclosurePosition();
+    }, true);
+  }
+
+  function bindDisclosure(disclosure) {
+    if (!disclosure || disclosure.dataset.floatingDisclosureBound === 'true') return;
+    disclosure.dataset.floatingDisclosureBound = 'true';
+    disclosure.addEventListener('toggle', () => {
+      if (disclosure.open) {
+        setActiveDisclosure(disclosure);
+        showBackdrop();
+        ensureFloatingMenu(disclosure);
+        updateActiveDisclosurePosition();
+        return;
+      }
+      if (activeDisclosure === disclosure) activeDisclosure = null;
+      clearFloatingMenu(disclosure);
+      if (!activeDisclosure) hideBackdrop();
+    });
+  }
+
+  function bind(root = document) {
+    bindDocumentEvents();
+    if (activeDisclosure && !activeDisclosure.isConnected) {
+      clearFloatingMenu(activeDisclosure, { removeOnly: true });
+      activeDisclosure = null;
+      hideBackdrop();
+    }
+    root.querySelectorAll('.results-actions-disclosure').forEach(bindDisclosure);
+  }
+
+  return { bind };
+})();
+
 function bindDisclosureState(root = document) {
   root.querySelectorAll('details[data-disclosure-state-key]').forEach(section => {
     const key = section.dataset.disclosureStateKey;
@@ -9767,6 +9987,7 @@ function bindDisclosureState(root = document) {
       AppState.disclosureState[key] = section.open;
     });
   });
+  FloatingActionDisclosureController.bind(root);
 }
 
 function rememberSettingsScroll(scope) {
