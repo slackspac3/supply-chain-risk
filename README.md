@@ -246,6 +246,9 @@ Current behavior:
   - `live_ai`
   - `fallback`
   - `local`
+- `Admin > AI Feedback & Tuning` now shows who submitted recent feedback events more clearly:
+  - when the managed account directory has a matching person, the admin card shows display name plus `@username`
+  - otherwise it falls back to the stored username
 - when a user removes a generated risk, the product now asks why:
   - `Incorrect risk`
   - `Correct, but narrowing scope`

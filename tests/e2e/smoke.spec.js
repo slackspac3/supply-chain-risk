@@ -67,7 +67,8 @@ async function mockSharedApis(page, {
   userState = null,
   settings = null,
   aiStatus = null,
-  skipUsers = false
+  skipUsers = false,
+  managedAccounts = null
 } = {}) {
   if (!skipUsers) await page.route('**/api/users', async route => {
     const request = route.request();
@@ -88,7 +89,10 @@ async function mockSharedApis(page, {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ accounts: [], storage: { writable: true, mode: 'shared-kv' } })
+      body: JSON.stringify({
+        accounts: Array.isArray(managedAccounts) ? managedAccounts : [],
+        storage: { writable: true, mode: 'shared-kv' }
+      })
     });
   });
 
@@ -1272,7 +1276,12 @@ test('admin AI feedback and tuning dashboard renders the signal view and tuning 
         shortlistDiscipline: 'strict',
         learningSensitivity: 'balanced'
       }
-    }
+    },
+    managedAccounts: [
+      { username: 'admin', displayName: 'Global Admin', role: 'admin' },
+      { username: 'alex', displayName: 'Alex Trafton', role: 'user' },
+      { username: 'maya', displayName: 'Maya Patel', role: 'user' }
+    ]
   });
   await page.route('**/api/org-intelligence', async route => {
     const request = route.request();
@@ -1343,7 +1352,9 @@ test('admin AI feedback and tuning dashboard renders the signal view and tuning 
     await expect(page.locator('#btn-reset-ai-feedback-dashboard')).toBeVisible();
     await page.locator('#btn-refresh-ai-feedback-dashboard').click();
     await expect(page.getByText(/recent feedback events/i).first()).toBeVisible();
-    await expect(page.locator('.wizard-disclosure[open] .wizard-disclosure-body').getByText(/submitted by alex/i).first()).toBeVisible();
+    await expect(page.locator('.wizard-disclosure[open] .wizard-disclosure-body').getByText(/feedback from/i).first()).toBeVisible();
+    await expect(page.locator('.wizard-disclosure[open] .wizard-disclosure-body').getByText(/alex trafton/i).first()).toBeVisible();
+    await expect(page.locator('.wizard-disclosure[open] .wizard-disclosure-body').getByText(/@alex/i).first()).toBeVisible();
   });
 });
 

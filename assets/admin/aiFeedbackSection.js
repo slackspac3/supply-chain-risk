@@ -103,14 +103,36 @@ const AdminAiFeedbackSection = (() => {
     }
   }
 
+  function buildAccountLabelByUsername() {
+    const accounts = typeof AuthService !== 'undefined' && AuthService && typeof AuthService.getManagedAccounts === 'function'
+      ? AuthService.getManagedAccounts()
+      : [];
+    return new Map((Array.isArray(accounts) ? accounts : []).map(account => [
+      String(account?.username || '').trim().toLowerCase(),
+      String(account?.displayName || '').trim()
+    ]).filter(([username]) => username));
+  }
+
+  function resolveFeedbackSubmitter(event = {}, accountLabelByUsername = new Map()) {
+    const username = String(event.submittedBy || '').trim().toLowerCase();
+    const displayName = String(accountLabelByUsername.get(username) || '').trim();
+    return {
+      username,
+      displayName,
+      summaryLabel: displayName || username || 'Unknown user'
+    };
+  }
+
   function renderFeedbackEventList(events = [], { emptyLabel = 'No detailed feedback events yet.' } = {}) {
     if (!Array.isArray(events) || !events.length) {
       return `<div class="form-help">${escape(emptyLabel)}</div>`;
     }
+    const accountLabelByUsername = buildAccountLabelByUsername();
     return `<div style="display:flex;flex-direction:column;gap:var(--sp-3)">
       ${events.map((event) => {
         const reasons = Array.isArray(event.reasons) ? event.reasons : [];
         const citations = Array.isArray(event.citations) ? event.citations : [];
+        const submitter = resolveFeedbackSubmitter(event, accountLabelByUsername);
         return `<div style="padding:var(--sp-4);border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--bg-canvas);display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;justify-content:space-between;gap:var(--sp-3);align-items:flex-start;flex-wrap:wrap">
             <div>
@@ -119,13 +141,17 @@ const AdminAiFeedbackSection = (() => {
             </div>
             <div class="badge badge--neutral">${escape(String(event.lensKey || 'general').replace(/-/g, ' '))}</div>
           </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <strong style="color:var(--text-primary)">Feedback from</strong>
+            <span class="badge badge--neutral">${escape(submitter.summaryLabel)}</span>
+            ${submitter.displayName && submitter.username ? `<span class="form-help">@${escape(submitter.username)}</span>` : ''}
+          </div>
           ${event.riskTitle ? `<div><strong style="color:var(--text-primary)">Risk</strong><div class="form-help">${escape(event.riskTitle)}</div></div>` : ''}
           ${event.scenarioFingerprint ? `<div><strong style="color:var(--text-primary)">Scenario context</strong><div class="form-help">${escape(event.scenarioFingerprint)}</div></div>` : ''}
           ${(reasons.length || citations.length) ? `<div style="display:flex;gap:8px;flex-wrap:wrap">
             ${reasons.map((reason) => `<span class="badge badge--neutral">${escape(formatReasonLabel(reason))}</span>`).join('')}
             ${citations.map((citation) => `<span class="badge badge--neutral">${escape(citation.title || citation.docId || 'Source')}</span>`).join('')}
           </div>` : ''}
-          <div class="form-help">Submitted by ${escape(event.submittedBy || 'unknown')}.</div>
         </div>`;
       }).join('')}
     </div>`;
