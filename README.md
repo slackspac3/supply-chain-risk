@@ -123,6 +123,10 @@ Current AI behavior:
   - bounded browser fallback heuristics only run when the taxonomy projection is absent or clearly too weak
   - the committed browser projection snapshot is now parity-checked against the canonical taxonomy, and can be regenerated with `npm run sync:taxonomy-projection`
   - bounded novel-wording evals now cover paraphrase and near-miss phrasing across ransomware/extortion, privacy/retention/transfer, supplier delay, workforce fatigue, ESG, availability attack, payment-control-vs-fraud, and third-party access wording
+- the authoritative Step 1 draft path is now tighter about event-path preservation:
+  - prompt construction explicitly prioritises user event, trigger, affected asset/service, and main impact
+  - server-side quality gates now reject more consequence-led or off-path rewrites and shortlist drift
+  - weak inputs now get more specific missing-detail guidance instead of generic “add more context” nudges
 - browser API base-URL resolution is now config-driven: Vercel-hosted fronts stay same-origin, while static fronts use the configured hosted API origin without extra discovery requests
 - client workflow requests are normalized before transport so semantically identical inputs produce a stable request shape
 - duplicate suppression now happens on both sides:
@@ -138,6 +142,15 @@ Current AI behavior:
 - supporting documents and standards are cited into the workflow and results
 
 The product is grounded by a growing enterprise corpus that includes ISO, NIST, COSO, IFRS/ESRS, OECD, UNGP, sector guidance, and UAE/GCC-relevant references.
+
+Recent grounding improvements:
+- retrieval metadata in [data/docs.json](./data/docs.json) is now sharper for high-drift Step 1 areas such as:
+  - vendor access and subcontractor reach
+  - ESG claim substantiation and Scope 2 disclosure supportability
+  - forced labour / modern slavery due diligence
+  - alternate workspace and manual fallback continuity language
+  - fatigue, understaffing, and worker-welfare scenarios
+- Step 1 citation selection now prefers event-matching references over generic governance references when both are available
 
 ## Pilot AI Readiness Policy
 
@@ -200,6 +213,8 @@ The repository now includes a benchmark fixture and two evaluation paths so qual
 
 Benchmark fixture:
 - [tests/fixtures/eval/g42_eval_master_repaired.jsonl](./tests/fixtures/eval/g42_eval_master_repaired.jsonl)
+- [tests/fixtures/eval/g42_eval_growth_pack.jsonl](./tests/fixtures/eval/g42_eval_growth_pack.jsonl)
+  - bounded supplemental pack for live PoC drift areas such as AI/model-risk abstention, privacy transfer/retention, supplier delay, vendor access, workforce fatigue, ESG substantiation, continuity fallback, and transformation-delivery drift
 
 Commands:
 - `npm run test:eval:fixture`
@@ -217,6 +232,13 @@ Outputs:
 - local deterministic report: `test-results/eval/local-eval-report.json`
 - AI judge report: `test-results/eval/ai-judge-report.json`
 - harvested growth candidates: `test-results/eval/eval-growth-candidates.jsonl`
+
+Additional regression coverage:
+- targeted unit packs now lock:
+  - projection parity against the canonical taxonomy snapshot
+  - bounded novel-wording paraphrases for Step 1 browser hinting
+  - retrieval relevance for the highest-drift grounding themes in `docs.json`
+  - supplemental eval-growth rows that represent real PoC-style wording expansion rather than only the original gold set
 
 The intended operating loop is:
 1. run `eval:local`
