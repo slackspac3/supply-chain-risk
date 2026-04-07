@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { getKvConfig, withLock: withKvLock } = require('./_kvStore');
 
 const AUDIT_KEY = process.env.AUDIT_LOG_KEY || 'risk_calculator_audit_log';
-const AUDIT_CAPACITY = Number(process.env.AUDIT_LOG_CAPACITY || 200);
+const AUDIT_CAPACITY = Number(process.env.AUDIT_LOG_CAPACITY || 500);
 
 async function runKvCommand(command) {
   let config = null;

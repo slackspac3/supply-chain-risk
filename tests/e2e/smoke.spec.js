@@ -32,7 +32,7 @@ function buildAuditSummary(entries = []) {
   const list = Array.isArray(entries) ? entries : [];
   return {
     total: list.length,
-    retainedCapacity: 200,
+    retainedCapacity: 500,
     loginSuccessCount: list.filter(entry => entry?.eventType === 'login_success').length,
     loginFailureCount: list.filter(entry => entry?.eventType === 'login_failure').length,
     logoutCount: list.filter(entry => entry?.eventType === 'logout').length,

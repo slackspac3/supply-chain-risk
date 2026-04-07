@@ -253,33 +253,33 @@ const AdminAuditLogSection = (() => {
       </div>
       <div class="audit-log-toolbar">
         <div class="audit-log-toolbar__actions">
-          <button class="btn btn--secondary" id="btn-refresh-audit-log" type="button">${auditCache.loading ? 'Refreshing…' : 'Refresh Logs'}</button>
+          <button class="btn btn--primary audit-log-toolbar__button" id="btn-refresh-audit-log" type="button">${auditCache.loading ? 'Refreshing…' : 'Refresh Logs'}</button>
           <div class="form-help audit-log-toolbar__meta">Last refreshed: <strong>${escape(lastLoadedLabel)}</strong></div>
-          <div class="form-help audit-log-toolbar__meta">Loaded ${escape(String(loadedEntries.length || 0))} / ${escape(String(auditSummary.retainedCapacity || 200))} retained</div>
+          <div class="form-help audit-log-toolbar__meta">Loaded ${escape(String(loadedEntries.length || 0))} / ${escape(String(auditSummary.retainedCapacity || 500))} retained</div>
         </div>
         <span class="form-help" id="audit-log-status">${auditCache.error || 'Older activity rolls off automatically. All timestamps use Dubai time (GST) with UK date order.'}</span>
       </div>
       <div class="audit-log-controls">
-        <label class="field audit-log-control">
-          <span>Search logs</span>
-          <input class="input" id="audit-log-search" type="search" value="${escape(activeSearchQuery)}" placeholder="Search user, event, target, or detail">
-        </label>
-        <label class="field audit-log-control">
-          <span>Category</span>
-          <select class="input" id="audit-log-category-filter">${renderSelectOptions(categoryOptions, activeCategoryFilter, 'All categories')}</select>
-        </label>
-        <label class="field audit-log-control">
-          <span>Status</span>
-          <select class="input" id="audit-log-status-filter">${renderSelectOptions(statusOptions, activeStatusFilter, 'All outcomes')}</select>
-        </label>
-        <label class="field audit-log-control">
-          <span>Source</span>
-          <select class="input" id="audit-log-source-filter">${renderSelectOptions(sourceOptions, activeSourceFilter, 'All sources')}</select>
-        </label>
-        <label class="field audit-log-control">
-          <span>Actor role</span>
-          <select class="input" id="audit-log-role-filter">${renderSelectOptions(roleOptions, activeRoleFilter, 'All roles')}</select>
-        </label>
+        <div class="form-group audit-log-control audit-log-control--search">
+          <label class="form-label" for="audit-log-search">Search logs</label>
+          <input class="form-input" id="audit-log-search" type="search" value="${escape(activeSearchQuery)}" placeholder="Search user, event, target, or detail">
+        </div>
+        <div class="form-group audit-log-control">
+          <label class="form-label" for="audit-log-category-filter">Category</label>
+          <select class="form-select" id="audit-log-category-filter">${renderSelectOptions(categoryOptions, activeCategoryFilter, 'All categories')}</select>
+        </div>
+        <div class="form-group audit-log-control">
+          <label class="form-label" for="audit-log-status-filter">Status</label>
+          <select class="form-select" id="audit-log-status-filter">${renderSelectOptions(statusOptions, activeStatusFilter, 'All outcomes')}</select>
+        </div>
+        <div class="form-group audit-log-control">
+          <label class="form-label" for="audit-log-source-filter">Source</label>
+          <select class="form-select" id="audit-log-source-filter">${renderSelectOptions(sourceOptions, activeSourceFilter, 'All sources')}</select>
+        </div>
+        <div class="form-group audit-log-control">
+          <label class="form-label" for="audit-log-role-filter">Actor role</label>
+          <select class="form-select" id="audit-log-role-filter">${renderSelectOptions(roleOptions, activeRoleFilter, 'All roles')}</select>
+        </div>
       </div>
       ${hasActiveFilters ? `<div class="audit-log-filter-banner" id="audit-log-active-filter">
         <div>

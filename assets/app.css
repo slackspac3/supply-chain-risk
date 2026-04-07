@@ -3881,10 +3881,17 @@ canvas { display: block; width: 100%; }
 .audit-log-toolbar {
   margin-top: var(--sp-4);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-4);
   flex-wrap: wrap;
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: 22px;
+  border: 1px solid rgba(246,243,242,0.08);
+  background:
+    radial-gradient(circle at top right, rgba(3,209,168,0.08), transparent 32%),
+    linear-gradient(180deg, rgba(246,243,242,0.04), rgba(246,243,242,0.016));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
 
 .audit-log-toolbar__actions {
@@ -3894,8 +3901,24 @@ canvas { display: block; width: 100%; }
   flex-wrap: wrap;
 }
 
+.audit-log-toolbar__button {
+  min-width: 168px;
+  justify-content: center;
+  box-shadow: 0 14px 30px rgba(3, 209, 168, 0.12);
+}
+
 .audit-log-toolbar__meta strong {
   color: var(--text-primary);
+}
+
+.audit-log-toolbar__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(246,243,242,0.08);
+  background: rgba(246,243,242,0.03);
 }
 
 .audit-log-controls {
@@ -3903,19 +3926,32 @@ canvas { display: block; width: 100%; }
   display: grid;
   grid-template-columns: minmax(240px, 2fr) repeat(4, minmax(160px, 1fr));
   gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: 22px;
+  border: 1px solid rgba(246,243,242,0.08);
+  background: linear-gradient(180deg, rgba(246,243,242,0.032), rgba(246,243,242,0.012));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
 }
 
 .audit-log-control {
   margin: 0;
 }
 
-.audit-log-control span {
-  display: block;
+.audit-log-control .form-label {
   margin-bottom: var(--sp-2);
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
+}
+
+.audit-log-control--search {
+  grid-column: span 2;
+}
+
+.audit-log-control .form-input,
+.audit-log-control .form-select {
+  min-height: 48px;
 }
 
 .audit-log-user-cell,
@@ -4022,11 +4058,19 @@ canvas { display: block; width: 100%; }
   .audit-log-controls {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
+
+  .audit-log-control--search {
+    grid-column: span 2;
+  }
 }
 
 @media (max-width: 720px) {
   .audit-log-controls {
     grid-template-columns: 1fr;
+  }
+
+  .audit-log-control--search {
+    grid-column: span 1;
   }
 }
 
