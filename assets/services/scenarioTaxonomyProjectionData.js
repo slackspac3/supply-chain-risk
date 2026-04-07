@@ -4662,6 +4662,18 @@
           "strength": "strong"
         },
         {
+          "text": "retained for too long",
+          "strength": "strong"
+        },
+        {
+          "text": "kept too long against privacy rules",
+          "strength": "strong"
+        },
+        {
+          "text": "kept beyond stated privacy obligations",
+          "strength": "strong"
+        },
+        {
           "text": "retained beyond required deletion periods",
           "strength": "strong"
         },
@@ -4832,6 +4844,22 @@
         },
         {
           "text": "transferred across borders",
+          "strength": "strong"
+        },
+        {
+          "text": "data transferred abroad without safeguards",
+          "strength": "strong"
+        },
+        {
+          "text": "transferred abroad without safeguards",
+          "strength": "strong"
+        },
+        {
+          "text": "transferred overseas without safeguards",
+          "strength": "strong"
+        },
+        {
+          "text": "moved to another jurisdiction without safeguards",
           "strength": "strong"
         },
         {
@@ -6552,6 +6580,18 @@
           "strength": "strong"
         },
         {
+          "text": "vendor credentials have standing access",
+          "strength": "strong"
+        },
+        {
+          "text": "support partner accounts can reach production systems",
+          "strength": "strong"
+        },
+        {
+          "text": "shared vendor account spans critical systems",
+          "strength": "strong"
+        },
+        {
           "text": "broad vendor access",
           "strength": "strong"
         },
@@ -7767,6 +7807,42 @@
         {
           "text": "claims differ materially from actual practice",
           "strength": "medium"
+        },
+        {
+          "text": "cannot be substantiated",
+          "strength": "medium"
+        },
+        {
+          "text": "cannot be evidenced",
+          "strength": "medium"
+        },
+        {
+          "text": "claims are unsupported",
+          "strength": "medium"
+        },
+        {
+          "text": "unsupported claim",
+          "strength": "medium"
+        },
+        {
+          "text": "scope 2 reduction unsupported",
+          "strength": "medium"
+        },
+        {
+          "text": "unsupported scope 2 reduction",
+          "strength": "medium"
+        },
+        {
+          "text": "renewable energy attributes not evidenced",
+          "strength": "medium"
+        },
+        {
+          "text": "renewable energy attributes",
+          "strength": "medium"
+        },
+        {
+          "text": "workload geography mismatch",
+          "strength": "medium"
         }
       ],
       "antiSignals": [
@@ -7818,6 +7894,18 @@
         },
         {
           "text": "unsupported sustainability claims",
+          "strength": "medium"
+        },
+        {
+          "text": "claims are unsupported",
+          "strength": "medium"
+        },
+        {
+          "text": "unsupported scope 2 reduction",
+          "strength": "medium"
+        },
+        {
+          "text": "renewable energy attributes",
           "strength": "medium"
         }
       ],
@@ -8315,6 +8403,18 @@
         {
           "text": "unsafe delivery conditions",
           "strength": "medium"
+        },
+        {
+          "text": "burnout",
+          "strength": "medium"
+        },
+        {
+          "text": "repeated weekend work",
+          "strength": "medium"
+        },
+        {
+          "text": "weekend bid work",
+          "strength": "medium"
         }
       ],
       "antiSignals": [
@@ -8493,6 +8593,18 @@
         },
         {
           "text": "knowledge concentration",
+          "strength": "medium"
+        },
+        {
+          "text": "shrinking core of experienced staff",
+          "strength": "medium"
+        },
+        {
+          "text": "weak onboarding",
+          "strength": "medium"
+        },
+        {
+          "text": "limited coaching",
           "strength": "medium"
         }
       ],

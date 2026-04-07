@@ -237,11 +237,39 @@ function countStep1PatternMatches(haystack = '', patterns = []) {
   ), 0);
 }
 
+function hasStep1StrongCrossLensCompetition(topFamilies = []) {
+  const rankedFamilies = Array.isArray(topFamilies) ? topFamilies : [];
+  const primary = rankedFamilies[0] || null;
+  if (!primary?.familyKey || !primary?.lensKey) return false;
+  const runnerUp = rankedFamilies.find((family, index) => (
+    index > 0
+    && family?.familyKey
+    && family?.lensKey
+    && String(family.lensKey || '').trim() !== String(primary.lensKey || '').trim()
+  )) || null;
+  if (!runnerUp) return false;
+  const primaryScore = Number(primary.score || 0);
+  const runnerUpScore = Number(runnerUp.score || 0);
+  const separation = primaryScore - runnerUpScore;
+  const runnerUpSignalCount = Array.isArray(runnerUp.matchedSignals) ? runnerUp.matchedSignals.length : 0;
+  const primarySignalCount = Array.isArray(primary.matchedSignals) ? primary.matchedSignals.length : 0;
+  return (
+    primaryScore >= 5
+    && primarySignalCount >= 2
+    && runnerUpScore >= 4.5
+    && runnerUpSignalCount >= 2
+    && separation <= 3.1
+  );
+}
+
 function buildStep1ProjectionHintModel(text = '', scenarioLensHint = '') {
   const analysis = evaluateStep1ScenarioWithProjection(text, scenarioLensHint);
   if (!analysis) return null;
-  const ambiguityFlags = uniqueStep1Keys(analysis.ambiguityFlags || analysis.classification?.ambiguityFlags || []);
   const topFamilies = Array.isArray(analysis.topFamilies) ? analysis.topFamilies : [];
+  const ambiguityFlags = uniqueStep1Keys([
+    ...(analysis.ambiguityFlags || analysis.classification?.ambiguityFlags || []),
+    ...(hasStep1StrongCrossLensCompetition(topFamilies) ? ['MIXED_TOP_FAMILIES'] : [])
+  ]);
   const familyOrder = getStep1ProjectionFamilyOrder(analysis, 3);
   const candidateLensKeys = uniqueStep1Keys([
     analysis.topLensKey,

@@ -109,6 +109,8 @@ test('scenario-draft route returns manual mode for incomplete scenario input bef
   assert.equal(res.payload.aiUnavailable, false);
   assert.equal(res.payload.draftNarrativeSource, 'manual');
   assert.equal(String(res.payload.manualReasonCode || ''), 'incomplete_scenario_input');
+  assert.match(String(res.payload.manualReasonMessage || ''), /State what happened or could happen in one plain sentence/i);
+  assert.match(String((res.payload.workflowGuidance || [])[0] || ''), /State what happened or could happen/i);
   assert.equal(String(res.payload.trace?.label || ''), 'Step 1 guided draft');
 });
 
@@ -458,6 +460,136 @@ test('scenario-draft route orchestrates live generation and quality-gate server-
   assert.equal(res.payload.scenarioLens?.key, 'identity');
   assert.match(String(res.payload.draftNarrative || ''), /global admin credentials/i);
   assert.equal(String(res.payload.trace?.label || ''), 'Step 1 guided draft');
+});
+
+test('scenario-draft route sends preserve-details anchors and compact context to the hosted AI prompt', async () => {
+  process.env.ALLOWED_ORIGIN = 'https://slackspac3.github.io';
+  process.env.SESSION_SIGNING_SECRET = 'test-signing-secret';
+  process.env.KV_REST_API_URL = 'https://example.test/kv';
+  process.env.KV_REST_API_TOKEN = 'test-token';
+  process.env.COMPASS_API_URL = 'https://example.test/ai';
+  process.env.COMPASS_API_KEY = 'proxy-secret';
+  process.env.COMPASS_MODEL = 'gpt-5.4';
+
+  const providerBodies = [];
+  const aiPayload = JSON.stringify({
+    draftNarrative: 'Key vendor delivery slips are blocking a dependent rollout and delaying committed milestones.',
+    summary: 'The scenario stays in the dependency-led delivery lane.',
+    linkAnalysis: 'The main chain is supplier delivery slippage, dependent rollout delay, and wider programme disruption.',
+    workflowGuidance: [
+      'Keep the event path centred on the dependency delay.',
+      'Avoid letting downstream programme pressure become a different primary family.'
+    ],
+    benchmarkBasis: 'Stay close to the typed dependency-led delivery wording.',
+    scenarioLens: {
+      key: 'transformation-delivery',
+      label: 'Transformation delivery',
+      functionKey: 'operations',
+      estimatePresetKey: 'transformation-delivery',
+      secondaryKeys: []
+    },
+    structuredScenario: {
+      assetService: 'Dependent rollout programme',
+      primaryDriver: 'Vendor delivery slippage',
+      eventPath: 'A dependency misses committed dates and blocks rollout work',
+      effect: 'Delayed milestones and wider delivery disruption'
+    },
+    risks: [
+      {
+        title: 'Dependency slippage delaying committed rollout milestones',
+        category: 'Delivery',
+        description: 'Vendor delivery delays block dependent rollout tasks and strain committed milestones.',
+        confidence: 'high',
+        regulations: ['ISO 27001']
+      }
+    ]
+  });
+
+  global.fetch = async (url, options = {}) => {
+    if (String(url).includes('/kv')) {
+      return {
+        ok: true,
+        json: async () => ({ result: null })
+      };
+    }
+    if (String(url) === 'https://example.test/ai') {
+      providerBodies.push(JSON.parse(options.body));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: aiPayload
+              }
+            }
+          ]
+        }),
+        text: async () => aiPayload
+      };
+    }
+    throw new Error(`Unexpected fetch in scenario-draft prompt packing test: ${url}`);
+  };
+
+  const handler = loadFresh('../../api/ai/scenario-draft');
+  const token = buildSessionToken({
+    username: 'analyst',
+    role: 'user',
+    exp: Date.now() + 60_000
+  });
+  const res = createRes();
+
+  await handler({
+    method: 'POST',
+    body: JSON.stringify({
+      riskStatement: 'Key vendor delivery slips are blocking a dependent rollout and delaying committed milestones.',
+      guidedInput: {
+        event: 'Key vendor delivery slips are blocking a dependent rollout',
+        cause: 'A dependency missed committed delivery dates',
+        asset: 'The dependent rollout programme',
+        impact: 'Dependent teams cannot complete the rollout on time'
+      },
+      businessUnit: {
+        name: 'Group Technology',
+        contextSummary: 'Delivery dependency context. '.repeat(160),
+        selectedDepartmentContext: 'Selected rollout context. '.repeat(120),
+        aiGuidance: 'Stay focused on explicit dependency slippage. '.repeat(80)
+      },
+      adminSettings: {
+        businessUnitContext: 'Business-unit rollout context. '.repeat(180),
+        departmentContext: 'Department delivery context. '.repeat(160),
+        inheritedContextSummary: 'Inherited organisation context. '.repeat(140),
+        personalContextSummary: 'User context. '.repeat(120),
+        resolvedObligationSummary: 'Programmes must track delivery obligations and escalations. '.repeat(120),
+        resolvedObligationContext: {
+          direct: [{ title: 'Delivery obligation', text: 'Critical programmes must retain delivery evidence and escalation triggers. '.repeat(60) }]
+        }
+      },
+      citations: [
+        { title: 'Generic governance note', score: 10, relevanceReason: 'General programme governance review only.', excerpt: 'A generic planning note without direct scenario evidence.' },
+        { title: 'Most relevant source', score: 9, relevanceReason: 'Directly matches the dependency-led delay.', excerpt: 'The vendor missed committed dates and blocked rollout work.' },
+        { title: 'Second source', score: 8, relevanceReason: 'Confirms the same dependent rollout blockage.', excerpt: 'Dependent teams cannot finish the rollout until the vendor deliverable lands.' },
+        { title: 'Third source', score: 7, relevanceReason: 'Supports the same delivery event path.', excerpt: 'Programme leadership has already escalated the delay.' },
+        { title: 'Fourth source', score: 6, relevanceReason: 'Supporting source only.', excerpt: 'Delivery governance note.' }
+      ]
+    }),
+    headers: {
+      origin: 'https://slackspac3.github.io',
+      'x-session-token': token
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(providerBodies.length >= 1, true);
+  const userPrompt = String(providerBodies[0]?.messages?.[1]?.content || '');
+  assert.match(userPrompt, /Priority details to preserve:/);
+  assert.match(userPrompt, /Accepted taxonomy anchor:/);
+  assert.match(userPrompt, /Retrieved references:/);
+  assert.ok(userPrompt.length < 12000);
+  assert.doesNotMatch(userPrompt, /Generic governance note/);
+  assert.match(userPrompt, /Most relevant source/);
 });
 
 test('scenario-draft route repairs an off-lane live shortlist so it stays aligned with the accepted identity narrative', async () => {

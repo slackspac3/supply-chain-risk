@@ -203,6 +203,16 @@ test('canonical classification survives bounded paraphrase wording across high-d
       text: 'Vendor accounts have broad access across critical systems without clear segregation.',
       expectedFamily: 'vendor_access_weakness',
       expectedLens: 'third-party'
+    },
+    {
+      text: 'Support partner accounts can reach production systems through a shared external access path.',
+      expectedFamily: 'vendor_access_weakness',
+      expectedLens: 'third-party'
+    },
+    {
+      text: 'Scope 2 reduction claims are unsupported because renewable energy attributes do not match the workload geography.',
+      expectedFamily: 'greenwashing_disclosure_gap',
+      expectedLens: 'esg'
     }
   ];
 

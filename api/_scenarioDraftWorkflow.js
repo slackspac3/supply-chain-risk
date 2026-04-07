@@ -607,6 +607,84 @@ function extractGuidedDraftAnchors(input = {}, seedNarrative = '') {
   return Array.from(new Set(String(text || '').toLowerCase().match(/[a-z0-9]+/g) || [])).filter((token) => token.length > 4 && !stopWords.has(token));
 }
 
+function extractScenarioAnchorTokens(value = '', {
+  limit = 10
+} = {}) {
+  const stopWords = new Set([
+    'about', 'after', 'along', 'because', 'could', 'create', 'critical', 'current', 'event', 'from', 'have', 'into',
+    'issue', 'likely', 'main', 'material', 'might', 'more', 'most', 'risk', 'scenario', 'scope', 'should', 'their',
+    'there', 'these', 'this', 'what', 'which', 'with', 'would'
+  ]);
+  return Array.from(new Set(String(value || '').toLowerCase().match(/[a-z0-9]+/g) || []))
+    .filter((token) => token.length > 4 && !stopWords.has(token))
+    .slice(0, limit);
+}
+
+function buildGuidedDraftAnchorGroups(input = {}, seedNarrative = '') {
+  const eventText = String(input?.guidedInput?.event || seedNarrative || '').trim();
+  const narrativeText = String(seedNarrative || input?.riskStatement || '').trim();
+  const causeText = String(input?.guidedInput?.cause || '').trim();
+  const impactText = String(input?.guidedInput?.impact || '').trim();
+  const assetText = String(input?.guidedInput?.asset || '').trim();
+  const event = extractScenarioAnchorTokens(eventText, { limit: 10 });
+  const cause = extractScenarioAnchorTokens(causeText, { limit: 6 });
+  const impact = extractScenarioAnchorTokens(impactText, { limit: 6 });
+  const asset = extractScenarioAnchorTokens(assetText, { limit: 6 });
+  const narrative = extractScenarioAnchorTokens(narrativeText, { limit: 10 });
+  const critical = uniqueKeys([
+    ...event.slice(0, 6),
+    ...cause.slice(0, 4),
+    ...asset.slice(0, 4),
+    ...narrative.slice(0, 4)
+  ]).slice(0, 12);
+  return {
+    event,
+    cause,
+    impact,
+    asset,
+    narrative,
+    critical,
+    all: uniqueKeys([
+      ...event,
+      ...cause,
+      ...impact,
+      ...asset,
+      ...narrative
+    ])
+  };
+}
+
+function scoreGuidedDraftAnchorGroups(text = '', groups = {}) {
+  const eventOverlap = countScenarioAnchorOverlap(text, groups.event || []);
+  const causeOverlap = countScenarioAnchorOverlap(text, groups.cause || []);
+  const impactOverlap = countScenarioAnchorOverlap(text, groups.impact || []);
+  const assetOverlap = countScenarioAnchorOverlap(text, groups.asset || []);
+  const narrativeOverlap = countScenarioAnchorOverlap(text, groups.narrative || []);
+  const criticalOverlap = countScenarioAnchorOverlap(text, groups.critical || []);
+  const populatedGroupCount = ['event', 'cause', 'impact', 'asset', 'narrative']
+    .filter((key) => Array.isArray(groups[key]) && groups[key].length)
+    .length;
+  const matchedGroupCount = [
+    eventOverlap > 0,
+    causeOverlap > 0,
+    impactOverlap > 0,
+    assetOverlap > 0,
+    narrativeOverlap > 0
+  ].filter(Boolean).length;
+  return {
+    eventOverlap,
+    causeOverlap,
+    impactOverlap,
+    assetOverlap,
+    narrativeOverlap,
+    criticalOverlap,
+    populatedGroupCount,
+    matchedGroupCount,
+    totalOverlap: eventOverlap + causeOverlap + impactOverlap + assetOverlap + narrativeOverlap,
+    eventLikeOverlap: Math.max(eventOverlap, narrativeOverlap)
+  };
+}
+
 function countScenarioAnchorOverlap(text = '', anchors = []) {
   const haystack = String(text || '').toLowerCase();
   return (Array.isArray(anchors) ? anchors : []).filter((token) => token && haystack.includes(token)).length;
@@ -654,6 +732,208 @@ function buildRiskContextLinkAnalysis({ classification, riskTitles = [] } = {}) 
     return 'Several selected risks appear capable of cascading together. Keep only the risks that clearly belong in the same event path and business consequence chain.';
   }
   return 'A single primary risk driver was identified from the intake. Keep only the risk that best represents the same scenario and business consequence.';
+}
+
+function buildClassificationAnchor(classification = {}) {
+  return {
+    domain: String(classification?.domain || '').trim(),
+    primaryFamily: String(classification?.primaryFamily?.key || '').trim(),
+    secondaryFamilies: Array.isArray(classification?.secondaryFamilies)
+      ? classification.secondaryFamilies.map((family) => family?.key).filter(Boolean)
+      : [],
+    overlays: Array.isArray(classification?.overlays)
+      ? classification.overlays.map((overlay) => overlay?.key).filter(Boolean)
+      : [],
+    mechanisms: Array.isArray(classification?.mechanisms)
+      ? classification.mechanisms.map((mechanism) => mechanism?.key).filter(Boolean)
+      : [],
+    confidence: Number(classification?.confidenceScore || classification?.confidence || 0),
+    confidenceBand: String(classification?.confidenceBand || '').trim(),
+    reasonCodes: Array.isArray(classification?.reasonCodes) ? classification.reasonCodes.slice(0, 8) : [],
+    ambiguityFlags: Array.isArray(classification?.ambiguityFlags) ? classification.ambiguityFlags.slice(0, 6) : []
+  };
+}
+
+function buildPromptSection(label = '', value = '', {
+  maxChars = 600
+} = {}) {
+  const heading = String(label || '').trim();
+  const body = truncateText(normaliseBlockInputText(value || ''), maxChars);
+  if (!heading || !body) return '';
+  return `${heading}:\n${body}`;
+}
+
+function buildGuidedScenarioContextPromptBlock(settings = {}, businessUnit = null) {
+  const obligationBlock = buildResolvedObligationPromptBlock(settings);
+  return [
+    buildPromptSection('Live business-unit context', settings?.businessUnitContext || '', { maxChars: 640 }),
+    buildPromptSection('Live function context', settings?.departmentContext || '', { maxChars: 520 }),
+    buildPromptSection('Resolved obligation basis', obligationBlock, { maxChars: 960 }),
+    buildPromptSection('Inherited organisation context', settings?.inheritedContextSummary || '', { maxChars: 560 }),
+    buildPromptSection('User-specific working context', settings?.personalContextSummary || '', { maxChars: 360 }),
+    buildPromptSection('Selected department context', businessUnit?.selectedDepartmentContext || '', { maxChars: 360 })
+  ].filter(Boolean).join('\n\n') || '(no additional live BU/function/user context provided)';
+}
+
+function buildGuidedScenarioEvidencePromptBlock(evidenceMeta = {}) {
+  const summary = [
+    String(evidenceMeta?.promptBlock || '').trim(),
+    Array.isArray(evidenceMeta?.missingInformation) && evidenceMeta.missingInformation.length
+      ? `Known evidence gaps: ${evidenceMeta.missingInformation.slice(0, 2).join(' ')}`
+      : ''
+  ].filter(Boolean).join('\n');
+  return truncateText(summary, 720) || '(no evidence summary available)';
+}
+
+function buildScenarioCitationRankingContext({
+  citations = [],
+  seedNarrative = '',
+  input = {},
+  classification = {}
+} = {}) {
+  const anchorGroups = buildGuidedDraftAnchorGroups(input, seedNarrative);
+  const primaryFamily = classification?.primaryFamily || null;
+  const secondaryFamilies = Array.isArray(classification?.secondaryFamilies) ? classification.secondaryFamilies.filter(Boolean) : [];
+  const familyThemePhrases = uniqueKeys([
+    ...collectFamilyThemePhrases(primaryFamily),
+    ...secondaryFamilies.flatMap((family) => collectFamilyThemePhrases(family).slice(0, 6))
+  ]);
+  const mechanismThemePhrases = collectMechanismThemePhrases(
+    uniqueKeys([
+      ...(Array.isArray(classification?.mechanisms) ? classification.mechanisms.map((mechanism) => mechanism?.key) : []),
+      ...(Array.isArray(primaryFamily?.defaultMechanisms) ? primaryFamily.defaultMechanisms : [])
+    ])
+  );
+  return {
+    citations: Array.isArray(citations) ? citations : [],
+    anchorGroups,
+    familyThemePhrases,
+    mechanismThemePhrases,
+    primaryFamilyLabel: String(primaryFamily?.label || '').trim(),
+    primaryFamilyKey: String(primaryFamily?.key || '').trim()
+  };
+}
+
+function scoreScenarioCitationForPrompt(citation = {}, rankingContext = {}) {
+  const text = [
+    citation?.title,
+    citation?.relevanceReason,
+    citation?.excerpt,
+    citation?.description,
+    citation?.note
+  ].map((value) => String(value || '').trim()).filter(Boolean).join('. ');
+  const anchorMetrics = scoreGuidedDraftAnchorGroups(text, rankingContext.anchorGroups || {});
+  const familyThemeOverlap = countPhraseMatches(text, rankingContext.familyThemePhrases || []);
+  const mechanismThemeOverlap = countPhraseMatches(text, rankingContext.mechanismThemePhrases || []);
+  const familyLabelOverlap = rankingContext.primaryFamilyLabel
+    ? countPhraseMatches(text, [rankingContext.primaryFamilyLabel])
+    : 0;
+  const baseScore = Number(citation?.score || 0);
+  const directEventMatch = anchorMetrics.eventOverlap > 0 || anchorMetrics.causeOverlap > 0 || anchorMetrics.assetOverlap > 0;
+  const eventGroupCoverage = [anchorMetrics.eventOverlap > 0, anchorMetrics.causeOverlap > 0, anchorMetrics.assetOverlap > 0].filter(Boolean).length;
+  const genericGovernanceOnly = /(governance|policy|oversight|committee|assurance|generic|planning note|governance note|review only)/i.test(text)
+    && !directEventMatch
+    && mechanismThemeOverlap === 0
+    && familyThemeOverlap === 0;
+  let score = 0;
+  score += anchorMetrics.eventOverlap * 16;
+  score += anchorMetrics.causeOverlap * 12;
+  score += anchorMetrics.assetOverlap * 10;
+  score += anchorMetrics.impactOverlap * 5;
+  score += anchorMetrics.narrativeOverlap * 6;
+  score += anchorMetrics.criticalOverlap * 8;
+  score += eventGroupCoverage * 10;
+  score += mechanismThemeOverlap * 6;
+  score += familyThemeOverlap * 5;
+  score += familyLabelOverlap * 4;
+  score += Math.min(10, baseScore);
+  if (!directEventMatch && anchorMetrics.totalOverlap === 0) score -= 18;
+  if (genericGovernanceOnly) score -= 28;
+  return {
+    score,
+    anchorMetrics,
+    familyThemeOverlap,
+    mechanismThemeOverlap,
+    familyLabelOverlap,
+    genericGovernanceOnly
+  };
+}
+
+function rankScenarioCitationsForPrompt(citations = [], options = {}) {
+  const rankingContext = buildScenarioCitationRankingContext({
+    citations,
+    ...options
+  });
+  return rankingContext.citations
+    .map((citation, index) => ({
+      citation,
+      index,
+      ranking: scoreScenarioCitationForPrompt(citation, rankingContext)
+    }))
+    .sort((left, right) => (
+      right.ranking.score - left.ranking.score
+      || Number(right.citation?.score || 0) - Number(left.citation?.score || 0)
+      || left.index - right.index
+    ));
+}
+
+function buildGuidedCitationPromptBlock(citations = [], {
+  limit = 4,
+  seedNarrative = '',
+  input = {},
+  classification = {}
+} = {}) {
+  const items = rankScenarioCitationsForPrompt(citations, {
+    seedNarrative,
+    input,
+    classification
+  })
+    .map(({ citation: item }, index) => {
+      const title = String(item?.title || item?.note || `Reference ${index + 1}`).trim();
+      const excerpt = truncateText(item?.excerpt || item?.description || item?.note || '', 180);
+      const reason = truncateText(item?.relevanceReason || '', 120);
+      return [`- ${title}`, reason ? `why used: ${reason}` : '', excerpt ? `summary: ${excerpt}` : ''].filter(Boolean).join(' | ');
+    })
+    .filter(Boolean)
+    .slice(0, limit);
+  return items.length ? items.join('\n') : '(no external citations available)';
+}
+
+function hasGenericGovernanceShortlistWording(risk = {}) {
+  const title = String(risk?.title || '').trim();
+  const category = String(risk?.category || '').trim();
+  const description = String(risk?.description || '').trim();
+  const titleText = `${title}. ${category}`.trim();
+  const titleGovernance = /(governance|policy|oversight|committee|assurance|remediation|review|playbook|training|awareness|standard)/i.test(titleText);
+  const eventPathTerms = /(credential|identity|tenant|configuration|outage|flood|traffic|availability|supplier|vendor|delivery|rollout|privacy|retention|transfer|fatigue|staff|labou?r|slavery|greenwashing|claims|safety|injury|payment|invoice|fraud|receivable|counterparty|environment|spill|control)/i.test(titleText);
+  const descriptionEventTerms = /(credential|identity|tenant|configuration|outage|flood|traffic|availability|supplier|vendor|delivery|rollout|privacy|retention|transfer|fatigue|staff|labou?r|slavery|greenwashing|claims|safety|injury|payment|invoice|fraud|receivable|counterparty|environment|spill|control)/i.test(description);
+  return titleGovernance && !eventPathTerms && !descriptionEventTerms;
+}
+
+function buildGuidedScenarioPriorityPromptBlock(input = {}, {
+  seedNarrative = '',
+  classification = {}
+} = {}) {
+  const anchorGroups = buildGuidedDraftAnchorGroups(input, seedNarrative);
+  return [
+    'Priority details to preserve:',
+    input?.guidedInput?.event
+      ? `- Event path: ${cleanUserFacingText(input.guidedInput.event, { maxSentences: 1 })}`
+      : (seedNarrative ? `- Event path: ${cleanUserFacingText(seedNarrative, { maxSentences: 1 })}` : ''),
+    input?.guidedInput?.cause
+      ? `- Trigger or cause: ${cleanUserFacingText(input.guidedInput.cause, { maxSentences: 1, stripTrailingPeriod: true })}`
+      : '',
+    input?.guidedInput?.asset
+      ? `- Affected asset or service: ${cleanUserFacingText(input.guidedInput.asset, { maxSentences: 1, stripTrailingPeriod: true })}`
+      : '',
+    input?.guidedInput?.impact
+      ? `- Main impact: ${cleanUserFacingText(input.guidedInput.impact, { maxSentences: 1 })}`
+      : '',
+    anchorGroups.critical.length
+      ? `- Anchor terms to preserve when still accurate: ${anchorGroups.critical.join(', ')}`
+      : '',
+    `Accepted taxonomy anchor:\n${JSON.stringify(buildClassificationAnchor(classification), null, 2)}`
+  ].filter(Boolean).join('\n');
 }
 
 function buildFallbackRiskCards(classification = {}, input = {}) {
@@ -1614,6 +1894,8 @@ function evaluateShortlistRiskCard(risk = {}, {
   const triggerSignalOverlapCount = countPhraseMatches(riskText, shortlistContext.triggerSignalPhrases || []);
   const themeOverlapCount = countPhraseMatches(riskText, shortlistContext.familyThemePhrases || []);
   const familyContextOverlapCount = countPhraseMatches(riskText, shortlistContext.acceptedFamilyKeys || []);
+  const titleAnchorOverlap = countScenarioAnchorOverlap(`${risk?.title || ''} ${risk?.category || ''}`, narrativeAnchors)
+    + countPhraseMatches(`${risk?.title || ''} ${risk?.category || ''}`, shortlistContext.triggerSignalPhrases || []);
   const eventPathEvidenceCount = [
     narrativeAnchorOverlap > 0,
     classificationAnchorOverlap > 0,
@@ -1651,6 +1933,7 @@ function evaluateShortlistRiskCard(risk = {}, {
     || riskClassification.reasonCodes?.includes('CONSEQUENCE_ONLY_NOT_PRIMARY')
     || (riskClassification.reasonCodes?.includes('INSUFFICIENT_PRIMARY_SIGNAL') && riskOverlayKeys.length > 0 && !eventAligned);
   const consequenceHeavy = Boolean(riskClassification.ambiguityFlags?.includes('CONSEQUENCE_HEAVY_TEXT'));
+  const genericGovernanceTitle = hasGenericGovernanceShortlistWording(risk);
   const overlayDrivenDomainAllowed = !riskPrimaryKey
     || riskDomainAligned
     || leadDomainAligned
@@ -1675,6 +1958,7 @@ function evaluateShortlistRiskCard(risk = {}, {
     blockedByRiskAntiSignals ? 'BLOCKED_BY_CLASSIFIER_ANTI_SIGNAL' : '',
     consequenceOnly ? 'CONSEQUENCE_ONLY_CARD' : '',
     consequenceHeavy ? 'CONSEQUENCE_HEAVY_CARD' : '',
+    genericGovernanceTitle ? 'GENERIC_GOVERNANCE_TITLE' : '',
     eventPathEvidenceCount ? 'HAS_EVENT_PATH_EVIDENCE' : 'NO_EVENT_PATH_EVIDENCE'
   ]);
 
@@ -1705,6 +1989,9 @@ function evaluateShortlistRiskCard(risk = {}, {
   if (blockedByRiskAntiSignals) score -= 24;
   if (consequenceOnly) score -= eventAligned ? 10 : 30;
   if (consequenceHeavy) score -= eventAligned ? 4 : 12;
+  if (genericGovernanceTitle) score -= eventAligned ? 16 : 34;
+  if (titleAnchorOverlap === 0 && genericGovernanceTitle) score -= 12;
+  if (titleAnchorOverlap === 0 && consequenceOnly) score -= 10;
 
   const overlayDrivenAligned = !eventAligned
     && !blocked
@@ -1718,6 +2005,7 @@ function evaluateShortlistRiskCard(risk = {}, {
     && eventAligned
     && eventPathEvidenceCount >= 1
     && score >= (familyAligned ? 40 : (secondaryAligned || allowedSecondaryAligned ? 36 : 34))
+    && !(genericGovernanceTitle && titleAnchorOverlap === 0 && mechanismOverlapCount === 0 && triggerSignalOverlapCount === 0)
     && !(consequenceOnly && narrativeAnchorOverlap === 0 && classificationAnchorOverlap === 0 && mechanismOverlapCount === 0 && themeOverlapCount === 0);
   const weakOverlayOnly = overlayDrivenAligned && !eventAligned;
   const alignmentType = blocked
@@ -1744,6 +2032,7 @@ function evaluateShortlistRiskCard(risk = {}, {
     weakOverlayOnly,
     consequenceOnly,
     consequenceHeavy,
+    genericGovernanceTitle,
     blockedFamily,
     blocked,
     narrativeAnchorOverlap,
@@ -1792,6 +2081,7 @@ function assessShortlistCoherence(risks = [], {
   const outsideFamilyCount = evaluations.filter((evaluation) => !evaluation.familyAligned && !evaluation.secondaryAligned && !evaluation.secondaryContextAligned && !evaluation.overlayDrivenAligned).length;
   const consequenceOnlyCount = evaluations.filter((evaluation) => evaluation.consequenceOnly).length;
   const weakOverlayOnlyCount = evaluations.filter((evaluation) => evaluation.weakOverlayOnly).length;
+  const genericGovernanceTitleCount = evaluations.filter((evaluation) => evaluation.genericGovernanceTitle).length;
   const acceptedWeakOverlayOnlyCount = acceptedEvaluations.filter((evaluation) => evaluation.weakOverlayOnly).length;
   const acceptedStrongEventCount = acceptedEvaluations.filter((evaluation) => evaluation.stronglyAligned).length;
   const acceptedPrimaryOrSecondaryCount = acceptedEvaluations.filter((evaluation) => (
@@ -1822,6 +2112,7 @@ function assessShortlistCoherence(risks = [], {
   if (blockedCount && blockedCount >= Math.ceil(Math.max(1, normalisedRisks.length) / 2)) reasonCodes.push('MAJORITY_BLOCKED');
   if (normalisedRisks.length && outsideFamilyCount >= Math.ceil(normalisedRisks.length / 2)) reasonCodes.push('MAJORITY_OUTSIDE_ACCEPTED_FAMILY');
   if (normalisedRisks.length && consequenceOnlyCount >= Math.ceil(normalisedRisks.length / 2)) reasonCodes.push('CONSEQUENCE_ONLY_DRIFT');
+  if (normalisedRisks.length && genericGovernanceTitleCount >= Math.ceil(normalisedRisks.length / 2)) reasonCodes.push('GENERIC_GOVERNANCE_TITLE_DRIFT');
   if (!dominantFamilyAligned) reasonCodes.push('DOMINANT_FAMILY_DRIFT');
   if (weakOverlayOnlyCount > Math.floor(Math.max(1, normalisedRisks.length) / 2)) reasonCodes.push('WEAK_OVERLAY_ONLY_SHORTLIST');
   if (lowAnchorCount && lowAnchorCount >= Math.ceil(normalisedRisks.length / 2)) reasonCodes.push('LOW_EVENT_ANCHOR_OVERLAP');
@@ -2073,11 +2364,26 @@ function evaluateGuidedDraftCandidate(candidate = '', {
   if (explicitLeadLens && !isCompatibleScenarioLens(expectedLens, explicitLeadLens)) {
     return { accepted: false, reason: 'explicit-lens-drift', narrative: cleanedCandidate };
   }
-  const anchors = extractGuidedDraftAnchors({ guidedInput }, seedNarrative);
-  const overlap = anchors.filter((token) => cleanedCandidate.toLowerCase().includes(token));
-  const minOverlap = anchors.length >= 5 ? 2 : anchors.length ? 1 : 0;
-  if (overlap.length < minOverlap) {
+  const anchorGroups = buildGuidedDraftAnchorGroups({ guidedInput }, seedNarrative);
+  const anchorMetrics = scoreGuidedDraftAnchorGroups(cleanedCandidate, anchorGroups);
+  const minTotalOverlap = anchorGroups.all.length >= 6 ? 2 : anchorGroups.all.length ? 1 : 0;
+  const minGroupMatches = anchorMetrics.populatedGroupCount >= 3 ? 2 : (anchorMetrics.populatedGroupCount ? 1 : 0);
+  const minCriticalOverlap = anchorGroups.critical.length >= 6 ? 2 : (anchorGroups.critical.length ? 1 : 0);
+  const minEventOverlap = anchorGroups.event.length >= 4 ? 2 : (anchorGroups.event.length ? 1 : 0);
+  if (anchorMetrics.totalOverlap < minTotalOverlap) {
     return { accepted: false, reason: 'low-overlap', narrative: cleanedCandidate };
+  }
+  if (anchorMetrics.matchedGroupCount < minGroupMatches) {
+    return { accepted: false, reason: 'narrow-anchor-coverage', narrative: cleanedCandidate };
+  }
+  if (anchorMetrics.eventLikeOverlap === 0 && (anchorGroups.event.length || anchorGroups.narrative.length)) {
+    return { accepted: false, reason: 'missing-event-anchor', narrative: cleanedCandidate };
+  }
+  if (minEventOverlap && anchorMetrics.eventOverlap < minEventOverlap && anchorMetrics.causeOverlap === 0) {
+    return { accepted: false, reason: 'weak-event-anchor-coverage', narrative: cleanedCandidate };
+  }
+  if (anchorMetrics.criticalOverlap < minCriticalOverlap) {
+    return { accepted: false, reason: 'weak-critical-anchor-overlap', narrative: cleanedCandidate };
   }
   const actualLens = classifyScenario(cleanedCandidate, { guidedInput, businessUnit, scenarioLensHint: expectedLens }).key;
   if (!isCompatibleScenarioLens(expectedLens, actualLens)) {
@@ -2260,6 +2566,70 @@ function buildScenarioDraftValidationText(input = {}) {
   ].filter(Boolean).join('. ')), { maxSentences: 5 });
 }
 
+function inferStep1MissingDetailPlan(input = {}, {
+  seedNarrative = '',
+  evidenceMeta = null,
+  purpose = 'guided_draft'
+} = {}) {
+  const eventText = cleanUserFacingText(input?.guidedInput?.event || seedNarrative || '', { maxSentences: 1 });
+  const assetText = cleanUserFacingText(input?.guidedInput?.asset || '', { maxSentences: 1, stripTrailingPeriod: true });
+  const impactText = cleanUserFacingText(input?.guidedInput?.impact || '', { maxSentences: 1 });
+  const causeText = cleanUserFacingText(input?.guidedInput?.cause || '', { maxSentences: 1, stripTrailingPeriod: true });
+  const text = String(seedNarrative || '').trim();
+  const tooThin = !text || text.length < 35;
+  let focusKey = '';
+  let focusPrompt = '';
+  if (!eventText || tooThin) {
+    focusKey = 'event';
+    focusPrompt = 'State what happened or could happen in one plain sentence.';
+  } else if (!assetText) {
+    focusKey = 'asset';
+    focusPrompt = 'Name the asset, service, dependency, or process affected.';
+  } else if (!impactText) {
+    focusKey = 'impact';
+    focusPrompt = 'Add the main business impact or why it matters.';
+  } else if (!causeText) {
+    focusKey = 'cause';
+    focusPrompt = 'Add the likely trigger or threat driver.';
+  } else if (Array.isArray(evidenceMeta?.missingInformation) && evidenceMeta.missingInformation.some((item) => /Geographic scope/i.test(String(item || '')))) {
+    focusKey = 'geography';
+    focusPrompt = 'Add the geography if the exposure or obligations change by location.';
+  } else {
+    focusKey = 'event';
+    focusPrompt = 'Tighten the event wording so the same event path stays explicit.';
+  }
+
+  const actionTextByPurpose = {
+    guided_draft: 'before trying AI draft generation again',
+    refinement: 'before asking the server to refine the draft',
+    intake_assist: 'before asking the server to shape the intake draft',
+    shortlist: 'before generating a shortlist'
+  };
+  const actionText = actionTextByPurpose[purpose] || actionTextByPurpose.guided_draft;
+  return {
+    focusKey,
+    focusPrompt,
+    summary: focusKey === 'event'
+      ? 'The current scenario text is still too vague about the main event path.'
+      : focusKey === 'asset'
+        ? 'The current draft does not clearly name what is affected.'
+        : focusKey === 'impact'
+          ? 'The current draft does not clearly state the main business impact.'
+          : focusKey === 'cause'
+            ? 'The current draft is missing the likely trigger or threat driver.'
+            : 'The current draft needs one more concrete detail before the server should shape it further.',
+    linkAnalysis: `${focusPrompt} ${actionText.charAt(0).toUpperCase() + actionText.slice(1)}.`,
+    guidance: uniqueKeys([
+      focusPrompt,
+      focusKey !== 'event' ? 'Keep the scenario to one clear event path.' : 'Avoid listing only consequences without the triggering event.',
+      focusKey !== 'asset' ? 'Name the asset, service, dependency, or process affected.' : '',
+      focusKey !== 'impact' ? 'Add the main business impact so the draft can stay aligned.' : '',
+      focusKey !== 'cause' ? 'Add the likely trigger if it is already known.' : ''
+    ]).slice(0, 3),
+    reasonMessage: `${focusPrompt} ${actionText.charAt(0).toUpperCase() + actionText.slice(1)}`
+  };
+}
+
 function hasMeaningfulScenarioDraftInput(input = {}) {
   const text = buildScenarioDraftValidationText(input);
   const tokens = (text.match(/[a-z0-9]{2,}/gi) || []).length;
@@ -2282,6 +2652,11 @@ function buildManualScenarioDraftResult(input = {}, { traceLabel = 'Step 1 guide
     adminSettings: input.adminSettings,
     userProfile: input.adminSettings?.userProfileSummary
   });
+  const missingDetailPlan = inferStep1MissingDetailPlan(input, {
+    seedNarrative,
+    evidenceMeta,
+    purpose: 'guided_draft'
+  });
   return buildManualModeResult({
     baseResult: {
       seedNarrative,
@@ -2289,13 +2664,9 @@ function buildManualScenarioDraftResult(input = {}, { traceLabel = 'Step 1 guide
       draftNarrativeSource: 'manual',
       draftNarrativeReason: 'input_incomplete',
       enhancedStatement: '',
-      summary: 'The current scenario text is too limited for the server to draft a useful scenario.',
-      linkAnalysis: 'Add the event, affected asset or service, and main impact before trying AI draft generation again.',
-      workflowGuidance: [
-        'Describe the event or issue you are assessing in one plain sentence.',
-        'Add the main impact or the asset, service, or team affected.',
-        'Then try the guided draft again.'
-      ],
+      summary: missingDetailPlan.summary,
+      linkAnalysis: missingDetailPlan.linkAnalysis,
+      workflowGuidance: missingDetailPlan.guidance,
       benchmarkBasis: 'This step stayed in manual mode because the current scenario text is too limited for a reliable server draft.',
       scenarioLens: buildScenarioLens(classification),
       structuredScenario: buildStructuredScenario({ ...input, riskStatement: seedNarrative }, classification),
@@ -2306,7 +2677,7 @@ function buildManualScenarioDraftResult(input = {}, { traceLabel = 'Step 1 guide
     manualReason: {
       code: 'incomplete_scenario_input',
       title: 'Manual draft only',
-      message: 'Add a clearer event, affected asset or service, or main impact before asking the server to draft the scenario.'
+      message: missingDetailPlan.reasonMessage
     },
     traceLabel,
     promptSummary: 'Server manual mode used for Step 1 guided draft because the input was too short or incomplete.',
@@ -2437,18 +2808,31 @@ Rules:
 - if the user describes outage, aging infrastructure, supplier delivery slippage, human error, or service instability without explicit compromise signals, do not force cyber
 - write the draft like a concise management briefing
 - keep risk titles short, card-friendly, and aligned to the same event path`;
+  const priorityPromptBlock = buildGuidedScenarioPriorityPromptBlock(input, {
+    seedNarrative,
+    classification
+  });
+  const scopedContextPromptBlock = buildGuidedScenarioContextPromptBlock(input.adminSettings || {}, input.businessUnit || null);
+  const evidencePromptBlock = buildGuidedScenarioEvidencePromptBlock(evidenceMeta);
+  const citationPromptBlock = buildGuidedCitationPromptBlock(input.citations || [], {
+    seedNarrative,
+    input,
+    classification
+  });
   const userPrompt = `Guided scenario seed:
 ${seedNarrative || '(none)'}
 
 Guided intake:
-${JSON.stringify(input.guidedInput || {}, null, 2)}
+${truncateText(JSON.stringify(input.guidedInput || {}, null, 2), 900)}
+
+${priorityPromptBlock}
 
 Business unit:
 ${JSON.stringify({
     name: input.businessUnit?.name || '',
-    contextSummary: input.businessUnit?.contextSummary || input.businessUnit?.notes || '',
-    selectedDepartmentContext: input.businessUnit?.selectedDepartmentContext || '',
-    aiGuidance: input.businessUnit?.aiGuidance || ''
+    contextSummary: truncateText(input.businessUnit?.contextSummary || input.businessUnit?.notes || '', 420),
+    selectedDepartmentContext: truncateText(input.businessUnit?.selectedDepartmentContext || '', 280),
+    aiGuidance: truncateText(input.businessUnit?.aiGuidance || '', 280)
   }, null, 2)}
 
 Geography:
@@ -2458,13 +2842,13 @@ Applicable regulations:
 ${Array.isArray(input.applicableRegulations) && input.applicableRegulations.length ? input.applicableRegulations.map((item) => `- ${item}`).join('\n') : '(none)'}
 
 Live scoped context:
-${buildContextPromptBlock(input.adminSettings || {}, input.businessUnit || null)}
+${scopedContextPromptBlock}
 
 Evidence quality context:
-${evidenceMeta.promptBlock}
+${evidencePromptBlock}
 
 Retrieved references:
-${buildCitationPromptBlock(input.citations || [])}
+${citationPromptBlock}
 
 If you are unsure, stay closer to the user's explicit event wording than to adjacent profile, compliance, or technology context.`;
   const feedbackPromptBlock = buildFeedbackLearningPromptBlock(feedbackProfile);
@@ -2505,14 +2889,20 @@ ${feedbackPromptBlock}`;
         originalContext: [
           `Guided seed: ${seedNarrative || '(none)'}`,
           `Guided intake: ${JSON.stringify(input.guidedInput || {})}`,
+          priorityPromptBlock,
           `Business unit: ${input.businessUnit?.name || 'Unknown'}`,
           `Geography: ${input.geography || 'Unknown'}`,
           `Applicable regulations: ${(Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []).join(', ') || '(none)'}`,
-          `Live context: ${truncateText(buildContextPromptBlock(input.adminSettings || {}, input.businessUnit || null), 1800)}`
+          `Live context: ${truncateText(scopedContextPromptBlock, 1800)}`,
+          `Evidence quality context: ${truncateText(evidencePromptBlock, 600)}`,
+          `Retrieved references: ${truncateText(citationPromptBlock, 1200)}`
         ].join('\n'),
         checklist: [
           'Keep the draft in the same event path as the user narrative.',
+          'Preserve the explicit event anchor before consequence, regulatory, or technology context.',
+          'Do not accept impact-only or consequence-heavy rewrites if they drop the user event, cause, or affected asset.',
           'Do not drift into compliance, operational, financial, or cyber framing unless the event clearly supports it.',
+          'Use the strongest directly matched grounding sources first and avoid decorative citations.',
           'Keep the risk shortlist tightly aligned to the same event tree.',
           'Keep the structured scenario populated enough for downstream quantification.'
         ],
@@ -2624,6 +3014,12 @@ module.exports = {
   normaliseGuidedScenarioDraftInput,
   workflowUtils: {
     buildAiAlignment,
+    buildClassificationAnchor,
+    buildGuidedCitationPromptBlock,
+    buildGuidedDraftAnchorGroups,
+    buildGuidedScenarioContextPromptBlock,
+    buildGuidedScenarioEvidencePromptBlock,
+    buildGuidedScenarioPriorityPromptBlock,
     buildResolvedObligationPromptBlock,
     buildContextPromptBlock,
     buildEvidenceMeta,
@@ -2637,6 +3033,8 @@ module.exports = {
     cleanScenarioSeed,
     compactInputValue,
     cleanUserFacingText,
+    evaluateGuidedDraftCandidate,
+    inferStep1MissingDetailPlan,
     isCompatibleScenarioLens,
     isPlainObject,
     normaliseAdminSettingsInput,
@@ -2650,6 +3048,7 @@ module.exports = {
     normaliseResolvedObligationContextInput,
     normaliseResolvedObligationEntryInput,
     normaliseRiskCards,
+    rankScenarioCitationsForPrompt,
     enforceScenarioShortlistCoherence,
     normaliseStringListInput,
     truncateText,

@@ -138,7 +138,11 @@ Evidence quality context:
 ${evidenceMeta.promptBlock}
 
 Retrieved references:
-${buildManualCitationBlock(input.citations || [])}
+${buildManualCitationBlock(input.citations || [], {
+        seedNarrative,
+        input,
+        classification
+      })}
 
 ${feedbackPromptBlock}`;
     }
@@ -214,7 +218,11 @@ Evidence quality context:
 ${evidenceMeta.promptBlock}
 
 Retrieved references:
-${buildManualCitationBlock(input.citations || [])}
+${buildManualCitationBlock(input.citations || [], {
+        seedNarrative,
+        input,
+        classification
+      })}
 
 ${feedbackPromptBlock}`;
     }
@@ -292,7 +300,11 @@ Evidence quality context:
 ${evidenceMeta.promptBlock}
 
 Retrieved references:
-${buildManualCitationBlock(input.citations || [])}
+${buildManualCitationBlock(input.citations || [], {
+        seedNarrative,
+        input,
+        classification
+      })}
 
 ${feedbackPromptBlock}`;
     }
@@ -370,8 +382,16 @@ function buildClassificationAnchor(classification = {}) {
   };
 }
 
-function buildManualCitationBlock(citations = []) {
-  const items = Array.isArray(citations) ? citations : [];
+function buildManualCitationBlock(citations = [], {
+  seedNarrative = '',
+  input = {},
+  classification = {}
+} = {}) {
+  const items = workflowUtils.rankScenarioCitationsForPrompt(citations, {
+    seedNarrative,
+    input,
+    classification
+  }).map((entry) => entry.citation);
   if (!items.length) return '(none)';
   return items
     .slice(0, 6)
@@ -425,6 +445,20 @@ function buildManualContext(input = {}, personality = MANUAL_STEP1_PERSONALITIES
     evidenceMeta,
     structuredScenario
   };
+}
+
+function resolveManualMissingDetailPurpose(personality = MANUAL_STEP1_PERSONALITIES.refinement) {
+  if (personality?.key === 'shortlist') return 'shortlist';
+  if (personality?.key === 'intakeAssist') return 'intake_assist';
+  return 'refinement';
+}
+
+function buildManualMissingDetailContent(input = {}, context = {}, personality = MANUAL_STEP1_PERSONALITIES.refinement) {
+  return workflowUtils.inferStep1MissingDetailPlan(input, {
+    seedNarrative: context?.seedNarrative || '',
+    evidenceMeta: context?.evidenceMeta || null,
+    purpose: resolveManualMissingDetailPurpose(personality)
+  });
 }
 
 function buildManualNarrativeAnchors(seedNarrative = '', registerText = '') {
@@ -549,6 +583,7 @@ function buildManualModeResponse(input = {}, {
   traceLabel = personality.traceLabelDefault
 } = {}) {
   const context = buildManualContext(input, personality);
+  const missingDetailPlan = buildManualMissingDetailContent(input, context, personality);
   return buildManualModeResult({
     baseResult: {
       seedNarrative: context.seedNarrative,
@@ -556,9 +591,13 @@ function buildManualModeResponse(input = {}, {
       draftNarrativeSource: 'manual',
       draftNarrativeReason: 'input_incomplete',
       enhancedStatement: context.seedNarrative,
-      summary: personality.manualSummary,
-      linkAnalysis: personality.manualLinkAnalysis,
-      workflowGuidance: personality.manualGuidance,
+      summary: missingDetailPlan.summary || personality.manualSummary,
+      linkAnalysis: missingDetailPlan.linkAnalysis || personality.manualLinkAnalysis,
+      workflowGuidance: workflowUtils.normaliseGuidance(
+        Array.isArray(missingDetailPlan.guidance) && missingDetailPlan.guidance.length
+          ? missingDetailPlan.guidance
+          : personality.manualGuidance
+      ),
       benchmarkBasis: personality.benchmarkBasis,
       scenarioLens: workflowUtils.buildScenarioLens(context.classification),
       structuredScenario: context.structuredScenario,
@@ -566,7 +605,10 @@ function buildManualModeResponse(input = {}, {
       regulations: Array.from(new Set((Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []).map(String).filter(Boolean))),
       citations: Array.isArray(input.citations) ? input.citations : []
     },
-    manualReason: personality.manualReason,
+    manualReason: {
+      ...personality.manualReason,
+      message: missingDetailPlan.reasonMessage || personality.manualReason?.message || ''
+    },
     traceLabel,
     promptSummary: personality.manualPromptSummary,
     response: personality.manualResponse,

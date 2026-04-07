@@ -523,4 +523,6 @@ test('manual-shortlist route returns manual mode for ambiguous short text instea
   assert.equal(res.statusCode, 200);
   assert.equal(res.payload.mode, 'manual');
   assert.equal(Array.isArray(res.payload.risks) ? res.payload.risks.length : 0, 0);
+  assert.match(String(res.payload.manualReasonMessage || ''), /State what happened or could happen in one plain sentence/i);
+  assert.match(String((res.payload.workflowGuidance || [])[0] || ''), /State what happened or could happen/i);
 });

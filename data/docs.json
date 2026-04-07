@@ -306,9 +306,12 @@
       "iso",
       "business-continuity",
       "resilience",
-      "all-bu"
+      "all-bu",
+      "site-disruption",
+      "alternate-workspace",
+      "manual-fallback"
     ],
-    "contentExcerpt": "ISO 22301 sets requirements for a business continuity management system. It is relevant for business impact analysis, continuity strategy, response structure, recovery planning, exercising, crisis communications, and resilience governance. It supports scenario analysis where operational disruption, service outage, or recovery capability materially affect loss.",
+    "contentExcerpt": "ISO 22301 sets requirements for a business continuity management system. It is relevant for site disruption, alternate workspace, manual fallback steps, recovery planning, exercising, crisis communications, and resilience governance. It supports scenario analysis where operational disruption, service outage, relocation readiness, or recovery capability materially affect loss.",
     "lastUpdated": "2024-06-15"
   },
   {
@@ -336,9 +339,12 @@
       "supplier",
       "supply-chain",
       "third-party",
-      "all-bu"
+      "all-bu",
+      "vendor-access",
+      "remote-access",
+      "subcontractor"
     ],
-    "contentExcerpt": "ISO 27036 provides guidance for information security in supplier relationships. It is relevant for third-party onboarding, contract controls, due diligence, supplier monitoring, outsourcing assurance, and fourth-party exposure. It supports stronger supply chain risk assessment where data access, service dependency, or shared infrastructure create inherited risk.",
+    "contentExcerpt": "ISO 27036 provides guidance for information security in supplier relationships. It is relevant for third-party onboarding, subcontractor oversight, remote-access governance, over-privileged vendor accounts, contract controls, due diligence, supplier monitoring, and fourth-party exposure. It supports stronger supply chain risk assessment where data access, service dependency, or shared infrastructure create inherited risk.",
     "lastUpdated": "2024-06-15"
   },
   {
@@ -409,9 +415,12 @@
       "esg",
       "sustainability",
       "climate",
-      "all-bu"
+      "all-bu",
+      "claim-substantiation",
+      "scope-2",
+      "investor-disclosure"
     ],
-    "contentExcerpt": "IFRS S1 and IFRS S2 establish baseline sustainability and climate-related disclosure expectations. They are relevant for governance, strategy, risk management, metrics, targets, and disclosure controls. They help frame ESG scenarios around disclosure quality, climate transition pressure, board oversight, and investor-facing governance rather than only reputational rhetoric.",
+    "contentExcerpt": "IFRS S1 and IFRS S2 establish baseline sustainability and climate-related disclosure expectations. They are relevant for governance, strategy, risk management, metrics, targets, disclosure controls, and claim substantiation. They help frame ESG scenarios around unsupported Scope 2 reduction claims, board oversight, investor-facing governance, and disclosure defensibility rather than only reputational rhetoric.",
     "lastUpdated": "2024-06-15"
   },
   {
@@ -545,9 +554,12 @@
       "esg",
       "sustainability",
       "reporting",
-      "all-bu"
+      "all-bu",
+      "greenwashing",
+      "assurance",
+      "value-chain"
     ],
-    "contentExcerpt": "The Corporate Sustainability Reporting Directive (CSRD) and European Sustainability Reporting Standards (ESRS) formalise governance, strategy, risk, metrics, and impact disclosure expectations for sustainability topics. They are relevant for ESG, climate, value-chain, governance, and assurance scenarios where reporting quality, control maturity, or disclosure credibility could materially affect stakeholders.",
+    "contentExcerpt": "The Corporate Sustainability Reporting Directive (CSRD) and European Sustainability Reporting Standards (ESRS) formalise governance, strategy, risk, metrics, impact, and assurance expectations for sustainability topics. They are relevant for ESG, climate, value-chain, greenwashing, and disclosure-credibility scenarios where reporting quality, control maturity, or evidence gaps could materially affect stakeholders.",
     "lastUpdated": "2024-06-15"
   },
   {
@@ -742,9 +754,12 @@
       "people-workforce",
       "human-rights",
       "global",
-      "all-bu"
+      "all-bu",
+      "forced-labour",
+      "modern-slavery",
+      "remediation"
     ],
-    "contentExcerpt": "The OECD due diligence guidance is relevant where supplier conduct, human-rights exposure, environmental harm, grievance handling, remediation, or value-chain oversight could create legal, operational, financing, or reputation risk. It helps ground procurement and ESG scenarios in structured due-diligence expectations rather than ad hoc ethics language.",
+    "contentExcerpt": "The OECD due diligence guidance is relevant where supplier conduct, forced labour, modern slavery, recruitment-fee abuse, grievance handling, remediation, or value-chain oversight could create legal, operational, financing, or reputation risk. It helps ground procurement and ESG scenarios in structured due-diligence expectations rather than ad hoc ethics language.",
     "lastUpdated": "2025-06-15"
   },
   {
@@ -760,9 +775,12 @@
       "investment-jv",
       "human-rights",
       "global",
-      "all-bu"
+      "all-bu",
+      "forced-labour",
+      "worker-welfare",
+      "remedy"
     ],
-    "contentExcerpt": "The UN Guiding Principles are relevant when the organisation may cause, contribute to, or be directly linked to adverse human-rights impacts through suppliers, portfolio companies, projects, or services. They help frame labour-practice, worker-welfare, remediation, and governance scenarios with a recognised global accountability model.",
+    "contentExcerpt": "The UN Guiding Principles are relevant when the organisation may cause, contribute to, or be directly linked to adverse human-rights impacts through suppliers, portfolio companies, projects, or services. They help frame forced-labour, worker-welfare, remediation, and governance scenarios with a recognised global accountability model.",
     "lastUpdated": "2025-06-15"
   },
   {
@@ -791,9 +809,12 @@
       "business-continuity",
       "crisis-management",
       "resilience",
-      "all-bu"
+      "all-bu",
+      "incident-command",
+      "decision-rights",
+      "relocation"
     ],
-    "contentExcerpt": "ISO 22361 is relevant where scenarios test crisis leadership, decision rights, communications, escalation, cross-functional coordination, and management under uncertainty. It strengthens continuity retrieval for scenarios that are less about static plans and more about whether the organisation can lead effectively during disruption.",
+    "contentExcerpt": "ISO 22361 is relevant where scenarios test crisis leadership, decision rights, relocation choices, communications, escalation, cross-functional coordination, and management under uncertainty. It strengthens continuity retrieval for scenarios that are less about static plans and more about whether the organisation can lead effectively during disruption.",
     "lastUpdated": "2025-06-15"
   },
   {
@@ -825,9 +846,12 @@
       "compliance",
       "cyber",
       "global",
-      "all-bu"
+      "all-bu",
+      "sub-tier",
+      "supplier-assurance",
+      "delivery-dependency"
     ],
-    "contentExcerpt": "NIST SP 800-161 is relevant for supplier assurance, dependency mapping, sub-tier visibility, sourcing governance, product integrity, and supply chain security risk management. It helps retrieval treat supplier, procurement, and concentration scenarios as structured dependency problems rather than generic vendor issues.",
+    "contentExcerpt": "NIST SP 800-161 is relevant for supplier assurance, dependency mapping, sub-tier visibility, sourcing governance, product integrity, over-privileged third-party access, and supply chain security risk management. It helps retrieval treat supplier, procurement, vendor-access, and concentration scenarios as structured dependency problems rather than generic vendor issues.",
     "lastUpdated": "2025-06-15"
   },
   {
@@ -841,9 +865,12 @@
       "human-rights",
       "operations",
       "global",
-      "all-bu"
+      "all-bu",
+      "fatigue",
+      "staffing",
+      "worker-welfare"
     ],
-    "contentExcerpt": "ILO-OSH is relevant where contractor safety, worker welfare, supervision, incident prevention, corrective action, and continuous improvement matter. It strengthens HSE retrieval for scenarios involving labour practices, unsafe conditions, site controls, and operational accountability beyond pure regulatory citation.",
+    "contentExcerpt": "ILO-OSH is relevant where contractor safety, worker welfare, supervision, fatigue, staffing pressure, incident prevention, corrective action, and continuous improvement matter. It strengthens HSE retrieval for scenarios involving labour practices, unsafe conditions, site controls, and operational accountability beyond pure regulatory citation.",
     "lastUpdated": "2025-06-15"
   },
   {
@@ -969,9 +996,12 @@
       "governance",
       "regulatory",
       "global",
-      "all-bu"
+      "all-bu",
+      "validation",
+      "human-oversight",
+      "agentic"
     ],
-    "contentExcerpt": "ISO/IEC 42001 is relevant where AI systems need clear governance, accountability, documented controls, human oversight, incident response, and continual improvement. It helps AI-enabled assessments stay grounded in a recognised management-system model instead of treating model risk as only a technical issue.",
+    "contentExcerpt": "ISO/IEC 42001 is relevant where AI systems need clear governance, accountability, documented controls, human oversight, incident response, evaluation discipline, and continual improvement. It helps AI-enabled assessments stay grounded in a recognised management-system model instead of treating model risk as only a technical issue.",
     "lastUpdated": "2026-03-30"
   },
   {
@@ -984,9 +1014,12 @@
       "operational",
       "risk-management",
       "global",
-      "all-bu"
+      "all-bu",
+      "bias",
+      "drift",
+      "evaluation"
     ],
-    "contentExcerpt": "ISO/IEC 23894 is relevant when teams need disciplined identification, analysis, treatment, and monitoring of AI-specific risks such as bias, drift, misuse, unsafe outputs, and weak oversight. It gives the platform a recognised reference for AI risk reasoning beyond policy language alone.",
+    "contentExcerpt": "ISO/IEC 23894 is relevant when teams need disciplined identification, analysis, treatment, and monitoring of AI-specific risks such as bias, drift, unsafe outputs, weak oversight, and evaluation gaps. It gives the platform a recognised reference for AI risk reasoning beyond policy language alone.",
     "lastUpdated": "2026-03-30"
   },
   {
@@ -1000,9 +1033,12 @@
       "governance",
       "risk-management",
       "global",
-      "all-bu"
+      "all-bu",
+      "trustworthy-ai",
+      "mapping-measuring",
+      "monitoring"
     ],
-    "contentExcerpt": "The NIST AI RMF is relevant where AI use cases need mapping, measurement, governance, and management of risks across lifecycle design, deployment, monitoring, and change. It strengthens retrieval for responsible-AI, model-governance, and trust scenarios where executive accountability matters as much as model performance.",
+    "contentExcerpt": "The NIST AI RMF is relevant where AI use cases need mapping, measurement, governance, and management of risks across lifecycle design, deployment, monitoring, change, and escalation. It strengthens retrieval for responsible-AI, model-governance, and trust scenarios where executive accountability matters as much as model performance.",
     "lastUpdated": "2026-03-30"
   },
   {
@@ -1016,9 +1052,12 @@
       "compliance",
       "eu",
       "global",
-      "all-bu"
+      "all-bu",
+      "transparency",
+      "post-market-monitoring",
+      "high-risk-ai"
     ],
-    "contentExcerpt": "The EU AI Act is relevant where AI systems may trigger risk-tier obligations, transparency duties, prohibited-use concerns, recordkeeping, human oversight, and post-market monitoring expectations. It helps AI scenarios stay tied to real governance and compliance consequences rather than generic innovation language.",
+    "contentExcerpt": "The EU AI Act is relevant where AI systems may trigger risk-tier obligations, transparency duties, prohibited-use concerns, recordkeeping, human oversight, and post-market monitoring expectations. It helps AI scenarios stay tied to real governance, abstention, and compliance consequences rather than generic innovation language.",
     "lastUpdated": "2026-03-30"
   },
   {
@@ -1031,9 +1070,12 @@
       "governance",
       "risk-management",
       "global",
-      "all-bu"
+      "all-bu",
+      "model-validation",
+      "challenge",
+      "independent-review"
     ],
-    "contentExcerpt": "SR 11-7 is relevant where model governance, validation, limitations, use controls, override discipline, and effective challenge determine whether management can trust model-driven decisions. It is especially useful when AI or analytics scenarios need stronger model-risk framing in financially material contexts.",
+    "contentExcerpt": "SR 11-7 is relevant where model governance, validation, limitations, use controls, override discipline, effective challenge, and independent review determine whether management can trust model-driven decisions. It is especially useful when AI or analytics scenarios need stronger model-risk framing in financially material contexts.",
     "lastUpdated": "2026-03-30"
   },
   {
@@ -1151,9 +1193,12 @@
       "supply-chain",
       "environment",
       "global",
-      "all-bu"
+      "all-bu",
+      "claim-substantiation",
+      "supplier-disclosure",
+      "assurance"
     ],
-    "contentExcerpt": "CDP disclosure expectations are relevant where climate, water, or supplier-environment data quality influences investor scrutiny, customer requests, assurance readiness, or value-chain credibility. They help ESG retrieval capture practical disclosure and evidence demands beyond broad sustainability narratives.",
+    "contentExcerpt": "CDP disclosure expectations are relevant where climate, water, or supplier-environment data quality influences investor scrutiny, customer requests, assurance readiness, claim substantiation, or value-chain credibility. They help ESG retrieval capture practical disclosure and evidence demands beyond broad sustainability narratives.",
     "lastUpdated": "2026-03-30"
   },
   {
@@ -1211,9 +1256,12 @@
       "health-safety",
       "operations",
       "global",
-      "all-bu"
+      "all-bu",
+      "fatigue",
+      "burnout",
+      "understaffing"
     ],
-    "contentExcerpt": "ISO 45003 is relevant where workload, fatigue, psychosocial stressors, contractor pressure, or unsafe culture could degrade safe delivery or increase harm. It broadens HSE retrieval beyond physical injury and helps workforce-resilience scenarios connect to operational risk.",
+    "contentExcerpt": "ISO 45003 is relevant where workload, fatigue, burnout, understaffing, psychosocial stressors, contractor pressure, or unsafe culture could degrade safe delivery or increase harm. It broadens HSE retrieval beyond physical injury and helps workforce-resilience scenarios connect to operational risk.",
     "lastUpdated": "2026-03-30"
   },
   {

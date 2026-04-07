@@ -105,6 +105,19 @@ test('server learning authority resolves user-tier priors from server user-state
               riskTitle: 'Privileged account compromise',
               selectedInAssessment: true,
               submittedBy: 'sam'
+            },
+            {
+              target: 'shortlist',
+              score: 1,
+              runtimeMode: 'live_ai',
+              buId: 'g42',
+              functionKey: 'technology',
+              lensKey: 'cyber',
+              reasons: ['wrong-domain', 'included unrelated risks'],
+              shownRiskTitles: ['Generic compliance remediation', 'Privileged account compromise'],
+              keptRiskTitles: ['Privileged account compromise'],
+              removedRiskTitles: ['Generic compliance remediation'],
+              submittedBy: 'sam'
             }
           ]
         }
@@ -125,10 +138,9 @@ test('server learning authority resolves user-tier priors from server user-state
     assert.equal(profile.function.active, true);
     assert.equal(profile.combined.activeTiers.includes('user'), true);
     assert.ok(profile.combined.preferredRiskTitles.some((item) => item.title === 'Privileged account compromise'));
-    assert.match(
-      learningAuthority.buildFeedbackLearningPromptBlock(profile),
-      /server-approved live-AI feedback/i
-    );
+    const promptBlock = learningAuthority.buildFeedbackLearningPromptBlock(profile);
+    assert.match(promptBlock, /server-approved live-AI feedback/i);
+    assert.match(promptBlock, /Down-rank titles or wording/i);
   } finally {
     restore();
   }

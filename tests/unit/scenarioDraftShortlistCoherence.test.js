@@ -310,6 +310,38 @@ test('delivery slippage shortlist coherence removes cyber cards when no cyber ca
   assert.doesNotMatch(titles, /cyber|credential/i);
 });
 
+test('shortlist coherence filters generic governance titles that do not stay on the same event tree', () => {
+  const narrative = 'Key vendor delivery slips are blocking a dependent rollout and delaying committed milestones.';
+  const result = enforceShortlist([
+    {
+      title: 'Dependency slippage delaying committed rollout milestones',
+      category: 'Delivery',
+      description: 'Vendor delivery delays block dependent rollout tasks and delay milestones.'
+    },
+    {
+      title: 'Programme governance review and steering remediation',
+      category: 'Transformation delivery',
+      description: 'General governance review and steering remediation should follow.'
+    },
+    {
+      title: 'Executive oversight committee follow-up',
+      category: 'Governance',
+      description: 'A committee should review the programme after the delay.'
+    }
+  ], {
+    narrative,
+    guidedInput: { event: narrative },
+    fallbackRisks: []
+  });
+
+  assert.match(String(result.mode || ''), /accepted|filtered|fallback_replaced/);
+  assertCoherenceMetadata(result);
+  assert.ok((result.reasonCodes || []).includes('GENERIC_GOVERNANCE_TITLE_DRIFT') || (result.filteredOutCount || 0) >= 1);
+  const titles = listTitles(result);
+  assert.match(titles, /supplier|delivery|dependency|rollout|deployment/i);
+  assert.doesNotMatch(titles, /governance review|oversight committee/i);
+});
+
 test('mixed identity and disclosure scenarios can keep explicit disclosure risks as secondaries', () => {
   const narrative = 'Azure global admin credentials discovered on the dark web are used to access the tenant, modify critical configurations, and extract customer records.';
   const result = enforceShortlist([

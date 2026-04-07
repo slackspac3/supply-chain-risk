@@ -121,7 +121,23 @@ const NOVEL_WORDING_CASES = Object.freeze([
     expectedFamily: 'vendor_access_weakness',
     expectedLens: 'third-party',
     minimumConfidenceBand: 'medium',
-    mustNotPrimary: ['third_party_access_compromise']
+    mustNotPrimary: ['third_party_access_compromise', 'identity_compromise']
+  },
+  {
+    name: 'third-party access weakness recognises support partner production reach wording',
+    text: 'Support partner accounts can reach production systems through a shared external access path.',
+    expectedFamily: 'vendor_access_weakness',
+    expectedLens: 'third-party',
+    minimumConfidenceBand: 'medium',
+    mustNotPrimary: ['third_party_access_compromise', 'identity_compromise']
+  },
+  {
+    name: 'greenwashing wording recognises unsupported scope 2 reduction claims',
+    text: 'Scope 2 reduction claims are unsupported because renewable energy attributes do not match the workload geography.',
+    expectedFamily: 'greenwashing_disclosure_gap',
+    expectedLens: 'esg',
+    minimumConfidenceBand: 'medium',
+    mustNotPrimary: ['policy_breach', 'records_retention_non_compliance']
   },
   {
     name: 'third-party compromise paraphrase stays in access compromise rather than governance-only weakness',
