@@ -4,6 +4,15 @@
 
 const _assessmentPersistenceWarnings = new Set();
 const SMART_PARAM_HISTORY_KEY = 'rip_param_history';
+const workspacePersistenceApi = typeof require === 'function'
+  ? (() => {
+      try {
+        return require('./userWorkspacePersistence.js');
+      } catch {
+        return null;
+      }
+    })()
+  : null;
 
 function getCurrentScopedLocalKey(baseKey) {
   const username = String((typeof AuthService !== 'undefined' && AuthService.getCurrentUser?.()?.username) || '').trim().toLowerCase();
@@ -88,7 +97,12 @@ function getAssessments() {
   return cache.assessments;
 }
 function persistSavedAssessmentsCollection(list) {
+  const buildDeltaPatch = workspacePersistenceApi?.buildSavedAssessmentsDeltaPatch
+    || (typeof buildSavedAssessmentsDeltaPatch === 'function' ? buildSavedAssessmentsDeltaPatch : null);
   const cache = ensureUserStateCache();
+  const previousSavedAssessments = cache.savedAssessments && typeof cache.savedAssessments === 'object'
+    ? normaliseSavedAssessmentsSection(cache.savedAssessments, cache.assessments || [])
+    : buildSavedAssessmentsSection(Array.isArray(cache.assessments) ? cache.assessments : []);
   const normalizedList = Array.isArray(list) ? list.map(item => normaliseAssessmentRecord(item)) : [];
   cache.assessments = normalizedList;
   cache.savedAssessments = buildSavedAssessmentsSection(normalizedList);
@@ -98,7 +112,12 @@ function persistSavedAssessmentsCollection(list) {
   } catch (error) {
     warnAssessmentPersistenceOnce('assessments-write', 'persistSavedAssessmentsCollection local write failed:', error);
   }
-  queueSharedUserStateSync({ savedAssessments: cache.savedAssessments });
+  const savedAssessmentsPatch = buildDeltaPatch
+    ? buildDeltaPatch(cache.savedAssessments, previousSavedAssessments)
+    : cache.savedAssessments;
+  if (Object.keys(savedAssessmentsPatch.upsertsById || {}).length || (savedAssessmentsPatch.removedIds || []).length) {
+    queueSharedUserStateSync({ savedAssessments: savedAssessmentsPatch });
+  }
   return normalizedList;
 }
 function saveAssessment(a, options = {}) {

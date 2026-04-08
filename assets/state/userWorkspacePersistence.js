@@ -179,6 +179,112 @@
     };
   }
 
+  function isSavedAssessmentsDeltaPatch(savedAssessments = {}) {
+    const source = savedAssessments && typeof savedAssessments === 'object' && !Array.isArray(savedAssessments)
+      ? savedAssessments
+      : null;
+    return Boolean(
+      source && (
+        (source.upsertsById && typeof source.upsertsById === 'object')
+        || Array.isArray(source.removedIds)
+      )
+    );
+  }
+
+  function normaliseSavedAssessmentsDeltaPatch(savedAssessments = {}) {
+    if (!isSavedAssessmentsDeltaPatch(savedAssessments)) return null;
+    const source = savedAssessments && typeof savedAssessments === 'object' ? savedAssessments : {};
+    const upsertsSource = source.upsertsById && typeof source.upsertsById === 'object'
+      ? source.upsertsById
+      : {};
+    const upsertsById = {};
+    Object.keys(upsertsSource).forEach(id => {
+      const item = upsertsSource[id];
+      if (!item || typeof item !== 'object') return;
+      const safeId = String(item.id || id || '').trim();
+      if (!safeId) return;
+      upsertsById[safeId] = cloneValue({ ...item, id: safeId }, null);
+    });
+    const removedIds = Array.from(new Set(
+      (Array.isArray(source.removedIds) ? source.removedIds : [])
+        .map(id => String(id || '').trim())
+        .filter(Boolean)
+    ));
+    removedIds.forEach(id => {
+      delete upsertsById[id];
+    });
+    return {
+      schemaVersion: USER_WORKSPACE_SCHEMA_VERSION,
+      upsertsById,
+      removedIds
+    };
+  }
+
+  function buildSavedAssessmentsDeltaPatch(nextSavedAssessments = {}, previousSavedAssessments = {}) {
+    const next = normaliseSavedAssessmentsSection(nextSavedAssessments);
+    const previous = normaliseSavedAssessmentsSection(previousSavedAssessments);
+    const upsertsById = {};
+    Object.keys(next.itemsById).forEach(id => {
+      const nextItem = next.itemsById[id];
+      const previousItem = previous.itemsById[id];
+      const nextSnapshot = cloneValue(nextItem, null);
+      const previousSnapshot = cloneValue(previousItem, null);
+      if (JSON.stringify(nextSnapshot) !== JSON.stringify(previousSnapshot)) {
+        upsertsById[id] = nextSnapshot;
+      }
+    });
+    const removedIds = Object.keys(previous.itemsById).filter(id => !next.itemsById[id]);
+    return {
+      schemaVersion: USER_WORKSPACE_SCHEMA_VERSION,
+      upsertsById,
+      removedIds
+    };
+  }
+
+  function applySavedAssessmentsDeltaPatch(currentSavedAssessments = {}, deltaPatch = {}) {
+    const current = normaliseSavedAssessmentsSection(currentSavedAssessments);
+    const delta = normaliseSavedAssessmentsDeltaPatch(deltaPatch);
+    if (!delta) return current;
+    const itemsById = { ...current.itemsById };
+    delta.removedIds.forEach(id => {
+      delete itemsById[id];
+    });
+    Object.keys(delta.upsertsById).forEach(id => {
+      itemsById[id] = cloneValue(delta.upsertsById[id], null);
+    });
+    return normaliseSavedAssessmentsSection({ itemsById });
+  }
+
+  function mergeSavedAssessmentsDeltaPatches(currentDeltaPatch = {}, nextDeltaPatch = {}) {
+    const current = normaliseSavedAssessmentsDeltaPatch(currentDeltaPatch) || {
+      schemaVersion: USER_WORKSPACE_SCHEMA_VERSION,
+      upsertsById: {},
+      removedIds: []
+    };
+    const next = normaliseSavedAssessmentsDeltaPatch(nextDeltaPatch) || {
+      schemaVersion: USER_WORKSPACE_SCHEMA_VERSION,
+      upsertsById: {},
+      removedIds: []
+    };
+    const mergedUpsertsById = {
+      ...current.upsertsById
+    };
+    const removedIds = new Set(current.removedIds);
+    next.removedIds.forEach(id => {
+      delete mergedUpsertsById[id];
+      removedIds.add(id);
+    });
+    Object.keys(next.upsertsById).forEach(id => {
+      mergedUpsertsById[id] = cloneValue(next.upsertsById[id], null);
+      removedIds.delete(id);
+    });
+    return {
+      schemaVersion: USER_WORKSPACE_SCHEMA_VERSION,
+      upsertsById: mergedUpsertsById,
+      removedIds: Array.from(removedIds)
+    };
+  }
+
   function materializeSavedAssessments(savedAssessments = {}) {
     const normalised = normaliseSavedAssessmentsSection(savedAssessments);
     const list = [];
@@ -246,7 +352,9 @@
       });
     }
     if (Object.prototype.hasOwnProperty.call(sourcePatch, 'savedAssessments')) {
-      next.savedAssessments = normaliseSavedAssessmentsSection(sourcePatch.savedAssessments, []);
+      next.savedAssessments = isSavedAssessmentsDeltaPatch(sourcePatch.savedAssessments)
+        ? applySavedAssessmentsDeltaPatch(next.savedAssessments, sourcePatch.savedAssessments)
+        : normaliseSavedAssessmentsSection(sourcePatch.savedAssessments, []);
     } else if (Object.prototype.hasOwnProperty.call(sourcePatch, 'assessments')) {
       next.savedAssessments = buildSavedAssessmentsSection(sourcePatch.assessments);
     }
@@ -283,7 +391,9 @@
       });
     }
     if (Object.prototype.hasOwnProperty.call(sourcePatch, 'savedAssessments')) {
-      nextPatch.savedAssessments = normaliseSavedAssessmentsSection(sourcePatch.savedAssessments, []);
+      nextPatch.savedAssessments = isSavedAssessmentsDeltaPatch(sourcePatch.savedAssessments)
+        ? normaliseSavedAssessmentsDeltaPatch(sourcePatch.savedAssessments)
+        : normaliseSavedAssessmentsSection(sourcePatch.savedAssessments, []);
     } else if (Object.prototype.hasOwnProperty.call(sourcePatch, 'assessments')) {
       nextPatch.savedAssessments = buildSavedAssessmentsSection(sourcePatch.assessments);
     }
@@ -291,10 +401,22 @@
   }
 
   function mergeUserWorkspacePatchSlices(currentPatch = {}, patch = {}) {
-    return {
-      ...normaliseUserWorkspacePatch(currentPatch),
-      ...normaliseUserWorkspacePatch(patch)
+    const current = normaliseUserWorkspacePatch(currentPatch);
+    const next = normaliseUserWorkspacePatch(patch);
+    const merged = {
+      ...current,
+      ...next
     };
+    if (Object.prototype.hasOwnProperty.call(current, 'savedAssessments') || Object.prototype.hasOwnProperty.call(next, 'savedAssessments')) {
+      if (isSavedAssessmentsDeltaPatch(current.savedAssessments) || isSavedAssessmentsDeltaPatch(next.savedAssessments)) {
+        merged.savedAssessments = mergeSavedAssessmentsDeltaPatches(current.savedAssessments, next.savedAssessments);
+      } else if (Object.prototype.hasOwnProperty.call(next, 'savedAssessments')) {
+        merged.savedAssessments = next.savedAssessments;
+      } else {
+        merged.savedAssessments = current.savedAssessments;
+      }
+    }
+    return merged;
   }
 
   function serializeUserWorkspaceState(state = {}) {
@@ -317,6 +439,11 @@
     normaliseDraftWorkspaceSection,
     createSavedAssessmentIndexEntry,
     normaliseSavedAssessmentsSection,
+    isSavedAssessmentsDeltaPatch,
+    normaliseSavedAssessmentsDeltaPatch,
+    buildSavedAssessmentsDeltaPatch,
+    applySavedAssessmentsDeltaPatch,
+    mergeSavedAssessmentsDeltaPatches,
     materializeSavedAssessments,
     buildSavedAssessmentsSection,
     buildDraftWorkspaceSection,

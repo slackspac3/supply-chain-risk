@@ -52,6 +52,30 @@ test('workspace sync queue normalises legacy draft and saved assessment patch sl
   assert.equal(next.userStateSyncPending.savedAssessments.index[0].id, 'assessment-1');
 });
 
+test('workspace sync queue merges saved-assessment delta patches by assessment id', () => {
+  const next = applyWorkspaceSyncQueuedTransition({
+    userStateSyncPending: {
+      savedAssessments: {
+        upsertsById: {
+          'assessment-1': { id: 'assessment-1', scenarioTitle: 'Existing saved assessment' }
+        },
+        removedIds: []
+      }
+    }
+  }, {
+    savedAssessments: {
+      upsertsById: {
+        'assessment-2': { id: 'assessment-2', scenarioTitle: 'New saved assessment' }
+      },
+      removedIds: []
+    }
+  });
+
+  assert.equal(next.userStateSyncPending.savedAssessments.upsertsById['assessment-1'].scenarioTitle, 'Existing saved assessment');
+  assert.equal(next.userStateSyncPending.savedAssessments.upsertsById['assessment-2'].scenarioTitle, 'New saved assessment');
+  assert.deepEqual(next.userStateSyncPending.savedAssessments.removedIds, []);
+});
+
 test('workspace sync started clears the last conflict and marks the sync in flight', () => {
   const next = applyWorkspaceSyncStartedTransition({
     userStateSyncInFlight: false,

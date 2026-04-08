@@ -3068,9 +3068,11 @@ async function loadSharedUserState(username = AuthService.getCurrentUser()?.user
 }
 
 const SERVER_CONTEXT_REFRESH_THROTTLE_MS = 15 * 1000;
+const USER_ROUTE_ENTRY_REFRESH_MAX_AGE_MS = 45 * 1000;
 let _serverContextRefreshInFlight = null;
 let _lastServerContextRefreshAt = 0;
 let _serverContextRefreshBound = false;
+let _lastUserRouteEntryRefreshAt = 0;
 
 function buildManagedAccessSignature(user = AuthService.getCurrentUser()) {
   return [
@@ -6510,6 +6512,45 @@ function getRouteMeta() {
   };
 }
 
+function isUserWorkspaceRoute(routeHash = '') {
+  const route = String(routeHash || '').trim().toLowerCase();
+  return route === '/dashboard'
+    || route === '/settings'
+    || route.startsWith('/wizard/')
+    || route.startsWith('/results/');
+}
+
+function shouldAttemptUserRouteEntryRefresh(routeHash = '', routeMeta = getRouteMeta()) {
+  if (!AuthService.isAuthenticated?.()) return false;
+  if (!isUserWorkspaceRoute(routeHash)) return false;
+  if (hasUnsafeWorkspaceEdits()) return false;
+  const currentUser = AuthService.getCurrentUser?.();
+  if (!currentUser?.username) return false;
+  const navigationKind = String(routeMeta?.navigationKind || '').trim().toLowerCase();
+  if (navigationKind === 'load' || navigationKind === 'server') return false;
+  const staleNotice = AppState.workspaceStaleNotice;
+  const staleNoticeUsername = String(staleNotice?.username || '').trim().toLowerCase();
+  const currentUsername = String(currentUser.username || '').trim().toLowerCase();
+  if (staleNotice && (!staleNoticeUsername || staleNoticeUsername === currentUsername)) return true;
+  const now = Date.now();
+  const lastFreshCheckAt = Math.max(
+    Number(_lastUserRouteEntryRefreshAt || 0),
+    Number(_lastServerContextRefreshAt || 0)
+  );
+  return (now - lastFreshCheckAt) >= USER_ROUTE_ENTRY_REFRESH_MAX_AGE_MS;
+}
+
+function maybeRefreshUserRouteEntryContext(routeHash = '', routeMeta = getRouteMeta()) {
+  if (!shouldAttemptUserRouteEntryRefresh(routeHash, routeMeta)) return;
+  _lastUserRouteEntryRefreshAt = Date.now();
+  refreshAuthenticatedContextFromServer({
+    rerender: true,
+    allowWorkspaceReload: true
+  }).catch(error => {
+    console.warn('route-entry workspace refresh failed:', error?.message || error);
+  });
+}
+
 function shouldRestoreScrollForRoute(routeHash) {
   const route = String(routeHash || '').toLowerCase();
   return route === '/settings' || route.startsWith('/admin/settings');
@@ -6527,6 +6568,8 @@ function applyPageNavigationEffects(root = document) {
   const routeChanged = AppState.lastRenderedRouteHash !== currentHash;
   AppState.lastRenderedRouteHash = currentHash;
   if (!routeChanged) return;
+
+  maybeRefreshUserRouteEntryContext(currentHash, routeMeta);
 
   if (!shouldRestoreScrollForRoute(currentHash)) {
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }));
@@ -11500,6 +11543,7 @@ async function init() {
     if (AuthService.getCurrentUser()?.username) {
       await loadSharedUserState(AuthService.getCurrentUser().username);
     }
+    _lastServerContextRefreshAt = Date.now();
     AppState.buList  = await loadJSON('./data/bu.json');
     AppState.docList = await loadJSON('./data/docs.json');
     AppState.benchmarkList = await loadJSON('./data/benchmarks.json');
