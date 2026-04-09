@@ -346,6 +346,7 @@
 
   function clearScenarioAssistArtifacts({ clearGeneratedRisks = false } = {}) {
     AppState.draft.llmAssisted = false;
+    AppState.draft.step1ConversationFingerprint = '';
     AppState.draft.scenarioTitle = '';
     AppState.draft.enhancedNarrative = '';
     AppState.draft.aiNarrativeBaseline = '';
@@ -398,6 +399,19 @@
     const source = normaliseScenarioSeedText(AppState.draft.sourceNarrative || '');
     const base = normaliseScenarioSeedText(AppState.draft.narrative || '');
     const enhanced = normaliseScenarioSeedText(AppState.draft.enhancedNarrative || '');
+    const continuitySeeds = [source, base, enhanced].filter(Boolean);
+    if (current && continuitySeeds.length) {
+      const currentTokens = Array.from(new Set(String(current || '').split(/[^a-z0-9]+/).filter(Boolean)));
+      const bestContinuity = continuitySeeds.reduce((bestScore, seed) => {
+        const seedTokens = Array.from(new Set(String(seed || '').split(/[^a-z0-9]+/).filter(Boolean)));
+        if (!currentTokens.length || !seedTokens.length) return bestScore;
+        const seedTokenSet = new Set(seedTokens);
+        const overlap = currentTokens.filter((token) => seedTokenSet.has(token)).length;
+        const score = (overlap * 2) / (currentTokens.length + seedTokens.length);
+        return Math.max(bestScore, score);
+      }, 0);
+      if (bestContinuity < 0.55) return current;
+    }
     if (current && enhanced && current === enhanced && (source || base)) return source || base;
     return source || current || base || enhanced;
   }

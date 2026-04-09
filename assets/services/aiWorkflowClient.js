@@ -217,6 +217,7 @@ const AiWorkflowClient = (() => {
       registerText: normaliseBlockText(source.registerText || ''),
       registerMeta: normaliseRegisterMeta(source.registerMeta),
       scenarioLensHint: normaliseScenarioLensHint(source.scenarioLensHint),
+      scenarioFingerprint: normaliseInlineText(source.scenarioFingerprint || ''),
       businessUnit: normaliseBusinessUnit(source.businessUnit),
       geography: normaliseInlineText(source.geography || ''),
       applicableRegulations: normaliseStringList(source.applicableRegulations, { maxItems: 12 }),
@@ -404,6 +405,7 @@ const AiWorkflowClient = (() => {
           riskStatement: normaliseBlockText(source.riskStatement || ''),
           guidedInput: normaliseGuidedInput(source.guidedInput),
           scenarioLensHint: normaliseInlineText(source.scenarioLensHint || ''),
+          scenarioFingerprint: normaliseInlineText(source.scenarioFingerprint || ''),
           businessUnit: normaliseBusinessUnit(source.businessUnit),
           geography: normaliseInlineText(source.geography || ''),
           applicableRegulations: normaliseStringList(source.applicableRegulations, { maxItems: 12 }),
@@ -420,6 +422,7 @@ const AiWorkflowClient = (() => {
         return compactValue({
           registerText: normaliseBlockText(source.registerText || ''),
           registerMeta: normaliseRegisterMeta(source.registerMeta),
+          scenarioFingerprint: normaliseInlineText(source.scenarioFingerprint || ''),
           businessUnit: normaliseBusinessUnit(source.businessUnit),
           geography: normaliseInlineText(source.geography || ''),
           applicableRegulations: normaliseStringList(source.applicableRegulations, { maxItems: 12 }),

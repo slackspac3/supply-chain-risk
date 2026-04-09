@@ -980,6 +980,18 @@ function hasAssessmentLocalFallback(assessment = {}) {
 
 function renderExecutiveBenchmarkContext(assessment, results, runMetadata) {
   const references = Array.isArray(assessment?.benchmarkReferences) ? assessment.benchmarkReferences.filter(Boolean) : [];
+  const requestedGeographies = Array.from(new Set(
+    references
+      .flatMap(ref => Array.isArray(ref?.requestedGeographies) ? ref.requestedGeographies : (ref?.requestedGeography ? [ref.requestedGeography] : []))
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  const matchedGeographies = Array.from(new Set(
+    references
+      .flatMap(ref => Array.isArray(ref?.matchedGeographies) ? ref.matchedGeographies : (ref?.geography ? [ref.geography] : []))
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+  ));
   const thresholdConfig = runMetadata?.thresholdConfigUsed || {};
   const warningThreshold = Number(results?.warningThreshold || thresholdConfig.warningThreshold || 0);
   const toleranceThreshold = Number(results?.threshold || thresholdConfig.eventToleranceThreshold || 0);
@@ -989,16 +1001,33 @@ function renderExecutiveBenchmarkContext(assessment, results, runMetadata) {
     .map(ref => String(ref?.sourceTitle || ref?.title || ref?.label || '').trim())
     .filter(Boolean)
     .slice(0, 3);
+  const geographyCoverage = Array.from(new Set(
+    references
+      .map(ref => String(ref?.coverageSummary || '').trim())
+      .filter(Boolean)
+  ));
+  const geographyFitLabel = references.some(ref => ref?.coverageType === 'global-fallback')
+    ? 'Global fallback used'
+    : references.some(ref => ref?.coverageType === 'multi-region-normalized' || ref?.coverageLabel === 'Multi-region input')
+      ? 'Multi-region normalized'
+      : references.some(ref => ref?.coverageType === 'regional-umbrella' || ref?.coverageType === 'national-proxy')
+        ? 'Regional proxy used'
+        : references.length
+          ? 'Exact or direct regional fit'
+          : 'Scenario baseline only';
   const benchmarkBasis = String(assessment?.benchmarkBasis || '').trim();
   const basisSummary = benchmarkBasis
     ? benchmarkBasis
     : references.length
       ? 'Published benchmark references were used where they mapped cleanly, then scenario-calibration baselines were used only where direct comparators were thin.'
       : 'Governance thresholds and scenario-calibration baselines were used because no published benchmark references were saved for this result.';
+  const geographyFitSummary = references.some(ref => ref?.coverageType === 'global-fallback' || ref?.coverageType === 'multi-region-normalized' || ref?.coverageLabel === 'Multi-region input')
+    ? (benchmarkBasis || geographyCoverage[0] || '')
+    : (geographyCoverage[0] || 'The current result will call out when benchmark coverage used a regional proxy or global best-practice fallback.');
   const qualitySignal = buildAssessmentAiQualitySignal(assessment);
   return `<section class="card card--elevated anim-fade-in results-benchmark-band">
     <div class="results-section-heading">Benchmark context</div>
-    <div class="form-help" style="margin-top:8px">Benchmarked against ${references.length || 'no saved'} reference${references.length === 1 ? '' : 's'} and ${triggerCount} governance trigger${triggerCount === 1 ? '' : 's'} so leadership can see what anchored the result.</div>
+    <div class="form-help" style="margin-top:8px">Benchmarked against ${references.length || 'no saved'} reference${references.length === 1 ? '' : 's'} and ${triggerCount} governance trigger${triggerCount === 1 ? '' : 's'} so leadership can see what anchored the result.${requestedGeographies.length ? ` Requested region${requestedGeographies.length === 1 ? '' : 's'}: ${escapeHtml(requestedGeographies.join(', '))}.` : ''}</div>
     <div class="premium-guidance-strip premium-guidance-strip--${escapeHtml(String(qualitySignal.tone || 'support'))} results-guidance-strip" style="margin-top:var(--sp-4)">
       <div class="premium-guidance-strip__main">
         <div class="premium-guidance-strip__label">Trust signal</div>
@@ -1008,6 +1037,7 @@ function renderExecutiveBenchmarkContext(assessment, results, runMetadata) {
       <div class="premium-guidance-strip__meta">
         <span class="badge badge--neutral">${references.length ? `${references.length} saved reference${references.length === 1 ? '' : 's'}` : 'Scenario baseline only'}</span>
         <span class="badge badge--gold">${triggerCount} governance trigger${triggerCount === 1 ? '' : 's'}</span>
+        <span class="badge badge--neutral">${escapeHtml(geographyFitLabel)}</span>
       </div>
     </div>
     <div class="results-value-grid" style="margin-top:var(--sp-4)">
@@ -1025,6 +1055,16 @@ function renderExecutiveBenchmarkContext(assessment, results, runMetadata) {
         <span class="results-value-card__label">Benchmark approach</span>
         <strong>${references.length ? 'Published references plus governance thresholds' : 'Governance thresholds plus scenario baseline'}</strong>
         <span class="results-value-card__foot">${escapeHtml(basisSummary)}</span>
+      </article>
+      <article class="results-value-card">
+        <span class="results-value-card__label">Geography fit</span>
+        <strong>${escapeHtml(geographyFitLabel)}</strong>
+        <span class="results-value-card__foot">${escapeHtml(geographyFitSummary)}</span>
+      </article>
+      <article class="results-value-card">
+        <span class="results-value-card__label">Comparator region used</span>
+        <strong>${escapeHtml(matchedGeographies.length ? matchedGeographies.join(', ') : 'Scenario baseline')}</strong>
+        <span class="results-value-card__foot">${escapeHtml(requestedGeographies.length ? `Requested: ${requestedGeographies.join(', ')}` : 'No explicit assessment geography was saved with this result.')}</span>
       </article>
       <article class="results-value-card">
         <span class="results-value-card__label">AI quality signal</span>

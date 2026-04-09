@@ -757,6 +757,58 @@ function renderWizard2AiChangeSummary(result, previousNarrative) {
   return `<div class="card card--elevated mt-4 anim-fade-in"><div class="context-panel-title">What AI changed</div><ol style="margin:12px 0 0 18px;display:flex;flex-direction:column;gap:8px">${summaryItems.map(item => `<li style="color:var(--text-secondary)">${item}</li>`).join('')}</ol>${wordingNote}</div>`;
 }
 
+function renderWizard2AiReadyBand(result) {
+  const confidenceLabel = String(result?.confidenceLabel || 'Moderate confidence').trim();
+  const evidenceQuality = String(result?.evidenceQuality || '').trim();
+  const confidenceTone = /high/i.test(confidenceLabel) ? 'gold' : /low/i.test(confidenceLabel) ? 'danger' : 'neutral';
+  const primaryDriver = getStructuredScenarioField(result?.structuredScenario, 'primaryDriver');
+  const eventPath = getStructuredScenarioField(result?.structuredScenario, 'eventPath');
+  return `<div class="wizard-summary-band wizard-summary-band--quiet mt-4 anim-fade-in">
+    <div>
+      <div class="wizard-summary-band__label">AI structure ready</div>
+      <strong>${escapeHtml(String(result?.scenarioTitle || 'Scenario ready for estimation'))}</strong>
+      <div class="wizard-summary-band__copy">The FAIR starting ranges are now loaded for Step 3. Keep the narrative editable, challenge the estimate, and only open the deeper evidence layer if you want to understand or defend the setup.</div>
+    </div>
+    <div class="wizard-summary-band__meta">
+      <span class="badge badge--${confidenceTone}">${escapeHtml(confidenceLabel)}${evidenceQuality ? ` · ${escapeHtml(evidenceQuality)}` : ''}</span>
+      ${primaryDriver ? `<span class="badge badge--neutral">${escapeHtml(primaryDriver)}</span>` : ''}
+      ${eventPath ? `<span class="badge badge--neutral">${escapeHtml(eventPath)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderWizard2AiReviewWorkbench(draft, result) {
+  return UI.disclosureSection({
+    title: 'Review AI structure and evidence only if needed',
+    badgeLabel: 'Optional detail',
+    badgeTone: 'neutral',
+    open: false,
+    className: 'wizard-disclosure card card--elevated wizard-secondary-workbench mt-4 anim-fade-in',
+    body: `${renderWizard2AnalystReasoning(draft, result)}${renderScenarioAssistSummaryBlock({
+      workflowGuidance: draft.workflowGuidance,
+      confidenceLabel: draft.confidenceLabel,
+      evidenceQuality: draft.evidenceQuality,
+      evidenceSummary: draft.evidenceSummary,
+      missingInformation: draft.missingInformation,
+      benchmarkBasis: draft.benchmarkBasis,
+      inputProvenance: draft.inputProvenance,
+      citations: draft.citations
+    })}<details class="wizard-disclosure wizard-disclosure--nested">
+      <summary>Show benchmark and evidence detail <span class="badge badge--neutral">Optional</span></summary>
+      <div class="wizard-disclosure-body">
+        ${renderBenchmarkRationaleBlock(draft.benchmarkBasis, draft.inputRationale, draft.benchmarkReferences)}
+        ${renderInputProvenanceBlock(draft.inputProvenance)}
+        ${renderCitationBlock(draft.citations)}
+        ${renderEvidenceQualityBlock(draft.confidenceLabel, draft.evidenceQuality, draft.evidenceSummary, draft.missingInformation, 'Detailed evidence view', {
+          primaryGrounding: draft.primaryGrounding,
+          supportingReferences: draft.supportingReferences,
+          inferredAssumptions: draft.inferredAssumptions
+        })}
+      </div>
+    </details>`
+  });
+}
+
 function clearWizard2AiUnavailableBanner() {
   document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
 }
@@ -886,28 +938,7 @@ async function runLLMAssist() {
     saveDraft();
     const aiStatusBanner = typeof renderAIStatusBanner === 'function' ? renderAIStatusBanner() : '';
     const wizard2Trace = getWizard2LatestTrace();
-    output.innerHTML = `${aiStatusBanner}${renderWizard2AiChangeSummary(result, previousNarrative)}${renderWizard2AnalystReasoning(AppState.draft, result)}<div class="card card--glow mt-4 anim-fade-in">
-      <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-3);flex-wrap:wrap">
-        <span class="badge badge--${/high/i.test(result.confidenceLabel || '') ? 'gold' : /low/i.test(result.confidenceLabel || '') ? 'danger' : 'neutral'}" style="font-size:.8rem">${escapeHtml(result.confidenceLabel || 'Moderate confidence')}${result.evidenceQuality ? ' · ' + escapeHtml(result.evidenceQuality) : ''}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-4)">
-        <span style="font-size:24px">✅</span>
-        <div>
-          <div style="font-family:var(--font-display);font-size:var(--text-lg);font-weight:700;color:var(--text-primary)">${escapeHtml(String(result.scenarioTitle || 'Scenario ready'))}</div>
-          <div style="font-size:.75rem;color:var(--text-muted)">AI-structured · FAIR inputs pre-loaded to Step 3</div>
-        </div>
-      </div>
-      ${result.structuredScenario?`<div class="grid-2"><div><div class="form-label" style="font-size:.7rem">Primary driver</div><p style="font-size:.85rem;margin-top:4px">${escapeHtml(getStructuredScenarioField(result.structuredScenario, 'primaryDriver') || 'Not specified')}</p></div><div><div class="form-label" style="font-size:.7rem">Event path</div><p style="font-size:.85rem;margin-top:4px">${escapeHtml(getStructuredScenarioField(result.structuredScenario, 'eventPath') || 'Not specified')}</p></div></div>`:''}
-    </div>${wizard2Trace ? `<div class="form-help" style="margin-top:var(--sp-3)"><button type="button" class="link-btn" id="btn-why-this-wizard2" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">Why this?</button></div>` : ''}${renderScenarioAssistSummaryBlock({
-      workflowGuidance: AppState.draft.workflowGuidance,
-      confidenceLabel: AppState.draft.confidenceLabel,
-      evidenceQuality: AppState.draft.evidenceQuality,
-      evidenceSummary: AppState.draft.evidenceSummary,
-      missingInformation: AppState.draft.missingInformation,
-      benchmarkBasis: AppState.draft.benchmarkBasis,
-      inputProvenance: AppState.draft.inputProvenance,
-      citations: AppState.draft.citations
-    })}<div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap"><button class="btn btn--primary" id="btn-wizard2-ai-continue" type="button">Continue to estimation</button><button class="btn btn--ghost" id="btn-wizard2-ai-retry" type="button">Run AI again</button></div><details class="card mt-4 anim-fade-in"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);font-size:.82rem;font-weight:600;color:var(--text-primary)"><span>Show benchmark and evidence detail</span><span class="badge badge--neutral">Optional</span></summary><div style="display:flex;flex-direction:column;gap:var(--sp-4);margin-top:var(--sp-4)">${renderBenchmarkRationaleBlock(AppState.draft.benchmarkBasis, AppState.draft.inputRationale, AppState.draft.benchmarkReferences)}${renderInputProvenanceBlock(AppState.draft.inputProvenance)}${renderCitationBlock(AppState.draft.citations)}${renderEvidenceQualityBlock(AppState.draft.confidenceLabel, AppState.draft.evidenceQuality, AppState.draft.evidenceSummary, AppState.draft.missingInformation, 'Detailed evidence view', { primaryGrounding: AppState.draft.primaryGrounding, supportingReferences: AppState.draft.supportingReferences, inferredAssumptions: AppState.draft.inferredAssumptions })}</div></details>`;
+    output.innerHTML = `${aiStatusBanner}${renderWizard2AiChangeSummary(result, previousNarrative)}${renderWizard2AiReadyBand(result)}${wizard2Trace ? `<div class="form-help" style="margin-top:var(--sp-3)"><button type="button" class="link-btn" id="btn-why-this-wizard2" style="appearance:none;background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit">Why this?</button></div>` : ''}<div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap"><button class="btn btn--primary" id="btn-wizard2-ai-continue" type="button">Continue to estimation</button><button class="btn btn--ghost" id="btn-wizard2-ai-retry" type="button">Run AI again</button></div>${renderWizard2AiReviewWorkbench(AppState.draft, result)}`;
     if (status) status.textContent = result.usedFallback
       ? 'A fallback suggested draft is ready. Review the changes, assumptions, and source basis before continuing.'
       : 'A suggested draft is ready. Review the changes, assumptions, and source basis before continuing.';

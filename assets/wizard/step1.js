@@ -1012,7 +1012,7 @@ function buildStep1GuidedPromptSuggestions(draft = AppState.draft || {}, example
 
 function renderStep1GuidedPromptIdeaChips(promptSuggestions = []) {
   return (Array.isArray(promptSuggestions) ? promptSuggestions : [])
-    .slice(0, 3)
+    .slice(0, 2)
     .map(prompt => `<button class="citation-chip guided-prompt-chip" data-prompt="${escapeHtml(prompt.prompt)}">${escapeHtml(prompt.label)}</button>`)
     .join('');
 }
@@ -1700,9 +1700,13 @@ function renderStep1AiQualityStrip(draft = {}) {
       <div class="premium-guidance-strip__label">AI quality signal</div>
       <strong>${escapeHtml(String(model.title || 'Working guidance'))}</strong>
       <div class="premium-guidance-strip__copy">${escapeHtml(String(model.copy || 'The platform is showing how strongly the current scenario is grounded before you carry it into the next step.'))}</div>
-    </div>
-    <div class="premium-guidance-strip__meta">
-      ${facts.map(fact => `<div class="premium-guidance-strip__fact"><span>${escapeHtml(String(fact.label || 'Signal'))}</span><strong>${escapeHtml(String(fact.value || '—'))}</strong></div>`).join('')}
+      ${facts.length ? `<details class="results-detail-disclosure wizard-ai-quality-disclosure">
+        <summary>View evidence and validation posture</summary>
+        <div class="results-detail-disclosure-copy">Open this when you want to understand how the current draft was validated and how much support sits behind it.</div>
+        <div class="premium-guidance-strip__meta wizard-ai-quality-strip__meta">
+          ${facts.map(fact => `<div class="premium-guidance-strip__fact"><span>${escapeHtml(String(fact.label || 'Signal'))}</span><strong>${escapeHtml(String(fact.value || '—'))}</strong></div>`).join('')}
+        </div>
+      </details>` : ''}
     </div>
   </div>`;
 }
@@ -2659,6 +2663,33 @@ function renderStep1ImportPathCard({
   </div>`;
 }
 
+function renderStep1InsightWorkbench(draft, scenarioMemoryState, activePath = 'guided') {
+  const disclosureKey = getDisclosureStateKey('/wizard/1', 'review ai reasoning and context');
+  const hasAiSummary = !!String(draft?.intakeSummary || '').trim();
+  const hasAlignment = !!(draft?.aiAlignment && typeof draft.aiAlignment === 'object');
+  const hasCrossReference = true;
+  const hasScenarioMemory = true;
+  const activeCount = [hasAiSummary, hasAlignment, hasCrossReference, hasScenarioMemory].filter(Boolean).length;
+  const summaryLabel = activeCount
+    ? `${activeCount} support view${activeCount === 1 ? '' : 's'} available`
+    : 'Optional';
+  return `<details class="wizard-disclosure wizard-disclosure--support wizard-secondary-workbench" data-disclosure-state-key="${escapeHtml(disclosureKey)}" ${getDisclosureOpenState(disclosureKey, false) ? 'open' : ''}>
+    <summary>Review AI reasoning and related context <span class="badge badge--neutral">${escapeHtml(summaryLabel)}</span></summary>
+    <div class="wizard-disclosure-body wizard-secondary-workbench__body">
+      ${activePath === 'guided' ? '' : renderStep1AiAlignmentCard(draft.aiAlignment)}
+      <div id="scenario-cross-reference-host">
+        ${renderStep1ScenarioCrossReferenceBand(draft)}
+      </div>
+      <div id="scenario-memory-host">
+        ${renderStep1ScenarioMemoryBand(draft, scenarioMemoryState)}
+      </div>
+      <div id="intake-output">
+        ${activePath === 'guided' ? '' : renderStep1AiIntakeSummary(draft)}
+      </div>
+    </div>
+  </details>`;
+}
+
 function renderStep1PathContent(path, {
   draft,
   recommendation,
@@ -2693,24 +2724,13 @@ function renderStep1PathContent(path, {
     });
   } else {
     content = `${renderStep1GuidedBuilderCard(draft, recommendation, functionLabel, promptIdeaModel)}
-      ${renderStep1AiIntakeSummary(draft)}
-      ${renderStep1AiAlignmentCard(draft.aiAlignment)}
       ${renderStep1HiddenNarrativeField(draft)}`;
   }
   return `<section class="wizard-summary-stack">
     ${draft.learningNote ? `<div class="wizard-summary-band wizard-summary-band--quiet"><div><div class="wizard-summary-band__label">Learnt from prior use</div><strong>Saved guidance from earlier use</strong><div class="wizard-summary-band__copy">${escapeHtml(String(draft.learningNote || ''))}</div></div></div>` : ''}
     ${renderGhostDraftBanner(draft)}
     ${content}
-    <div id="scenario-cross-reference-host">
-      ${renderStep1ScenarioCrossReferenceBand(draft)}
-    </div>
-    <div id="scenario-memory-host">
-      ${renderStep1ScenarioMemoryBand(draft, scenarioMemoryState)}
-    </div>
-    <div id="intake-output">
-      ${activePath === 'guided' ? '' : renderStep1AiIntakeSummary(draft)}
-      ${activePath === 'guided' ? '' : renderStep1AiAlignmentCard(draft.aiAlignment)}
-    </div>
+    ${renderStep1InsightWorkbench(draft, scenarioMemoryState, activePath)}
   </section>`;
 }
 
@@ -3809,7 +3829,29 @@ function persistAndRenderStep1({
   }
 }
 
-function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false } = {}) {
+function getStep1NarrativeContinuityScore(left = '', right = '') {
+  const leftTokens = Array.from(new Set(normaliseAssessmentTokens(left)));
+  const rightTokens = Array.from(new Set(normaliseAssessmentTokens(right)));
+  if (!leftTokens.length || !rightTokens.length) return 0;
+  const rightTokenSet = new Set(rightTokens);
+  const overlap = leftTokens.filter((token) => rightTokenSet.has(token)).length;
+  return (overlap * 2) / (leftTokens.length + rightTokens.length);
+}
+
+function clearStep1ConversationContext() {
+  AppState.draft.step1ConversationFingerprint = '';
+  if (typeof dispatchDraftAction === 'function') {
+    dispatchDraftAction('CLEAR_LLM_CONTEXT', {});
+  } else if (Array.isArray(AppState.draft?.llmContext)) {
+    AppState.draft.llmContext = [];
+  }
+}
+
+function clearStep1StaleAssistState(nextNarrative, {
+  clearGeneratedRisks = false,
+  clearNarrative = false,
+  forceClearConversation = false
+} = {}) {
   window.clearTimeout(_step1LivePreviewDebounce);
   _step1LivePreviewRequestId += 1;
   _step1LivePreviewState = {
@@ -3823,30 +3865,42 @@ function clearStep1StaleAssistState(nextNarrative, { clearGeneratedRisks = false
     loadingSignature: ''
   };
   const nextSeed = normaliseScenarioSeedText(nextNarrative);
-  if (!nextSeed) {
-    AppState.draft.guidedDraftPreview = '';
-    AppState.draft.guidedDraftSource = '';
-    AppState.draft.guidedDraftStatus = '';
-    AppState.draft.scenarioTitle = '';
-    resetStep1RegulationSelectionState();
-    return;
-  }
   const currentSeeds = [
     AppState.draft.sourceNarrative,
     AppState.draft.narrative,
     AppState.draft.enhancedNarrative
   ].map(normaliseScenarioSeedText).filter(Boolean);
+  const shouldClearConversation = forceClearConversation
+    || !nextSeed
+    || (
+      currentSeeds.length > 0
+      && !currentSeeds.some((seed) => seed === nextSeed)
+      && currentSeeds.every((seed) => getStep1NarrativeContinuityScore(seed, nextSeed) < 0.55)
+    );
+  if (!nextSeed) {
+    if (shouldClearConversation) clearStep1ConversationContext();
+    if (clearNarrative) {
+      AppState.draft.narrative = '';
+      AppState.draft.sourceNarrative = '';
+      AppState.draft.enhancedNarrative = '';
+      AppState.draft.scenarioLens = null;
+    }
+    AppState.draft.guidedDraftPreview = '';
+    AppState.draft.guidedDraftSource = '';
+    AppState.draft.guidedDraftStatus = '';
+    AppState.draft.scenarioTitle = '';
+    resetStep1RegulationSelectionState();
+    clearScenarioAssistArtifacts({ clearGeneratedRisks });
+    return;
+  }
   if (currentSeeds.some(seed => seed === nextSeed)) return;
   // Once the underlying scenario changes, stale AI summaries and generated cards become misleading against the visible draft.
-  if (String(AppState.draft?.step1Path || '').trim() === 'guided') {
+  if (shouldClearConversation) clearStep1ConversationContext();
+  if (String(AppState.draft?.step1Path || '').trim() === 'guided' || clearNarrative) {
     AppState.draft.narrative = '';
     AppState.draft.sourceNarrative = '';
     AppState.draft.enhancedNarrative = '';
-    if (typeof dispatchDraftAction === 'function') {
-      dispatchDraftAction('CLEAR_LLM_CONTEXT', {});
-    } else if (Array.isArray(AppState.draft?.llmContext)) {
-      AppState.draft.llmContext = [];
-    }
+    if (clearNarrative) AppState.draft.scenarioLens = null;
   }
   AppState.draft.guidedDraftPreview = '';
   AppState.draft.guidedDraftSource = '';
@@ -5103,6 +5157,12 @@ async function handleRegisterUpload(e) {
     UI.toast('The uploaded file appears to be binary or unreadable. Please convert it to Excel, TXT, CSV, TSV, JSON, or Markdown before uploading.', 'warning', 7000);
     return;
   }
+  clearLoadedDryRunFlag();
+  clearStep1StaleAssistState(parsed.text, {
+    clearGeneratedRisks: true,
+    clearNarrative: true,
+    forceClearConversation: true
+  });
   AppState.draft.uploadedRegisterName = file.name;
   AppState.draft.registerFindings = parsed.text;
   AppState.draft.registerMeta = parsed.meta;

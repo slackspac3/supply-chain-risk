@@ -80,14 +80,14 @@ const RiskEngine = (() => {
   }
 
   function sampleLognormalFromU(u, min, mode, max) {
-    if (min <= 0) min = 1;
-    if (mode <= 0) mode = min * 2;
-    if (max <= mode) max = mode * 2;
-    const mu = Math.log(mode);
-    const sigma = Math.log(max / mode) / 1.645;
+    const safeMin = Number.isFinite(min) && min > 0 ? min : Number.EPSILON;
+    const safeMode = Number.isFinite(mode) && mode > safeMin ? mode : Math.max(safeMin * 2, 0.001);
+    const safeMax = Number.isFinite(max) && max > safeMode ? max : safeMode * 2;
+    const mu = Math.log(safeMode);
+    const sigma = Math.log(safeMax / safeMode) / 1.645;
     const s = Math.abs(sigma) < 0.001 ? 0.001 : sigma;
     const z = inverseStandardNormal(Math.min(0.999999, Math.max(0.000001, u)));
-    return Math.exp(mu + s * z);
+    return Math.max(safeMin, Math.exp(mu + s * z));
   }
 
   function sampleDist(distType, min, likely, max) {
@@ -282,6 +282,51 @@ const RiskEngine = (() => {
     }
   }
 
+  function buildParameterSemanticsWarnings(normalizedParams) {
+    const warnings = [];
+    const midpointVulnerability = normalizedParams.vulnDirect
+      ? Number(normalizedParams.vulnLikely)
+      : sigmoid(Number(normalizedParams.threatCapLikely) - Number(normalizedParams.controlStrLikely));
+    if (Number.isFinite(midpointVulnerability) && (midpointVulnerability <= 0.05 || midpointVulnerability >= 0.95)) {
+      warnings.push('The current vulnerability setup sits near certainty or near-impossibility. Confirm the threat-capability and control-strength bands still reflect a challengeable FAIR view.');
+    }
+    if (normalizedParams.distType !== 'lognormal') return warnings;
+
+    const lognormalRanges = [
+      ['tef', 'Event frequency'],
+      normalizedParams.vulnDirect ? ['vuln', 'Event success likelihood'] : null,
+      !normalizedParams.vulnDirect ? ['threatCap', 'Threat capability'] : null,
+      !normalizedParams.vulnDirect ? ['controlStr', 'Control strength'] : null,
+      ['ir', 'Incident response'],
+      ['bi', 'Business interruption'],
+      ['db', 'Data remediation'],
+      ['rl', 'Regulatory and legal'],
+      ['tp', 'Third-party impact'],
+      ['rc', 'Reputation and contract'],
+      normalizedParams.secondaryEnabled ? ['secProb', 'Secondary-loss probability'] : null,
+      normalizedParams.secondaryEnabled ? ['secMag', 'Secondary-loss magnitude'] : null
+    ].filter(Boolean);
+
+    const zeroLowLabels = [];
+    const wideTailLabels = [];
+    lognormalRanges.forEach(([key, label]) => {
+      const min = Number(normalizedParams[`${key}Min`]);
+      const likely = Number(normalizedParams[`${key}Likely`]);
+      const max = Number(normalizedParams[`${key}Max`]);
+      if (!Number.isFinite(min) || !Number.isFinite(likely) || !Number.isFinite(max) || likely <= 0 || max <= 0) return;
+      if (min <= 0) zeroLowLabels.push(label);
+      if ((max / likely) >= 25) wideTailLabels.push(label);
+    });
+
+    if (zeroLowLabels.length) {
+      warnings.push(`Lognormal ${zeroLowLabels.join(', ')} use zero or non-positive lows. The model treats those as near-zero planning floors rather than true zeros.`);
+    }
+    if (wideTailLabels.length) {
+      warnings.push(`Lognormal ${wideTailLabels.join(', ')} have very wide severe tails. Confirm the severe case is intentionally heavier than the expected case, not just uncertain.`);
+    }
+    return warnings;
+  }
+
   function buildExpensiveSettingsWarnings(normalizedParams) {
     const warnings = [];
     if (normalizedParams.iterations >= HIGH_ITERATION_WARNING) {
@@ -361,11 +406,13 @@ const RiskEngine = (() => {
     }
 
     const expensiveSettings = buildExpensiveSettingsWarnings(normalizedParams);
+    const semanticsWarnings = buildParameterSemanticsWarnings(normalizedParams);
     return {
       valid: errors.length === 0,
       errors,
-      warnings: expensiveSettings,
+      warnings: [...expensiveSettings, ...semanticsWarnings],
       expensiveSettings,
+      semanticsWarnings,
       normalizedParams
     };
   }

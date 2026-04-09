@@ -93,15 +93,51 @@
     document.querySelectorAll('.ai-unavailable-banner').forEach(node => node.remove());
   }
 
-  function _getStep1PriorMessages() {
-    return Array.isArray(AppState?.draft?.llmContext) ? AppState.draft.llmContext : [];
+  function _normaliseScenarioFingerprintText(value = '') {
+    return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
   }
 
-  function _appendStep1LlmContext(userText, assistantText) {
+  function _buildStep1ScenarioFingerprint({
+    narrative = '',
+    guidedInput = null,
+    registerText = '',
+    registerMeta = null,
+    businessUnit = null,
+    geography = '',
+    scenarioLensHint = null
+  } = {}) {
+    const safeGuidedInput = guidedInput && typeof guidedInput === 'object' ? guidedInput : {};
+    const scenarioLens = scenarioLensHint && typeof scenarioLensHint === 'object'
+      ? String(scenarioLensHint.key || scenarioLensHint.label || scenarioLensHint.functionKey || '').trim()
+      : String(scenarioLensHint || '').trim();
+    return [
+      String(businessUnit?.id || businessUnit?.buId || AppState?.draft?.buId || '').trim(),
+      String(geography || '').trim(),
+      scenarioLens,
+      _normaliseScenarioFingerprintText(safeGuidedInput.event || ''),
+      _normaliseScenarioFingerprintText(safeGuidedInput.cause || ''),
+      _normaliseScenarioFingerprintText(safeGuidedInput.impact || ''),
+      _normaliseScenarioFingerprintText(safeGuidedInput.asset || ''),
+      _normaliseScenarioFingerprintText(narrative || ''),
+      _normaliseScenarioFingerprintText(registerText || ''),
+      String(registerMeta?.extension || registerMeta?.type || '').trim().toLowerCase()
+    ].filter(Boolean).join(' | ').slice(0, 320);
+  }
+
+  function _getStep1PriorMessages({ scenarioFingerprint = '' } = {}) {
+    const priorMessages = Array.isArray(AppState?.draft?.llmContext) ? AppState.draft.llmContext : [];
+    const currentFingerprint = String(scenarioFingerprint || '').trim();
+    const storedFingerprint = String(AppState?.draft?.step1ConversationFingerprint || '').trim();
+    if (!currentFingerprint || !storedFingerprint || currentFingerprint !== storedFingerprint) return [];
+    return priorMessages;
+  }
+
+  function _appendStep1LlmContext(userText, assistantText, { scenarioFingerprint = '' } = {}) {
     if (typeof dispatchDraftAction !== 'function') return;
     const user = String(userText || '').trim();
     const assistant = String(assistantText || '').trim();
     if (!user || !assistant) return;
+    AppState.draft.step1ConversationFingerprint = String(scenarioFingerprint || '').trim();
     dispatchDraftAction('APPEND_LLM_CONTEXT', { user, assistant });
   }
 
@@ -226,18 +262,29 @@
     citations = [],
     traceLabel = ''
   } = {}) {
+    const geography = formatScenarioGeographies(getScenarioGeographies());
+    const scenarioFingerprint = _buildStep1ScenarioFingerprint({
+      narrative,
+      guidedInput: AppState.draft.guidedInput,
+      registerText,
+      registerMeta,
+      businessUnit: aiContext?.businessUnit || bu,
+      geography,
+      scenarioLensHint: preferredLens
+    });
     return {
       riskStatement: String(narrative || '').trim(),
       registerText: String(registerText || '').trim(),
       registerMeta: registerMeta && typeof registerMeta === 'object' ? registerMeta : null,
       scenarioLensHint: preferredLens,
       businessUnit: aiContext?.businessUnit || bu,
-      geography: formatScenarioGeographies(getScenarioGeographies()),
+      geography,
       applicableRegulations: deriveApplicableRegulations(aiContext?.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
       guidedInput: { ...AppState.draft.guidedInput },
       citations: Array.isArray(citations) ? citations : [],
       adminSettings: aiContext?.adminSettings || {},
-      priorMessages: _getStep1PriorMessages(),
+      scenarioFingerprint,
+      priorMessages: _getStep1PriorMessages({ scenarioFingerprint }),
       traceLabel
     };
   }
@@ -319,21 +366,30 @@
     const bu = getBUList().find(b => b.id === (document.getElementById('wizard-bu')?.value || AppState.draft.buId));
     const preferredLens = getStep1PreferredScenarioLens(settings, AppState.draft, localDraft);
     const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+    const geography = formatScenarioGeographies(getScenarioGeographies());
+    const scenarioFingerprint = _buildStep1ScenarioFingerprint({
+      narrative: localDraft,
+      guidedInput: AppState.draft.guidedInput,
+      businessUnit: aiContext.businessUnit || bu,
+      geography,
+      scenarioLensHint: preferredLens
+    });
     const requestPayload = {
       riskStatement: localDraft,
       guidedInput: { ...AppState.draft.guidedInput },
       scenarioLensHint: preferredLens,
       businessUnit: aiContext.businessUnit || bu,
-      geography: formatScenarioGeographies(getScenarioGeographies()),
+      geography,
       applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
       adminSettings: aiContext.adminSettings,
+      scenarioFingerprint,
       traceLabel: STEP1_TRACE_LABELS.guidedDraft
     };
     if (_guardStep1AiActionCooldown({
       button,
       endpoint: '/api/ai/scenario-draft',
       payload: requestPayload,
-      scope: 'step1-guided-draft',
+      scope: `step1-guided-draft::${scenarioFingerprint}`,
       cooldownLabel: 'Built just now',
       message: 'This guided draft already reflects the current answers. Review it or change the guided inputs before rebuilding.'
     })) return;
@@ -358,7 +414,7 @@
         citations
       });
       const result = _ensureRiskConfidence(rawResult);
-      _markStep1AiActionCooldown('/api/ai/scenario-draft', requestPayload, 'step1-guided-draft');
+      _markStep1AiActionCooldown('/api/ai/scenario-draft', requestPayload, `step1-guided-draft::${scenarioFingerprint}`);
       const finalDraft = String(result.draftNarrative || result.enhancedStatement || localDraft).trim() || localDraft;
       const resultMode = String(result.mode || '').trim().toLowerCase();
       const guidedDraftSource = resultMode === 'deterministic_fallback'
@@ -387,7 +443,7 @@
       AppState.draft.narrative = finalDraft;
       AppState.draft.sourceNarrative = localDraft;
       AppState.draft.enhancedNarrative = finalDraft;
-      _appendStep1LlmContext(localDraft, finalDraft);
+      _appendStep1LlmContext(localDraft, finalDraft, { scenarioFingerprint });
       document.getElementById('intake-risk-statement').value = finalDraft;
       saveDraft();
       renderWizard1();
@@ -477,7 +533,7 @@
         applicableRegulations: deriveApplicableRegulations(aiContext.businessUnit || bu, getSelectedRisks(), getScenarioGeographies()),
         businessUnitName: aiContext.businessUnit?.name || bu?.name || AppState.draft.buName || ''
       }), 5);
-      const rawResult = await LLMService.buildManualIntakeAssist(_buildManualStep1RequestPayload({
+      const requestPayload = _buildManualStep1RequestPayload({
         narrative: assistSeed || narrative,
         registerText: AppState.draft.registerFindings,
         registerMeta: AppState.draft.registerMeta,
@@ -486,7 +542,8 @@
         preferredLens,
         citations,
         traceLabel: STEP1_TRACE_LABELS.intakeAssist
-      }));
+      });
+      const rawResult = await LLMService.buildManualIntakeAssist(requestPayload);
       const result = _ensureRiskConfidence(rawResult);
       draftScenarioState.applyScenarioAssistResultToDraft(result, {
         narrative,
@@ -496,7 +553,9 @@
         nextNarrative: result.enhancedStatement || narrative
       });
       _syncRiskConfidenceToDraft(result.risks);
-      _appendStep1LlmContext(assistSeed || narrative, result.enhancedStatement || result.draftNarrative || narrative);
+      _appendStep1LlmContext(assistSeed || narrative, result.enhancedStatement || result.draftNarrative || narrative, {
+        scenarioFingerprint: requestPayload.scenarioFingerprint
+      });
       saveDraft();
       renderWizard1();
       window.scheduleStep1ScenarioCrossReferenceRefresh?.({ immediate: true, force: true, narrativeOverride: result.enhancedStatement || narrative });
@@ -541,7 +600,7 @@
       button,
       endpoint: '/api/ai/manual-draft-refinement',
       payload: requestPayload,
-      scope: 'step1-enhance-draft',
+      scope: `step1-enhance-draft::${requestPayload.scenarioFingerprint || ''}`,
       cooldownLabel: 'Enhanced just now',
       message: 'This draft refinement already reflects the current wording. Review it or change the draft before rerunning.'
     })) return;
@@ -563,7 +622,7 @@
         citations
       });
       const result = _ensureRiskConfidence(rawResult);
-      _markStep1AiActionCooldown('/api/ai/manual-draft-refinement', requestPayload, 'step1-enhance-draft');
+      _markStep1AiActionCooldown('/api/ai/manual-draft-refinement', requestPayload, `step1-enhance-draft::${requestPayload.scenarioFingerprint || ''}`);
       draftScenarioState.applyScenarioAssistResultToDraft(result, {
         narrative,
         assistSeed,
@@ -572,7 +631,9 @@
         nextNarrative: result.enhancedStatement || narrative
       });
       _syncRiskConfidenceToDraft(result.risks);
-      _appendStep1LlmContext(assistSeed || narrative, result.enhancedStatement || result.draftNarrative || narrative);
+      _appendStep1LlmContext(assistSeed || narrative, result.enhancedStatement || result.draftNarrative || narrative, {
+        scenarioFingerprint: requestPayload.scenarioFingerprint
+      });
       saveDraft();
       renderWizard1();
       window.scheduleStep1ScenarioCrossReferenceRefresh?.({ immediate: true, force: true, narrativeOverride: result.enhancedStatement || narrative });
@@ -622,7 +683,7 @@
       button,
       endpoint: '/api/ai/manual-shortlist',
       payload: requestPayload,
-      scope: 'step1-manual-shortlist',
+      scope: `step1-manual-shortlist::${requestPayload.scenarioFingerprint || ''}`,
       cooldownLabel: 'Loaded just now',
       message: 'This shortlist already reflects the current draft. Review it or change the scenario before rerunning.'
     })) return {
@@ -634,7 +695,7 @@
     try {
       const rawResult = await LLMService.buildManualShortlist(requestPayload);
       const result = _ensureRiskConfidence(rawResult);
-      _markStep1AiActionCooldown('/api/ai/manual-shortlist', requestPayload, 'step1-manual-shortlist');
+      _markStep1AiActionCooldown('/api/ai/manual-shortlist', requestPayload, `step1-manual-shortlist::${requestPayload.scenarioFingerprint || ''}`);
       const appliedRisks = draftScenarioState.applyScenarioShortlistResultToDraft(result, {
         narrative: draftNarrative,
         bu,
@@ -698,21 +759,30 @@
     const bu = getBUList().find(b => b.id === AppState.draft.buId);
     const button = document.getElementById('btn-register-analyse');
     const aiContext = buildCurrentAIAssistContext({ buId: bu?.id || AppState.draft.buId });
+    const geography = formatScenarioGeographies(getScenarioGeographies());
+    const scenarioFingerprint = _buildStep1ScenarioFingerprint({
+      registerText: AppState.draft.registerFindings,
+      registerMeta: AppState.draft.registerMeta,
+      businessUnit: aiContext.businessUnit || bu,
+      geography,
+      scenarioLensHint: AppState.draft.scenarioLens
+    });
     const requestPayload = {
       registerText: AppState.draft.registerFindings,
       registerMeta: AppState.draft.registerMeta,
       businessUnit: aiContext.businessUnit || bu,
-      geography: formatScenarioGeographies(getScenarioGeographies()),
+      geography,
       applicableRegulations: AppState.draft.applicableRegulations || [],
       adminSettings: aiContext.adminSettings,
-      priorMessages: _getStep1PriorMessages(),
+      scenarioFingerprint,
+      priorMessages: _getStep1PriorMessages({ scenarioFingerprint }),
       traceLabel: STEP1_TRACE_LABELS.registerAnalysis
     };
     if (_guardStep1AiActionCooldown({
       button,
       endpoint: '/api/ai/register-analysis',
       payload: requestPayload,
-      scope: 'step1-register-analysis',
+      scope: `step1-register-analysis::${scenarioFingerprint}`,
       cooldownLabel: 'Analysed just now',
       message: 'This register analysis already reflects the current upload and context. Review it or change the file before rerunning.'
     })) return;
@@ -720,7 +790,7 @@
     try {
       const rawResult = await LLMService.analyseRiskRegister(requestPayload);
       const result = _ensureRiskConfidence(rawResult);
-      _markStep1AiActionCooldown('/api/ai/register-analysis', requestPayload, 'step1-register-analysis');
+      _markStep1AiActionCooldown('/api/ai/register-analysis', requestPayload, `step1-register-analysis::${scenarioFingerprint}`);
       const parsedFallback = parseRegisterText(AppState.draft.registerFindings).map(title => ({ title, source: 'register' }));
       const extractedRisks = result.risks || parsedFallback;
       if (!extractedRisks.length) {

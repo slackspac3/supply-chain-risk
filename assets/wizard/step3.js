@@ -1271,6 +1271,32 @@ function renderEstimateSourceAtGlance(draft) {
   });
 }
 
+function renderEstimateSecondaryContextWorkbench(draft) {
+  const contextParts = [];
+  if (draft.learningNote) {
+    contextParts.push(`<div class="wizard-summary-band wizard-summary-band--quiet">
+      <div>
+        <div class="wizard-summary-band__label">Template learning</div>
+        <strong>Starting point guidance</strong>
+        <div class="wizard-summary-band__copy">${escapeHtml(draft.learningNote)}</div>
+      </div>
+    </div>`);
+  }
+  const orgCalibration = renderOrgCalibrationBand(draft);
+  if (orgCalibration) contextParts.push(orgCalibration);
+  const scopeSummary = renderEstimateScopeSummaryBand(draft);
+  if (scopeSummary) contextParts.push(scopeSummary);
+  if (!contextParts.length) return '';
+  return UI.disclosureSection({
+    title: 'Review handoff, scope, and calibration only if needed',
+    badgeLabel: 'Optional detail',
+    badgeTone: 'neutral',
+    open: false,
+    className: 'wizard-disclosure card card--elevated wizard-secondary-workbench anim-fade-in',
+    body: contextParts.join('')
+  });
+}
+
 function renderEstimateFocusStrip(draft, isAdv, validation, baselineAssessment) {
   const warnings = Array.isArray(validation?.warnings) ? validation.warnings.map(humanizeEstimateValidationMessage).filter(Boolean) : [];
   const modeLabel = isAdv ? 'Advanced mode' : 'Basic mode';
@@ -1356,6 +1382,9 @@ function _ensureDraftFairParamsSeeded(draft) {
 
   if ((!draft.benchmarkReferences || !draft.benchmarkReferences.length) && benchmarkCandidates.length) {
     draft.benchmarkReferences = BenchmarkService.buildReferenceList(benchmarkCandidates);
+  }
+  if (!String(draft.benchmarkBasis || '').trim() && benchmarkCandidates.length) {
+    draft.benchmarkBasis = BenchmarkService.summariseBenchmarkBasis(benchmarkCandidates);
   }
   if ((!draft.inputProvenance || !draft.inputProvenance.length) && benchmarkCandidates.length) {
     draft.inputProvenance = BenchmarkService.buildInputProvenance(benchmarkCandidates);
@@ -1648,9 +1677,7 @@ function renderWizard3() {
             <div class="form-help" style="margin-top:8px">Check readiness and source quality first. Then work through the core estimate from frequency to impact.</div>
           </section>
           ${renderEstimateFocusStrip(draft, isAdv, validation, baselineAssessment)}
-          ${draft.learningNote ? `<div class="wizard-summary-band wizard-summary-band--quiet anim-fade-in"><div><div class="wizard-summary-band__label">Template learning</div><strong>Starting point guidance</strong><div class="wizard-summary-band__copy">${escapeHtml(draft.learningNote)}</div></div></div>` : ''}
-          ${renderOrgCalibrationBand(draft)}
-          ${renderEstimateScopeSummaryBand(draft)}
+          ${renderEstimateSecondaryContextWorkbench(draft)}
           ${renderQuantReadinessScoreCard(draft, validation)}
           ${baselineAssessment ? `<div class="card card--elevated anim-fade-in"><div class="wizard-premium-head"><div><div class="context-panel-title">Current assessment baseline</div><p class="context-panel-copy">You are working from <strong>${escapeHtml(baselineTitle || 'the original assessment')}</strong>. Adjust the assumptions below to reflect stronger prevention, faster response, or lower disruption impact, then rerun to compare the new result against the current baseline.</p></div><span class="badge badge--gold">Treatment lane</span></div><div class="form-help" style="margin-top:10px">Baseline completed on ${new Date(baselineAssessment.completedAt || baselineAssessment.createdAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' })}.</div><div class="citation-chips" style="margin-top:12px"><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="control-strength">Try stronger controls</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="detection-response">Try faster detection</button><button type="button" class="chip treatment-prompt-chip" data-treatment-prompt="resilience">Try lower disruption impact</button></div><div class="form-group" style="margin-top:16px"><label class="form-label" for="treatment-improvement-request">Describe the better outcome you want to test</label><textarea class="form-textarea" id="treatment-improvement-request" rows="3" placeholder="e.g. stronger privileged-access controls, faster containment, better resilience, lower business disruption">${draft.treatmentImprovementRequest || ''}</textarea><span class="form-help">Describe the improvement in plain language and let AI adjust the copied baseline values before you simulate the new case.</span></div><div class="flex items-center gap-3" style="margin-top:12px;flex-wrap:wrap"><button class="btn btn--secondary" id="btn-treatment-ai-assist" type="button">AI Assist This Better Outcome</button><span class="form-help" id="treatment-improvement-status">${escapeHtml(getStep3TreatmentAssistStatusCopy(draft))}</span></div></div>` : ''}
           <section class="wizard-ia-section anim-fade-in">

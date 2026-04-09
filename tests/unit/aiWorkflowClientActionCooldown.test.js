@@ -47,6 +47,23 @@ test('workflow fingerprints normalise semantically identical scenario-draft payl
   assert.equal(first, second);
 });
 
+test('workflow fingerprints include a normalised step 1 scenario fingerprint for manual routes', () => {
+  const client = loadAiWorkflowClient();
+
+  const first = client.buildWorkflowFingerprint('/api/ai/manual-draft-refinement', {
+    riskStatement: 'Azure global admin credentials found on the dark web.',
+    scenarioFingerprint: ' corp-tech | technology | Azure global admin credentials found on the dark web. ',
+    geography: 'United Arab Emirates'
+  });
+  const second = client.buildWorkflowFingerprint('/api/ai/manual-draft-refinement', {
+    riskStatement: 'Azure global admin credentials found on the dark web.',
+    scenarioFingerprint: 'corp-tech | technology | Azure global admin credentials found on the dark web.',
+    geography: 'United Arab Emirates'
+  });
+
+  assert.equal(first, second);
+});
+
 test('action cooldown store blocks only the same normalised payload within the cooldown window', async () => {
   const client = loadAiWorkflowClient();
   const store = client.createActionCooldownStore({ cooldownMs: 25, maxEntries: 8 });

@@ -31,7 +31,11 @@ function loadStep1Internals() {
     Map,
     localStorage: noopStorage,
     sessionStorage: noopStorage,
-    window: { Step1Assist: {} },
+    window: {
+      Step1Assist: {},
+      clearTimeout() {},
+      setTimeout() { return 0; }
+    },
     document: {},
     AppState: { draft: {} },
     AuthService: {
@@ -57,6 +61,13 @@ function loadStep1Internals() {
     saveDraft: () => {},
     markDraftDirty: () => {},
     persistAndRenderStep1: () => {},
+    clearScenarioAssistArtifacts: () => {},
+    resetStep1RegulationSelectionState: () => {},
+    dispatchDraftAction(actionType) {
+      if (actionType === 'CLEAR_LLM_CONTEXT') {
+        context.AppState.draft.llmContext = [];
+      }
+    },
     normaliseAssessmentTokens: (text = '') => String(text || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
     normaliseScenarioSeedText: (text = '') => String(text || '').trim().toLowerCase(),
     guessRisksFromText: (text = '', options = {}) => {
@@ -76,6 +87,7 @@ function loadStep1Internals() {
   return {
     appState: context.AppState,
     setStep1ButtonBusy: context._setStep1ButtonBusy,
+    clearStep1StaleAssistState: context.clearStep1StaleAssistState,
     inferStep1FunctionKeyFromText: context.inferStep1FunctionKeyFromText,
     buildStep1ExplicitNarrativeLens: context.buildStep1ExplicitNarrativeLens,
     getStep1PreferredScenarioLens: context.getStep1PreferredScenarioLens,
@@ -802,6 +814,24 @@ test('shortlist generation from typed narrative uses the current narrative lens 
   assert.equal(seededCount, 1);
   assert.equal(internals.getLastGuessRisksArgs()?.options?.lensHint?.key, 'cyber');
   assert.equal(internals.getLastGuessRisksArgs()?.options?.lensHint?.functionKey, 'technology');
+});
+
+test('manual scenario rewrite clears stale step 1 llm context', () => {
+  const internals = loadStep1Internals();
+  internals.appState.draft.step1Path = 'draft';
+  internals.appState.draft.sourceNarrative = 'A payment-control failure creates direct monetary loss.';
+  internals.appState.draft.narrative = 'A payment-control failure creates direct monetary loss.';
+  internals.appState.draft.enhancedNarrative = 'A payment-control failure creates direct monetary loss.';
+  internals.appState.draft.llmContext = [
+    { role: 'user', content: 'Refine this financial draft.' },
+    { role: 'assistant', content: 'Here is the refined payment-control scenario.' }
+  ];
+
+  internals.clearStep1StaleAssistState(
+    'Azure global admin credentials discovered on the dark web are used to access the tenant and modify critical configurations.'
+  );
+
+  assert.deepEqual(Array.from(internals.appState.draft.llmContext || []), []);
 });
 
 test('supplier delivery slippage for infrastructure deployment stays out of procurement prompt ideas', () => {

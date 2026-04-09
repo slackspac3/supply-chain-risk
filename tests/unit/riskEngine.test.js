@@ -79,6 +79,39 @@ test('validateRunParams rejects malformed model inputs and expensive settings st
   assert.ok(warningOnly.warnings.length >= 2);
 });
 
+test('validateRunParams surfaces lognormal tail and zero-low semantics without breaking compatibility', () => {
+  const validation = RiskEngine.validateRunParams(buildValidParams({
+    distType: 'lognormal',
+    biMin: 0,
+    biLikely: 50000,
+    biMax: 2500000,
+    dbMin: 0,
+    dbLikely: 5000,
+    dbMax: 200000,
+    tpMin: 0,
+    tpLikely: 15000,
+    tpMax: 450000
+  }));
+
+  assert.equal(validation.valid, true);
+  assert.ok(validation.semanticsWarnings.some(message => /near-zero planning floors/i.test(message)));
+  assert.ok(validation.semanticsWarnings.some(message => /very wide severe tails/i.test(message)));
+});
+
+test('validateRunParams warns when derived vulnerability is effectively near-certain', () => {
+  const validation = RiskEngine.validateRunParams(buildValidParams({
+    threatCapMin: 0.9,
+    threatCapLikely: 0.98,
+    threatCapMax: 1,
+    controlStrMin: 0,
+    controlStrLikely: 0.02,
+    controlStrMax: 0.08
+  }));
+
+  assert.equal(validation.valid, true);
+  assert.ok(validation.semanticsWarnings.some(message => /near certainty or near-impossibility/i.test(message)));
+});
+
 test('runAsync preserves reproducibility when the saved seed is reused', async () => {
   const first = await RiskEngine.runAsync(buildValidParams({ seed: null }));
   assert.equal(typeof first.runConfig.seed, 'number');

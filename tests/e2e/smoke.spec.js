@@ -565,6 +565,9 @@ test('wizard handoff guidance carries the scenario cleanly into steps 2 and 3', 
     await continueToEstimation.scrollIntoViewIfNeeded();
     await continueToEstimation.click();
     await expect(page).toHaveURL(/#\/wizard\/3$/);
+    const handoffDisclosure = page.getByText(/review handoff, scope, and calibration only if needed/i);
+    await expect(handoffDisclosure).toBeVisible();
+    await handoffDisclosure.click();
     await expect(page.getByText(/scenario handoff/i)).toBeVisible();
     await expect(page.getByText(/quant readiness/i)).toBeVisible();
   });

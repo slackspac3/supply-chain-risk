@@ -259,3 +259,17 @@ test('applyScenarioShortlistResultToDraft preserves server-authoritative risks i
     ['Identity compromise of privileged tenant administration']
   );
 });
+
+test('getIntakeAssistSeedNarrative prefers fresh divergent current text over stale prior scenario text', () => {
+  const { api, appState } = loadDraftScenarioStateRuntime();
+  appState.draft.sourceNarrative = 'A privileged identity compromise exposes the cloud tenant to unauthorised access.';
+  appState.draft.narrative = 'A privileged identity compromise exposes the cloud tenant to unauthorised access.';
+  appState.draft.enhancedNarrative = 'A privileged identity compromise exposes the cloud tenant to unauthorised access.';
+
+  const seed = api.getIntakeAssistSeedNarrative(
+    'The business impact analysis is stale, recovery priorities are missing, and the continuity call tree has not been exercised.'
+  );
+
+  assert.match(seed, /business impact analysis|continuity call tree|recovery priorities/i);
+  assert.doesNotMatch(seed, /identity compromise|cloud tenant/i);
+});
