@@ -1522,7 +1522,7 @@ function normaliseSmartParamScenarioType(source = {}) {
   const eventPath = String(getStructuredScenarioField(source?.structuredScenario, 'eventPath') || '').trim().toLowerCase();
   if (/identity|credential|account|phishing|mailbox/.test(eventPath)) return 'identity';
   if (/cloud|bucket|tenant|misconfig|saas/.test(eventPath)) return 'cloud';
-  if (/data|privacy|breach|exfil/.test(eventPath)) return 'data-breach';
+  if (/data breach|privacy breach|personal data breach|data exposure|records exposed|sensitive data exposed|confidential data exposed|data leak|exfil/.test(eventPath)) return 'data-breach';
   if (/ransom|continuity|outage|recovery/.test(eventPath)) return 'business-continuity';
   if (/procurement|supplier|vendor|third[- ]party|supply/.test(eventPath)) return 'third-party';
   const functionKey = inferStoredScenarioFunctionKey(source);
@@ -7161,11 +7161,13 @@ function normaliseScenarioLensHint(value) {
       'ai / model risk': 'ai-model-risk',
       'ai-model-risk': 'ai-model-risk',
       'model risk': 'ai-model-risk',
+      'model governance': 'ai-model-risk',
       'responsible ai': 'ai-model-risk',
       'data governance': 'data-governance',
       'data-governance': 'data-governance',
       privacy: 'data-governance',
       'data privacy': 'data-governance',
+      'data protection': 'data-governance',
       'data governance / privacy': 'data-governance',
       'fraud / integrity': 'fraud-integrity',
       'fraud integrity': 'fraud-integrity',
@@ -7262,8 +7264,36 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
         }
       ];
     }
+    if (/(voluntary attrition|internal transfer requests?|role progression|weak onboarding|limited coaching|mentor(?:ing)? new hires|weekend bid work|shrinking core of experienced staff|critical talent|specialist teams?|return-to-office|return to office|return-to-campus|return to campus|one-size-fits-all policy|employee experience|late-evening coordination|quiet space|campus allocation|compensation disparities|materially higher packages|mentor resentment|internal mobility|acceptance rates|contingent specialists?|succession planning|learning access|leadership visibility|internal opportunity pathways|mixed employment model|promotion pathways|critical knowledge dependencies|capability maps?|informal onboarding|role-locali[sz]ation|locali[sz]ation push|hidden second-job behavior|disengagement|employer credibility|scarce talent|talent architecture|capability depth)/.test(source)) {
+      return [
+        {
+          title: 'Critical talent retention and capability-depth risk',
+          category: 'People / Workforce',
+          regulations: ['ILO-OSH 2001', 'ISO 45003'],
+          description: 'Capability depth can erode quickly when attrition, weak onboarding, or specialist-team overdependence outpace the organization’s ability to develop and retain talent.'
+        },
+        {
+          title: 'Workforce policy or employee-experience model mismatch',
+          category: 'People / Workforce',
+          regulations: ['ILO-OSH 2001', 'SA8000'],
+          description: 'A workplace, localization, or people-policy design that no longer fits how specialist teams operate can create sustained retention, morale, and productivity pressure.'
+        },
+        {
+          title: 'Uneven talent-development and succession architecture',
+          category: 'People / Workforce',
+          regulations: ['UN Guiding Principles', 'ISO 45003'],
+          description: 'When learning access, promotion pathways, or succession depth vary across comparable worker groups, resilience depends too heavily on a narrow set of people and informal knowledge channels.'
+        }
+      ];
+    }
     if (/exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights/.test(source)) {
       return [
+        {
+          title: 'People and human-rights harm in the workforce model',
+          category: 'People / Workforce',
+          regulations: ['UN Guiding Principles', 'SA8000'],
+          description: 'Worker exploitation, recruitment abuse, or grievance failure should stay on the people and human-rights path rather than being reduced to a disclosure issue alone.'
+        },
         {
           title: 'Supplier labor-practice and due-diligence failure',
           category: 'Procurement',
@@ -7306,6 +7336,371 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
         }
       ];
     }
+    if (/(maverick spend|off-contract|outside approved sourcing|bypassing procurement|enterprise agreement|duplicate licen[cs]es|higher unit pricing|pricing leakage|strategic sourcing threshold|change request directly to the reseller|incumbent vendor|incumbent reseller)/.test(source)) {
+      return [
+        {
+          title: 'Off-contract purchasing',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The team appears to have purchased outside the approved sourcing route instead of using the enterprise agreement or controlled procurement channel.'
+        },
+        {
+          title: 'Commercial value leakage',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'COSO Internal Control Framework'],
+          description: 'Duplicate entitlements and higher unit pricing show lost commercial leverage at the point of purchase.'
+        },
+        {
+          title: 'Software sourcing governance weakness',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'Threshold workarounds and local urgency suggest weak control over how software demand is sourced and authorized.'
+        }
+      ];
+    }
+    if (/(rfp|request for proposal|scoring template|whole-life cost|whole life cost|lifecycle operating costs?|technical weighting|energy efficiency|serviceability|spare-parts? lead times|lowest upfront bidder|cooling systems|gulf conditions)/.test(source)) {
+      return [
+        {
+          title: 'Tender design weakness',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The evaluation method appears not to have reflected the technical and commercial factors that matter most for the asset being sourced.'
+        },
+        {
+          title: 'Whole-life cost procurement failure',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'COSO Internal Control Framework'],
+          description: 'The award seems to have favored upfront price over lifecycle cost, maintainability, and operating value.'
+        },
+        {
+          title: 'Category capability gap',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'A generic template appears to have been reused for a specialist category without enough procurement tailoring.'
+        }
+      ];
+    }
+    if (/(one lot|single lot|lotting strategy|competition design|single aggregator|specialist suppliers?|specialist provider|niche suppliers?|price benchmarking proved weak|data-labeling services|data-labeling|data labeling|multilingual medical annotation|bundled .*one lot)/.test(source)) {
+      return [
+        {
+          title: 'Poor market-making and lot strategy',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'Bundling unlike service needs into one lot appears to have reduced competition and bidder participation.'
+        },
+        {
+          title: 'Commercial leverage loss',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'COSO Internal Control Framework'],
+          description: 'Weak lotting and competition design can remove price tension and weaken benchmarking discipline.'
+        },
+        {
+          title: 'Supplier lock-in created through procurement design',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The sourcing structure appears to have created dependency on one broad supplier before any actual delivery failure.'
+        }
+      ];
+    }
+    if (/(alternative distributor|legal carve-outs|warranty coverage|origin declarations?|support obligations|side emails?|draft appendices|distributor terms|deposit immediately|deposit request|scarce capacity|substitution rights|partially compliant server configurations)/.test(source)) {
+      return [
+        {
+          title: 'Contracting-through-procurement control failure',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'Commercial urgency appears to have fragmented the sourcing and contract-formation path before key protections were made clear and binding.'
+        },
+        {
+          title: 'Inadequate sourcing due diligence under constrained supply',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The team may be moving toward commitment before resolving the delivery, support, and substitution terms that matter most.'
+        },
+        {
+          title: 'Procurement governance breakdown under market pressure',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'Scarce capacity and schedule pressure appear to be compressing the controls needed for a defensible cross-border purchase.'
+        },
+        {
+          title: 'Value-for-money and remedy protection risk',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'Ambiguous warranty, support, origin, and substitution terms can leave the buyer exposed even before performance begins.'
+        }
+      ];
+    }
+    if (/(bundled scope|price validity|evaluation criteria|award strategy|installation change orders|opaque assumptions|shortest lead times|volatile upstream component markets|negotiation approach|commercially sound award)/.test(source)) {
+      return [
+        {
+          title: 'Tender design weakness',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The tender structure appears to be combining commercial and technical decisions in a way that weakens clean evaluation discipline.'
+        },
+        {
+          title: 'Award strategy risk',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The group may be drifting toward an award that embeds avoidable dependence, weak pricing protections, and poor commercial assumptions.'
+        },
+        {
+          title: 'Negotiation leverage erosion',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'COSO Internal Control Framework'],
+          description: 'Bundled scope and volatile price-validity clauses can reduce leverage before contract signature and make later correction harder.'
+        }
+      ];
+    }
+    if (/(direct negotiation|incumbent-led consortium|incumbent consortium|scope creep|service baselines?|should-cost|should cost|urgent sourcing|emergency sourcing exercise|time is limited|fragmented position)/.test(source)) {
+      return [
+        {
+          title: 'Demand-specification weakness',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The scope and service baseline appear not to be normalized enough before negotiation.'
+        },
+        {
+          title: 'Single-source negotiation risk',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The sourcing path may be narrowing too quickly into direct negotiation with an incumbent-led provider set.'
+        },
+        {
+          title: 'Commercial readiness gap in urgent sourcing',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'COSO Internal Control Framework'],
+          description: 'Time pressure appears to be exposing weak demand normalization, limited should-cost discipline, and fragmented negotiation readiness.'
+        }
+      ];
+    }
+    if (/side letter|return rights|rebate support|quarter-end pressure|backdated certification|duplicate proof|proof-of-performance|fabricated evidence/.test(source)) {
+      return [
+        {
+          title: 'Channel side-arrangement or rebate-evidence manipulation',
+          category: 'Fraud / Integrity',
+          regulations: ['ISO 37001', 'UAE AML/CFT'],
+          description: 'Concealed side letters, return rights, rebate support, or fabricated eligibility evidence can make an apparently valid transaction misleading in substance.'
+        },
+        {
+          title: 'Books-and-records and revenue-substance distortion',
+          category: 'Financial',
+          regulations: ['COSO Internal Control Framework'],
+          description: 'If commercial evidence was manipulated, recorded revenue, rebate eligibility, and incentive outcomes may no longer reflect the true deal economics.'
+        },
+        {
+          title: 'Partner-governance breakdown around a strategic reseller',
+          category: 'Third-Party',
+          regulations: ['ISO 27036', 'ISO 37301'],
+          description: 'The fact pattern may reveal that a trusted channel partner relationship bypassed normal challenge over hidden commercial terms and proof quality.'
+        }
+      ];
+    }
+    if (/ghost workers?|attendance logs?|false certification|site coordinator|related party|undisclosed relationship/.test(source)) {
+      return [
+        {
+          title: 'Ghost-worker or false-certification fraud',
+          category: 'Fraud / Integrity',
+          regulations: ['ISO 37001', 'UAE AML/CFT'],
+          description: 'False attendance certification and undisclosed related-party ties point to deliberate overbilling and integrity failure rather than a normal workforce issue.'
+        },
+        {
+          title: 'Related-party and conflict-disclosure failure',
+          category: 'Compliance',
+          regulations: ['ISO 37301'],
+          description: 'Undisclosed family or personal ties can invalidate the control environment around certification, labour approval, and supplier challenge.'
+        },
+        {
+          title: 'Labour-cost overpayment and site-governance leakage',
+          category: 'Financial',
+          regulations: ['COSO Internal Control Framework'],
+          description: 'If workers were billed but not present, the site may be carrying direct overpayment, unreliable records, and weakened trust in contractor governance.'
+        }
+      ];
+    }
+    if (/approval thresholds?|kickback|urgency narrative|vendor sequencing/.test(source)) {
+      return [
+        {
+          title: 'Change-order steering and kickback-funded margin extraction',
+          category: 'Fraud / Integrity',
+          regulations: ['ISO 37001', 'UAE AML/CFT'],
+          description: 'Repeated threshold avoidance combined with collusion or kickback indicators points to engineered misconduct rather than only weak procurement discipline.'
+        },
+        {
+          title: 'Approval circumvention embedded in project spend',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'The project may have been structured to evade higher-value challenge and steer work through seemingly valid urgent change orders.'
+        },
+        {
+          title: 'Improper margin leakage across the expansion programme',
+          category: 'Financial',
+          regulations: ['COSO Internal Control Framework'],
+          description: 'If scope and urgency were manipulated, the programme may be carrying hidden kickback-funded cost and unreliable spend evidence.'
+        }
+      ];
+    }
+    if (/unbadged individual|restricted office area|door on bypass|visitor escort|temporary badge privileges|event footprint|legal war room|catering access windows|unauthorized movement|fence-line alarms?|camera blind spots?|temporary gate protocol|after-hours service access|prototype facility|prototype labs?|restricted zones?|executive movement|contractor badges?|loading bay|secure cage|vehicle screening|unsupervised access|camera sight lines/.test(source)) {
+      return [
+        {
+          title: 'Unauthorized physical access or sensitive-zone exposure',
+          category: 'Physical Security',
+          regulations: ['ISO 22301', 'UAE Fire and Life Safety Code'],
+          description: 'Weak escort, badge, perimeter, or zone-segregation controls may have allowed unauthorized physical proximity to a restricted area, route, or asset.'
+        },
+        {
+          title: 'Protective-security control weakness around a sensitive site',
+          category: 'Physical Security',
+          regulations: ['ISO 22301'],
+          description: 'Temporary access exceptions, blind spots, or after-hours procedures may have diluted the intended protective posture of the site.'
+        },
+        {
+          title: 'Operational and assurance pressure after a site-control lapse',
+          category: 'Operational',
+          regulations: ['ISO 31000'],
+          description: 'Even without confirmed theft or harm, a visible physical-control lapse can trigger urgent review of site operations, escort discipline, and restricted-area governance.'
+        }
+      ];
+    }
+    if (/(single approved supplier|single approved source|production line shift|inventory buffers were minimal|minimal buffer inventory|insufficient safety stock|rack enclosures|shipment slipped|customer go-live dates)/.test(source)) {
+      return [
+        {
+          title: 'Single-source dependency',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'A live single-source dependency has become a material supply continuity issue because one approved source can no longer support dependent delivery commitments.'
+        },
+        {
+          title: 'Insufficient safety stock',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'Thin inventory buffers are amplifying a supplier slip and leaving little resilience against further shipment delay.'
+        },
+        {
+          title: 'Inbound material delay risk',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'Physical inputs are arriving later than the dependent delivery path assumed, putting downstream activation dates at risk.'
+        }
+      ];
+    }
+    if (/(allocation priority|allocation rights|fragmented forecast|non-binding forecast|demand aggregation|demand signal|distributor priority shifted|\boem\b|original manufacturer|constrained stock|internal competition|forecast certainty)/.test(source)) {
+      return [
+        {
+          title: 'Allocation and supply assurance risk',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'NIST SP 800-161'],
+          description: 'Scarcity allocation and weak OEM protection are reducing assured access to the constrained components the group needs.'
+        },
+        {
+          title: 'Demand aggregation weakness',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'NIST SP 800-161'],
+          description: 'Fragmented demand signals and non-binding forecasts are weakening the enterprise position in a tight allocation market.'
+        },
+        {
+          title: 'Distributor dependency without OEM protection',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 28000'],
+          description: 'The sourcing structure relies on distributors without securing direct allocation assurance from the original manufacturer.'
+        },
+        {
+          title: 'Cross-program supply contention',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'Multiple business-critical programmes are now competing for the same constrained stock because supply assurance was not secured early enough.'
+        }
+      ];
+    }
+    if (/(buffer hub|deployable inventory|inspection backlog|shipping re-routing|shipping rerouting|repair lead time|service-spares flow|service spares flow|replacement network modules|practically deployable|onward dispatch|field demand)/.test(source)) {
+      return [
+        {
+          title: 'Deployable inventory readiness failure',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'Inventory is technically in stock but not reliably deployable because the hub, inspection, and dispatch path has become unstable.'
+        },
+        {
+          title: 'Cross-border logistics fragility',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'Transit, customs, inspection, and packaging instability are degrading the physical network needed to support field demand.'
+        },
+        {
+          title: 'Service-spares flow disruption',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'The spares chain can no longer convert nominal stock into dependable repair support at the speed the service model requires.'
+        }
+      ];
+    }
+    if (/(port congestion|customs inspection|customs slowdown|missed generator arrival|generator delivery|installation sequence|site energization|critical-path inbound logistics|cross-border equipment flows|contractor teams stranded|commissioning delay)/.test(source)
+      && !/(sub-tier supplier|shared sub-tier|board assembler|quality hold|shared dependency|component shortage|sub-tier bottlenecks|shipment windows|material flow|critical-component sequencing|upstream constraint propagation|custom busways|coolant distribution manifolds)/.test(source)) {
+      return [
+        {
+          title: 'Critical-path inbound logistics disruption',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'A delayed inbound equipment stream is now blocking a tightly sequenced installation or commissioning path.'
+        },
+        {
+          title: 'Insufficient schedule resilience in material flow',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'Near-zero float in the material sequence has left the programme highly exposed to a single transport or customs slip.'
+        },
+        {
+          title: 'Cross-border logistics dependency risk',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'Equipment movement across several countries is creating timing and customs variability that the plan did not absorb.'
+        }
+      ];
+    }
+    if (/(sub-tier supplier|shared sub-tier|board assembler|quality hold|shared dependency|component shortage|sub-tier bottlenecks|shipment windows|material flow|critical-component sequencing|upstream constraint propagation|custom busways|coolant distribution manifolds)/.test(source)) {
+      if (/(quality hold|board assembler|shared dependency|component shortage|shared sub-tier)/.test(source)) {
+        return [
+          {
+            title: 'Sub-tier concentration risk',
+            category: 'Supply Chain',
+            regulations: ['NIST SP 800-161', 'ISO 28000'],
+            description: 'A hidden upstream dependency is concentrating risk into a sub-tier source that multiple programmes depend on.'
+          },
+          {
+            title: 'Supply visibility weakness',
+            category: 'Supply Chain',
+            regulations: ['NIST SP 800-161', 'ISO 28000'],
+            description: 'Direct supplier reporting looked healthy, but the enterprise lacked sufficient visibility into the real upstream dependency path.'
+          },
+          {
+            title: 'Quality-triggered material shortage',
+            category: 'Supply Chain',
+            regulations: ['NIST SP 800-161', 'ISO 28000'],
+            description: 'A quality hold at a lower tier is now constraining physical component flow into dependent assembly or deployment work.'
+          }
+        ];
+      }
+      return [
+        {
+          title: 'Multi-tier material flow disruption',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'NIST SP 800-161'],
+          description: 'Upstream bottlenecks are disrupting the physical flow of components across tiers and breaking integrated build sequencing.'
+        },
+        {
+          title: 'Critical-component sequencing risk',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'ISO 22301'],
+          description: 'The work depends on critical components arriving in a specific order and timing that the current supply path cannot sustain.'
+        },
+        {
+          title: 'Upstream constraint propagation',
+          category: 'Supply Chain',
+          regulations: ['ISO 28000', 'NIST SP 800-161'],
+          description: 'Lower-tier constraints are cascading through shipment windows and resequencing dependent work across sites.'
+        }
+      ];
+    }
     if (/single[- ]source|sole source|supplier shortfall|supplier concentration|critical supplier/.test(source)) {
       return [
         {
@@ -7335,21 +7730,23 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
     { key: 'strategic', title: 'Strategic execution or market-position risk', category: 'Strategic', regulations: ['ISO 31000', 'COSO ERM'], terms: ['strategy', 'strategic', 'expansion', 'transformation', 'growth', 'market', 'competitive', 'portfolio', 'investment'] },
     { key: 'operational', title: 'Operational breakdown affecting core services', category: 'Operational', regulations: ['ISO 31000', 'ISO 22301'], terms: ['outage', 'downtime', 'availability', 'service disruption', 'operational disruption', 'failure', 'breakdown', 'backlog', 'capacity', 'process failure', 'human error', 'manual error', 'aging infrastructure', 'ageing infrastructure', 'legacy infrastructure', 'platform instability', 'system instability'] },
     { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'UAE Information Assurance Standard', 'ISO 27001'], terms: ['ransom', 'malware', 'phish', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud compromise', 'cloud exposure', 'cloud breach', 'misconfig', 'vulnerability', 'privileged'] },
+    { key: 'ai-model-risk', title: 'AI, agentic, or model-governance failure', category: 'AI / Model Risk', regulations: ['ISO/IEC 42001', 'NIST AI RMF', 'ISO/IEC 23894'], terms: ['responsible ai', 'model risk', 'model drift', 'hallucination', 'algorithmic bias', 'training data', 'large language model', 'llm assistant', 'ai assistant', 'copilot', 'agentic', 'tool chaining', 'abstention', 'calibration', 'benchmark contamination', 'release gating', 'generalization', 'generalisation', 'retraining', 'human in the loop', 'unsafe output', 'forecasting model', 'capacity planning model', 'recalibration', 'translation bias', 'multilingual validation', 'pilot validation', 'deployment readiness', 'machine-translated'] },
+    { key: 'data-governance', title: 'Data governance, privacy, or approved-use failure', category: 'Data Governance / Privacy', regulations: ['ISO 27701', 'UAE PDPL', 'GDPR'], terms: ['data governance', 'data protection', 'data privacy', 'privacy', 'data lineage', 'lineage metadata', 'purpose limitation', 'secondary use', 'data retention', 'retention schedule', 'records retained too long', 'lawful basis', 'data residency', 'cross-border transfer', 'record of processing activities', 'ropa', 'dpia', 'data controller', 'data processor', 'controller-processor', 'processor agreement', 'de-identification', 'deidentification', 'data minimization', 'data minimisation', 'free-text fields', 'live identifiers', 'passport details', 'identity graph', 'identity views', 'suppression flags', 'record resurrection', 'deletion propagation', 'derived datasets', 'offshore support queue', 'development environment'] },
     { key: 'third-party', title: 'Third-party dependency or supplier failure', category: 'Third-Party', regulations: ['ISO 27036', 'ISO 28000'], terms: ['vendor', 'supplier', 'third-party', 'third party', 'outsourc', 'dependency', 'subprocessor', 'partner'] },
     { key: 'regulatory', title: 'Regulatory or licensing exposure', category: 'Regulatory', regulations: ['BIS Export Controls', 'OFAC Sanctions'], terms: ['regulator', 'regulatory', 'licence', 'license', 'supervisory', 'filing', 'notification', 'sanction', 'export control'] },
     { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'financial reporting', 'misstatement', 'bankruptcy', 'insolvency', 'receivable', 'bad debt', 'write-off', 'counterparty', 'customer default', 'client default', 'collections', 'working capital', 'provisioning'] },
-    { key: 'fraud-integrity', title: 'Fraud, integrity, or financial-crime exposure', category: 'Fraud / Integrity', regulations: ['ISO 37001', 'UAE AML/CFT'], terms: ['fraud', 'integrity', 'financial crime', 'money laundering', 'kickback', 'bribery', 'corruption', 'collusion', 'embezzlement'] },
-    { key: 'esg', title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure'] },
+    { key: 'fraud-integrity', title: 'Fraud, integrity, or financial-crime exposure', category: 'Fraud / Integrity', regulations: ['ISO 37001', 'UAE AML/CFT'], terms: ['fraud', 'financial crime', 'money laundering', 'kickback', 'bribery', 'corruption', 'collusion', 'embezzlement', 'invoice splitting', 'approval threshold', 'side letter', 'return rights', 'rebate support', 'quarter-end pressure', 'ghost workers', 'false certification', 'related party', 'intermediary', 'success fee', 'books and records', 'urgency narrative', 'rebate claims', 'backdated certifications', 'duplicate proof', 'fabricated evidence'] },
+    { key: 'esg', title: 'ESG or sustainability disclosure risk', category: 'ESG', regulations: ['IFRS S1', 'IFRS S2'], terms: ['esg', 'sustainability', 'climate', 'emission', 'carbon', 'greenwashing', 'social impact', 'governance failure', 'disclosure', 'assurance', 'ifrs s1', 'ifrs s2', 'gri', 'tcfd', 'tnfd'] },
     { key: 'compliance', title: 'Compliance control or policy breakdown', category: 'Compliance', regulations: ['ISO 37301', 'UAE PDPL'], terms: ['policy breach', 'control failure', 'non-compliance', 'compliance', 'obligation', 'conduct', 'ethics', 'privacy', 'data protection', 'retention', 'lawful basis', 'cross-border transfer'] },
-    { key: 'legal-contract', title: 'Legal, contract, or IP exposure', category: 'Legal / Contract', regulations: ['ISO 37301'], terms: ['contract', 'indemnity', 'litigation', 'ip', 'intellectual property', 'licensing dispute', 'dispute', 'terms breach'] },
-    { key: 'geopolitical', title: 'Geopolitical, sanctions, or market-access exposure', category: 'Geopolitical', regulations: ['OFAC Sanctions', 'BIS Export Controls'], terms: ['geopolitical', 'market access', 'sanctions', 'export control', 'sovereign', 'cross-border restriction', 'entity list', 'tariff'] },
-    { key: 'supply-chain', title: 'Supply chain resilience disruption', category: 'Supply Chain', regulations: ['ISO 28000', 'ISO 22301'], terms: ['supply chain', 'logistics', 'inventory', 'fulfilment', 'shipment', 'single source', 'upstream'] },
-    { key: 'procurement', title: 'Procurement governance or sourcing risk', category: 'Procurement', regulations: ['ISO 20400', 'ISO 37301'], terms: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'vendor selection', 'purchasing', 'critical spend', 'single-source spend'] },
+    { key: 'legal-contract', title: 'Legal, contract, or IP exposure', category: 'Legal / Contract', regulations: ['ISO 37301'], terms: ['contract', 'indemnity', 'litigation', 'ip', 'intellectual property', 'licensing dispute', 'dispute', 'terms breach', 'liability cap', 'service credits', 'rights and remedies', 'license scope', 'licence scope', 'affiliate-use rights', 'affiliate use rights', 'derived insights', 'service data', 'step-in rights', 'technical equivalence', 'acceptance certificate', 'statement of work', 'schedule hierarchy', 'annex conflict', 'consortium agreement'] },
+    { key: 'geopolitical', title: 'Geopolitical, sanctions, or market-access exposure', category: 'Geopolitical', regulations: ['OFAC Sanctions', 'BIS Export Controls', 'EU Foreign Subsidies Regulation'], terms: ['geopolitical', 'market access', 'sanctions', 'export control', 'sovereign', 'cross-border restriction', 'entity list', 'tariff', 'localization', 'localisation', 'foreign influence', 'ownership transparency', 'admissibility', 'technology origin', 'public-sector screening'] },
+    { key: 'supply-chain', title: 'Supply chain resilience disruption', category: 'Supply Chain', regulations: ['ISO 28000', 'ISO 22301'], terms: ['supply chain', 'logistics', 'inventory', 'fulfilment', 'shipment', 'single source', 'upstream', 'sub-tier', 'quality hold', 'customs', 'port congestion', 'installation sequence', 'allocation priority', 'oem', 'buffer hub', 'deployable inventory', 'service spares'] },
+    { key: 'procurement', title: 'Procurement governance or sourcing risk', category: 'Procurement', regulations: ['ISO 20400', 'ISO 37301'], terms: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'vendor selection', 'purchasing', 'critical spend', 'single-source spend', 'maverick spend', 'off-contract', 'enterprise agreement', 'duplicate licenses', 'pricing leakage', 'rfp scoring', 'whole-life cost', 'technical weighting', 'lotting strategy', 'competition design', 'single aggregator', 'direct negotiation', 'should-cost', 'service baseline', 'bundled scope', 'price validity', 'award strategy', 'substitution rights'] },
     { key: 'business-continuity', title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['NCEMA 7000:2021 Business Continuity', 'ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management'] },
-    { key: 'physical-security', title: 'Physical security or facilities-protection breakdown', category: 'Physical Security', regulations: ['ISO 22301', 'UAE Fire and Life Safety Code'], terms: ['physical security', 'perimeter', 'site intrusion', 'badge control', 'facility breach', 'executive protection', 'visitor management'] },
-    { key: 'ot-resilience', title: 'OT or industrial-control resilience failure', category: 'OT Resilience', regulations: ['IEC 62443', 'ISO 22301'], terms: ['ot', 'industrial control', 'ics', 'scada', 'plant network', 'site systems', 'control room', 'operational technology'] },
-    { key: 'people-workforce', title: 'People, workforce, or labour-practice exposure', category: 'People / Workforce', regulations: ['UN Guiding Principles', 'SA8000', 'ILO-OSH 2001'], terms: ['workforce', 'labour', 'labor', 'attrition', 'staffing', 'fatigue', 'strike', 'worker welfare', 'human rights'] },
-    { key: 'investment-jv', title: 'Investment, JV, or integration-thesis exposure', category: 'Investment / JV', regulations: ['COSO ERM', 'ISO 31000'], terms: ['merger', 'acquisition', 'm&a', 'joint venture', 'jv', 'deal thesis', 'integration', 'valuation'] },
+    { key: 'physical-security', title: 'Physical security or facilities-protection breakdown', category: 'Physical Security', regulations: ['ISO 22301', 'UAE Fire and Life Safety Code'], terms: ['physical security', 'perimeter', 'site intrusion', 'badge control', 'facility breach', 'executive protection', 'visitor management', 'unbadged individual', 'restricted office area', 'door on bypass', 'visitor escort', 'temporary badge privileges', 'event footprint', 'legal war room', 'catering access windows', 'unauthorized movement', 'fence-line alarms', 'camera blind spots', 'temporary gate protocol', 'after-hours service access', 'prototype facility', 'restricted zones', 'executive movement', 'contractor badges', 'loading bay', 'secure cage', 'vehicle screening', 'unsupervised access'] },
+    { key: 'ot-resilience', title: 'OT or industrial-control resilience failure', category: 'OT Resilience', regulations: ['IEC 62443', 'ISO 22301'], terms: ['ot', 'industrial control', 'ics', 'scada', 'plant network', 'site systems', 'control room', 'operational technology', 'edge computing room', 'temperature alarms', 'power fluctuation', 'airflow settings', 'workload throttling', 'edge gateways', 'heatwave', 'power quality fluctuations', 'telemetry gaps', 'manual field verification', 'timing mismatch', 'edge controller', 'configuration baseline', 'false rejects', 'supervised mode', 'failover logic', 'backup power transfer', 'restart priorities', 'regional grid disturbance', 'gateway clocks', 'telemetry replay', 'control confirmations', 'state reconstruction', 'edge inference', 'actuator timing', 'reject gate', 'restart instability'] },
+    { key: 'people-workforce', title: 'People, workforce, or labour-practice exposure', category: 'People / Workforce', regulations: ['UN Guiding Principles', 'SA8000', 'ILO-OSH 2001'], terms: ['workforce', 'labour', 'labor', 'attrition', 'staffing', 'fatigue', 'strike', 'worker welfare', 'human rights', 'retention', 'onboarding', 'succession planning', 'employee experience', 'internal mobility', 'role progression', 'compensation disparities', 'contingent specialists', 'promotion pathways'] },
+    { key: 'investment-jv', title: 'Investment, JV, or integration-thesis exposure', category: 'Investment / JV', regulations: ['COSO ERM', 'ISO 31000'], terms: ['merger', 'acquisition', 'm&a', 'joint venture', 'jv', 'deal thesis', 'integration', 'valuation', 'minority investment', 'controlling stake', 'quality of earnings', 'founder concentration', 'reserved matters', 'pipeline ownership', 'transfer pricing', 'capital calls', 'valuation reset', 'seconded personnel'] },
     { key: 'transformation-delivery', title: 'Transformation-delivery or programme-execution failure', category: 'Transformation Delivery', regulations: ['ISO 31010', 'COSO ERM'], terms: ['transformation', 'programme', 'program', 'project delivery', 'go-live', 'milestone', 'dependency slip', 'benefit realisation'] },
     { key: 'hse', title: 'Health, safety, and environmental incident exposure', category: 'HSE', regulations: ['ISO 45001', 'ISO 14001'], terms: ['hse', 'health and safety', 'safety', 'injury', 'environmental', 'spill', 'incident', 'worker'] }
   ];
@@ -7360,6 +7757,8 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
     regulatory: new Set(['regulatory', 'compliance']),
     operational: new Set(['operational', 'business-continuity']),
     'business-continuity': new Set(['business-continuity', 'operational']),
+    'ai-model-risk': new Set(['ai-model-risk', 'compliance', 'cyber']),
+    'data-governance': new Set(['data-governance', 'compliance', 'regulatory']),
     strategic: new Set(['strategic']),
     financial: new Set(['financial']),
     'fraud-integrity': new Set(['fraud-integrity', 'financial', 'compliance', 'regulatory']),
@@ -7700,22 +8099,22 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         followOn: 'Once the model starts producing unsafe or low-trust outputs, management usually has to stabilise usage, review governance, and explain how the model was allowed to operate that way.'
       };
     }
-    if (/data governance|data quality|data lineage|retention|purpose limitation|privacy|personal data|consent|residency|master data/.test(text)) {
+    if (/data governance|data quality|data lineage|lineage metadata|data retention|retention schedule|records retained too long|purpose limitation|privacy|data protection|personal data|consent|residency|master data|de-?identification|data minimi[sz]ation|secondary use|free-text fields?|live identifiers?|passport details|identity graph|identity views|suppression flags?|record resurrection|deletion propagation|derived datasets?|offshore support queue|development environment/.test(text)) {
       return {
         positioning: 'This points to a data-governance and privacy issue rather than only a classic cyber incident.',
         affected: 'the data lineage, retention, ownership, and approved-use path around the affected dataset',
-        driver: 'weak ownership, poor retention enforcement, or unclear control over how sensitive data is reused and governed',
+        driver: 'weak ownership, poor minimization or retention enforcement, or unclear control over how sensitive data is reused and governed',
         impact: 'supervisory challenge, remediation cost, and lower confidence in analytics or reporting built on the data',
         followOn: 'Once data-governance weaknesses become visible, management often has to defend both privacy compliance and the reliability of downstream uses built on the same data.'
       };
     }
     if (/exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights/.test(text)) {
       return {
-        positioning: 'This points to a combined procurement, compliance, and ESG issue rather than a simple supplier-performance problem.',
-        affected: 'the supplier due-diligence, sourcing-governance, and contract-management path around the affected category',
-        driver: 'weak sub-tier supplier oversight, delayed escalation, or inadequate sourcing due diligence',
-        impact: 'regulatory fines, supplier remediation cost, contract challenge, and stakeholder scrutiny',
-        followOn: 'Once exploitative labor practices are confirmed, management usually has to make rapid supplier, remediation, and disclosure decisions under regulatory and reputational pressure.'
+        positioning: 'This points to a people, workforce, and human-rights issue with procurement and compliance consequences rather than a simple supplier-performance problem.',
+        affected: 'the human-rights, workforce-governance, and supplier-oversight path around the affected workers or labour model',
+        driver: 'weak labour oversight, delayed remediation, or inadequate due diligence over the workforce conditions in scope',
+        impact: 'worker harm, regulatory pressure, remediation cost, and stakeholder scrutiny',
+        followOn: 'Once exploitative labor practices are confirmed, management usually has to make rapid people, supplier, remediation, and disclosure decisions under regulatory and reputational pressure.'
       };
     }
     if (/collud|price fix|bid rig|cartel|anti-?competitive|inflate (?:their |the )?bid|competition law/.test(text)) {
@@ -7727,6 +8126,87 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         followOn: 'If the pattern is not challenged quickly, the organisation can lock in avoidable cost and face questions about how the sourcing decision was governed.'
       };
     }
+    if (/(maverick spend|off-contract|outside approved sourcing|bypassing procurement|enterprise agreement|duplicate licen[cs]es|higher unit pricing|pricing leakage|strategic sourcing threshold|change request directly to the reseller|incumbent vendor|incumbent reseller)/.test(text)) {
+      return {
+        positioning: 'This points to a procurement-governance and framework-discipline issue rather than a fraud or cyber event.',
+        affected: 'the software-sourcing path, enterprise-agreement controls, and local purchase-approval route in scope',
+        driver: 'maverick buying, weak framework discipline, or poor entitlement visibility around centrally managed licenses',
+        impact: 'duplicate spend, weaker pricing outcomes, and lower confidence in software sourcing governance',
+        followOn: 'Once off-contract software buying appears, management usually has to reconcile entitlement positions, validate commercial leakage, and decide how to tighten local buying controls.'
+      };
+    }
+    if (/(rfp|request for proposal|scoring template|whole-life cost|whole life cost|lifecycle operating costs?|technical weighting|energy efficiency|serviceability|spare-parts? lead times|lowest upfront bidder|cooling systems|gulf conditions)/.test(text)) {
+      return {
+        positioning: 'This points to a procurement-method and evaluation-design issue rather than an operational or ESG primary event.',
+        affected: 'the tender-scoring logic, category methodology, and award criteria for the asset class in scope',
+        driver: 'poor weighting of technical and whole-life value factors inside the sourcing method',
+        impact: 'suboptimal supplier award, higher lifecycle cost, and weaker confidence in category expertise',
+        followOn: 'Once a tender method is shown to be weak, management usually has to decide whether the evaluation should be reopened, recalibrated, or rebuilt around better technical criteria.'
+      };
+    }
+    if (/(one lot|single lot|lotting strategy|competition design|single aggregator|specialist suppliers?|specialist provider|niche suppliers?|price benchmarking proved weak|data-labeling services|data-labeling|data labeling|multilingual medical annotation|bundled .*one lot)/.test(text)) {
+      return {
+        positioning: 'This points to a procurement-packaging and competition-design issue rather than a simple supplier-underperformance problem.',
+        affected: 'the lot structure, market-making approach, and supplier optionality built into the sourcing event',
+        driver: 'bundling unlike requirements too broadly and reducing the competitive field before the award was even made',
+        impact: 'weaker bargaining power, reduced optionality, and avoidable dependency on one broad provider',
+        followOn: 'Once lotting and competition design are shown to be weak, management usually has to rethink market structure, bidder participation, and whether the current package can still deliver fair value.'
+      };
+    }
+    if (/(alternative distributor|legal carve-outs|warranty coverage|origin declarations?|support obligations|side emails?|draft appendices|distributor terms|deposit immediately|deposit request|scarce capacity|substitution rights|partially compliant server configurations)/.test(text)) {
+      return {
+        positioning: 'This points to a procurement-and-contract-formation control issue rather than a pure geopolitical or supply-chain primary event.',
+        affected: 'the accelerated sourcing path, distributor commitment terms, and remedy protections around the purchase in scope',
+        driver: 'market pressure compressing diligence and leaving key obligations, support, or substitution rights unresolved at commitment point',
+        impact: 'weaker buyer protection, deposit exposure, and lower confidence that the award secures the goods and remedies the business expects',
+        followOn: 'Once procurement is asked to move quickly under constrained supply, management usually has to decide whether the controls around contract formation are still strong enough to justify commitment.'
+      };
+    }
+    if (/(bundled scope|price validity|evaluation criteria|award strategy|installation change orders|opaque assumptions|shortest lead times|volatile upstream component markets|negotiation approach|commercially sound award)/.test(text)) {
+      return {
+        positioning: 'This points to a tender-structure and award-discipline issue rather than a live supply-chain incident.',
+        affected: 'the bundled-award design, negotiation leverage, and pricing protections around a high-value sourcing event',
+        driver: 'weak tender structure, opaque commercial assumptions, or an evaluation model that can embed avoidable dependence before signature',
+        impact: 'pricing traps, lower leverage, and a risk of making a commercially weak award decision from the outset',
+        followOn: 'Once a high-value tender becomes over-bundled and assumption-heavy, management usually has to test whether the award path still preserves value for money and defensible leverage.'
+      };
+    }
+    if (/(direct negotiation|incumbent-led consortium|incumbent consortium|scope creep|service baselines?|should-cost|should cost|urgent sourcing|emergency sourcing exercise|time is limited|fragmented position)/.test(text)) {
+      return {
+        positioning: 'This points to a procurement-readiness and negotiation-posture issue rather than a business-continuity or supplier-performance primary event.',
+        affected: 'the demand normalization, negotiation basis, and competition posture for the urgent sourcing event in scope',
+        driver: 'compressed timelines, weak scope normalization, and limited should-cost discipline before direct negotiation',
+        impact: 'inflated pricing, weak service constructs, and lower confidence that the enterprise is negotiating from a coherent position',
+        followOn: 'Once urgent sourcing begins without a stable demand baseline, management usually has to choose between slowing down for better procurement readiness or accepting weaker leverage and value-for-money discipline.'
+      };
+    }
+    if (/side letter|return rights|rebate support|quarter-end pressure|backdated certification|duplicate proof|proof-of-performance|fabricated evidence/.test(text)) {
+      return {
+        positioning: 'This points to a fraud and books-and-records issue rather than a routine finance or partner-management problem.',
+        affected: 'the commercial-substance, rebate-evidence, and incentive-governance path around the transaction in scope',
+        driver: 'concealed side arrangements, fabricated supporting evidence, or weak challenge over a strategically protected channel relationship',
+        impact: 'improper payments, misstated performance, investigation pressure, and lower confidence in the deal evidence trail',
+        followOn: 'Once hidden terms or fabricated support emerge, management usually has to test revenue substance, rebate eligibility, and whether employees or partners coordinated the manipulation.'
+      };
+    }
+    if (/ghost workers?|attendance logs?|false certification|site coordinator|related party|undisclosed relationship/.test(text)) {
+      return {
+        positioning: 'This points to certification fraud and related-party abuse rather than only a workforce or site-operations problem.',
+        affected: 'the labour-certification, related-party disclosure, and payment-approval path around the site activity in scope',
+        driver: 'false certification, concealed conflicts of interest, or deliberate inflation of billed labour against weak on-site challenge',
+        impact: 'overpayment, investigation cost, management distrust of site reporting, and wider contractor-governance strain',
+        followOn: 'When attendance evidence and badge data conflict, management usually has to investigate the certification chain, related-party ties, and how the same weakness might affect other contractors.'
+      };
+    }
+    if (/approval thresholds?|kickback|urgency narrative|vendor sequencing/.test(text)) {
+      return {
+        positioning: 'This points to collusive change-order abuse and corruption risk rather than a simple procurement-process weakness.',
+        affected: 'the approval-threshold, change-order, and contractor-steering path around the programme in scope',
+        driver: 'coordinated threshold avoidance, kickback incentives, or manipulated urgency claims that hide the true commercial intent',
+        impact: 'commercial leakage, investigation pressure, and lower confidence in project-governance decisions already taken',
+        followOn: 'Once device trails or payment links suggest collusion, management usually has to re-open approvals, vendor sequencing, and the integrity of seemingly complete project paperwork.'
+      };
+    }
     if (/bankrupt|bankruptcy|insolv|insolven|receivable|bad debt|write[- ]?off|counterparty|credit loss|credit exposure|customer default|client default|collections|collectability|cashflow|working capital|provisioning|provision/.test(text)) {
       return {
         positioning: 'This points to a counterparty-credit and receivables-recovery issue, not a generic compliance breakdown.',
@@ -7734,6 +8214,51 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         driver: 'client insolvency, delayed collections, or weak visibility over concentration and recovery risk',
         impact: 'bad debt write-off, cashflow strain, and pressure on provisioning and reporting judgement',
         followOn: 'Once a major client fails, management usually has to move quickly on collections strategy, provisioning, legal recovery options, and wider concentration exposure.'
+      };
+    }
+    if (/(single approved supplier|single approved source|production line shift|inventory buffers were minimal|minimal buffer inventory|insufficient safety stock|rack enclosures|shipment slipped)/.test(text)) {
+      return {
+        positioning: 'This points to a live supply-chain shortfall rather than only a sourcing concentration concern.',
+        affected: 'the single-source component path, buffer position, and downstream delivery commitments in scope',
+        driver: 'production reallocation, thin safety stock, or weak substitute planning around a live source dependency',
+        impact: 'inbound material delay, activation slippage, and pressure on dependent deployment commitments',
+        followOn: 'Once a single approved source slips and buffers are thin, management usually has to choose between accelerated substitution, re-sequencing work, or accepting visible delivery delay.'
+      };
+    }
+    if (/(allocation priority|allocation rights|fragmented forecast|non-binding forecast|demand aggregation|demand signal|distributor priority shifted|\boem\b|original manufacturer|constrained stock|internal competition)/.test(text)) {
+      return {
+        positioning: 'This points to a supply-assurance and scarcity-allocation issue rather than a procurement-process or geopolitical primary event.',
+        affected: 'the allocation position, OEM protection path, and aggregated demand signal behind the constrained components in scope',
+        driver: 'weak demand aggregation, limited OEM commitment, or distributor reprioritisation under scarcity',
+        impact: 'constrained stock, internal contention across programmes, and lower confidence that critical builds can be supplied on time',
+        followOn: 'Once supply allocation shifts away, management usually has to decide whether to aggregate demand, renegotiate upstream access, or actively ration components across programmes.'
+      };
+    }
+    if (/(buffer hub|deployable inventory|inspection backlog|shipping re-routing|shipping rerouting|repair lead time|service-spares flow|service spares flow|replacement network modules|practically deployable|onward dispatch|field demand)/.test(text)) {
+      return {
+        positioning: 'This points to a supply-chain readiness issue in the spares network rather than a continuity or OT primary event.',
+        affected: 'the buffer-hub, inspection, dispatch, and service-spares path needed to support field demand',
+        driver: 'transit instability, packaging inconsistency, or inspection backlogs that make nominal inventory hard to deploy in practice',
+        impact: 'repair lead-time pressure, weaker service responsiveness, and lower confidence in the support model for deployed assets',
+        followOn: 'Once stock is technically available but not practically deployable, management usually has to stabilise the hub-readiness path before customer commitments start to slip.'
+      };
+    }
+    if (/(port congestion|customs inspection|customs slowdown|missed generator arrival|generator delivery|installation sequence|site energization|critical-path inbound logistics|cross-border equipment flows|contractor teams stranded|commissioning delay)/.test(text)) {
+      return {
+        positioning: 'This points to a critical-path inbound logistics issue rather than an OT or transformation primary event.',
+        affected: 'the inbound-equipment sequence, installation logic, and commissioning path around the site or programme in scope',
+        driver: 'port congestion, customs delay, or fragile sequencing across critical inbound equipment streams',
+        impact: 'commissioning delay, stranded contractor effort, and deferred readiness of the dependent service or site',
+        followOn: 'Once a single inbound stream blocks the installation sequence, management usually has to decide whether to re-sequence the build, absorb contractor idle time, or escalate the cross-border route.'
+      };
+    }
+    if (/(sub-tier supplier|shared sub-tier|board assembler|quality hold|shared dependency|component shortage|sub-tier bottlenecks|shipment windows|material flow|critical-component sequencing|upstream constraint propagation|custom busways|coolant distribution manifolds)/.test(text)) {
+      return {
+        positioning: 'This points to a multi-tier material-flow issue rather than a narrow third-party or procurement primary event.',
+        affected: 'the upstream component path, sub-tier visibility, and sequencing logic for the dependent build or deployment in scope',
+        driver: 'hidden sub-tier dependence, quality holds, or upstream bottlenecks cascading across shipment windows',
+        impact: 'material shortages, resequenced work, and lower confidence that critical inputs will arrive in the order and timing the build requires',
+        followOn: 'Once upstream constraints begin to propagate across tiers, management usually has to decide which builds to prioritise, what visibility can be demanded, and whether the current sequence is still realistic.'
       };
     }
     if (/(supplier|vendor|third[- ]party|third party)/.test(text)
@@ -7756,6 +8281,15 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         followOn: 'Once a critical category becomes concentrated, continuity, pricing power, and contract performance usually deteriorate together.'
       };
     }
+    if (/responsible ai|model risk|model drift|hallucination|algorithmic bias|training data|large language model|llm assistant|ai assistant|copilot|agentic|tool chaining|abstention|calibration|benchmark contamination|release gating|generalisation|generalization|retraining|human in the loop|unsafe output|forecasting model|capacity planning model|recalibration|translation bias|multilingual validation|pilot validation|deployment readiness|machine-translated/.test(text)) {
+      return {
+        positioning: 'This points to an AI and model-governance issue rather than a generic compliance, cyber, or operational event.',
+        affected: 'the AI-enabled workflow, model-evaluation path, and human-escalation controls around the use case in scope',
+        driver: 'weak validation, poor calibration or abstention, unsafe agentic behavior, or monitoring gaps after deployment',
+        impact: 'unsafe decisions, false confidence, remediation work, and lower trust in AI-enabled operations',
+        followOn: 'Once AI behavior is shown to be unreliable, management usually has to slow rollout, tighten evaluation and fallback controls, and decide where human review must remain mandatory.'
+      };
+    }
     if (/(downtime|outage|service disruption|operational disruption|availability|unavailable|aging infrastructure|ageing infrastructure|legacy infrastructure|human error|manual error|platform instability|system instability)/.test(text)
       && !/(ransom|malware|phish|identity|credential|breach|exfil|misconfigur|privileged|compromise)/.test(text)) {
       return {
@@ -7766,16 +8300,16 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         followOn: 'Once downtime becomes visible, management usually has to stabilise the service, manage customer impact, and decide whether deeper resilience or infrastructure remediation is needed.'
       };
     }
-    if (/geopolitical|market access|sanctions|export control|entity list|sovereign|cross-border restriction|tariff/.test(text)) {
+    if (/geopolitical|market access|sanctions|export control|entity list|sovereign|cross-border restriction|tariff|locali[sz]ation|foreign influence|ownership transparency|admissibility|technology[- ]origin|public[- ]sector screening|in-country autonomy|local board representation|regional platform model|sanctions spillover|correspondent bank|cargo insurance|travel approval|export-finance/.test(text)) {
       return {
         positioning: 'This points to a geopolitical and market-access issue rather than only a narrow regulatory problem.',
-        affected: 'the cross-border operating path, supplier access, and market-entry assumptions behind the initiative in scope',
-        driver: 'sovereign restrictions, sanctions, export controls, or tightened approval conditions',
-        impact: 'delayed execution, supply disruption, stranded investment, and management reprioritisation',
-        followOn: 'Once geopolitical restrictions tighten, management often has to rethink suppliers, delivery timing, and whether the original business case is still realistic.'
+        affected: 'the cross-border operating path, public-sector admissibility, supplier access, and market-entry assumptions behind the initiative in scope',
+        driver: 'sovereign restrictions, sanctions spillover, localisation demands, export controls, or tightened approval conditions',
+        impact: 'delayed execution, supply disruption, stranded investment, bid inadmissibility, and management reprioritisation',
+        followOn: 'Once geopolitical restrictions tighten, management often has to rethink suppliers, ownership or delivery structure, timing, and whether the original business case is still realistic.'
       };
     }
-    if (/physical security|facility breach|badge control|perimeter|executive protection|visitor management|site intrusion/.test(text)) {
+    if (/physical security|facility breach|badge control|perimeter|executive protection|visitor management|site intrusion|unbadged individual|restricted office area|door on bypass|visitor escort|temporary badge privileges|event footprint|legal war room|catering access windows|unauthorized movement|fence-line alarms?|camera blind spots?|temporary gate protocol|after-hours service access|prototype facility|prototype labs?|restricted zones?|executive movement|contractor badges?|loading bay|secure cage|vehicle screening|unsupervised access|camera sight lines/.test(text)) {
       return {
         positioning: 'This points to a physical-security and facilities-control issue rather than a purely digital incident.',
         affected: 'the site-access, perimeter, visitor-management, and executive-protection path around the location in scope',
@@ -7784,7 +8318,7 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         followOn: 'Once physical controls are shown to be weak, management usually has to stabilise access, reassess site posture, and decide whether broader facilities controls need urgent remediation.'
       };
     }
-    if (/ot\b|industrial control|ics|scada|plant network|site systems|control room/.test(text)) {
+    if (/ot\b|industrial control|ics|scada|plant network|site systems|control room|edge computing room|temperature alarms?|power fluctuation|airflow settings|workload throttling|edge gateways?|heatwave|power quality fluctuations?|telemetry gaps?|manual field verification|timing mismatch|edge controller|configuration baseline|false rejects?|supervised mode|failover logic|backup power transfer|restart priorities|regional grid disturbance|gateway clocks?|telemetry replay|control confirmations?|state reconstruction|edge inference|actuator timing|reject gate|restart instability/.test(text)) {
       return {
         positioning: 'This points to an OT and site-resilience issue that sits between cyber, operations, and safety.',
         affected: 'the industrial-control, telemetry, and site-recovery path around the affected operating environment',
@@ -7793,13 +8327,13 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
         followOn: 'Once site-control confidence drops, management usually has to choose between degraded operation, manual fallback, or shutdown while recovery is brought back under control.'
       };
     }
-    if (/workforce|labou?r|staffing|fatigue|attrition|strike|worker welfare/.test(text)) {
+    if (/workforce|labou?r|staffing|fatigue|attrition|strike|worker welfare|onboarding|employee experience|succession planning|internal mobility|role progression|compensation disparities|contingent specialists|promotion pathways|mixed employment model|critical knowledge dependencies/.test(text)) {
       return {
         positioning: 'This points to a people and workforce resilience issue rather than only a generic HSE or HR concern.',
-        affected: 'the staffing model, contractor coverage, and shift-critical control path around the work in scope',
-        driver: 'fatigue, attrition, weak workforce planning, or delayed escalation of labour and welfare pressure',
-        impact: 'operational strain, wellbeing concern, and higher likelihood of error or unsafe work conditions',
-        followOn: 'Once workforce pressure is visible, management usually has to make rapid decisions about staffing, safe coverage, contractor oversight, and whether work should continue as planned.'
+        affected: 'the staffing model, capability architecture, and employee-experience path around the work in scope',
+        driver: 'attrition, weak workforce planning, uneven development pathways, or a policy model that no longer fits how specialist teams operate',
+        impact: 'retention pressure, capability fragility, and lower confidence that critical work can scale sustainably',
+        followOn: 'Once workforce weakness is visible, management usually has to make rapid decisions about staffing, progression, policy exceptions, knowledge transfer, and whether the operating model is still sustainable.'
       };
     }
     return null;
@@ -7845,14 +8379,14 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
       followOn: 'This kind of integrity event usually exposes how easy it was to bypass controls, collude, or hide unusual activity inside trusted workflows.'
     },
     'legal-contract': {
-      affected: 'the contract, indemnity, licensing, or rights position in scope',
+      affected: 'the contract, acceptance, indemnity, licensing, or rights position in scope',
       impact: 'legal cost, delivery delay, and pressure on commitments that depend on the disputed relationship',
-      followOn: 'These scenarios usually become more serious when governance over changes, obligations, or ownership is weak.'
+      followOn: 'These scenarios usually become more serious when governance over changes, obligations, acceptance criteria, or ownership is weak.'
     },
     geopolitical: {
-      affected: 'the cross-border operating plan, supplier access, or market-entry path in scope',
-      impact: 'delayed execution, supplier disruption, and value erosion as policy conditions tighten',
-      followOn: 'This kind of geopolitical event typically weakens timing, optionality, and management confidence in the original plan.'
+      affected: 'the cross-border operating plan, public-sector admissibility, supplier access, or market-entry path in scope',
+      impact: 'delayed execution, supplier disruption, bid inadmissibility, and value erosion as policy conditions tighten',
+      followOn: 'This kind of geopolitical event typically weakens timing, optionality, and management confidence in the original plan, especially when localisation or foreign-influence filters tighten.'
     },
     strategic: {
       affected: 'the strategic objective, programme, or operating model in scope',
@@ -7886,9 +8420,9 @@ function composeGuidedNarrative(guidedInput = {}, { lensLabel = '', lensKey = ''
       followOn: 'People and workforce issues often intensify quickly because staffing pressure, supervision, and welfare concerns amplify each other.'
     },
     'investment-jv': {
-      affected: 'the transaction thesis, integration path, or shared governance model in scope',
-      impact: 'value erosion, delayed synergy, and executive pressure to reset assumptions',
-      followOn: 'These scenarios usually expose whether the deal logic, integration plan, and control assumptions were strong enough to justify the investment.'
+      affected: 'the transaction thesis, JV vehicle, or shared governance model in scope',
+      impact: 'value erosion, partner strain, delayed synergy, and executive pressure to reset assumptions or restructure the vehicle',
+      followOn: 'These scenarios usually expose whether the deal logic, governance rights, and post-close control assumptions were strong enough to justify the investment.'
     },
     'transformation-delivery': {
       affected: 'the programme roadmap, milestone control, or dependency path in scope',
@@ -10633,6 +11167,22 @@ function renderHelpPage() {
           `
         }),
         renderHelpDisclosure('context', {
+          title: 'How the function and BU context grounding banner works',
+          summary: 'Use the banner to tell whether retained-context AI Assist is actually inheriting saved context or still writing generic prose.',
+          body: `
+            ${renderHelpMiniCards([
+              { title: 'Grounded in saved context', body: 'The draft is clearly reflecting saved BU or organisation context and is usually a reasonable starting point to review and tighten.' },
+              { title: 'Partly grounded', body: 'Some saved context is showing through, but the draft is still incomplete or relying too much on generic language or uploaded material alone.' },
+              { title: 'Generic draft warning', body: 'The saved context is too thin or is not clearly reflected in the draft. Treat this as a cue to enrich the retained context before saving it downstream.' }
+            ])}
+            ${renderHelpCallout({
+              tone: 'trust',
+              title: 'Practical rule',
+              body: 'Polished wording is not enough. If the grounding banner is weak, improve the saved BU, function, or organisation context, or add better supporting source material, before trusting the draft.'
+            })}
+          `
+        }),
+        renderHelpDisclosure('context', {
           title: 'How live AI and fallback behave in pilot',
           summary: 'Pilot-quality AI requires a verified live path; fallback keeps the workflow moving but should be treated differently.',
           body: `
@@ -10817,6 +11367,22 @@ function renderHelpPage() {
           summary: 'AI assists; it does not certify.',
           body: `
             <p class="help-body-copy">Use AI suggestions as a working draft. Keep what matches the business reality, edit what does not, and treat references as support for challenge, not as automatic proof that the estimate is correct. Provenance and citations help you understand how the current draft was assembled.</p>
+          `
+        }),
+        renderHelpDisclosure('confidence', {
+          title: 'How citation age and freshness signals work',
+          summary: 'Use age warnings as challenge cues, not as decorative metadata.',
+          body: `
+            ${renderHelpMiniCards([
+              { title: 'Citation age labels', body: 'Some citations now show when a source is old. Older sources can still be useful, but they should usually be treated as directional support rather than current proof.' },
+              { title: 'Official source links', body: 'Where the platform has a verified public source page, the citation title can open the external source for review.' },
+              { title: 'Assessment freshness banners', body: 'Older saved assessments can show a freshness warning when reopened. That is a prompt to decide whether the scenario should be rerun before management relies on it.' }
+            ])}
+            ${renderHelpCallout({
+              tone: 'best',
+              title: 'What to do when freshness is weak',
+              body: 'If the source is stale, the benchmark is old, or the saved assessment is no longer fresh, use that signal to challenge whether the assumptions and current business conditions still hold before escalation.'
+            })}
           `
         })
       ]

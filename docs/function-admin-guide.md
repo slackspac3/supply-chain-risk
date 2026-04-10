@@ -100,6 +100,15 @@ Your settings matter because function context shapes:
 Good practice:
 - keep the function context specific and current
 - update it when the control environment, operating model, or priorities change
+- when you use `AI Assist` on function context, read the grounding banner before saving:
+  - `Grounded in saved context` means the draft is clearly inheriting saved BU or organisation context
+  - `Partly grounded` means some saved context is showing through, but the draft still needs review
+  - `Generic draft warning` means the draft is still too generic or the saved context is too thin
+
+If the grounding banner is weak:
+- enrich the function or BU context first
+- check whether the relevant document library coverage exists
+- do not save generic function context just because the prose sounds polished
 
 ## How AI should be treated
 
@@ -110,7 +119,7 @@ Practical rule:
 If the output is weak:
 1. check the scenario wording
 2. check the function context
-3. check the confidence and evidence posture
+3. check the confidence, evidence, and freshness posture
 4. then decide whether the issue is input quality, context quality, or something that needs wider review
 
 ## Pilot boundaries

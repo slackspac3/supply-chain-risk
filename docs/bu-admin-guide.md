@@ -103,6 +103,8 @@ Your settings matter because BU context shapes:
 Good practice:
 - keep BU context short, specific, and current
 - make sure function summaries below the BU still align with the real operating model
+- use the BU and function-context `AI Assist` tools as drafting aids, then check the grounding banner before saving
+- if the banner says the draft is generic or only partly grounded, improve the saved context or the underlying document coverage before rolling it out downstream
 
 ## How AI should be treated
 
@@ -113,7 +115,7 @@ Practical rule:
 If the output is weak:
 1. check whether the scenario itself is coherent
 2. check whether BU context is current
-3. check confidence and evidence posture
+3. check confidence, evidence, and freshness posture
 4. then decide whether the issue is local, contextual, or worth escalating
 
 ## Pilot boundaries

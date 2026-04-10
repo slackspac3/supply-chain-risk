@@ -18,6 +18,7 @@ Use the global-admin workbench to keep the platform credible for everyone else.
 Good use of this role:
 - verify the live AI path before demos, pilot reviews, and sign-off sessions
 - keep the document library and company context current
+- keep jurisdiction-specific baseline context current where it materially shapes drafting and retrieval
 - watch shared AI feedback quality before changing tuning
 - manage access, defaults, and inherited operating context
 - use preview and oversight to understand downstream impact
@@ -49,6 +50,12 @@ What not to do:
 - `#/help`
   - role-aware help page for the current signed-in user
 
+Current baseline areas that deserve explicit review:
+- UAE company baselines that should not collapse into one generic label
+- ADGM holding-company obligations where they genuinely apply
+- continuity and disaster-recovery references such as NCEMA, not only ISO continuity guidance
+- official public source links and age labels for citeable documents
+
 ## Suggested operating rhythm
 
 ### Before a demo, review, or sign-off session
@@ -73,6 +80,7 @@ What not to do:
 ### Before changing shared AI tuning
 - Check company context and document coverage first.
 - Confirm the issue is not caused by stale defaults, weak grounding, or bad user inputs.
+- If BU or function admins are saving context with `Generic draft warning`, fix the inherited context or document coverage before retuning model behavior.
 - Change one parameter at a time:
   - alignment priority
   - draft style
@@ -95,6 +103,8 @@ What to look at:
   - whether the issue is wrong-domain drift, generic writing, missed risks, unrelated risks, weak citations, or something else
 - shared-learning thresholds
   - whether the signal is strong enough to promote beyond one user
+- grounding signals in BU and function context builders
+  - whether the system is telling users that the saved context is actually showing up in the draft
 
 Good tuning discipline:
 - use `strict` alignment when the platform is drifting into adjacent lenses too often
@@ -116,6 +126,7 @@ This matters because a weak output can come from:
 - poor prompt input
 - stale shared context
 - thin document grounding
+- old or weakly maintained citations
 - local fallback mode
 - real model drift
 

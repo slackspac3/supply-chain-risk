@@ -71,6 +71,9 @@ Use Step 1 well:
 - keep the wording simple and specific
 - remove shortlist risks that do not belong in this event path
 - rate the draft or shortlist if the AI output is weak
+- read the grounding cues before you carry the draft forward:
+  - stronger grounding means the scenario is clearly tied to saved context and retrieved references
+  - weaker grounding means the draft still needs more challenge or evidence
 
 ### 3. Step 2: Refine the scenario
 
@@ -100,6 +103,16 @@ What to do:
 Do not:
 - force precise numbers without a reason
 - use advanced controls just because they are available
+
+## Grounding and freshness signals
+
+The product now shows more explicit trust signals.
+
+What to watch:
+- Step 1 and results grounding cues tell you whether the current scenario is strongly grounded, lightly grounded, or still relying mainly on working judgment.
+- Citation labels can show when a source is old. If a citation says it was last reviewed years ago, use it as directional support rather than current proof.
+- Some citations now open to an official public source page when one exists.
+- If you reopen an older saved assessment, the results page may warn that the run is stale. Treat that as a prompt to reassess before escalating.
 
 ## Review and results
 
@@ -149,6 +162,7 @@ What that means:
 If AI looks weak:
 - improve the scenario wording
 - check that the event path is clear
+- check whether the grounding and evidence cues still look thin
 - use the feedback controls
 - rerun only if the input actually changed
 

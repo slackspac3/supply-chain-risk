@@ -61,27 +61,27 @@ const RAGService = (() => {
   const CONCEPT_RULES = [
     {
       key: 'procurement-governance',
-      patterns: ['procurement', 'sourcing', 'tender', 'bid', 'bid rigging', 'contract award', 'supplier selection', 'purchasing', 'purchase order'],
-      docTags: ['procurement', 'sourcing', 'governance', 'compliance'],
-      docIds: ['doc-iso20400-29', 'doc-uncitral-proc-46', 'doc-worldbank-proc-47', 'doc-iso37001-57']
+      patterns: ['procurement', 'sourcing', 'tender', 'bid', 'bid rigging', 'contract award', 'supplier selection', 'purchasing', 'purchase order', 'maverick spend', 'off-contract', 'enterprise agreement', 'duplicate licenses', 'pricing leakage', 'rfp scoring', 'scoring template', 'whole-life cost', 'whole life cost', 'technical weighting', 'lotting strategy', 'competition design', 'single aggregator', 'specialist suppliers', 'distributor terms', 'deposit request', 'origin declaration', 'substitution rights', 'bundled scope', 'price validity', 'award strategy', 'direct negotiation', 'incumbent consortium', 'should-cost', 'service baselines'],
+      docTags: ['procurement', 'sourcing', 'governance', 'compliance', 'tender-design', 'commercial-governance'],
+      docIds: ['doc-iso20400-29', 'doc-uncitral-proc-46', 'doc-worldbank-proc-47', 'doc-iso37001-57', 'doc-proc-software-framework-148', 'doc-proc-tender-wholelife-149', 'doc-proc-lotting-150', 'doc-proc-constrained-contracting-151', 'doc-proc-bundled-award-152', 'doc-proc-direct-negotiation-153']
     },
     {
       key: 'supply-chain-dependency',
-      patterns: ['supply chain', 'sub-tier', 'sub tier', 'upstream', 'logistics', 'inventory', 'shipment', 'single source', 'sole source', 'concentration risk'],
+      patterns: ['supply chain', 'sub-tier', 'sub tier', 'upstream', 'logistics', 'inventory', 'shipment', 'single source', 'single approved supplier', 'single approved source', 'sole source', 'concentration risk', 'production line shift', 'inventory buffer', 'safety stock', 'rack enclosures', 'quality hold', 'component shortage', 'shipment windows', 'material flow', 'port congestion', 'customs inspection', 'installation sequence', 'allocation priority', 'allocation rights', 'oem', 'fragmented forecast', 'buffer hub', 'deployable inventory', 'service spares', 'repair lead time'],
       docTags: ['supply-chain', 'third-party', 'procurement', 'business-continuity'],
-      docIds: ['doc-3p-08', 'doc-iso28000-23', 'doc-nist-800161-53', 'doc-worldbank-proc-47']
+      docIds: ['doc-3p-08', 'doc-iso28000-23', 'doc-nist-800161-53', 'doc-supply-single-source-143', 'doc-supply-subtier-144', 'doc-supply-logistics-145', 'doc-supply-allocation-146', 'doc-supply-spares-147']
     },
     {
       key: 'human-rights-diligence',
       patterns: ['human rights', 'modern slavery', 'forced labour', 'forced labor', 'exploitative labour', 'exploitative labor', 'child labour', 'child labor', 'labour practices', 'labor practices', 'worker welfare', 'recruitment fees', 'passport retention', 'withheld passports', 'labour broker', 'labor broker', 'remediation', 'worker grievance'],
-      docTags: ['human-rights', 'procurement', 'supply-chain', 'esg', 'compliance'],
-      docIds: ['doc-oecd-rbc-48', 'doc-ungp-49', 'doc-iso20400-29', 'doc-ilo-osh-54']
+      docTags: ['human-rights', 'procurement', 'supply-chain', 'esg', 'compliance', 'people-workforce'],
+      docIds: ['doc-oecd-rbc-48', 'doc-ungp-49', 'doc-iso20400-29', 'doc-ilo-osh-54', 'doc-sa8000-61', 'doc-internal-esg-humanrights-83']
     },
     {
       key: 'anti-bribery-integrity',
-      patterns: ['bribery', 'corruption', 'kickback', 'kick back', 'collusion', 'conflict of interest', 'facilitation payment', 'gifts and entertainment', 'gift and entertainment', 'hospitality', 'sponsored travel', 'public official', 'intermediary onboarding'],
+      patterns: ['bribery', 'corruption', 'kickback', 'kick back', 'collusion', 'conflict of interest', 'facilitation payment', 'gifts and entertainment', 'gift and entertainment', 'hospitality', 'sponsored travel', 'public official', 'intermediary onboarding', 'intermediary', 'success fee', 'opaque introductions', 'books and records', 'change-order steering', 'approval thresholds', 'urgency narrative'],
       docTags: ['compliance', 'procurement', 'anti-bribery', 'governance'],
-      docIds: ['doc-iso37001-57', 'doc-worldbank-proc-47', 'doc-uncitral-proc-46', 'doc-internal-compliance-abc-85', 'doc-internal-compliance-thirdparty-87']
+      docIds: ['doc-iso37001-57', 'doc-worldbank-proc-47', 'doc-uncitral-proc-46', 'doc-internal-compliance-abc-85', 'doc-internal-compliance-thirdparty-87', 'doc-fraud-threshold-130']
     },
     {
       key: 'speak-up-investigation',
@@ -109,9 +109,9 @@ const RAGService = (() => {
     },
     {
       key: 'business-partner-integrity',
-      patterns: ['business partner due diligence', 'business partner code of conduct', 'beneficial ownership', 'beneficial owner', 'red flags', 'approved through escalation', 'ongoing monitoring', 'partner onboarding shortcut', 'third-party screening'],
+      patterns: ['business partner due diligence', 'business partner code of conduct', 'beneficial ownership', 'beneficial owner', 'red flags', 'approved through escalation', 'ongoing monitoring', 'partner onboarding shortcut', 'third-party screening', 'side letter', 'return rights', 'rebate support'],
       docTags: ['third-party', 'compliance', 'due-diligence', 'governance'],
-      docIds: ['doc-iso37301-26', 'doc-iso37001-57', 'doc-internal-compliance-thirdparty-87']
+      docIds: ['doc-iso37301-26', 'doc-iso37001-57', 'doc-internal-compliance-thirdparty-87', 'doc-fraud-channel-128']
     },
     {
       key: 'insider-information-governance',
@@ -139,27 +139,27 @@ const RAGService = (() => {
     },
     {
       key: 'ai-governance',
-      patterns: ['responsible ai', 'model risk', 'ai governance', 'model drift', 'hallucination', 'algorithmic bias', 'ai act', 'training data'],
+      patterns: ['responsible ai', 'model risk', 'ai governance', 'model drift', 'hallucination', 'algorithmic bias', 'ai act', 'training data', 'large language model', 'llm assistant', 'ai assistant', 'policy copilot', 'agentic orchestration', 'unsafe tool chaining', 'authority overreach', 'multilingual validation', 'translation bias', 'abstention', 'calibration', 'benchmark contamination', 'release gating', 'generalization', 'generalisation', 'retraining', 'human in the loop', 'forecasting model', 'capacity planning model', 'recalibration', 'pilot validation', 'deployment readiness', 'machine-translated'],
       docTags: ['ai-model-risk', 'governance', 'compliance', 'data-governance'],
-      docIds: ['doc-iso42001-62', 'doc-iso23894-63', 'doc-nist-airmf-64', 'doc-eu-ai-act-65', 'doc-sr11-7-66']
+      docIds: ['doc-iso42001-62', 'doc-iso23894-63', 'doc-nist-airmf-64', 'doc-eu-ai-act-65', 'doc-sr11-7-66', 'doc-ai-multilingual-validation-120', 'doc-model-monitoring-drift-121', 'doc-agentic-ai-control-122', 'doc-ai-calibration-abstention-123', 'doc-ai-benchmark-release-124']
     },
     {
       key: 'data-governance',
-      patterns: ['data governance', 'data lineage', 'data quality', 'retention', 'purpose limitation', 'consent', 'data residency', 'master data', 'lawful basis', 'records retained too long', 'transfer safeguards', 'troubleshooting logs', 'overseas diagnostics', 'privacy by design', 'dpia', 'data protection impact assessment', 'privacy impact assessment', 'data subject rights', 'subject access request', 'right to erasure', 'rectification request', 'portability request', 'record of processing activities', 'ropa', 'controller', 'processor', 'data processing agreement', 'supervisory authority', 'breach notification', '72-hour notification', 'dpo', 'patient data', 'medical records', 'health data', 'special category data', 'biometric data', 'uae health data', 'adgm data protection'],
+      patterns: ['data governance', 'data lineage', 'data quality', 'data retention', 'retention schedule', 'purpose limitation', 'consent', 'data residency', 'master data', 'lawful basis', 'records retained too long', 'transfer safeguards', 'troubleshooting logs', 'overseas diagnostics', 'privacy by design', 'dpia', 'data protection impact assessment', 'privacy impact assessment', 'data subject rights', 'subject access request', 'right to erasure', 'rectification request', 'portability request', 'record of processing activities', 'ropa', 'data controller', 'data processor', 'controller-processor', 'data processing agreement', 'supervisory authority', 'breach notification', '72-hour notification', 'dpo', 'patient data', 'medical records', 'health data', 'special category data', 'biometric data', 'uae health data', 'adgm data protection', 'de-identification', 'deidentification', 'data minimization', 'data minimisation', 'secondary use', 'lineage metadata', 'free-text fields', 'live identifiers', 'passport details', 'medical appointment references', 'health references', 'identity graph', 'identity views', 'suppression flags', 'record resurrection', 'deletion propagation', 'derived datasets', 'offshore support queue', 'development environment', 'staging pipeline', 'data marketplace'],
       docTags: ['data-governance', 'privacy', 'compliance', 'controls'],
-      docIds: ['doc-iso27701-19', 'doc-gdpr-06', 'doc-data-05', 'doc-cls-07', 'doc-hipaa-39', 'doc-internal-privacy-96', 'doc-internal-privacy-health-97']
+      docIds: ['doc-iso27701-19', 'doc-gdpr-06', 'doc-data-05', 'doc-cls-07', 'doc-hipaa-39', 'doc-internal-privacy-96', 'doc-internal-privacy-health-97', 'doc-adgm-dp-101', 'doc-data-minimization-125', 'doc-purpose-lineage-126', 'doc-deletion-suppression-127']
     },
     {
       key: 'fraud-integrity',
-      patterns: ['financial crime', 'money laundering', 'kickback', 'bribery', 'corruption', 'integrity breakdown', 'embezzlement'],
+      patterns: ['financial crime', 'money laundering', 'kickback', 'bribery', 'corruption', 'integrity breakdown', 'embezzlement', 'invoice splitting', 'threshold avoidance', 'approval threshold', 'side letter', 'return rights', 'rebate support', 'quarter-end pressure', 'ghost workers', 'attendance logs', 'false certification', 'related party', 'intermediary', 'success fee', 'opaque introductions', 'books and records', 'urgency narrative', 'rebate claims', 'backdated certifications', 'duplicate proof', 'proof-of-performance', 'fabricated evidence'],
       docTags: ['fraud-integrity', 'financial', 'compliance', 'anti-bribery'],
-      docIds: ['doc-iso37001-57', 'doc-uae-amlcft-12', 'doc-coso-ic-33']
+      docIds: ['doc-iso37001-57', 'doc-uae-amlcft-12', 'doc-coso-ic-33', 'doc-fraud-channel-128', 'doc-fraud-labor-129', 'doc-fraud-threshold-130', 'doc-fraud-evidence-131']
     },
     {
       key: 'legal-contract',
-      patterns: ['contract dispute', 'indemnity', 'licensing dispute', 'intellectual property', 'ip ownership', 'litigation', 'terms breach'],
-      docTags: ['legal-contract', 'compliance', 'procurement', 'governance'],
-      docIds: ['doc-iso37301-26', 'doc-uncitral-proc-46', 'doc-worldbank-proc-47']
+      patterns: ['contract dispute', 'indemnity', 'licensing dispute', 'intellectual property', 'ip ownership', 'litigation', 'terms breach', 'rights and remedies', 'service credits', 'confidentiality clause', 'license scope', 'licence scope', 'affiliate-use rights', 'affiliate use rights', 'service data', 'derived insights', 'step-in rights', 'liability cap', 'liability caps', 'uncapped indemnity', 'technical equivalence', 'acceptance certificate', 'acceptance criteria', 'statement of work', 'schedule hierarchy', 'annex conflict', 'substitute performance', 'consortium agreement', 'flow-down terms', 'local-court exclusivity', 'termination rights'],
+      docTags: ['legal-contract', 'contract-governance', 'licensing', 'acceptance', 'claims', 'data-rights', 'consortium'],
+      docIds: ['doc-contract-governance-67', 'doc-contract-clauses-108', 'doc-licensing-rights-109', 'doc-data-rights-contract-110', 'doc-dispute-notice-111', 'doc-consortium-flowdown-112', 'doc-unidroit-contracts-113', 'doc-cisg-114', 'doc-wipo-ict-115']
     },
     {
       key: 'geopolitical-market-access',
@@ -169,27 +169,27 @@ const RAGService = (() => {
     },
     {
       key: 'ot-resilience',
-      patterns: ['operational technology', 'industrial control', 'ics', 'scada', 'plant network', 'site systems', 'ot security'],
-      docTags: ['operational', 'cyber', 'hse', 'facilities', 'business-continuity'],
-      docIds: ['doc-iec62443-52', 'doc-uae-fire-life-45']
+      patterns: ['operational technology', 'industrial control', 'ics', 'scada', 'plant network', 'site systems', 'ot security', 'edge computing room', 'temperature alarms', 'power fluctuation', 'airflow settings', 'workload throttling', 'edge gateways', 'heatwave', 'power quality fluctuations', 'telemetry gaps', 'manual field verification', 'timing mismatch', 'edge controller', 'configuration baseline', 'older configuration baseline', 'false rejects', 'supervised mode', 'failover logic', 'backup power transfer', 'restart priorities', 'regional grid disturbance', 'gateway clocks', 'telemetry replay', 'control confirmations', 'connectivity loss', 'state reconstruction', 'edge inference', 'actuator timing', 'reject gate', 'restart instability'],
+      docTags: ['ot-resilience', 'operational', 'facilities', 'engineering', 'critical-site', 'telemetry'],
+      docIds: ['doc-iec62443-52', 'doc-ot-edge-environment-135', 'doc-ot-telemetry-recovery-136', 'doc-ot-failover-sequencing-137', 'doc-ot-vision-sync-138']
     },
     {
       key: 'physical-security',
-      patterns: ['physical security', 'executive protection', 'badge control', 'visitor management', 'perimeter breach', 'facility intrusion'],
-      docTags: ['physical-security', 'facilities', 'business-continuity', 'hse'],
-      docIds: ['doc-uae-fire-life-45', 'doc-iso22301-20', 'doc-nfpa1600-32']
+      patterns: ['physical security', 'executive protection', 'badge control', 'visitor management', 'perimeter breach', 'facility intrusion', 'unbadged individual', 'restricted office area', 'door on bypass', 'visitor escort', 'temporary badge privileges', 'event footprint', 'legal war room', 'catering access windows', 'unauthorized movement', 'fence-line alarms', 'camera blind spots', 'temporary gate protocol', 'after-hours service access', 'prototype facility', 'restricted zones', 'executive movement', 'contractor badges', 'loading bay', 'secure cage', 'vehicle screening', 'unsupervised access', 'camera sight lines'],
+      docTags: ['physical-security', 'facilities', 'executive-protection', 'restricted-site', 'visitor-management'],
+      docIds: ['doc-physical-security-69', 'doc-physical-event-132', 'doc-physical-perimeter-133', 'doc-physical-staging-134', 'doc-uae-fire-life-45']
     },
     {
       key: 'people-workforce',
-      patterns: ['workforce resilience', 'worker welfare', 'staffing pressure', 'labour rights', 'human rights', 'contractor welfare', 'fatigue'],
-      docTags: ['people-workforce', 'human-rights', 'esg', 'hse', 'operational'],
-      docIds: ['doc-ungp-49', 'doc-oecd-rbc-48', 'doc-ilo-osh-54', 'doc-sa8000-61']
+      patterns: ['workforce resilience', 'worker welfare', 'staffing pressure', 'labour rights', 'human rights', 'contractor welfare', 'fatigue', 'voluntary attrition', 'internal transfer requests', 'role progression', 'weak onboarding', 'limited coaching', 'weekend bid work', 'return-to-office', 'return to office', 'return-to-campus', 'return to campus', 'employee experience', 'compensation disparities', 'internal mobility', 'acceptance rates', 'contingent specialists', 'succession planning', 'learning access', 'promotion pathways', 'critical knowledge dependencies', 'mixed employment model'],
+      docTags: ['people-workforce', 'human-rights', 'esg', 'hse', 'operational', 'employee-experience', 'talent-retention', 'succession-planning'],
+      docIds: ['doc-ungp-49', 'doc-oecd-rbc-48', 'doc-ilo-osh-54', 'doc-sa8000-61', 'doc-workforce-retention-139', 'doc-workforce-policy-140', 'doc-workforce-equity-141', 'doc-workforce-architecture-142']
     },
     {
       key: 'investment-integration',
-      patterns: ['m&a', 'merger integration', 'joint venture', 'deal thesis', 'synergy delivery', 'post-merger integration'],
-      docTags: ['investment-jv', 'strategic', 'financial', 'governance'],
-      docIds: ['doc-coso-erm-25', 'doc-iso31000-24', 'doc-iso31010-50']
+      patterns: ['m&a', 'merger integration', 'joint venture', 'deal thesis', 'synergy delivery', 'post-merger integration', 'minority investment', 'value-creation thesis', 'quality of earnings', 'controlling stake', 'reserved matters', 'capital calls', 'valuation reset'],
+      docTags: ['investment-jv', 'deal-thesis', 'joint-venture', 'quality-of-earnings', 'governance'],
+      docIds: ['doc-investment-jv-70', 'doc-minority-investment-116', 'doc-qoe-control-117', 'doc-jv-governance-118', 'doc-jv-restructuring-119', 'doc-coso-erm-25', 'doc-iso31000-24', 'doc-iso31010-50']
     },
     {
       key: 'transformation-delivery',
@@ -214,27 +214,27 @@ const RAGService = (() => {
   const TOPIC_RULES = [
     {
       key: 'privacy',
-      patterns: ['privacy', 'personal data', 'pii', 'phi', 'data protection', 'gdpr', 'pdpl', 'data subject', 'biometric', 'health data', 'patient data', 'medical records', 'privacy by design', 'dpia', 'data protection impact assessment', 'subject access request', 'record of processing activities', 'controller', 'processor', 'breach notification', 'supervisory authority', 'adgm', 'uae health data'],
+      patterns: ['privacy', 'personal data', 'pii', 'phi', 'data protection', 'gdpr', 'pdpl', 'data subject', 'biometric', 'health data', 'patient data', 'medical records', 'privacy by design', 'dpia', 'data protection impact assessment', 'subject access request', 'record of processing activities', 'data controller', 'data processor', 'controller-processor', 'data processing agreement', 'breach notification', 'supervisory authority', 'adgm', 'uae health data'],
       docTags: ['privacy', 'data-protection', 'pims'],
       docIds: ['doc-iso27018-18', 'doc-iso27701-19', 'doc-data-05', 'doc-gdpr-06', 'doc-cls-07', 'doc-hipaa-39', 'doc-internal-privacy-96', 'doc-internal-privacy-health-97']
     },
     {
       key: 'ai-model-risk',
-      patterns: ['responsible ai', 'model risk', 'ai governance', 'algorithmic bias', 'model drift', 'hallucination', 'training data', 'ai act'],
+      patterns: ['responsible ai', 'model risk', 'ai governance', 'algorithmic bias', 'model drift', 'hallucination', 'training data', 'ai act', 'large language model', 'llm assistant', 'ai assistant', 'copilot', 'agentic', 'tool chaining', 'abstention', 'calibration', 'benchmark contamination', 'release gating', 'generalization', 'generalisation', 'retraining', 'human in the loop', 'multilingual validation', 'translation bias', 'unsafe output', 'forecasting model', 'capacity planning model', 'recalibration', 'pilot validation', 'deployment readiness', 'machine-translated', 'authority overreach', 'red-team'],
       docTags: ['ai-model-risk', 'governance', 'compliance', 'data-governance'],
-      docIds: ['doc-iso42001-62', 'doc-iso23894-63', 'doc-nist-airmf-64', 'doc-eu-ai-act-65', 'doc-sr11-7-66']
+      docIds: ['doc-iso42001-62', 'doc-iso23894-63', 'doc-nist-airmf-64', 'doc-eu-ai-act-65', 'doc-sr11-7-66', 'doc-ai-multilingual-validation-120', 'doc-model-monitoring-drift-121', 'doc-agentic-ai-control-122', 'doc-ai-calibration-abstention-123', 'doc-ai-benchmark-release-124']
     },
     {
       key: 'data-governance',
-      patterns: ['data governance', 'data lineage', 'data quality', 'retention', 'purpose limitation', 'consent', 'data residency', 'lawful basis', 'records retained too long', 'transfer safeguards', 'overseas diagnostics', 'privacy by design', 'dpia', 'data protection impact assessment', 'data subject rights', 'subject access request', 'record of processing activities', 'controller', 'processor', 'data processing agreement', 'breach notification', 'supervisory authority', 'patient data', 'medical records', 'health data', 'biometric data'],
+      patterns: ['data governance', 'data lineage', 'data quality', 'data retention', 'retention schedule', 'purpose limitation', 'consent', 'data residency', 'lawful basis', 'records retained too long', 'transfer safeguards', 'overseas diagnostics', 'privacy by design', 'dpia', 'data protection impact assessment', 'data subject rights', 'subject access request', 'record of processing activities', 'data controller', 'data processor', 'controller-processor', 'data processing agreement', 'breach notification', 'supervisory authority', 'patient data', 'medical records', 'health data', 'biometric data', 'de-identification', 'deidentification', 'data minimization', 'data minimisation', 'secondary use', 'lineage metadata', 'free-text fields', 'passport details', 'identity graph', 'identity views', 'suppression flags', 'record resurrection', 'deletion propagation', 'derived datasets', 'offshore support queue', 'development environment', 'staging pipeline', 'data marketplace'],
       docTags: ['data-governance', 'privacy', 'controls', 'compliance'],
-      docIds: ['doc-iso27701-19', 'doc-gdpr-06', 'doc-data-05', 'doc-cls-07', 'doc-hipaa-39', 'doc-internal-privacy-96', 'doc-internal-privacy-health-97']
+      docIds: ['doc-iso27701-19', 'doc-gdpr-06', 'doc-data-05', 'doc-cls-07', 'doc-hipaa-39', 'doc-internal-privacy-96', 'doc-internal-privacy-health-97', 'doc-adgm-dp-101', 'doc-data-minimization-125', 'doc-purpose-lineage-126', 'doc-deletion-suppression-127']
     },
     {
       key: 'fraud-integrity',
-      patterns: ['fraud', 'financial crime', 'kickback', 'bribery', 'corruption', 'integrity', 'embezzlement', 'money laundering', 'public official', 'hospitality', 'facilitation payment'],
+      patterns: ['fraud', 'financial crime', 'kickback', 'bribery', 'corruption', 'embezzlement', 'money laundering', 'public official', 'hospitality', 'facilitation payment', 'invoice splitting', 'threshold avoidance', 'approval threshold', 'side letter', 'return rights', 'rebate support', 'quarter-end pressure', 'ghost workers', 'attendance logs', 'false certification', 'related party', 'intermediary', 'success fee', 'books and records', 'urgency narrative', 'rebate claims', 'backdated certifications', 'duplicate proof', 'fabricated evidence'],
       docTags: ['fraud-integrity', 'financial', 'anti-bribery', 'compliance'],
-      docIds: ['doc-iso37001-57', 'doc-uae-amlcft-12', 'doc-coso-ic-33', 'doc-internal-compliance-abc-85']
+      docIds: ['doc-iso37001-57', 'doc-uae-amlcft-12', 'doc-coso-ic-33', 'doc-internal-compliance-abc-85', 'doc-fraud-channel-128', 'doc-fraud-labor-129', 'doc-fraud-threshold-130', 'doc-fraud-evidence-131']
     },
     {
       key: 'compliance',
@@ -244,9 +244,9 @@ const RAGService = (() => {
     },
     {
       key: 'legal-contract',
-      patterns: ['legal', 'contract', 'indemnity', 'licensing dispute', 'ip ownership', 'intellectual property', 'litigation'],
-      docTags: ['legal-contract', 'compliance', 'governance'],
-      docIds: ['doc-iso37301-26', 'doc-uncitral-proc-46', 'doc-worldbank-proc-47']
+      patterns: ['legal', 'contract', 'indemnity', 'licensing dispute', 'ip ownership', 'intellectual property', 'litigation', 'rights and remedies', 'service credits', 'confidentiality clause', 'license scope', 'licence scope', 'affiliate-use rights', 'affiliate use rights', 'service data', 'derived insights', 'step-in rights', 'liability cap', 'liability caps', 'technical equivalence', 'acceptance certificate', 'statement of work', 'schedule hierarchy', 'annex conflict', 'consortium agreement', 'flow-down terms', 'termination rights'],
+      docTags: ['legal-contract', 'contract-governance', 'licensing', 'acceptance', 'claims', 'data-rights', 'consortium'],
+      docIds: ['doc-contract-governance-67', 'doc-contract-clauses-108', 'doc-licensing-rights-109', 'doc-data-rights-contract-110', 'doc-dispute-notice-111', 'doc-consortium-flowdown-112', 'doc-unidroit-contracts-113', 'doc-cisg-114', 'doc-wipo-ict-115']
     },
     {
       key: 'geopolitical',
@@ -262,15 +262,15 @@ const RAGService = (() => {
     },
     {
       key: 'supply-chain',
-      patterns: ['supplier', 'third-party', 'third party', 'vendor', 'supply chain', 'sub-tier', 'single source', 'fourth party', 'outsourcing', 'logistics'],
+      patterns: ['supplier', 'third-party', 'third party', 'vendor', 'supply chain', 'sub-tier', 'single source', 'single approved supplier', 'single approved source', 'fourth party', 'outsourcing', 'logistics', 'production line shift', 'inventory buffer', 'safety stock', 'rack enclosures', 'quality hold', 'material flow', 'shipment windows', 'port congestion', 'customs inspection', 'installation sequence', 'allocation priority', 'oem', 'buffer hub', 'deployable inventory', 'service spares', 'repair lead time'],
       docTags: ['supply-chain', 'third-party', 'supplier', 'vendor', 'procurement'],
-      docIds: ['doc-iso27036-22', 'doc-iso28000-23', 'doc-3p-08', 'doc-nist-800161-53']
+      docIds: ['doc-iso27036-22', 'doc-iso28000-23', 'doc-3p-08', 'doc-nist-800161-53', 'doc-supply-single-source-143', 'doc-supply-subtier-144', 'doc-supply-logistics-145', 'doc-supply-allocation-146', 'doc-supply-spares-147']
     },
     {
       key: 'procurement',
-      patterns: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'supplier selection', 'collusion', 'kickback'],
-      docTags: ['procurement', 'sourcing', 'governance', 'anti-bribery'],
-      docIds: ['doc-iso20400-29', 'doc-worldbank-proc-47', 'doc-uncitral-proc-46', 'doc-iso37001-57']
+      patterns: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'supplier selection', 'maverick spend', 'off-contract', 'enterprise agreement', 'duplicate licenses', 'pricing leakage', 'rfp scoring', 'scoring template', 'whole-life cost', 'technical weighting', 'lotting strategy', 'competition design', 'single aggregator', 'specialist suppliers', 'distributor terms', 'deposit request', 'origin declaration', 'substitution rights', 'bundled scope', 'price validity', 'award strategy', 'direct negotiation', 'incumbent consortium', 'should-cost', 'service baselines'],
+      docTags: ['procurement', 'sourcing', 'governance', 'tender-design', 'commercial-governance'],
+      docIds: ['doc-iso20400-29', 'doc-worldbank-proc-47', 'doc-uncitral-proc-46', 'doc-proc-software-framework-148', 'doc-proc-tender-wholelife-149', 'doc-proc-lotting-150', 'doc-proc-constrained-contracting-151', 'doc-proc-bundled-award-152', 'doc-proc-direct-negotiation-153']
     },
     {
       key: 'human-rights',
@@ -292,21 +292,21 @@ const RAGService = (() => {
     },
     {
       key: 'physical-security',
-      patterns: ['physical security', 'facilities', 'executive protection', 'visitor management', 'badge control', 'perimeter breach'],
-      docTags: ['physical-security', 'facilities', 'business-continuity', 'operations'],
-      docIds: ['doc-uae-fire-life-45', 'doc-iso22301-20', 'doc-nfpa1600-32']
+      patterns: ['physical security', 'facilities', 'executive protection', 'visitor management', 'badge control', 'perimeter breach', 'unbadged individual', 'restricted office area', 'door on bypass', 'visitor escort', 'temporary badge privileges', 'event footprint', 'legal war room', 'catering access windows', 'unauthorized movement', 'fence-line alarms', 'camera blind spots', 'temporary gate protocol', 'after-hours service access', 'prototype facility', 'restricted zones', 'executive movement', 'contractor badges', 'loading bay', 'secure cage', 'vehicle screening', 'unsupervised access', 'camera sight lines'],
+      docTags: ['physical-security', 'facilities', 'executive-protection', 'operations', 'restricted-site'],
+      docIds: ['doc-physical-security-69', 'doc-physical-event-132', 'doc-physical-perimeter-133', 'doc-physical-staging-134', 'doc-uae-fire-life-45']
     },
     {
       key: 'people-workforce',
-      patterns: ['people risk', 'workforce', 'labour', 'labor', 'worker welfare', 'fatigue', 'staffing pressure', 'human rights'],
-      docTags: ['people-workforce', 'human-rights', 'esg', 'hse', 'operations'],
-      docIds: ['doc-ungp-49', 'doc-oecd-rbc-48', 'doc-ilo-osh-54', 'doc-sa8000-61']
+      patterns: ['people risk', 'workforce', 'labour', 'labor', 'worker welfare', 'fatigue', 'staffing pressure', 'human rights', 'attrition', 'onboarding', 'employee experience', 'compensation disparities', 'internal mobility', 'succession planning', 'promotion pathways', 'contingent specialists', 'mixed employment model'],
+      docTags: ['people-workforce', 'human-rights', 'esg', 'hse', 'operations', 'employee-experience', 'talent-retention', 'succession-planning'],
+      docIds: ['doc-ungp-49', 'doc-oecd-rbc-48', 'doc-ilo-osh-54', 'doc-sa8000-61', 'doc-workforce-retention-139', 'doc-workforce-policy-140', 'doc-workforce-equity-141', 'doc-workforce-architecture-142']
     },
     {
       key: 'investment-jv',
-      patterns: ['m&a', 'merger', 'acquisition', 'joint venture', 'jv', 'integration thesis', 'post-merger integration'],
-      docTags: ['investment-jv', 'strategic', 'financial', 'governance'],
-      docIds: ['doc-coso-erm-25', 'doc-iso31000-24', 'doc-iso31010-50']
+      patterns: ['m&a', 'merger', 'acquisition', 'joint venture', 'jv', 'integration thesis', 'post-merger integration', 'minority investment', 'controlling stake', 'quality of earnings', 'founder concentration', 'reserved matters', 'pipeline ownership', 'transfer pricing', 'capital calls', 'valuation reset', 'seconded personnel', 'cross-sell assumptions', 'customer consent rights', 'post-close control'],
+      docTags: ['investment-jv', 'deal-thesis', 'joint-venture', 'quality-of-earnings', 'governance'],
+      docIds: ['doc-investment-jv-70', 'doc-minority-investment-116', 'doc-qoe-control-117', 'doc-jv-governance-118', 'doc-jv-restructuring-119', 'doc-coso-erm-25', 'doc-iso31000-24', 'doc-iso31010-50']
     },
     {
       key: 'transformation-delivery',
@@ -455,27 +455,27 @@ const RAGService = (() => {
   function _getMatchingLensTags(query = '') {
     const q = _normaliseText(query);
     const aliases = new Map([
-      ['ai-model-risk', ['ai-model-risk', 'ai risk', 'responsible ai', 'model risk', 'algorithmic bias', 'hallucination', 'model drift']],
-      ['data-governance', ['data-governance', 'data governance', 'privacy', 'data quality', 'lineage', 'retention', 'consent']],
+      ['ai-model-risk', ['ai-model-risk', 'ai risk', 'responsible ai', 'model risk', 'model governance', 'algorithmic bias', 'hallucination', 'model drift', 'large language model', 'llm assistant', 'copilot', 'agentic', 'tool chaining', 'abstention', 'calibration', 'benchmark contamination', 'release gating', 'generalization', 'generalisation', 'retraining', 'human in the loop', 'multilingual validation', 'translation bias', 'forecasting model', 'capacity planning model', 'recalibration', 'pilot validation', 'deployment readiness', 'machine-translated']],
+      ['data-governance', ['data-governance', 'data governance', 'data protection', 'data privacy', 'privacy', 'data quality', 'lineage', 'data retention', 'retention schedule', 'consent', 'purpose limitation', 'secondary use', 'de-identification', 'data minimization', 'free-text fields', 'passport details', 'identity graph', 'identity views', 'suppression flags', 'record resurrection', 'deletion propagation', 'derived datasets', 'offshore support queue', 'development environment', 'data marketplace']],
       ['third-party', ['third-party', 'third party', 'vendor', 'supplier', 'outsourcing']],
-      ['supply-chain', ['supply-chain', 'supply chain', 'logistics', 'inventory', 'sub-tier', 'single source', 'upstream']],
+      ['supply-chain', ['supply-chain', 'supply chain', 'logistics', 'inventory', 'sub-tier', 'single source', 'single approved supplier', 'upstream', 'production line shift', 'inventory buffer', 'safety stock', 'quality hold', 'material flow', 'shipment windows', 'port congestion', 'customs inspection', 'installation sequence', 'allocation priority', 'oem', 'buffer hub', 'deployable inventory', 'service spares', 'repair lead time']],
       ['business-continuity', ['business-continuity', 'business continuity', 'continuity', 'recovery', 'disaster recovery', 'crisis management', 'rto', 'rpo', 'business impact analysis', 'bia', 'incident management', 'service restoration', 'resumption']],
-      ['fraud-integrity', ['fraud-integrity', 'fraud', 'integrity', 'financial crime', 'kickback', 'bribery', 'corruption']],
+      ['fraud-integrity', ['fraud-integrity', 'fraud', 'integrity', 'financial crime', 'kickback', 'bribery', 'corruption', 'side letter', 'return rights', 'rebate support', 'quarter-end pressure', 'ghost workers', 'false certification', 'related party', 'intermediary', 'success fee', 'books and records', 'rebate claims', 'backdated certifications', 'duplicate proof', 'fabricated evidence']],
       ['esg', ['esg', 'sustainability', 'climate', 'emissions', 'greenwashing', 'human rights', 'tcfd', 'ghg protocol', 'cdp', 'double materiality', 'scope 3']],
       ['hse', ['hse', 'health and safety', 'worker safety', 'injury', 'environmental', 'spill', 'hazard', 'process safety', 'loss of containment', 'permit to work', 'management of change', 'psychological safety']],
       ['cyber', ['cyber', 'identity', 'phishing', 'ransomware', 'cloud', 'breach', 'ics', 'ot security']],
       ['operational', ['operational', 'process failure', 'breakdown', 'service failure', 'backlog', 'quality failure']],
       ['strategic', ['strategic', 'strategy', 'market', 'transformation', 'portfolio', 'investment']],
-      ['legal-contract', ['legal-contract', 'legal', 'contract', 'litigation', 'indemnity', 'licensing dispute', 'ip ownership']],
+      ['legal-contract', ['legal-contract', 'legal', 'contract', 'litigation', 'indemnity', 'licensing dispute', 'ip ownership', 'rights and remedies', 'service credits', 'confidentiality clause', 'license scope', 'licence scope', 'affiliate use rights', 'service data', 'derived insights', 'step-in rights', 'liability cap', 'technical equivalence', 'acceptance certificate', 'schedule hierarchy', 'annex conflict', 'consortium agreement']],
       ['geopolitical', ['geopolitical', 'sanctions', 'market access', 'export control', 'sovereign', 'entity list']],
       ['regulatory', ['regulatory', 'regulator', 'licence', 'license', 'sanction', 'export control', 'filing']],
       ['financial', ['financial', 'fraud', 'payment', 'treasury', 'capital', 'misstatement']],
       ['compliance', ['compliance', 'non-compliance', 'policy breach', 'anti bribery', 'corruption', 'ethics', 'conduct']],
-      ['procurement', ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'supplier due diligence', 'collusion']],
-      ['physical-security', ['physical-security', 'physical security', 'facilities', 'executive protection', 'perimeter', 'visitor management']],
-      ['ot-resilience', ['ot-resilience', 'ot', 'ics', 'scada', 'industrial control', 'site systems', 'plant network']],
-      ['people-workforce', ['people-workforce', 'people risk', 'workforce', 'labour', 'labor', 'staffing pressure', 'human rights']],
-      ['investment-jv', ['investment-jv', 'investment', 'm&a', 'merger', 'acquisition', 'joint venture', 'jv', 'integration thesis']],
+      ['procurement', ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'supplier due diligence', 'maverick spend', 'off-contract', 'enterprise agreement', 'duplicate licenses', 'pricing leakage', 'whole-life cost', 'lotting strategy', 'competition design', 'single aggregator', 'distributor terms', 'bundled scope', 'price validity', 'direct negotiation', 'should-cost', 'service baselines']],
+      ['physical-security', ['physical-security', 'physical security', 'facilities', 'executive protection', 'perimeter', 'visitor management', 'unbadged individual', 'restricted office area', 'door on bypass', 'visitor escort', 'temporary badge privileges', 'event footprint', 'legal war room', 'catering access windows', 'unauthorized movement', 'fence-line alarms', 'camera blind spots', 'temporary gate protocol', 'after-hours service access', 'prototype facility', 'restricted zones', 'executive movement', 'contractor badges', 'loading bay', 'secure cage', 'vehicle screening', 'unsupervised access', 'camera sight lines']],
+      ['ot-resilience', ['ot-resilience', 'ot', 'ics', 'scada', 'industrial control', 'site systems', 'plant network', 'edge computing room', 'temperature alarms', 'power fluctuation', 'airflow settings', 'workload throttling', 'edge gateways', 'heatwave', 'power quality fluctuations', 'telemetry gaps', 'manual field verification', 'timing mismatch', 'edge controller', 'configuration baseline', 'false rejects', 'supervised mode', 'failover logic', 'backup power transfer', 'restart priorities', 'regional grid disturbance', 'gateway clocks', 'telemetry replay', 'control confirmations', 'state reconstruction', 'edge inference', 'actuator timing', 'reject gate', 'restart instability']],
+      ['people-workforce', ['people-workforce', 'people risk', 'workforce', 'labour', 'labor', 'staffing pressure', 'human rights', 'attrition', 'onboarding', 'employee experience', 'internal mobility', 'succession planning', 'contingent specialists', 'promotion pathways', 'mixed employment model', 'compensation disparities']],
+      ['investment-jv', ['investment-jv', 'investment', 'm&a', 'merger', 'acquisition', 'joint venture', 'jv', 'integration thesis', 'minority investment', 'controlling stake', 'quality of earnings', 'reserved matters', 'capital calls', 'valuation reset', 'post-close control']],
       ['transformation-delivery', ['transformation-delivery', 'transformation delivery', 'programme delivery', 'program delivery', 'project delivery', 'go live', 'milestone slip']]
     ]);
     return LENS_TAGS.filter(tag => (aliases.get(tag) || [tag]).some(pattern => q.includes(_normaliseText(pattern))));

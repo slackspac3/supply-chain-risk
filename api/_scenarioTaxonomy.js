@@ -1,9 +1,11 @@
 'use strict';
 
-const SCENARIO_TAXONOMY_VERSION = 'phase1.1.8-2026-04-09';
+const SCENARIO_TAXONOMY_VERSION = 'phase1.1.19-2026-04-10';
 
 const SCENARIO_TAXONOMY_DOMAINS = Object.freeze([
   { key: 'cyber', label: 'Cyber' },
+  { key: 'ai_model', label: 'AI / Model Risk' },
+  { key: 'data_governance', label: 'Data Governance / Privacy' },
   { key: 'operational', label: 'Operational' },
   { key: 'business_continuity', label: 'Business Continuity' },
   { key: 'finance', label: 'Finance' },
@@ -806,6 +808,179 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     functionKey: 'technology',
     estimatePresetKey: 'thirdParty'
   }),
+  family({
+    key: 'multilingual_validation_bias',
+    label: 'Multilingual validation bias',
+    domain: 'ai_model',
+    description: 'A model or copilot behaves unevenly across language, translation, or representation conditions because validation was not strong enough for the deployed context.',
+    priorityScore: 87,
+    positiveSignals: ['llm assistant', 'copilot', 'biased summarization', 'arabic translation', 'multilingual validation', 'language handling weakness', 'pilot validation', 'unsafe deployment readiness'],
+    antiSignals: ['unauthorized access', 'vendor collusion', 'retention schedule breach', 'credential theft', 'ddos'],
+    typicalAssets: ['AI assistant', 'decision-support workflow', 'pilot validation pack'],
+    typicalCauses: ['weak multilingual validation', 'translation loss', 'biased output behaviour'],
+    typicalConsequences: ['control breakdown', 'reputational damage', 'customer harm'],
+    preferredRiskThemes: ['multilingual model bias', 'unsafe deployment readiness', 'translation-driven distortion'],
+    defaultOverlays: ['control_breakdown', 'reputational_damage'],
+    forbiddenDriftFamilies: ['identity_compromise', 'cloud_control_failure', 'award_process_manipulation'],
+    examplePhrases: [
+      'an LLM assistant overweights polished English submissions and misses technical caveats in Arabic attachments',
+      'pilot testing finds multilingual summarization bias before broader deployment'
+    ],
+    counterExamples: [
+      'a bid portal is accessed by an unauthorized party',
+      'vendors collude during an award process'
+    ],
+    promptIdeaTemplates: [
+      'A multilingual copilot looks deployment-ready until validation reveals systematic bias across translated content',
+      'Model summarization quality is uneven across languages and undermines decision support'
+    ],
+    shortlistSeedThemes: ['multilingual validation gap', 'translation-driven bias', 'unsafe AI pilot readiness'],
+    legacyKey: 'ai-model-risk',
+    lensKey: 'ai-model-risk',
+    lensLabel: 'AI / model risk',
+    functionKey: 'technology',
+    estimatePresetKey: 'aiModelRisk'
+  }),
+  family({
+    key: 'model_drift_monitoring_failure',
+    label: 'Model drift monitoring failure',
+    domain: 'ai_model',
+    description: 'A previously valid model is kept in use after the operating environment changes materially and monitoring fails to trigger recalibration or challenge.',
+    priorityScore: 84,
+    positiveSignals: ['forecasting model', 'model drift', 'recalibration', 'customer mix shift', 'monitoring failure', 'capacity reservations', 'decision-support reliability erosion'],
+    antiSignals: ['supplier corruption', 'factory control-system outage', 'credential theft', 'ddos'],
+    typicalAssets: ['planning model', 'monitoring dashboard', 'capacity commitment process'],
+    typicalCauses: ['environmental drift', 'weak recalibration trigger', 'outdated monitoring thresholds'],
+    typicalConsequences: ['direct monetary loss', 'operational disruption', 'backlog growth'],
+    preferredRiskThemes: ['planning-model drift', 'monitoring and recalibration failure', 'decision-support erosion'],
+    defaultOverlays: ['direct_monetary_loss', 'operational_disruption'],
+    forbiddenDriftFamilies: ['delivery_slippage', 'cloud_control_failure', 'counterparty_default'],
+    examplePhrases: [
+      'a capacity-planning model drifts after customer patterns change and recalibration never occurs',
+      'monitoring does not trigger challenge even though the model environment has shifted materially'
+    ],
+    counterExamples: [
+      'malicious tampering changes the model code',
+      'a supplier reallocates production capacity away from the enterprise'
+    ],
+    legacyKey: 'ai-model-risk',
+    lensKey: 'ai-model-risk',
+    lensLabel: 'AI / model risk',
+    functionKey: 'technology',
+    estimatePresetKey: 'aiModelRisk'
+  }),
+  family({
+    key: 'fairness_retraining_degradation',
+    label: 'Fairness degradation after retraining',
+    domain: 'ai_model',
+    description: 'Retraining improves aggregate performance while materially worsening subgroup outcomes or weakening real human oversight.',
+    priorityScore: 85,
+    positiveSignals: ['retraining', 'population segment', 'human in the loop', 'subgroup validation', 'fairness degradation', 'workflow reliance', 'precision trade-off'],
+    antiSignals: ['data retention schedule', 'contractual limitation-of-liability', 'credential theft', 'ddos'],
+    typicalAssets: ['decision-support model', 'subgroup validation pack', 'human-review workflow'],
+    typicalCauses: ['underrepresented retraining data', 'weak subgroup validation', 'overreliance on rankings'],
+    typicalConsequences: ['customer harm', 'control breakdown', 'reputational damage'],
+    preferredRiskThemes: ['subgroup fairness failure', 'human-oversight overreliance', 'unsafe retraining release'],
+    defaultOverlays: ['customer_harm', 'control_breakdown'],
+    forbiddenDriftFamilies: ['identity_compromise', 'privacy_governance_gap', 'industrial_control_instability'],
+    examplePhrases: [
+      'retraining improves precision overall but worsens outcomes for a smaller population segment',
+      'human reviewers remain in the loop but increasingly rely on the model ranking'
+    ],
+    counterExamples: [
+      'a hacker exposes the dataset externally',
+      'a privacy team flags a retention schedule mismatch before retraining starts'
+    ],
+    legacyKey: 'ai-model-risk',
+    lensKey: 'ai-model-risk',
+    lensLabel: 'AI / model risk',
+    functionKey: 'technology',
+    estimatePresetKey: 'aiModelRisk'
+  }),
+  family({
+    key: 'agentic_control_boundary_failure',
+    label: 'Agentic control-boundary failure',
+    domain: 'ai_model',
+    description: 'An agentic or tool-using AI system chains individually acceptable components into unsafe end-to-end behaviour because policy, fallback, and evaluation controls are immature.',
+    priorityScore: 88,
+    positiveSignals: ['agentic orchestration', 'unsafe tool chaining', 'authority overreach', 'fallback framework', 'stale policy variants', 'action recommendations exceed authority', 'end-to-end ai evaluation'],
+    antiSignals: ['credential theft', 'lawful basis defect', 'emergency recovery site', 'ddos'],
+    typicalAssets: ['agentic workflow', 'tool orchestration layer', 'authority control boundary'],
+    typicalCauses: ['weak end-to-end evaluation', 'immature fallback design', 'unsafe tool sequencing'],
+    typicalConsequences: ['control breakdown', 'operational disruption', 'legal exposure'],
+    preferredRiskThemes: ['system-level AI control failure', 'tool-chaining weakness', 'authority-boundary overreach'],
+    defaultOverlays: ['control_breakdown', 'operational_disruption'],
+    forbiddenDriftFamilies: ['cloud_control_failure', 'identity_compromise', 'business_continuity_plan_gap'],
+    examplePhrases: [
+      'an agentic orchestration layer chains safe tools into unsafe overall behaviour',
+      'action recommendations exceed business authority because fallback and control boundaries are immature'
+    ],
+    counterExamples: [
+      'a credential theft incident compromises the orchestration platform',
+      'supplier concentration delays hardware refresh for the AI platform'
+    ],
+    legacyKey: 'ai-model-risk',
+    lensKey: 'ai-model-risk',
+    lensLabel: 'AI / model risk',
+    functionKey: 'technology',
+    estimatePresetKey: 'aiModelRisk'
+  }),
+  family({
+    key: 'calibration_abstention_failure',
+    label: 'Calibration and abstention failure',
+    domain: 'ai_model',
+    description: 'A control-sensitive AI assistant fails to abstain or escalate when evidence is stale, conflicting, or ambiguous, producing overconfident outputs.',
+    priorityScore: 89,
+    positiveSignals: ['abstention failure', 'calibration failure', 'authoritative hallucination', 'stale policy retrieval', 'jurisdiction conflicts', 'confident reconciliations', 'control-sensitive copilot'],
+    antiSignals: ['cyber compromise', 'data misuse', 'generic compliance breach', 'ddos'],
+    typicalAssets: ['policy copilot', 'governance workflow', 'escalation path'],
+    typicalCauses: ['weak uncertainty handling', 'poor calibration', 'insufficient ambiguity evaluation'],
+    typicalConsequences: ['control breakdown', 'legal exposure', 'reputational damage'],
+    preferredRiskThemes: ['unsafe decision-support calibration', 'failed abstention', 'ambiguity-handling weakness'],
+    defaultOverlays: ['control_breakdown', 'legal_exposure'],
+    forbiddenDriftFamilies: ['policy_breach', 'privacy_governance_gap', 'identity_compromise'],
+    examplePhrases: [
+      'a multilingual policy copilot fails to abstain when jurisdictions conflict and stale sources look internally consistent',
+      'overconfident reconciliations suppress escalation to human specialists'
+    ],
+    counterExamples: [
+      'a compliance team misses a filing deadline without any AI involvement',
+      'hostile manipulation changes the knowledge base content'
+    ],
+    legacyKey: 'ai-model-risk',
+    lensKey: 'ai-model-risk',
+    lensLabel: 'AI / model risk',
+    functionKey: 'technology',
+    estimatePresetKey: 'aiModelRisk'
+  }),
+  family({
+    key: 'evaluation_contamination_release_failure',
+    label: 'Evaluation contamination and release failure',
+    domain: 'ai_model',
+    description: 'Benchmark design, red-team coverage, or release-gating evidence creates false confidence about model readiness and generalization.',
+    priorityScore: 90,
+    positiveSignals: ['benchmark contamination', 'synthetic red-team', 'release gating', 'generalization', 'prompt-template reuse', 'arabic dialect variation', 'mixed-script queries', 'evaluation design failure'],
+    antiSignals: ['cyber leakage', 'data-governance defect', 'strategic platform positioning', 'ddos'],
+    typicalAssets: ['benchmark suite', 'release-gating pack', 'red-team challenge set'],
+    typicalCauses: ['evaluation contamination', 'weak edge-case coverage', 'false-confidence release governance'],
+    typicalConsequences: ['control breakdown', 'reputational damage', 'customer harm'],
+    preferredRiskThemes: ['benchmark contamination', 'false-confidence release gating', 'generalization overstatement'],
+    defaultOverlays: ['control_breakdown', 'reputational_damage'],
+    forbiddenDriftFamilies: ['identity_compromise', 'privacy_governance_gap', 'portfolio_execution_drift'],
+    examplePhrases: [
+      'benchmark tasks leak into tuning practice and overstate release readiness',
+      'synthetic red-team prompts miss Arabic variation and low-frequency regulatory edge cases'
+    ],
+    counterExamples: [
+      'benchmark assets are stolen by an attacker',
+      'the platform roadmap changes but evaluation validity remains sound'
+    ],
+    legacyKey: 'ai-model-risk',
+    lensKey: 'ai-model-risk',
+    lensLabel: 'AI / model risk',
+    functionKey: 'technology',
+    estimatePresetKey: 'aiModelRisk'
+  }),
 
   family({
     key: 'process_breakdown',
@@ -1279,9 +1454,9 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     label: 'Invoice fraud',
     domain: 'fraud_integrity',
     description: 'Deception around invoices or payable instructions creates direct financial loss.',
-    positiveSignals: ['invoice fraud', 'fake invoice', 'false invoice', 'duplicate invoice scam'],
+    positiveSignals: ['invoice fraud', 'fake invoice', 'false invoice', 'duplicate invoice scam', 'invoice splitting', 'threshold avoidance', 'approval threshold', 'consulting invoices', 'duplicate narrative'],
     antiSignals: ['ddos', 'credential theft', 'forced labour'],
-    requiredSignals: ['invoice', 'accounts payable'],
+    requiredSignals: ['invoice', 'accounts payable', 'approval threshold', 'sourcing review'],
     typicalAssets: ['invoice process', 'accounts payable'],
     typicalCauses: ['deception', 'fake invoice submission'],
     typicalConsequences: ['direct monetary loss', 'fraud exposure'],
@@ -1337,7 +1512,15 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
       'hospitality offered to a public official',
       'public official',
       'intermediary onboarding shortcut',
-      'undisclosed conflict of interest in supplier selection'
+      'undisclosed conflict of interest in supplier selection',
+      'intermediary',
+      'success fee',
+      'opaque introductions',
+      'books and records',
+      'change orders',
+      'approval thresholds',
+      'urgency narrative',
+      'public-sector opportunity'
     ],
     antiSignals: ['ddos', 'credential theft', 'website outage', 'whistleblowing retaliation', 'non-retaliation'],
     typicalAssets: ['approval path', 'commercial relationship'],
@@ -1405,6 +1588,96 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     defaultOverlays: ['direct_monetary_loss', 'regulatory_scrutiny', 'legal_exposure'],
     examplePhrases: ['supplier collusion distorts the bid', 'price-fixing scheme inflates cost'],
     counterExamples: ['public site slowed by DDoS attack', 'cloud control misconfiguration exposes storage'],
+    legacyKey: 'fraud-integrity',
+    lensKey: 'fraud-integrity',
+    lensLabel: 'Fraud / integrity',
+    functionKey: 'finance',
+    estimatePresetKey: 'fraudIntegrity'
+  }),
+  family({
+    key: 'channel_rebate_manipulation',
+    label: 'Channel side-arrangement and rebate manipulation',
+    domain: 'fraud_integrity',
+    description: 'Concealed side letters, return rights, or rebate support distort the true substance of channel transactions.',
+    positiveSignals: [
+      'channel partner',
+      'reseller',
+      'side letter',
+      'return rights',
+      'rebate support',
+      'quarter-end pressure',
+      'incentive targets',
+      'sham sale',
+      'channel stuffing',
+      'proof-of-performance',
+      'backdated certification',
+      'fabricated evidence'
+    ],
+    antiSignals: ['ddos', 'credential theft', 'worker fatigue', 'records retention'],
+    typicalAssets: ['channel programme', 'rebate process', 'revenue-support evidence'],
+    typicalCauses: ['concealed commercial side arrangement', 'fabricated eligibility support', 'quarter-end manipulation'],
+    typicalConsequences: ['misstated revenue', 'improper payment', 'books-and-records exposure'],
+    allowedSecondaryFamilies: ['policy_breach', 'payment_control_failure', 'bribery_corruption'],
+    forbiddenDriftFamilies: ['availability_attack', 'delivery_slippage', 'identity_compromise'],
+    defaultOverlays: ['direct_monetary_loss', 'control_breakdown', 'legal_exposure', 'regulatory_scrutiny'],
+    examplePhrases: [
+      'channel partner uses side letter and informal return rights to secure quarter-end revenue',
+      'rebate support is promised outside the signed agreement and later evidenced with backdated certifications'
+    ],
+    counterExamples: ['cloud region outage delays service launch', 'major supplier misses a logistics commitment'],
+    promptIdeaTemplates: [
+      'Channel side-arrangement and rebate manipulation',
+      'Concealed commercial side letters and fabricated eligibility support distort the transaction substance'
+    ],
+    shortlistSeedThemes: ['channel integrity risk', 'books-and-records distortion', 'rebate claim abuse'],
+    fallbackNarrativePatterns: [
+      'Keep side letters, return rights, rebate support, or quarter-end channel manipulation on the fraud and integrity path rather than flattening it into generic finance or partner management.',
+      'Treat apparently complete paperwork as secondary if the fact pattern points to fabricated commercial evidence or concealed transaction substance.'
+    ],
+    legacyKey: 'fraud-integrity',
+    lensKey: 'fraud-integrity',
+    lensLabel: 'Fraud / integrity',
+    functionKey: 'finance',
+    estimatePresetKey: 'fraudIntegrity'
+  }),
+  family({
+    key: 'certification_evidence_fraud',
+    label: 'Certification and evidence falsification',
+    domain: 'fraud_integrity',
+    description: 'False certifications, related-party concealment, or fabricated proof are used to obtain payment, credit, or approval.',
+    positiveSignals: [
+      'ghost workers',
+      'attendance logs',
+      'false certification',
+      'site coordinator',
+      'related party',
+      'undisclosed relationship',
+      'backdated certification',
+      'duplicate proof',
+      'fabricated evidence',
+      'proof-of-performance'
+    ],
+    antiSignals: ['ddos', 'credential theft', 'single source dependency', 'understaffing'],
+    typicalAssets: ['supporting evidence', 'labour certification', 'rebate claim pack'],
+    typicalCauses: ['evidence fabrication', 'related-party concealment', 'false service certification'],
+    typicalConsequences: ['improper payment', 'investigation pressure', 'books-and-records exposure'],
+    allowedSecondaryFamilies: ['policy_breach', 'payment_control_failure', 'bribery_corruption'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'delivery_slippage'],
+    defaultOverlays: ['direct_monetary_loss', 'control_breakdown', 'legal_exposure'],
+    examplePhrases: [
+      'ghost workers are certified through attendance logs despite contradictory site evidence',
+      'backdated certifications and duplicate proof-of-performance documents support an unearned rebate claim'
+    ],
+    counterExamples: ['customer portal slows under heavy traffic', 'supplier delivery delays a deployment milestone'],
+    promptIdeaTemplates: [
+      'Certification and evidence falsification',
+      'False certifications or fabricated proof are used to unlock payment, credit, or approval'
+    ],
+    shortlistSeedThemes: ['false certification', 'related-party concealment', 'evidence fabrication'],
+    fallbackNarrativePatterns: [
+      'Keep ghost workers, false certifications, fabricated proof, or undisclosed related-party ties on the fraud and integrity path rather than collapsing them into workforce or compliance process issues.',
+      'Treat attendance, certification, or rebate evidence as suspect if the scenario suggests deliberate falsification rather than innocent documentation weakness.'
+    ],
     legacyKey: 'fraud-integrity',
     lensKey: 'fraud-integrity',
     lensLabel: 'Fraud / integrity',
@@ -1627,7 +1900,7 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
   family({
     key: 'privacy_governance_gap',
     label: 'Privacy governance gap',
-    domain: 'compliance',
+    domain: 'data_governance',
     description: 'Privacy management controls are missing, weak, or not followed for high-risk personal or sensitive data processing.',
     priorityScore: 80,
     positiveSignals: [
@@ -1705,16 +1978,16 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
       'Keep the scenario in the privacy-governance lane when the wording is about DPIAs, privacy by design, data subject rights, records of processing, controller-processor accountability, or sensitive-data oversight rather than an actual disclosure event.',
       'Let records retention or cross-border transfer take precedence only when those more specific obligation failures are explicit.'
     ],
-    legacyKey: 'compliance',
-    lensKey: 'compliance',
-    lensLabel: 'Compliance',
+    legacyKey: 'data-governance',
+    lensKey: 'data-governance',
+    lensLabel: 'Data Governance / Privacy',
     functionKey: 'compliance',
     estimatePresetKey: 'dataGovernance'
   }),
   family({
     key: 'privacy_non_compliance',
     label: 'Privacy non-compliance',
-    domain: 'compliance',
+    domain: 'data_governance',
     description: 'A privacy or data-protection obligation is breached through unlawful processing, retention, or control failure.',
     priorityScore: 82,
     positiveSignals: [
@@ -1749,16 +2022,16 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
       'website flood slows customer-facing services',
       'supplier delivery slippage delays deployment'
     ],
-    legacyKey: 'compliance',
-    lensKey: 'compliance',
-    lensLabel: 'Compliance',
+    legacyKey: 'data-governance',
+    lensKey: 'data-governance',
+    lensLabel: 'Data Governance / Privacy',
     functionKey: 'compliance',
     estimatePresetKey: 'dataGovernance'
   }),
   family({
     key: 'records_retention_non_compliance',
     label: 'Records retention non-compliance',
-    domain: 'compliance',
+    domain: 'data_governance',
     description: 'Records are retained or deleted inconsistently with legal, privacy, or internal retention obligations.',
     priorityScore: 76,
     positiveSignals: [
@@ -1803,16 +2076,16 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
       'Treat the retention or deletion obligation failure as the event path rather than a generic data-breach scenario.',
       'Keep any disclosure or legal concern as an overlay unless the text explicitly says records were exposed.'
     ],
-    legacyKey: 'compliance',
-    lensKey: 'compliance',
-    lensLabel: 'Compliance',
+    legacyKey: 'data-governance',
+    lensKey: 'data-governance',
+    lensLabel: 'Data Governance / Privacy',
     functionKey: 'compliance',
     estimatePresetKey: 'dataGovernance'
   }),
   family({
     key: 'cross_border_transfer_non_compliance',
     label: 'Cross-border transfer non-compliance',
-    domain: 'compliance',
+    domain: 'data_governance',
     description: 'Personal or restricted data is transferred across borders without the required legal basis, safeguards, or approvals.',
     priorityScore: 77,
     positiveSignals: [
@@ -1860,9 +2133,9 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
       'Treat the transfer-governance failure as the primary event path and keep any disclosure risk as a consequence.',
       'Do not collapse this into a cyber family unless the text explicitly says data was exposed or stolen.'
     ],
-    legacyKey: 'compliance',
-    lensKey: 'compliance',
-    lensLabel: 'Compliance',
+    legacyKey: 'data-governance',
+    lensKey: 'data-governance',
+    lensLabel: 'Data Governance / Privacy',
     functionKey: 'compliance',
     estimatePresetKey: 'dataGovernance'
   }),
@@ -2093,6 +2366,538 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
   }),
 
   family({
+    key: 'licensing_rights_entitlement_dispute',
+    label: 'Licensing rights and entitlement dispute',
+    domain: 'legal_contract',
+    description: 'The event path is a dispute over licence scope, affiliate-use rights, service-data rights, or entitlement boundaries under an existing agreement.',
+    priorityScore: 82,
+    positiveSignals: [
+      signal('license scope', 'strong'),
+      signal('licence scope', 'strong'),
+      signal('affiliate-use rights', 'strong'),
+      signal('affiliate use rights', 'strong'),
+      signal('entitlement dispute', 'strong'),
+      signal('service data rights', 'medium'),
+      signal('derived insights', 'medium'),
+      signal('licensing rights', 'medium')
+    ],
+    antiSignals: [
+      signal('malware', 'strong'),
+      signal('ransomware', 'strong'),
+      signal('data breach', 'strong'),
+      signal('policy breach', 'medium'),
+      signal('regulatory filing', 'medium')
+    ],
+    requiredSignals: [signal('license', 'weak'), signal('licence', 'weak'), signal('entitlement', 'weak'), signal('affiliate', 'weak'), signal('rights', 'weak')],
+    typicalAssets: ['group licence', 'service-data rights', 'affiliate use entitlement'],
+    typicalCauses: ['licence restatement', 'rights ambiguity', 'ownership challenge'],
+    typicalConsequences: ['commercial dispute', 'service restriction', 'legal escalation'],
+    preferredRiskThemes: ['licence entitlement ambiguity', 'rights allocation dispute', 'affiliate use restriction'],
+    allowedSecondaryFamilies: ['contract_liability'],
+    cannotBePrimaryWith: ['data_disclosure', 'privacy_non_compliance'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise'],
+    defaultOverlays: ['legal_exposure', 'direct_monetary_loss'],
+    examplePhrases: [
+      'updated licence terms remove affiliate-use rights that operating companies have relied on',
+      'service-data and derived-insights rights become contested under a software agreement'
+    ],
+    counterExamples: [
+      'a model produces inaccurate answers but no contract rights are disputed',
+      'a privacy regulator challenges personal-data handling without a licence dispute'
+    ],
+    legacyKey: 'legal-contract',
+    lensKey: 'legal-contract',
+    lensLabel: 'Legal / contract',
+    functionKey: 'compliance',
+    estimatePresetKey: 'legalContract'
+  }),
+
+  family({
+    key: 'scope_and_liability_allocation_dispute',
+    label: 'Scope and liability allocation dispute',
+    domain: 'legal_contract',
+    description: 'The event path is uncertainty over how signed agreements allocate scope, caps, indemnities, step-in rights, or delivery obligations across parties.',
+    priorityScore: 81,
+    positiveSignals: [
+      signal('liability cap', 'strong'),
+      signal('liability caps', 'strong'),
+      signal('step-in rights', 'strong'),
+      signal('scope allocation', 'strong'),
+      signal('flow-down terms', 'strong'),
+      signal('consortium agreement', 'strong'),
+      signal('allocation of obligations', 'medium'),
+      signal('uncapped indemnity', 'medium')
+    ],
+    antiSignals: [
+      signal('award criteria', 'medium'),
+      signal('vendor selection', 'medium'),
+      signal('supplier onboarding', 'medium'),
+      signal('shipment delay', 'strong'),
+      signal('inventory shortfall', 'strong')
+    ],
+    requiredSignals: [signal('liability', 'weak'), signal('scope', 'weak'), signal('obligation', 'weak'), signal('step-in', 'weak'), signal('cap', 'weak')],
+    typicalAssets: ['consortium agreement', 'subcontract', 'liability schedule'],
+    typicalCauses: ['cross-reference ambiguity', 'scope carve-out dispute', 'flow-down mismatch'],
+    typicalConsequences: ['claim exposure', 'renegotiation pressure', 'delivery instability'],
+    preferredRiskThemes: ['scope allocation ambiguity', 'liability allocation dispute', 'step-in rights uncertainty'],
+    allowedSecondaryFamilies: ['contract_liability', 'sovereignty_localisation_constraint'],
+    cannotBePrimaryWith: ['supplier_control_weakness', 'delivery_slippage'],
+    forbiddenDriftFamilies: ['single_source_dependency', 'delivery_slippage'],
+    defaultOverlays: ['legal_exposure', 'direct_monetary_loss'],
+    examplePhrases: [
+      'consortium partners dispute whether localisation obligations and acceptance liabilities sit inside committed scope',
+      'step-in rights and liability caps do not clearly allocate responsibility across delivery parties'
+    ],
+    counterExamples: [
+      'a supplier fails to deliver on time but the signed allocation of obligations is clear',
+      'the sourcing process is weak before contract award'
+    ],
+    legacyKey: 'legal-contract',
+    lensKey: 'legal-contract',
+    lensLabel: 'Legal / contract',
+    functionKey: 'compliance',
+    estimatePresetKey: 'legalContract'
+  }),
+
+  family({
+    key: 'acceptance_and_specification_dispute',
+    label: 'Acceptance and specification dispute',
+    domain: 'legal_contract',
+    description: 'The event path is a dispute over technical equivalence, acceptance criteria, schedule hierarchy, or the legally binding specification baseline.',
+    priorityScore: 79,
+    positiveSignals: [
+      signal('technical equivalence', 'strong'),
+      signal('acceptance certificate', 'strong'),
+      signal('acceptance criteria', 'strong'),
+      signal('statement of work', 'medium'),
+      signal('schedule hierarchy', 'strong'),
+      signal('annex conflict', 'strong'),
+      signal('substitute performance', 'medium'),
+      signal('specification dispute', 'medium')
+    ],
+    antiSignals: [
+      signal('project delay', 'medium'),
+      signal('go-live', 'medium'),
+      signal('data breach', 'strong'),
+      signal('malicious insider', 'strong')
+    ],
+    requiredSignals: [signal('acceptance', 'weak'), signal('specification', 'weak'), signal('equivalence', 'weak'), signal('statement of work', 'weak'), signal('schedule', 'weak')],
+    typicalAssets: ['statement of work', 'acceptance certificate', 'technical specification'],
+    typicalCauses: ['annex conflict', 'specification ambiguity', 'acceptance threshold dispute'],
+    typicalConsequences: ['payment hold', 'claim escalation', 'delivery delay'],
+    preferredRiskThemes: ['acceptance dispute', 'specification hierarchy conflict', 'technical equivalence disagreement'],
+    allowedSecondaryFamilies: ['contract_liability', 'scope_and_liability_allocation_dispute'],
+    cannotBePrimaryWith: ['delivery_slippage'],
+    forbiddenDriftFamilies: ['delivery_slippage', 'availability_attack'],
+    defaultOverlays: ['legal_exposure', 'direct_monetary_loss'],
+    examplePhrases: [
+      'annex conflicts and schedule hierarchy issues create a dispute about whether substitute performance meets contractual acceptance',
+      'a project cannot close because the parties disagree over technical equivalence and acceptance criteria'
+    ],
+    counterExamples: [
+      'the delivery team misses a milestone but the specification and acceptance rules are undisputed',
+      'service capacity degrades without any contract interpretation issue'
+    ],
+    legacyKey: 'legal-contract',
+    lensKey: 'legal-contract',
+    lensLabel: 'Legal / contract',
+    functionKey: 'compliance',
+    estimatePresetKey: 'legalContract'
+  }),
+
+  family({
+    key: 'off_contract_purchase_value_leakage',
+    label: 'Off-contract purchasing and value leakage',
+    domain: 'procurement',
+    description: 'Buying outside approved sourcing channels duplicates entitlements or weakens commercial leverage before any live supplier incident occurs.',
+    priorityScore: 85,
+    positiveSignals: [
+      signal('maverick spend', 'strong'),
+      signal('off-contract', 'strong'),
+      signal('outside approved sourcing', 'strong'),
+      signal('bypassing procurement', 'strong'),
+      signal('enterprise agreement', 'strong'),
+      signal('duplicate licenses', 'strong'),
+      signal('duplicate licences', 'strong'),
+      signal('higher unit pricing', 'strong'),
+      signal('pricing leakage', 'strong'),
+      signal('change request directly to the reseller', 'strong'),
+      signal('strategic sourcing threshold', 'medium'),
+      signal('incumbent reseller', 'medium')
+    ],
+    antiSignals: [
+      signal('kickback', 'strong'),
+      signal('side letter', 'strong'),
+      signal('shipment delay', 'strong'),
+      signal('market access', 'medium'),
+      signal('export control', 'medium')
+    ],
+    requiredSignals: [signal('procurement', 'weak'), signal('purchase', 'weak'), signal('license', 'weak'), signal('reseller', 'weak')],
+    typicalAssets: ['enterprise agreement', 'software entitlement', 'local purchase path'],
+    typicalCauses: ['maverick spend', 'weak framework discipline', 'poor entitlement visibility'],
+    typicalConsequences: ['excess cost', 'duplicate entitlement', 'weaker sourcing governance'],
+    preferredRiskThemes: ['off-contract purchasing', 'commercial value leakage', 'software sourcing governance weakness'],
+    defaultOverlays: ['direct_monetary_loss', 'control_breakdown'],
+    examplePhrases: [
+      'a local team bypasses procurement, duplicates licenses already held centrally, and pays higher unit pricing through a reseller',
+      'software is bought outside the approved framework because the purchase is treated as below the strategic sourcing threshold'
+    ],
+    counterExamples: [
+      'a reseller conceals return rights or rebate evidence to misstate the commercial substance of the deal',
+      'the primary issue is a delayed software deployment rather than how the purchase was sourced'
+    ],
+    promptIdeaTemplates: [
+      'Local software buying bypasses the group framework and creates duplicate spend',
+      'Off-contract purchasing weakens leverage against an incumbent reseller'
+    ],
+    shortlistSeedThemes: ['off-contract purchasing', 'commercial value leakage', 'framework bypass'],
+    fallbackNarrativePatterns: [
+      'Keep the scenario in procurement when the central failure is how a purchase was sourced and approved, even if excess cost is the visible consequence.',
+      'Do not promote reseller language into fraud without explicit deception, kickbacks, or fabricated evidence.'
+    ],
+    legacyKey: 'procurement',
+    lensKey: 'procurement',
+    lensLabel: 'Procurement',
+    functionKey: 'procurement',
+    estimatePresetKey: 'procurement'
+  }),
+  family({
+    key: 'tender_methodology_value_misalignment',
+    label: 'Tender methodology and whole-life value misalignment',
+    domain: 'procurement',
+    description: 'The sourcing method or award criteria emphasize the wrong factors and lead to a procurement decision misaligned with technical and lifecycle value.',
+    priorityScore: 84,
+    positiveSignals: [
+      signal('rfp', 'strong'),
+      signal('request for proposal', 'strong'),
+      signal('scoring template', 'strong'),
+      signal('whole-life cost', 'strong'),
+      signal('whole life cost', 'strong'),
+      signal('lifecycle operating costs', 'strong'),
+      signal('technical weighting', 'strong'),
+      signal('energy efficiency', 'medium'),
+      signal('serviceability', 'medium'),
+      signal('spare-parts lead times', 'strong'),
+      signal('lowest upfront bidder', 'strong'),
+      signal('cooling systems', 'medium'),
+      signal('gulf conditions', 'medium')
+    ],
+    antiSignals: [
+      signal('kickback', 'strong'),
+      signal('collusion', 'strong'),
+      signal('shipment delay', 'medium'),
+      signal('service outage', 'medium')
+    ],
+    requiredSignals: [signal('tender', 'weak'), signal('bid', 'weak'), signal('score', 'weak'), signal('award', 'weak')],
+    typicalAssets: ['rfp methodology', 'evaluation model', 'technical criteria'],
+    typicalCauses: ['template reuse', 'poor category tailoring', 'wrong weighting design'],
+    typicalConsequences: ['suboptimal award', 'higher lifecycle cost', 'operating burden'],
+    preferredRiskThemes: ['tender design weakness', 'whole-life cost procurement failure', 'category capability gap'],
+    defaultOverlays: ['direct_monetary_loss', 'operational_disruption'],
+    examplePhrases: [
+      'a scoring template overweights generic commercial factors and underweights energy efficiency, serviceability, and spare-parts lead times',
+      'the lowest upfront bidder wins even though lifecycle cost and maintenance complexity are materially worse'
+    ],
+    counterExamples: [
+      'a supplier was selected on sound criteria but later failed to perform in service',
+      'the fact pattern centers on bribery or bid rigging rather than poor evaluation methodology'
+    ],
+    promptIdeaTemplates: [
+      'Tender criteria emphasize the wrong measures for a specialist asset class',
+      'Whole-life value is lost because the sourcing method optimizes the headline bid only'
+    ],
+    shortlistSeedThemes: ['tender design weakness', 'whole-life value misalignment', 'category capability gap'],
+    fallbackNarrativePatterns: [
+      'Keep the scenario in procurement when the root failure is the evaluation method rather than later operational effects.',
+      'Do not collapse a poor award methodology into operational or ESG primary just because efficiency or serviceability matter.'
+    ],
+    legacyKey: 'procurement',
+    lensKey: 'procurement',
+    lensLabel: 'Procurement',
+    functionKey: 'procurement',
+    estimatePresetKey: 'procurement'
+  }),
+  family({
+    key: 'lotting_and_competition_design_failure',
+    label: 'Lotting and competition design failure',
+    domain: 'procurement',
+    description: 'Package design or lot structure reduces competition, weakens price tension, and creates avoidable dependency before supplier performance is tested.',
+    priorityScore: 83,
+    positiveSignals: [
+      signal('lotting strategy', 'strong'),
+      signal('competition design', 'strong'),
+      signal('single aggregator', 'strong'),
+      signal('specialist suppliers', 'strong'),
+      signal('specialist provider', 'medium'),
+      signal('niche suppliers', 'medium'),
+      signal('price benchmarking proved weak', 'strong'),
+      signal('data-labeling services', 'medium'),
+      signal('multilingual medical annotation', 'medium'),
+      signal('one lot', 'medium'),
+      signal('single lot', 'medium')
+    ],
+    antiSignals: [
+      signal('kickback', 'strong'),
+      signal('delivery outage', 'medium'),
+      signal('data breach', 'strong'),
+      signal('business continuity incident', 'strong')
+    ],
+    requiredSignals: [signal('supplier', 'weak'), signal('lot', 'weak'), signal('package', 'weak'), signal('competition', 'weak')],
+    typicalAssets: ['lot structure', 'market package', 'supplier field'],
+    typicalCauses: ['over-bundling', 'weak market making', 'poor competition design'],
+    typicalConsequences: ['reduced optionality', 'weaker leverage', 'supplier dependency'],
+    preferredRiskThemes: ['poor market-making and lot strategy', 'commercial leverage loss', 'supplier lock-in created through procurement design'],
+    allowedSecondaryFamilies: ['single_source_dependency', 'supplier_concentration_risk'],
+    defaultOverlays: ['third_party_dependency', 'direct_monetary_loss'],
+    examplePhrases: [
+      'one large aggregator bids for a bundled lot that locks out niche suppliers capable of delivering parts of the requirement',
+      'weak lotting reduces competition and leaves price benchmarking thin before the service is delivered'
+    ],
+    counterExamples: [
+      'a specialist supplier is chosen through a well-structured lot design and later fails in performance',
+      'the core issue is model quality rather than how annotation work was packaged and competed'
+    ],
+    promptIdeaTemplates: [
+      'Competition weakens because unlike services are bundled into one sourcing lot',
+      'Procurement design creates lock-in before any live supplier failure occurs'
+    ],
+    shortlistSeedThemes: ['lot strategy weakness', 'competition design failure', 'supplier lock-in through procurement'],
+    fallbackNarrativePatterns: [
+      'Keep the scenario in procurement when dependency is created by the market package itself.',
+      'Do not promote data-labeling language into AI/model risk unless the event path is about model behavior rather than service sourcing.'
+    ],
+    legacyKey: 'procurement',
+    lensKey: 'procurement',
+    lensLabel: 'Procurement',
+    functionKey: 'procurement',
+    estimatePresetKey: 'procurement'
+  }),
+  family({
+    key: 'compressed_sourcing_contract_formation_gap',
+    label: 'Compressed sourcing and contract-formation gap',
+    domain: 'procurement',
+    description: 'Urgency and constrained supply compress the sourcing process so that obligations, remedies, or substitution rights remain unclear at commitment point.',
+    priorityScore: 84,
+    positiveSignals: [
+      signal('alternative distributor', 'strong'),
+      signal('legal carve-outs', 'strong'),
+      signal('warranty coverage', 'strong'),
+      signal('origin declarations', 'strong'),
+      signal('support obligations', 'strong'),
+      signal('side emails', 'strong'),
+      signal('draft appendices', 'strong'),
+      signal('distributor terms', 'strong'),
+      signal('deposit immediately', 'medium'),
+      signal('deposit request', 'medium'),
+      signal('scarce capacity', 'strong'),
+      signal('substitution rights', 'strong')
+    ],
+    antiSignals: [
+      signal('kickback', 'strong'),
+      signal('business email compromise', 'strong'),
+      signal('shipment delay', 'medium'),
+      signal('delivery slip', 'medium')
+    ],
+    requiredSignals: [signal('contract', 'weak'), signal('supplier', 'weak'), signal('terms', 'weak'), signal('obligations', 'weak')],
+    typicalAssets: ['distributor proposal', 'contract pack', 'deposit approval'],
+    typicalCauses: ['accelerated sourcing', 'fragmented term formation', 'scarcity pressure'],
+    typicalConsequences: ['weak buyer protection', 'ambiguous obligations', 'remedy uncertainty'],
+    preferredRiskThemes: ['contracting-through-procurement control failure', 'inadequate sourcing due diligence under constrained supply', 'procurement governance breakdown under market pressure'],
+    allowedSecondaryFamilies: ['contract_liability', 'scope_and_liability_allocation_dispute'],
+    defaultOverlays: ['legal_exposure', 'direct_monetary_loss'],
+    examplePhrases: [
+      'obligations and substitution rights are spread across draft appendices, emails, and distributor terms while the team is pressed to place a deposit',
+      'market pressure compresses the sourcing process before warranty, support, and origin protections are made clear'
+    ],
+    counterExamples: [
+      'the contract is clear and the supplier later defaults in delivery',
+      'export-control restrictions are the primary event rather than the procurement response to them'
+    ],
+    promptIdeaTemplates: [
+      'Compressed sourcing leaves key obligations unresolved at commitment point',
+      'Scarcity pressure turns contract formation into a procurement control failure'
+    ],
+    shortlistSeedThemes: ['contracting-through-procurement control failure', 'constrained-supply diligence gap', 'weak remedy protection'],
+    fallbackNarrativePatterns: [
+      'Keep the scenario in procurement when urgency weakens contract formation inside the sourcing event.',
+      'Do not promote geopolitical or legal context over the procurement failure that created the exposure.'
+    ],
+    legacyKey: 'procurement',
+    lensKey: 'procurement',
+    lensLabel: 'Procurement',
+    functionKey: 'procurement',
+    estimatePresetKey: 'procurement'
+  }),
+  family({
+    key: 'bundled_award_leverage_erosion',
+    label: 'Bundled award and negotiation leverage erosion',
+    domain: 'procurement',
+    description: 'A high-value tender is structured in a way that embeds avoidable dependence, price traps, or weak leverage before award.',
+    priorityScore: 82,
+    positiveSignals: [
+      signal('bundled scope', 'strong'),
+      signal('price validity', 'strong'),
+      signal('evaluation criteria', 'strong'),
+      signal('award strategy', 'strong'),
+      signal('installation change orders', 'medium'),
+      signal('opaque assumptions', 'strong'),
+      signal('shortest lead times', 'medium'),
+      signal('volatile upstream component markets', 'medium'),
+      signal('negotiation approach', 'medium')
+    ],
+    antiSignals: [
+      signal('kickback', 'strong'),
+      signal('shipment slipped', 'strong'),
+      signal('port congestion', 'strong'),
+      signal('service outage', 'strong')
+    ],
+    requiredSignals: [signal('tender', 'weak'), signal('award', 'weak'), signal('pricing', 'weak'), signal('supplier', 'weak')],
+    typicalAssets: ['bundled tender', 'evaluation pack', 'price-validity clause'],
+    typicalCauses: ['over-bundling', 'weak award discipline', 'poor negotiation structure'],
+    typicalConsequences: ['pricing traps', 'reduced leverage', 'avoidable dependency'],
+    preferredRiskThemes: ['tender design weakness', 'award strategy risk', 'negotiation leverage erosion'],
+    allowedSecondaryFamilies: ['single_source_dependency', 'supplier_concentration_risk', 'scope_and_liability_allocation_dispute'],
+    defaultOverlays: ['direct_monetary_loss', 'third_party_dependency'],
+    examplePhrases: [
+      'a technically attractive bidder couples short lead times to bundled scope, opaque change-order assumptions, and limited price validity',
+      'the core decision is whether tender structure and negotiation approach are strong enough before award'
+    ],
+    counterExamples: [
+      'the award is clean and the problem arises later from live supply disruption',
+      'pricing issues stem from proven misconduct rather than weak award design'
+    ],
+    promptIdeaTemplates: [
+      'Tender structure embeds pricing traps before the contract is signed',
+      'Bundled scope weakens leverage in a high-value award decision'
+    ],
+    shortlistSeedThemes: ['award strategy risk', 'negotiation leverage erosion', 'bundled tender weakness'],
+    fallbackNarrativePatterns: [
+      'Keep the scenario in procurement when the decisive risk sits in pre-award structure and leverage rather than post-award performance.',
+      'Do not collapse hardware and lead-time language into supply chain when the event path is about the award design itself.'
+    ],
+    legacyKey: 'procurement',
+    lensKey: 'procurement',
+    lensLabel: 'Procurement',
+    functionKey: 'procurement',
+    estimatePresetKey: 'procurement'
+  }),
+  family({
+    key: 'urgent_direct_negotiation_readiness_gap',
+    label: 'Urgent direct negotiation and readiness gap',
+    domain: 'procurement',
+    description: 'Emergency or time-pressured sourcing narrows into direct negotiation before scope, service baselines, or should-cost discipline are mature.',
+    priorityScore: 83,
+    positiveSignals: [
+      signal('direct negotiation', 'strong'),
+      signal('incumbent-led consortium', 'strong'),
+      signal('incumbent consortium', 'strong'),
+      signal('scope creep', 'strong'),
+      signal('service baselines', 'strong'),
+      signal('should-cost', 'strong'),
+      signal('should cost', 'strong'),
+      signal('urgent sourcing', 'medium'),
+      signal('emergency sourcing exercise', 'strong'),
+      signal('time is limited', 'medium'),
+      signal('fragmented position', 'medium')
+    ],
+    antiSignals: [
+      signal('service outage', 'strong'),
+      signal('business continuity incident', 'strong'),
+      signal('supplier compromise', 'strong'),
+      signal('kickback', 'strong')
+    ],
+    requiredSignals: [signal('negotiation', 'weak'), signal('scope', 'weak'), signal('service', 'weak'), signal('pricing', 'weak')],
+    typicalAssets: ['negotiation pack', 'scope baseline', 'should-cost model'],
+    typicalCauses: ['compressed timeline', 'weak demand normalization', 'incumbent dependence'],
+    typicalConsequences: ['inflated pricing', 'poor service construct', 'weak negotiation leverage'],
+    preferredRiskThemes: ['demand-specification weakness', 'single-source negotiation risk', 'commercial readiness gap in urgent sourcing'],
+    allowedSecondaryFamilies: ['supplier_concentration_risk'],
+    defaultOverlays: ['direct_monetary_loss', 'third_party_dependency'],
+    examplePhrases: [
+      'time pressure pushes the group into direct negotiation with an incumbent consortium before service baselines and should-cost models are stable',
+      'scope creep and inconsistent service constructs leave the enterprise negotiating from a fragmented position'
+    ],
+    counterExamples: [
+      'an urgent supplier issue becomes a business continuity incident after service failure begins',
+      'the scenario is about continuity or cyber sensitivity rather than the sourcing posture before award'
+    ],
+    promptIdeaTemplates: [
+      'Urgent sourcing narrows into direct negotiation before the demand baseline is mature',
+      'The enterprise enters negotiation without a coherent should-cost and service baseline'
+    ],
+    shortlistSeedThemes: ['demand-specification weakness', 'single-source negotiation risk', 'urgent sourcing readiness gap'],
+    fallbackNarrativePatterns: [
+      'Keep the scenario in procurement when the core problem is negotiation readiness under time pressure.',
+      'Do not promote urgency into business continuity unless a live service interruption is already underway.'
+    ],
+    legacyKey: 'procurement',
+    lensKey: 'procurement',
+    lensLabel: 'Procurement',
+    functionKey: 'procurement',
+    estimatePresetKey: 'procurement'
+  }),
+
+  family({
+    key: 'single_source_buffer_shortfall',
+    label: 'Single-source buffer shortfall',
+    domain: 'supply_chain',
+    description: 'A live single-source dependency, thin safety stock, or production reallocation creates a material delivery shortfall for downstream work.',
+    priorityScore: 86,
+    positiveSignals: [
+      signal('single approved supplier', 'strong'),
+      signal('single approved source', 'strong'),
+      signal('production line shift', 'strong'),
+      signal('inventory buffers were minimal', 'strong'),
+      signal('minimal buffer inventory', 'strong'),
+      signal('insufficient safety stock', 'strong'),
+      signal('rack enclosures', 'medium'),
+      signal('shipment slipped', 'strong'),
+      signal('shipment delay', 'strong'),
+      signal('customer go-live dates', 'medium')
+    ],
+    antiSignals: [
+      ...DELIVERY_ANTI,
+      signal('contract award', 'strong'),
+      signal('bid evaluation', 'strong'),
+      signal('vendor access compromised', 'strong'),
+      signal('export control', 'strong')
+    ],
+    requiredSignals: [signal('supplier', 'weak'), signal('inventory', 'weak'), signal('shipment', 'weak'), signal('buffer', 'weak')],
+    typicalAssets: ['single-source component', 'inventory buffer', 'deployment commitment'],
+    typicalCauses: ['production reallocation', 'thin safety stock', 'weak substitute planning'],
+    typicalConsequences: ['backlog growth', 'operational disruption', 'third-party dependency'],
+    preferredRiskThemes: ['single-source delivery shortfall', 'buffer fragility', 'inbound material delay'],
+    defaultMechanisms: ['dependency_failure'],
+    allowedSecondaryFamilies: ['single_source_dependency', 'delivery_slippage', 'supplier_concentration_risk'],
+    canCoExistWith: ['single_source_dependency', 'delivery_slippage'],
+    canEscalateTo: ['programme_delivery_slippage'],
+    cannotBePrimaryWith: ['third_party_access_compromise', 'supplier_insolvency'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'vendor_access_weakness'],
+    defaultOverlays: ['backlog_growth', 'operational_disruption', 'third_party_dependency'],
+    examplePhrases: [
+      'a single approved supplier shifts production and thin inventory buffers now create a delivery shortfall',
+      'minimal safety stock turns a live single-source slip into delayed downstream go-live dates'
+    ],
+    counterExamples: [
+      'a supplier category is concentrated but there is no live delivery pressure yet',
+      'the issue is only whether a sourcing award was governed properly'
+    ],
+    promptIdeaTemplates: [
+      'A live single-source supplier slip is amplified by weak inventory buffers',
+      'Thin safety stock turns a production reallocation into an inbound material delay'
+    ],
+    shortlistSeedThemes: ['single-source delivery shortfall', 'insufficient safety stock', 'inbound material delay'],
+    fallbackNarrativePatterns: [
+      'Keep the scenario in supply chain when a live source-and-buffer failure creates a delivery shortfall, even if procurement concentration also exists.',
+      'Do not collapse thin inventory and inbound delay into generic programme slippage when the physical supply path is explicit.'
+    ],
+    legacyKey: 'supply-chain',
+    lensKey: 'supply-chain',
+    lensLabel: 'Supply chain',
+    functionKey: 'procurement',
+    estimatePresetKey: 'supplyChain'
+  }),
+  family({
     key: 'single_source_dependency',
     label: 'Single-source dependency',
     domain: 'procurement',
@@ -2322,6 +3127,259 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     fallbackNarrativePatterns: [
       'Keep the scenario in the logistics lane when transport, shipment, route, or transit disruption is the explicit cause.',
       'Do not collapse a shipment blockage into generic delivery slippage when the logistics cause is the event path.'
+    ],
+    legacyKey: 'supply-chain',
+    lensKey: 'supply-chain',
+    lensLabel: 'Supply chain',
+    functionKey: 'procurement',
+    estimatePresetKey: 'supplyChain'
+  }),
+  family({
+    key: 'critical_path_logistics_sequencing',
+    label: 'Critical-path logistics sequencing failure',
+    domain: 'supply_chain',
+    description: 'Cross-border transport, customs, or inbound-equipment sequencing breaks a critical installation or commissioning path.',
+    priorityScore: 88,
+    positiveSignals: [
+      signal('port congestion', 'strong'),
+      signal('customs inspection', 'strong'),
+      signal('customs slowdown', 'strong'),
+      signal('missed generator arrival', 'strong'),
+      signal('generator delivery', 'medium'),
+      signal('installation sequence', 'strong'),
+      signal('site energization', 'strong'),
+      signal('critical-path inbound logistics', 'strong'),
+      signal('cross-border equipment flows', 'strong'),
+      signal('contractor teams stranded', 'medium'),
+      signal('commissioning delay', 'medium')
+    ],
+    antiSignals: [
+      ...DELIVERY_ANTI,
+      signal('entity list', 'strong'),
+      signal('sanctions spillover', 'strong'),
+      signal('tariff shock', 'strong'),
+      signal('edge controller', 'strong'),
+      signal('telemetry gaps', 'strong'),
+      signal('regional grid disturbance', 'strong')
+    ],
+    requiredSignals: [signal('customs', 'weak'), signal('port', 'weak'), signal('installation', 'weak'), signal('shipment', 'weak')],
+    typicalAssets: ['critical inbound equipment', 'installation sequence', 'commissioning path'],
+    typicalCauses: ['port congestion', 'customs delay', 'sequencing fragility across inbound equipment'],
+    typicalConsequences: ['operational disruption', 'backlog growth', 'third-party dependency'],
+    preferredRiskThemes: ['critical-path inbound logistics', 'cross-border sequencing fragility', 'equipment-arrival blockage'],
+    defaultMechanisms: ['dependency_failure'],
+    allowedSecondaryFamilies: ['logistics_disruption', 'delivery_slippage', 'programme_delivery_slippage'],
+    canCoExistWith: ['logistics_disruption', 'delivery_slippage'],
+    canEscalateTo: ['programme_delivery_slippage'],
+    cannotBePrimaryWith: ['market_access_restriction', 'third_party_access_compromise'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'edge_logic_synchronisation_failure'],
+    defaultOverlays: ['operational_disruption', 'backlog_growth', 'third_party_dependency'],
+    examplePhrases: [
+      'port congestion and customs inspection delays strand contractor teams because critical equipment misses the installation sequence',
+      'a missed generator arrival blocks site energization across a tightly sequenced commissioning path'
+    ],
+    counterExamples: [
+      'a formal export-control restriction blocks the route before shipment starts',
+      'site systems become unstable because the controller baseline is wrong'
+    ],
+    promptIdeaTemplates: [
+      'Critical inbound logistics fail on the installation path and delay commissioning',
+      'Cross-border equipment sequencing breaks a tightly coupled energization plan'
+    ],
+    shortlistSeedThemes: ['critical-path inbound logistics disruption', 'material-flow sequencing fragility', 'cross-border logistics dependency'],
+    fallbackNarrativePatterns: [
+      'Treat port, customs, and inbound-equipment sequencing as supply chain primary unless the text explicitly moves into a sovereignty restriction or OT control failure.',
+      'Do not let energization or commissioning consequences pull a logistics-sequencing event into OT or transformation primary when the material path is clear.'
+    ],
+    legacyKey: 'supply-chain',
+    lensKey: 'supply-chain',
+    lensLabel: 'Supply chain',
+    functionKey: 'procurement',
+    estimatePresetKey: 'supplyChain'
+  }),
+  family({
+    key: 'multi_tier_material_flow_disruption',
+    label: 'Multi-tier material flow disruption',
+    domain: 'supply_chain',
+    description: 'Hidden sub-tier dependency, quality holds, or cascading upstream bottlenecks disrupt physical material flow across multiple programmes or sites.',
+    priorityScore: 89,
+    positiveSignals: [
+      signal('sub-tier supplier', 'strong'),
+      signal('shared sub-tier', 'strong'),
+      signal('board assembler', 'strong'),
+      signal('quality hold', 'strong'),
+      signal('shared dependency', 'strong'),
+      signal('component shortage', 'strong'),
+      signal('sub-tier bottlenecks', 'strong'),
+      signal('shipment windows', 'strong'),
+      signal('material flow', 'strong'),
+      signal('critical-component sequencing', 'medium'),
+      signal('upstream constraint propagation', 'strong'),
+      signal('custom busways', 'medium'),
+      signal('coolant distribution manifolds', 'medium')
+    ],
+    antiSignals: [
+      ...DELIVERY_ANTI,
+      signal('contract award', 'strong'),
+      signal('vendor access compromised', 'strong'),
+      signal('entity list', 'strong'),
+      signal('licensing dispute', 'strong')
+    ],
+    requiredSignals: [signal('supplier', 'weak'), signal('component', 'weak'), signal('shipment', 'weak'), signal('material', 'weak'), signal('sub-tier', 'weak')],
+    typicalAssets: ['critical component flow', 'multi-tier supply path', 'installation sequence'],
+    typicalCauses: ['hidden sub-tier dependency', 'quality-triggered hold', 'upstream bottleneck propagation'],
+    typicalConsequences: ['operational disruption', 'backlog growth', 'third-party dependency'],
+    preferredRiskThemes: ['sub-tier concentration', 'material-flow disruption', 'upstream bottleneck propagation'],
+    defaultMechanisms: ['dependency_failure'],
+    allowedSecondaryFamilies: ['supplier_concentration_risk', 'delivery_slippage', 'logistics_disruption'],
+    canCoExistWith: ['delivery_slippage', 'logistics_disruption'],
+    canEscalateTo: ['programme_delivery_slippage'],
+    cannotBePrimaryWith: ['third_party_access_compromise', 'market_access_restriction'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'contract_liability'],
+    defaultOverlays: ['operational_disruption', 'backlog_growth', 'third_party_dependency'],
+    examplePhrases: [
+      'a hidden sub-tier quality hold creates shared component shortages across multiple programmes',
+      'upstream bottlenecks cascade across shipment windows and break material sequencing for an integrated build'
+    ],
+    counterExamples: [
+      'a supplier category is concentrated but still delivering on time',
+      'the issue is whether a step-in right or liability cap can be enforced'
+    ],
+    promptIdeaTemplates: [
+      'A hidden sub-tier dependency creates a quality-triggered material shortage',
+      'Upstream bottlenecks cascade through shipment windows and disrupt integrated build sequencing'
+    ],
+    shortlistSeedThemes: ['sub-tier concentration risk', 'quality-triggered material shortage', 'upstream constraint propagation'],
+    fallbackNarrativePatterns: [
+      'Keep hidden sub-tier dependence, quality holds, and upstream bottlenecks in the supply-chain lane even when supplier governance language is present.',
+      'Do not collapse cascading material-flow disruption into procurement or third-party primary just because suppliers remain contractually engaged.'
+    ],
+    legacyKey: 'supply-chain',
+    lensKey: 'supply-chain',
+    lensLabel: 'Supply chain',
+    functionKey: 'procurement',
+    estimatePresetKey: 'supplyChain'
+  }),
+  family({
+    key: 'allocation_supply_assurance_erosion',
+    label: 'Allocation and supply assurance erosion',
+    domain: 'supply_chain',
+    description: 'Scarcity allocation, fragmented demand signals, or missing OEM protection erode assured access to constrained physical stock.',
+    priorityScore: 87,
+    positiveSignals: [
+      signal('allocation priority', 'strong'),
+      signal('allocation rights', 'strong'),
+      signal('original manufacturer', 'medium'),
+      signal('oem', 'strong'),
+      signal('fragmented forecast', 'strong'),
+      signal('non-binding forecast', 'strong'),
+      signal('demand aggregation', 'strong'),
+      signal('demand signal', 'medium'),
+      signal('constrained stock', 'strong'),
+      signal('internal competition', 'medium'),
+      signal('distributor priority shifted', 'strong'),
+      signal('forecast certainty', 'medium')
+    ],
+    antiSignals: [
+      ...DELIVERY_ANTI,
+      signal('entity list', 'strong'),
+      signal('sanctions spillover', 'strong'),
+      signal('tariff shock', 'strong'),
+      signal('localization requirement', 'strong'),
+      signal('foreign-influence review', 'strong'),
+      signal('vendor access compromised', 'strong')
+    ],
+    requiredSignals: [signal('allocation', 'weak'), signal('forecast', 'weak'), signal('stock', 'weak'), signal('distributor', 'weak'), signal('oem', 'weak')],
+    typicalAssets: ['constrained component stock', 'OEM allocation position', 'aggregated demand signal'],
+    typicalCauses: ['weak demand aggregation', 'no OEM protection', 'allocation reprioritisation under scarcity'],
+    typicalConsequences: ['operational disruption', 'backlog growth', 'third-party dependency'],
+    preferredRiskThemes: ['allocation assurance risk', 'demand aggregation weakness', 'distributor dependency without OEM protection'],
+    defaultMechanisms: ['dependency_failure'],
+    allowedSecondaryFamilies: ['supplier_concentration_risk', 'market_access_restriction', 'programme_delivery_slippage'],
+    canCoExistWith: ['supplier_concentration_risk'],
+    canEscalateTo: ['programme_delivery_slippage'],
+    cannotBePrimaryWith: ['market_access_restriction', 'third_party_access_compromise'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'sovereignty_localisation_constraint'],
+    defaultOverlays: ['operational_disruption', 'backlog_growth', 'third_party_dependency'],
+    examplePhrases: [
+      'fragmented forecasts and missing OEM allocation rights leave the group exposed when distributor priority shifts',
+      'scarce stock is reallocated to stronger forecasts and multiple programmes now compete internally for constrained components'
+    ],
+    counterExamples: [
+      'sanctions or public-sector admissibility rules directly block the market',
+      'the issue is only whether the original sourcing award met policy'
+    ],
+    promptIdeaTemplates: [
+      'Weak demand aggregation leaves the enterprise without reliable allocation under scarce supply',
+      'Distributor dependency without OEM protection erodes assured access to constrained components'
+    ],
+    shortlistSeedThemes: ['allocation and supply assurance risk', 'demand aggregation weakness', 'cross-program supply contention'],
+    fallbackNarrativePatterns: [
+      'Keep OEM allocation, forecast fragmentation, and constrained-stock competition in the supply-chain lane unless an explicit geopolitical restriction is the trigger.',
+      'Do not collapse scarcity allocation into procurement-only or strategic-only primary when the event is assured access to physical stock.'
+    ],
+    legacyKey: 'supply-chain',
+    lensKey: 'supply-chain',
+    lensLabel: 'Supply chain',
+    functionKey: 'procurement',
+    estimatePresetKey: 'supplyChain'
+  }),
+  family({
+    key: 'deployable_inventory_readiness_failure',
+    label: 'Deployable inventory readiness failure',
+    domain: 'supply_chain',
+    description: 'Stock is nominally available but transit, inspection, packaging, or dispatch instability makes it unreliable for field demand.',
+    priorityScore: 88,
+    positiveSignals: [
+      signal('buffer hub', 'strong'),
+      signal('deployable inventory', 'strong'),
+      signal('inspection backlog', 'strong'),
+      signal('shipping re-routing', 'strong'),
+      signal('shipping rerouting', 'strong'),
+      signal('repair lead time', 'strong'),
+      signal('service-spares flow', 'strong'),
+      signal('service spares flow', 'strong'),
+      signal('replacement network modules', 'medium'),
+      signal('practically deployable', 'strong'),
+      signal('onward dispatch', 'medium'),
+      signal('field demand', 'medium')
+    ],
+    antiSignals: [
+      ...DELIVERY_ANTI,
+      signal('continuity exercise', 'strong'),
+      signal('manual fallback exercise', 'strong'),
+      signal('edge controller', 'strong'),
+      signal('telemetry gaps', 'strong'),
+      signal('vendor access compromised', 'strong')
+    ],
+    requiredSignals: [signal('inventory', 'weak'), signal('hub', 'weak'), signal('inspection', 'weak'), signal('dispatch', 'weak'), signal('spares', 'weak')],
+    typicalAssets: ['buffer stock', 'regional hub', 'field-spares flow'],
+    typicalCauses: ['inspection delays', 'shipping rerouting', 'packaging inconsistency', 'dispatch instability'],
+    typicalConsequences: ['operational disruption', 'backlog growth', 'third-party dependency'],
+    preferredRiskThemes: ['deployable inventory readiness', 'cross-border logistics fragility', 'service-spares disruption'],
+    defaultMechanisms: ['dependency_failure'],
+    allowedSecondaryFamilies: ['logistics_disruption', 'delivery_slippage', 'programme_delivery_slippage'],
+    canCoExistWith: ['logistics_disruption'],
+    canEscalateTo: ['programme_delivery_slippage'],
+    cannotBePrimaryWith: ['third_party_access_compromise', 'market_access_restriction'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'edge_logic_synchronisation_failure'],
+    defaultOverlays: ['operational_disruption', 'backlog_growth', 'third_party_dependency'],
+    examplePhrases: [
+      'a regional buffer hub holds stock that is technically available but not practically deployable because inspection and transit are unstable',
+      'shipping rerouting and packaging inconsistency weaken service-spares flow and threaten repair lead times'
+    ],
+    counterExamples: [
+      'a continuity exercise finds the alternate site is not ready',
+      'an industrial controller loses synchronization and destabilises the process'
+    ],
+    promptIdeaTemplates: [
+      'Deployable inventory readiness collapses even though nominal stock still exists',
+      'Hub, inspection, and onward-dispatch instability degrade service-spares flow'
+    ],
+    shortlistSeedThemes: ['deployable inventory readiness failure', 'cross-border logistics fragility', 'service-spares flow disruption'],
+    fallbackNarrativePatterns: [
+      'Treat hub readiness, inspection backlog, and practical deployability as supply chain primary unless the text explicitly becomes a continuity activation or OT control failure.',
+      'Do not let spares and field-service language alone pull a logistics-readiness event into OT when the chain instability is the real cause.'
     ],
     legacyKey: 'supply-chain',
     lensKey: 'supply-chain',
@@ -2576,6 +3634,123 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     estimatePresetKey: 'investmentJv'
   }),
   family({
+    key: 'investment_thesis_fragility',
+    label: 'Investment thesis fragility',
+    domain: 'strategic_transformation',
+    description: 'A proposed investment thesis relies on concentrated revenue, key-person dependence, unproven value-creation assumptions, or weak influence rights that may not justify the investment case.',
+    priorityScore: 82,
+    positiveSignals: ['minority investment', 'minority stake', 'value-creation thesis', 'cross-sell assumptions', 'revenue concentration', 'key-person dependence', 'influence limitation', 'investment thesis fragility', 'post-deal value realization'],
+    antiSignals: ['ddos', 'credential theft', 'policy breach'],
+    typicalAssets: ['investment thesis', 'minority governance model', 'value-creation plan'],
+    typicalCauses: ['weak diligence', 'concentrated revenue base', 'unproven cross-sell logic'],
+    typicalConsequences: ['direct monetary loss', 'reputational damage'],
+    preferredRiskThemes: ['minority investment fragility', 'value-creation thesis weakness', 'post-deal assumption risk'],
+    allowedSecondaryFamilies: ['portfolio_execution_drift', 'integration_failure'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'market_access_restriction'],
+    defaultOverlays: ['direct_monetary_loss', 'reputational_damage'],
+    examplePhrases: [
+      'a minority investment depends on concentrated revenue and unproven cross-sell assumptions',
+      'key-person dependence and weak influence rights undermine the value-creation thesis'
+    ],
+    counterExamples: [
+      'sanctions tighten and block access to the market',
+      'the acquired environment suffers a live credential compromise before close'
+    ],
+    legacyKey: 'investment-jv',
+    lensKey: 'investment-jv',
+    lensLabel: 'Investment / JV',
+    functionKey: 'strategic',
+    estimatePresetKey: 'investmentJv'
+  }),
+  family({
+    key: 'control_acquisition_assumption_misalignment',
+    label: 'Control acquisition assumption misalignment',
+    domain: 'strategic_transformation',
+    description: 'A control acquisition depends on fragile earnings quality, founder concentration, or post-close control assumptions that may not hold after closing.',
+    priorityScore: 84,
+    positiveSignals: ['controlling stake', 'control acquisition', 'quality of earnings', 'earnings quality', 'founder concentration', 'founder-centric', 'post-close control', 'one-off remediation projects', 'recurring managed-service margins', 'customer consent rights'],
+    antiSignals: ['ddos', 'credential theft', 'shipment delay'],
+    typicalAssets: ['control acquisition', 'deal valuation', 'post-close operating model'],
+    typicalCauses: ['fragile earnings base', 'founder dependence', 'weak post-close control assumptions'],
+    typicalConsequences: ['direct monetary loss', 'operational disruption'],
+    preferredRiskThemes: ['acquisition valuation fragility', 'post-close control risk', 'earnings quality dependence'],
+    allowedSecondaryFamilies: ['integration_failure', 'benefits_realisation_failure'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'market_access_restriction'],
+    defaultOverlays: ['direct_monetary_loss', 'operational_disruption'],
+    examplePhrases: [
+      'headline growth masks weaker recurring margins and heavy founder dependence',
+      'a control acquisition assumes post-close control that local management may resist'
+    ],
+    counterExamples: [
+      'a target misses an SLA after closing without any valuation issue',
+      'a regulator blocks the deal on market-access grounds'
+    ],
+    legacyKey: 'investment-jv',
+    lensKey: 'investment-jv',
+    lensLabel: 'Investment / JV',
+    functionKey: 'strategic',
+    estimatePresetKey: 'investmentJv'
+  }),
+  family({
+    key: 'jv_governance_boundary_breakdown',
+    label: 'JV governance boundary breakdown',
+    domain: 'strategic_transformation',
+    description: 'A joint venture becomes unstable because reserved matters, opportunity ownership, or decision rights are not operationally precise enough to govern the vehicle.',
+    priorityScore: 85,
+    positiveSignals: ['joint venture', 'reserved matters', 'reserved opportunities', 'pipeline ownership', 'transfer pricing', 'shared engineering resources', 'product-roadmap decisions', 'partner divergence', 'jv governance'],
+    antiSignals: ['ddos', 'credential theft', 'battery-room hazard'],
+    typicalAssets: ['joint venture vehicle', 'reserved-matter framework', 'shared resource model'],
+    typicalCauses: ['ambiguous governance boundary', 'weak decision-right design', 'partner misalignment'],
+    typicalConsequences: ['operational disruption', 'reputational damage', 'direct monetary loss'],
+    preferredRiskThemes: ['JV governance ambiguity', 'partner-alignment breakdown', 'operationalized-boundary failure'],
+    allowedSecondaryFamilies: ['integration_failure', 'contract_liability'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'market_access_restriction'],
+    defaultOverlays: ['operational_disruption', 'direct_monetary_loss'],
+    examplePhrases: [
+      'a joint venture cannot agree which opportunities sit inside the vehicle and which remain with parents',
+      'reserved matters and transfer-pricing boundaries are too broad to guide daily decisions'
+    ],
+    counterExamples: [
+      'the venture loses access because sanctions close the market',
+      'the issue is only whether a single clause is enforceable'
+    ],
+    legacyKey: 'investment-jv',
+    lensKey: 'investment-jv',
+    lensLabel: 'Investment / JV',
+    functionKey: 'strategic',
+    estimatePresetKey: 'investmentJv'
+  }),
+  family({
+    key: 'jv_viability_exit_entanglement',
+    label: 'JV viability and exit entanglement',
+    domain: 'strategic_transformation',
+    description: 'A maturing JV faces disputed capital support, partner divergence, and embedded dependencies that make reset, restructuring, or exit materially harder than expected.',
+    priorityScore: 86,
+    positiveSignals: ['capital calls', 'valuation reset', 'scope narrowing', 'seconded personnel', 'seconded specialists', 'parent-supplied software licenses', 'preferred-supplier arrangements', 'clean separation', 'exit discussion', 'restructuring complexity', 'entangled ownership structure'],
+    antiSignals: ['ddos', 'credential theft', 'privacy breach'],
+    typicalAssets: ['JV vehicle', 'shared licences and staff', 'exit pathway'],
+    typicalCauses: ['partner divergence', 'commercial underperformance', 'structural entanglement'],
+    typicalConsequences: ['direct monetary loss', 'operational disruption', 'reputational damage'],
+    preferredRiskThemes: ['JV viability breakdown', 'exit entanglement', 'stalled reset economics'],
+    allowedSecondaryFamilies: ['jv_governance_boundary_breakdown', 'integration_failure', 'contract_liability'],
+    canEscalateTo: ['portfolio_execution_drift'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'market_access_restriction'],
+    defaultOverlays: ['direct_monetary_loss', 'operational_disruption'],
+    examplePhrases: [
+      'capital calls, seconded staff, and parent licences make a JV hard to reset or unwind',
+      'partner appetite diverges while exit and restructuring options are constrained by entanglement'
+    ],
+    counterExamples: [
+      'a programme misses milestones but the investment structure remains sound',
+      'market-access restrictions, not JV economics, are the cause of the stress'
+    ],
+    legacyKey: 'investment-jv',
+    lensKey: 'investment-jv',
+    lensLabel: 'Investment / JV',
+    functionKey: 'strategic',
+    estimatePresetKey: 'investmentJv'
+  }),
+  family({
     key: 'portfolio_execution_drift',
     label: 'Portfolio execution drift',
     domain: 'strategic_transformation',
@@ -2622,19 +3797,45 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     label: 'Market access restriction',
     domain: 'strategic_transformation',
     description: 'External restrictions or geopolitical measures reduce market access or execution viability.',
-    positiveSignals: ['market access restriction', 'cross-border restriction', 'tariff shock', 'entity list', 'trade restriction'],
+    positiveSignals: ['market access restriction', 'cross-border restriction', 'tariff shock', 'entity list', 'trade restriction', 'sanctions spillover', 'banking restriction', 'insurance withdrawal', 'travel approval restriction'],
     antiSignals: ['ddos', 'credential theft', 'payment approval'],
     typicalAssets: ['market entry plan', 'cross-border route'],
-    typicalCauses: ['trade restriction', 'geopolitical shift', 'sovereign measure'],
+    typicalCauses: ['trade restriction', 'geopolitical shift', 'sovereign measure', 'sanctions spillover across support channels'],
     typicalConsequences: ['operational disruption', 'regulatory scrutiny'],
     allowedSecondaryFamilies: ['sanctions_breach', 'logistics_disruption'],
     forbiddenDriftFamilies: ['availability_attack', 'identity_compromise'],
     defaultOverlays: ['operational_disruption', 'regulatory_scrutiny'],
-    examplePhrases: ['sanctions or tariff changes restrict market access', 'cross-border restriction blocks execution'],
+    examplePhrases: ['sanctions or tariff changes restrict market access', 'cross-border restriction blocks execution', 'banks, insurers, and travel approvals retreat before a formal prohibition exists'],
     counterExamples: ['botnet overwhelms the public site', 'forced labour allegation emerges in a supplier workforce'],
     legacyKey: 'geopolitical',
-    lensKey: 'strategic',
-    lensLabel: 'Strategic',
+    lensKey: 'geopolitical',
+    lensLabel: 'Geopolitical / market access',
+    functionKey: 'strategic',
+    estimatePresetKey: 'geopolitical'
+  }),
+  family({
+    key: 'sovereignty_localisation_constraint',
+    label: 'Sovereignty or localisation constraint',
+    domain: 'strategic_transformation',
+    description: 'Host-market sovereignty, localisation, ownership-transparency, or public-sector admissibility conditions materially constrain how the enterprise can bid, govern, or deliver in a target market.',
+    priorityScore: 76,
+    positiveSignals: ['localization requirement', 'localisation requirement', 'in-country autonomy', 'local board representation', 'foreign-influence review', 'ownership transparency requirement', 'technology-origin scrutiny', 'public-sector screening', 'public procurement screening', 'admissibility'],
+    antiSignals: ['ddos', 'credential theft', 'invoice fraud'],
+    typicalAssets: ['public-sector bid', 'market-entry operating model', 'ownership and governance structure'],
+    typicalCauses: ['sovereignty condition', 'localisation rule', 'public-sector admissibility filter', 'foreign-influence screening'],
+    typicalConsequences: ['operational disruption', 'regulatory scrutiny', 'reputational damage'],
+    preferredRiskThemes: ['localisation-driven access restriction', 'sovereign operating-model constraint', 'public-sector admissibility erosion'],
+    allowedSecondaryFamilies: ['market_access_restriction', 'contract_liability'],
+    canCoExistWith: ['market_access_restriction'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise', 'delivery_slippage'],
+    defaultOverlays: ['operational_disruption', 'regulatory_scrutiny'],
+    examplePhrases: ['localization and sovereign operating conditions reshape whether the bid remains viable', 'foreign-influence review and ownership transparency rules make a public-sector tender harder to access'],
+    counterExamples: ['a routine contract redline slows signature', 'a supplier misses delivery dates without any sovereignty or admissibility constraint'],
+    promptIdeaTemplates: ['A public-sector opportunity becomes harder to pursue because sovereignty conditions change how the enterprise must govern and deliver the service', 'A target market tightens admissibility filters around ownership, provenance, and localisation expectations'],
+    shortlistSeedThemes: ['sovereign market-access friction', 'localisation-driven bid constraint', 'public-sector admissibility pressure'],
+    legacyKey: 'geopolitical',
+    lensKey: 'geopolitical',
+    lensLabel: 'Geopolitical / market access',
     functionKey: 'strategic',
     estimatePresetKey: 'geopolitical'
   }),
@@ -3014,9 +4215,9 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     domain: 'esg_hse_people',
     description: 'Delivery or resilience depends on too few critical people, creating a people-led fragility in the operating model.',
     priorityScore: 77,
-    positiveSignals: ['critical staff dependency', 'single point of failure in the team', 'key-person dependency', 'too few trained staff', 'only one person knows', 'small number of individuals', 'absence would materially disrupt execution', 'knowledge concentration', 'shrinking core of experienced staff', 'weak onboarding', 'limited coaching'],
+    positiveSignals: ['critical staff dependency', 'single point of failure in the team', 'key-person dependency', 'too few trained staff', 'only one person knows', 'small number of individuals', 'absence would materially disrupt execution', 'knowledge concentration', 'shrinking core of experienced staff', 'weak onboarding', 'limited coaching', 'critical knowledge dependencies', 'informal onboarding', 'succession plans are nominal', 'capability depth', 'contingent specialists'],
     antiSignals: ['ddos', 'credential theft', 'fake invoice', 'greenwashing', 'supplier delay', 'portfolio execution drift'],
-    requiredSignals: ['critical staff dependency', 'single point of failure in the team', 'key-person dependency', 'too few trained staff', 'only one person knows', 'small number of individuals', 'absence would materially disrupt execution'],
+    requiredSignals: ['critical staff dependency', 'single point of failure in the team', 'key-person dependency', 'too few trained staff', 'only one person knows', 'small number of individuals', 'absence would materially disrupt execution', 'knowledge concentration', 'critical knowledge dependencies', 'shrinking core of experienced staff'],
     typicalAssets: ['critical team', 'specialist role', 'operational knowledge'],
     typicalCauses: ['key-person dependency', 'insufficient cross-training', 'knowledge concentration'],
     typicalConsequences: ['operational_disruption', 'recovery_strain', 'backlog_growth'],
@@ -3051,6 +4252,124 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     functionKey: 'hse',
     estimatePresetKey: 'peopleWorkforce'
   }),
+  family({
+    key: 'talent_retention_development_weakness',
+    label: 'Talent retention and development weakness',
+    domain: 'esg_hse_people',
+    description: 'Attrition, weak progression design, and poor development support erode critical capability depth in specialist teams.',
+    priorityScore: 82,
+    positiveSignals: ['voluntary attrition', 'internal transfer requests', 'role progression', 'weak onboarding', 'limited coaching', 'mentor new hires', 'mentoring load', 'weekend bid work', 'shrinking core of experienced staff', 'scarce talent', 'critical specialist team'],
+    antiSignals: ['ddos', 'credential theft', 'data transfer', 'plant room', 'badge bypass'],
+    requiredSignals: ['voluntary attrition', 'internal transfer requests', 'role progression', 'weak onboarding', 'limited coaching', 'shrinking core of experienced staff'],
+    typicalAssets: ['specialist team', 'talent pipeline', 'onboarding model'],
+    typicalCauses: ['workload concentration', 'unclear progression', 'weak development support'],
+    typicalConsequences: ['operational_disruption', 'backlog_growth', 'recovery_strain'],
+    preferredRiskThemes: ['critical talent retention risk', 'capability depth erosion', 'onboarding and development weakness'],
+    defaultMechanisms: ['fatigue_staffing_pressure', 'key_person_concentration'],
+    allowedSecondaryFamilies: ['critical_staff_dependency', 'workforce_fatigue_staffing_weakness'],
+    canCoExistWith: ['critical_staff_dependency', 'workforce_fatigue_staffing_weakness'],
+    cannotBePrimaryWith: ['identity_compromise', 'records_retention_non_compliance'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise'],
+    defaultOverlays: ['operational_disruption', 'reputational_damage', 'backlog_growth'],
+    examplePhrases: ['voluntary attrition rises after repeated weekend bid work and weak role progression in a specialist team', 'new hires receive limited coaching while a shrinking core of experienced staff carries delivery and mentoring'],
+    counterExamples: ['records are kept beyond the permitted period', 'a contractor bypasses a secure door'],
+    promptIdeaTemplates: ['Attrition and weak progression are eroding critical capability depth', 'Onboarding and coaching gaps are increasing dependence on a shrinking specialist core'],
+    shortlistSeedThemes: ['critical talent retention risk', 'capability concentration in senior staff', 'onboarding and development weakness'],
+    fallbackNarrativePatterns: ['Treat attrition, progression, and capability-development weakness as the event path rather than a generic delivery slowdown.', 'Keep operational strain as a consequence unless the text clearly starts with a service failure instead.'],
+    legacyKey: 'people-workforce',
+    lensKey: 'people-workforce',
+    lensLabel: 'People / workforce',
+    functionKey: 'hse',
+    estimatePresetKey: 'peopleWorkforce'
+  }),
+  family({
+    key: 'workforce_policy_model_mismatch',
+    label: 'Workforce policy and operating-model mismatch',
+    domain: 'esg_hse_people',
+    description: 'A one-size-fits-all workplace or localization policy conflicts with how specialist teams actually create value, reducing retention and effectiveness.',
+    priorityScore: 81,
+    positiveSignals: ['return-to-office', 'return to office', 'return-to-campus', 'return to campus', 'one-size-fits-all policy', 'late-evening coordination', 'quiet space', 'employee experience', 'campus allocation', 'hybrid workforce', 'role-localization', 'localization push', 'hidden second-job behavior', 'disengagement'],
+    antiSignals: ['forced labour', 'ddos', 'identity compromise', 'battery room', 'failover logic'],
+    requiredSignals: ['return-to-office', 'return to office', 'return-to-campus', 'return to campus', 'one-size-fits-all policy', 'employee experience', 'hybrid workforce', 'role-localization'],
+    typicalAssets: ['workforce policy', 'campus design', 'specialist work pattern'],
+    typicalCauses: ['uniform policy assumptions', 'poor workplace design fit', 'misread operating reality'],
+    typicalConsequences: ['operational_disruption', 'reputational_damage', 'backlog_growth'],
+    preferredRiskThemes: ['workforce model misfit', 'employee-experience and retention pressure', 'productivity loss from workplace-design mismatch'],
+    allowedSecondaryFamilies: ['workforce_fatigue_staffing_weakness'],
+    canCoExistWith: ['workforce_fatigue_staffing_weakness'],
+    cannotBePrimaryWith: ['perimeter_breach', 'records_retention_non_compliance'],
+    forbiddenDriftFamilies: ['perimeter_breach', 'availability_attack'],
+    defaultOverlays: ['operational_disruption', 'reputational_damage'],
+    examplePhrases: ['a return-to-campus policy clashes with late-evening coordination windows and quiet-space needs', 'role-localization and attendance assumptions no longer fit how specialist teams support global customers'],
+    counterExamples: ['a campus gate is tailgated by an unauthorised visitor', 'sensitive records are kept longer than policy allows'],
+    promptIdeaTemplates: ['A workplace policy no longer fits how specialist teams actually operate', 'Return-to-campus and localization assumptions are creating retention and effectiveness pressure'],
+    shortlistSeedThemes: ['workforce policy misfit', 'employee experience and retention pressure', 'work-model effectiveness gap'],
+    fallbackNarrativePatterns: ['Treat the policy and operating-model mismatch as the primary event path rather than a generic office, facilities, or confidentiality issue.', 'Keep any security, continuity, or compliance references as context unless they clearly start the scenario.'],
+    legacyKey: 'people-workforce',
+    lensKey: 'people-workforce',
+    lensLabel: 'People / workforce',
+    functionKey: 'hse',
+    estimatePresetKey: 'peopleWorkforce'
+  }),
+  family({
+    key: 'compensation_equity_mobility_fragmentation',
+    label: 'Compensation equity and mobility fragmentation',
+    domain: 'esg_hse_people',
+    description: 'Uncoordinated pay and mobility decisions across comparable roles undermine morale, trust, and talent-market credibility.',
+    priorityScore: 80,
+    positiveSignals: ['compensation disparities', 'materially higher packages', 'mentor resentment', 'internal mobility', 'acceptance rates', 'comparable roles', 'local hiring decisions', 'scarce technology skills', 'higher packages', 'retention sentiment'],
+    antiSignals: ['forced labour', 'payment fraud', 'construction incident', 'data residency'],
+    requiredSignals: ['compensation disparities', 'materially higher packages', 'internal mobility', 'acceptance rates', 'comparable roles'],
+    typicalAssets: ['specialist talent pool', 'offer governance', 'internal mobility framework'],
+    typicalCauses: ['decentralized pay decisions', 'weak enterprise talent governance', 'uneven offer discipline'],
+    typicalConsequences: ['reputational_damage', 'operational_disruption', 'backlog_growth'],
+    preferredRiskThemes: ['compensation equity pressure', 'internal trust and morale erosion', 'fragmented talent-governance risk'],
+    allowedSecondaryFamilies: ['talent_retention_development_weakness'],
+    canCoExistWith: ['talent_retention_development_weakness'],
+    cannotBePrimaryWith: ['payment_control_failure', 'records_retention_non_compliance'],
+    forbiddenDriftFamilies: ['payment_control_failure', 'forced_labour_modern_slavery'],
+    defaultOverlays: ['reputational_damage', 'operational_disruption'],
+    examplePhrases: ['materially higher packages for similar roles create mentor resentment and internal mobility friction', 'local hiring decisions create visible compensation disparities across scarce technology roles'],
+    counterExamples: ['invoice splitting is used to bypass approvals', 'a worker is injured on site'],
+    promptIdeaTemplates: ['Decentralized pay decisions are creating equity and trust pressure in scarce talent pools', 'Compensation and mobility governance no longer align across comparable specialist roles'],
+    shortlistSeedThemes: ['compensation equity pressure', 'manager trust erosion', 'fragmented talent-governance risk'],
+    fallbackNarrativePatterns: ['Treat pay disparity, mobility friction, and morale pressure as a workforce-governance event path rather than forcing it into compliance or finance.', 'Keep legal or compliance exposure as downstream context unless the text says a formal breach occurred first.'],
+    legacyKey: 'people-workforce',
+    lensKey: 'people-workforce',
+    lensLabel: 'People / workforce',
+    functionKey: 'hse',
+    estimatePresetKey: 'peopleWorkforce'
+  }),
+  family({
+    key: 'mixed_workforce_capability_architecture_gap',
+    label: 'Mixed-workforce capability architecture gap',
+    domain: 'esg_hse_people',
+    description: 'Capability resilience weakens because contingent, specialist, and employee populations are developed unevenly across succession, learning, and opportunity pathways.',
+    priorityScore: 83,
+    positiveSignals: ['contingent specialists', 'succession planning', 'learning access', 'leadership visibility', 'internal opportunity pathways', 'mixed employment model', 'promotion pathways', 'critical knowledge dependencies', 'capability maps', 'contractor populations', 'uneven development', 'talent architecture', 'critical capability management'],
+    antiSignals: ['ddos', 'identity compromise', 'export control', 'failover logic', 'climate disclosure'],
+    requiredSignals: ['contingent specialists', 'succession planning', 'learning access', 'mixed employment model', 'promotion pathways', 'critical knowledge dependencies', 'capability maps'],
+    typicalAssets: ['mixed workforce model', 'succession pipeline', 'critical capability map'],
+    typicalCauses: ['segmented development access', 'weak succession design', 'contingent knowledge outside normal pathways'],
+    typicalConsequences: ['recovery_strain', 'operational_disruption', 'reputational_damage'],
+    preferredRiskThemes: ['critical capability resilience gap', 'unequal workforce development pathways', 'fragile mixed-workforce operating model'],
+    defaultMechanisms: ['key_person_concentration'],
+    allowedSecondaryFamilies: ['critical_staff_dependency', 'talent_retention_development_weakness'],
+    canCoExistWith: ['critical_staff_dependency', 'talent_retention_development_weakness'],
+    cannotBePrimaryWith: ['supplier_control_weakness', 'ot_resilience_failure'],
+    forbiddenDriftFamilies: ['ot_resilience_failure', 'forced_labour_modern_slavery'],
+    defaultOverlays: ['recovery_strain', 'operational_disruption', 'reputational_damage'],
+    examplePhrases: ['contingent specialists hold critical know-how outside the normal talent-development system', 'succession planning, learning access, and promotion pathways vary sharply across comparable worker populations'],
+    counterExamples: ['an industrial edge controller becomes unstable after restart', 'a supplier workforce faces forced labour allegations'],
+    promptIdeaTemplates: ['A segmented workforce model is creating fragile capability resilience', 'Uneven development access across worker populations is weakening critical succession depth'],
+    shortlistSeedThemes: ['critical capability concentration', 'unequal workforce development architecture', 'talent resilience weakness'],
+    fallbackNarrativePatterns: ['Treat workforce segmentation, succession weakness, and uneven development access as the event path rather than collapsing it into continuity or OT language.', 'Keep business continuity implications as overlays unless the scenario starts with a disruption event instead of a people-model weakness.'],
+    legacyKey: 'people-workforce',
+    lensKey: 'people-workforce',
+    lensLabel: 'People / workforce',
+    functionKey: 'hse',
+    estimatePresetKey: 'peopleWorkforce'
+  }),
 
   family({
     key: 'perimeter_breach',
@@ -3058,7 +4377,7 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     domain: 'physical_ot',
     description: 'Physical intrusion, unauthorised site access, or protective-security control failure compromises a facility or restricted area.',
     priorityScore: 80,
-    positiveSignals: ['perimeter breach', 'site intrusion', 'intrusion into facility', 'perimeter failure', 'badge control lapse', 'visitor management failure', 'facility access lapse', 'unauthorised site access', 'unauthorized site access', 'restricted operations area', 'restricted area entered'],
+    positiveSignals: ['perimeter breach', 'site intrusion', 'intrusion into facility', 'perimeter failure', 'badge control lapse', 'visitor management failure', 'facility access lapse', 'unauthorised site access', 'unauthorized site access', 'restricted operations area', 'restricted area entered', 'door on bypass', 'unbadged individual', 'visitor escort lapse', 'restricted office area', 'fence-line alarms', 'camera blind spots', 'temporary gate protocol', 'after-hours service access', 'after-hours logistics', 'prototype facility', 'vehicle checks'],
     antiSignals: ['ddos', 'credential theft', 'greenwashing', 'no failover', 'industrial control'],
     typicalAssets: ['site perimeter', 'facility', 'restricted operations area'],
     typicalCauses: ['intrusion', 'perimeter weakness', 'access-control lapse'],
@@ -3072,6 +4391,32 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     defaultOverlays: ['operational_disruption', 'control_breakdown', 'reputational_damage'],
     examplePhrases: ['an unauthorised person bypasses facility controls into a restricted operations area', 'site intrusion bypasses the perimeter and exposes a restricted area'],
     counterExamples: ['botnet traffic floods the website', 'weak payment approval control releases funds'],
+    legacyKey: 'physical-security',
+    lensKey: 'physical-security',
+    lensLabel: 'Physical security',
+    functionKey: 'operations',
+    estimatePresetKey: 'physicalSecurity'
+  }),
+  family({
+    key: 'access_exception_exposure',
+    label: 'Access-exception and sensitive-zone exposure',
+    domain: 'physical_ot',
+    description: 'Temporary badge privileges, event exceptions, or weak zone segregation create unauthorized proximity to sensitive people, areas, or materials.',
+    priorityScore: 82,
+    positiveSignals: ['temporary badge privileges', 'event footprint', 'room-booking exceptions', 'catering access windows', 'vip escorts', 'restricted zones', 'executive movement', 'executive floor', 'legal war room', 'delegation visit', 'transition points', 'unauthorized movement'],
+    antiSignals: ['ddos', 'credential theft', 'retention breach', 'worker injury'],
+    typicalAssets: ['executive area', 'war room', 'restricted zone', 'delegation route'],
+    typicalCauses: ['temporary access exception', 'weak privilege reversal', 'poor physical segregation'],
+    typicalConsequences: ['control breakdown', 'reputational damage', 'leadership assurance pressure'],
+    preferredRiskThemes: ['event-access exception exposure', 'restricted-zone dilution', 'executive-area proximity risk'],
+    defaultMechanisms: ['access_control_weakness'],
+    allowedSecondaryFamilies: ['perimeter_breach'],
+    canCoExistWith: ['perimeter_breach'],
+    cannotBePrimaryWith: ['process_breakdown', 'service_delivery_failure'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise'],
+    defaultOverlays: ['control_breakdown', 'reputational_damage', 'operational_disruption'],
+    examplePhrases: ['temporary event badges and catering access windows create uncontrolled movement around a legal war room', 'executive movement and restricted prototype routes overlap during a delegation visit'],
+    counterExamples: ['website traffic flood degrades the customer portal', 'supplier insolvency delays a programme milestone'],
     legacyKey: 'physical-security',
     lensKey: 'physical-security',
     lensLabel: 'Physical security',
@@ -3102,6 +4447,32 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     estimatePresetKey: 'physicalSecurity'
   }),
   family({
+    key: 'sensitive_asset_staging_exposure',
+    label: 'Sensitive asset staging and loading exposure',
+    domain: 'physical_ot',
+    description: 'Weak badge, escort, vehicle-screening, or loading-bay control exposes sensitive hardware or restricted staging areas to theft, tampering, or covert access.',
+    priorityScore: 83,
+    positiveSignals: ['contractor badges', 'loading bay', 'secure cage', 'vehicle screening', 'unsupervised access', 'prototype hardware', 'prototype labs', 'hardware staging', 'encrypted storage devices', 'compute modules', 'pre-configuration cage', 'after-hours logistics'],
+    antiSignals: ['ddos', 'credential theft', 'policy retention breach', 'compensation inequity'],
+    typicalAssets: ['staging floor', 'secure cage', 'prototype hardware', 'loading route'],
+    typicalCauses: ['informal badge reissue', 'weak escort discipline', 'incomplete vehicle screening'],
+    typicalConsequences: ['asset interference', 'control breakdown', 'operational disruption'],
+    preferredRiskThemes: ['restricted staging access weakness', 'hardware tampering exposure', 'loading-bay supervision failure'],
+    defaultMechanisms: ['access_control_weakness'],
+    allowedSecondaryFamilies: ['perimeter_breach'],
+    canCoExistWith: ['perimeter_breach'],
+    cannotBePrimaryWith: ['service_delivery_failure', 'availability_attack'],
+    forbiddenDriftFamilies: ['identity_compromise', 'payment_control_failure'],
+    defaultOverlays: ['control_breakdown', 'operational_disruption', 'reputational_damage'],
+    examplePhrases: ['temporary contractor badges and a loading-bay escort route expose a secure hardware cage', 'vehicle-screening logs are incomplete around a restricted staging facility'],
+    counterExamples: ['endpoint malware encrypts customer files', 'a contractual liability dispute delays the launch'],
+    legacyKey: 'physical-security',
+    lensKey: 'physical-security',
+    lensLabel: 'Physical security',
+    functionKey: 'operations',
+    estimatePresetKey: 'physicalSecurity'
+  }),
+  family({
     key: 'ot_resilience_failure',
     label: 'OT resilience failure',
     domain: 'physical_ot',
@@ -3122,6 +4493,110 @@ const BASE_SCENARIO_TAXONOMY_FAMILIES = Object.freeze([
     defaultOverlays: ['operational_disruption', 'recovery_strain', 'service_outage'],
     examplePhrases: ['an industrial control environment becomes unstable and site operations cannot be sustained safely', 'OT resilience weakness destabilises site systems'],
     counterExamples: ['website is slowed by hostile traffic', 'privacy obligation breached through unlawful processing'],
+    legacyKey: 'ot-resilience',
+    lensKey: 'ot-resilience',
+    lensLabel: 'OT / site resilience',
+    functionKey: 'operations',
+    estimatePresetKey: 'otResilience'
+  }),
+  family({
+    key: 'edge_environmental_instability',
+    label: 'Edge environmental instability',
+    domain: 'physical_ot',
+    description: 'Environmental or facilities conditions destabilize edge or site-adjacent OT infrastructure without any malicious trigger.',
+    priorityScore: 83,
+    positiveSignals: ['edge computing room', 'temperature alarms', 'power fluctuation', 'airflow settings', 'workload throttling', 'heatwave', 'power quality fluctuations'],
+    antiSignals: ['ddos', 'credential theft', 'privacy breach', 'worker injury'],
+    typicalAssets: ['edge computing room', 'gateway cluster', 'local inference hardware'],
+    typicalCauses: ['environmental drift', 'airflow change', 'power-quality instability'],
+    typicalConsequences: ['operational disruption', 'recovery strain', 'manual workload reduction'],
+    preferredRiskThemes: ['edge-site environmental instability', 'facilities-induced OT stress', 'reduced resilience margin at the edge'],
+    defaultMechanisms: ['industrial_control_instability'],
+    allowedSecondaryFamilies: ['ot_resilience_failure'],
+    canCoExistWith: ['ot_resilience_failure'],
+    cannotBePrimaryWith: ['availability_attack', 'perimeter_breach'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise'],
+    defaultOverlays: ['operational_disruption', 'recovery_strain'],
+    examplePhrases: ['an edge computing room shows temperature alarms and power fluctuation after airflow settings are changed', 'heat and power stress force workload throttling across field gateway clusters'],
+    counterExamples: ['a cloud account is compromised through stolen credentials', 'a customer contract dispute delays deployment'],
+    legacyKey: 'ot-resilience',
+    lensKey: 'ot-resilience',
+    lensLabel: 'OT / site resilience',
+    functionKey: 'operations',
+    estimatePresetKey: 'otResilience'
+  }),
+  family({
+    key: 'telemetry_state_recovery_failure',
+    label: 'Telemetry and state-recovery failure',
+    domain: 'physical_ot',
+    description: 'Telemetry buffering, replay, clocking, or recovery sequencing becomes unreliable after disruption, weakening safe control-state reconstruction.',
+    priorityScore: 84,
+    positiveSignals: ['telemetry gaps', 'manual field verification', 'gateway clocks', 'telemetry replay', 'control confirmations', 'connectivity loss', 'state reconstruction'],
+    antiSignals: ['ddos', 'credential theft', 'lawful basis', 'supplier bribery'],
+    typicalAssets: ['edge gateway', 'telemetry buffer', 'controller event log'],
+    typicalCauses: ['clock drift', 'rollback mismatch', 'state-recovery sequencing defect'],
+    typicalConsequences: ['recovery strain', 'manual fallback', 'reduced confidence in local control state'],
+    preferredRiskThemes: ['telemetry recovery weakness', 'clock and sequencing drift', 'hidden resilience defect after communications loss'],
+    defaultMechanisms: ['industrial_control_instability'],
+    allowedSecondaryFamilies: ['ot_resilience_failure'],
+    canCoExistWith: ['ot_resilience_failure'],
+    cannotBePrimaryWith: ['availability_attack', 'perimeter_breach'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise'],
+    defaultOverlays: ['recovery_strain', 'operational_disruption'],
+    examplePhrases: ['gateway clocks drift and telemetry replay no longer reconstructs state cleanly after connectivity loss', 'manual field verification is triggered because control confirmations and alarm ordering cannot be trusted'],
+    counterExamples: ['a phishing email steals credentials from an operator', 'a retention rule is breached for personal data'],
+    legacyKey: 'ot-resilience',
+    lensKey: 'ot-resilience',
+    lensLabel: 'OT / site resilience',
+    functionKey: 'operations',
+    estimatePresetKey: 'otResilience'
+  }),
+  family({
+    key: 'failover_sequence_inconsistency',
+    label: 'Failover and restart-sequence inconsistency',
+    domain: 'physical_ot',
+    description: 'Restart priorities or failover logic across controllers, power transfer, and supporting site systems are inconsistent enough to create unstable restoration behavior.',
+    priorityScore: 85,
+    positiveSignals: ['failover logic', 'backup power transfer', 'restart priorities', 'regional grid disturbance', 'uneven resilience profile'],
+    antiSignals: ['ddos', 'credential theft', 'policy breach', 'visitor management failure'],
+    typicalAssets: ['building management controller', 'backup power transfer path', 'restart logic'],
+    typicalCauses: ['site-to-site inconsistency', 'isolated testing blind spot', 'misaligned restoration priorities'],
+    typicalConsequences: ['unpredictable recovery', 'equipment stress', 'unsafe restoration sequence'],
+    preferredRiskThemes: ['site failover inconsistency', 'restart-priority conflict', 'estate-level OT resilience blind spot'],
+    defaultMechanisms: ['industrial_control_instability'],
+    allowedSecondaryFamilies: ['ot_resilience_failure'],
+    canCoExistWith: ['ot_resilience_failure'],
+    cannotBePrimaryWith: ['availability_attack', 'recovery_coordination_failure'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise'],
+    defaultOverlays: ['recovery_strain', 'service_outage', 'operational_disruption'],
+    examplePhrases: ['backup power transfer and restart priorities are inconsistent across critical-service sites', 'a regional grid disturbance exposes hidden failover-logic differences between controllers and edge workloads'],
+    counterExamples: ['an unauthorised person enters a restricted site zone', 'a public website slows under hostile traffic'],
+    legacyKey: 'ot-resilience',
+    lensKey: 'ot-resilience',
+    lensLabel: 'OT / site resilience',
+    functionKey: 'operations',
+    estimatePresetKey: 'otResilience'
+  }),
+  family({
+    key: 'control_edge_sync_mismatch',
+    label: 'Control and edge synchronization mismatch',
+    domain: 'physical_ot',
+    description: 'An industrial workflow becomes unstable because control, timing, and edge execution components lose synchronization after change or restart.',
+    priorityScore: 84,
+    positiveSignals: ['timing mismatch', 'edge controller', 'older configuration baseline', 'false rejects', 'supervised mode', 'edge inference', 'actuator timing', 'reject gate', 'restart instability'],
+    antiSignals: ['adversarial prompt', 'privacy breach', 'supplier insolvency', 'cashflow stress'],
+    typicalAssets: ['edge controller', 'local inference hardware', 'actuator timing path'],
+    typicalCauses: ['configuration divergence', 'restart mismatch', 'baseline drift'],
+    typicalConsequences: ['degraded automation', 'manual supervision', 'quality and control instability'],
+    preferredRiskThemes: ['control-edge timing mismatch', 'configuration baseline drift in OT', 'reduced industrial recoverability'],
+    defaultMechanisms: ['industrial_control_instability'],
+    allowedSecondaryFamilies: ['ot_resilience_failure'],
+    canCoExistWith: ['ot_resilience_failure'],
+    cannotBePrimaryWith: ['availability_attack', 'model_drift_monitoring_failure'],
+    forbiddenDriftFamilies: ['availability_attack', 'identity_compromise'],
+    defaultOverlays: ['operational_disruption', 'recovery_strain'],
+    examplePhrases: ['an edge controller reverts to an older baseline and timing mismatch causes false rejects until supervised mode is used', 'edge inference decisions and actuator timing drift apart after restart instability'],
+    counterExamples: ['model fairness degrades for a minority subgroup', 'a contract clause dispute delays launch'],
     legacyKey: 'ot-resilience',
     lensKey: 'ot-resilience',
     lensLabel: 'OT / site resilience',

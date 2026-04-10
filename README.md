@@ -19,6 +19,7 @@ The platform helps a user move from a vague issue to a structured, challengeable
 Core capabilities:
 - role-based dashboards for standard users, function admins, BU admins, and global admins
 - AI-assisted risk and context builder
+- grounded BU and function-context drafting with inline grounding feedback
 - scenario refinement and structured scenario shaping
 - plain-language estimation and advanced tuning
 - FAIR-style Monte Carlo simulation
@@ -26,6 +27,7 @@ Core capabilities:
 - treatment comparison and better-outcome analysis
 - direct PDF export plus printable decision memo / board note outputs
 - evidence, provenance, assumptions, confidence, and citation surfacing
+- citation freshness labels, official external source links, and saved-assessment freshness advisories
 - document-grounded retrieval across standards, frameworks, and regulations
 - review submission and management sign-off workflow
 - admin governance for organisation setup, defaults, users, audit, and document library
@@ -139,6 +141,15 @@ Current AI behavior:
 - retrieval uses a stronger local hybrid scorer with lens-aware and concept-aware matching, but browser-local learning weights no longer authoritatively shape inference quality
 - domain guardrails now explicitly keep common continuity, counterparty-credit, ESG/human-rights, and geopolitical scenarios from drifting into adjacent cyber, fraud, or procurement lanes unless the user input actually supports that crossover
 - remaining browser-side helper AI stays assistive-only for bounded UX features such as company-context drafting and scenario memory; it is not part of the trusted assessment or review path
+- BU and function-context AI assist now inherits richer organisation context, parent-layer context, and saved regulations, then shows an inline grounding state:
+  - `Grounded in saved context`
+  - `Partly grounded`
+  - `Generic draft warning`
+- UAE default grounding now includes named national references for UAE contexts, including:
+  - `UAE Information Assurance Standard`
+  - `NCEMA 7000:2021 Business Continuity`
+  - named UAE Cyber Security Council policies
+  - ADGM holding-company obligations where the company baseline is relevant
 - supporting documents and standards are cited into the workflow and results
 
 The product is grounded by a growing enterprise corpus that includes ISO, NIST, COSO, IFRS/ESRS, OECD, UNGP, sector guidance, and UAE/GCC-relevant references.
@@ -150,7 +161,11 @@ Recent grounding improvements:
   - forced labour / modern slavery due diligence
   - alternate workspace and manual fallback continuity language
   - fatigue, understaffing, and worker-welfare scenarios
+- official UAE and ADGM references are now included for document-grounded retrieval, including NCEMA continuity, ADGM annual filings, ADGM beneficial ownership, ADGM data protection, and named UAE Cyber Security Council policy references
 - Step 1 citation selection now prefers event-matching references over generic governance references when both are available
+- citations can now carry:
+  - staleness warnings when a source is old
+  - official external source links where a verified public source page exists
 
 ## Pilot AI Readiness Policy
 
@@ -198,6 +213,11 @@ Results are intentionally split by audience:
   - assumptions
   - citations
   - challenge review
+
+Additional trust signals now shown in the workflow:
+- citation age warnings in evidence views
+- benchmark age labels and stale-benchmark warnings in estimation
+- saved-assessment freshness advisories when older runs are reopened
 
 Export options currently include:
 - JSON export
