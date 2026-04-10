@@ -4,7 +4,7 @@
   function getCompassConfigFromAdminInputs() {
     return {
       apiUrl: document.getElementById('admin-compass-url')?.value.trim() || DEFAULT_COMPASS_PROXY_URL,
-      model: document.getElementById('admin-compass-model')?.value.trim() || 'gpt-5.1',
+      model: document.getElementById('admin-compass-model')?.value.trim() || AiStatusClient.DEFAULT_MODEL,
       apiKey: document.getElementById('admin-compass-key')?.value.trim() || ''
     };
   }

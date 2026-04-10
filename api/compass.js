@@ -1,4 +1,5 @@
 const { requireSession } = require('./_apiAuth');
+const { DEFAULT_COMPASS_MODEL } = require('./_aiRuntime');
 const { applyCorsHeaders, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
 const { checkRateLimit } = require('./_rateLimit');
 
@@ -21,7 +22,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
 
 module.exports = async function handler(req, res) {
   const compassApiUrl = process.env.COMPASS_API_URL || 'https://api.core42.ai/v1/chat/completions';
-  const compassModel = process.env.COMPASS_MODEL || 'gpt-5.1';
+  const compassModel = process.env.COMPASS_MODEL || DEFAULT_COMPASS_MODEL;
   applyCorsHeaders(req, res, {
     methods: 'POST,OPTIONS',
     headers: 'content-type,x-session-token'

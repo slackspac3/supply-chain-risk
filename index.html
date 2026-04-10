@@ -274,6 +274,7 @@
 <script src="assets/services/aiTraceRuntime.js?v=20260409v1"></script>
 <script src="assets/services/aiStatusClient.js?v=20260409v1"></script>
 <script src="assets/services/aiWorkflowClient.js?v=20260409v1"></script>
+<script src="assets/state/llmResponseExtractor.js?v=20260409v1"></script>
 <script src="assets/services/scenarioTaxonomyProjectionData.js?v=20260409v1"></script>
 <script src="assets/services/scenarioTaxonomyProjection.js?v=20260409v1"></script>
 <script src="assets/services/llmService.js?v=20260409v1"></script>
@@ -323,7 +324,6 @@
 <script src="assets/state/userWorkspacePersistence.js?v=20260409v1"></script>
 <script src="assets/state/assessmentLifecycle.js?v=20260409v1"></script>
 <script src="assets/state/registerWorkbookSelector.js?v=20260409v1"></script>
-<script src="assets/state/llmResponseExtractor.js?v=20260409v1"></script>
 <script src="assets/state/assessmentState.js?v=20260409v1"></script>
 <script src="assets/state/obligationResolution.js?v=20260409v1"></script>
 <script src="assets/state/orgCapabilityState.js?v=20260409v1"></script>
@@ -341,7 +341,7 @@
   LLMService.setCompassConfig({
     apiKey: 'your-core42-key',
     apiUrl: window.ApiOriginResolver.resolveApiUrl('/api/compass'),
-    model: 'gpt-5.1'
+    model: AiStatusClient.DEFAULT_MODEL
   });
 
   Do not ship a real API key in this public frontend.

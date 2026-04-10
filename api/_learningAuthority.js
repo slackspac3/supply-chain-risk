@@ -5,6 +5,8 @@ const { readSettings } = require('./settings');
 const { readUserState } = require('./user-state');
 
 const AI_FEEDBACK_KEY = 'risk_calculator_ai_feedback';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FEEDBACK_HALF_LIFE_DAYS = 90;
 
 function toSafeString(value, max = 240) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -69,15 +71,34 @@ function incrementWeightedMapValue(target, key, amount = 0, max = 180) {
   target[safeKey] = Number(target[safeKey] || 0) + amount;
 }
 
+function scaleWeightedMap(target = {}, factor = 1) {
+  if (!target || typeof target !== 'object' || !Number.isFinite(factor) || factor === 1) return target;
+  Object.keys(target).forEach((key) => {
+    target[key] = Number(target[key] || 0) * factor;
+  });
+  return target;
+}
+
+function getFeedbackDecayWeight(recordedAt, now = Date.now()) {
+  const timestamp = Number(recordedAt || 0);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return 1;
+  const safeNow = Number.isFinite(now) && now > 0 ? now : Date.now();
+  const ageMs = Math.max(0, safeNow - timestamp);
+  const daysSinceEvent = ageMs / DAY_MS;
+  return Math.pow(0.5, daysSinceEvent / FEEDBACK_HALF_LIFE_DAYS);
+}
+
 function createEmptyFeedbackProfile() {
   return {
     totalEvents: 0,
     liveAiEvents: 0,
     distinctUsers: 0,
+    signalConfidence: 1,
+    coldStartDiscountApplied: false,
     runtimeCounts: { live_ai: 0, fallback: 0, local: 0 },
-    draft: { count: 0, totalScore: 0, averageScore: 0, reasons: {} },
-    shortlist: { count: 0, totalScore: 0, averageScore: 0, reasons: {} },
-    risk: { count: 0, totalScore: 0, averageScore: 0, reasons: {} },
+    draft: { count: 0, signalCount: 0, totalScore: 0, averageScore: 0, reasons: {} },
+    shortlist: { count: 0, signalCount: 0, totalScore: 0, averageScore: 0, reasons: {} },
+    risk: { count: 0, signalCount: 0, totalScore: 0, averageScore: 0, reasons: {} },
     riskWeights: {},
     docWeights: {},
     docTagWeights: {},
@@ -98,71 +119,35 @@ function feedbackScoreDelta(score) {
   return (Math.max(1, Math.min(5, Math.round(Number(score || 0)))) - 3) / 2;
 }
 
-function buildFeedbackProfile(events = []) {
-  const profile = createEmptyFeedbackProfile();
-  const submitters = new Set();
-  (Array.isArray(events) ? events : []).forEach((rawEvent) => {
-    const event = normaliseFeedbackEvent(rawEvent);
-    if (!event.score) return;
-    profile.totalEvents += 1;
-    profile.latestAt = Math.max(profile.latestAt, Number(event.recordedAt || 0));
-    profile.runtimeCounts[event.runtimeMode] = Number(profile.runtimeCounts[event.runtimeMode] || 0) + 1;
-    if (event.runtimeMode === 'live_ai') profile.liveAiEvents += 1;
-    if (event.submittedBy) submitters.add(event.submittedBy);
-    const bucket = event.target === 'shortlist'
-      ? profile.shortlist
-      : event.target === 'risk'
-        ? profile.risk
-        : profile.draft;
-    bucket.count += 1;
-    bucket.totalScore += Number(event.score || 0);
-    (Array.isArray(event.reasons) ? event.reasons : []).forEach((reason) => {
-      bucket.reasons[reason] = Number(bucket.reasons[reason] || 0) + 1;
-      if (reason === 'wrong-domain') profile.wrongDomainCount += 1;
-      if (reason === 'weak-citations') profile.weakCitationCount += 1;
-      if (reason === 'missed-key-risk') profile.missedRiskCount += 1;
-      if (reason === 'included-unrelated-risks') profile.unrelatedRiskCount += 1;
-      if (reason === 'useful-with-edits') profile.usefulWithEditsCount += 1;
-    });
-    if (event.runtimeMode !== 'live_ai') return;
-    const baseDelta = feedbackScoreDelta(event.score);
-    if (event.target === 'risk') {
-      if (event.riskTitle) {
-        incrementWeightedMapValue(profile.riskWeights, event.riskTitle, baseDelta * 1.5);
-        if (event.selectedInAssessment === true) {
-          incrementWeightedMapValue(profile.riskWeights, event.riskTitle, 0.3 + Math.max(0, baseDelta) * 0.5);
-        } else if (event.selectedInAssessment === false) {
-          incrementWeightedMapValue(profile.riskWeights, event.riskTitle, -0.3 + Math.min(0, baseDelta) * 0.5);
-        }
-      }
-      return;
-    }
-    const draftWeight = event.target === 'draft' ? 0.9 : 0.45;
-    const shortlistWeight = event.target === 'shortlist' ? 0.95 : 0.3;
-    (Array.isArray(event.citations) ? event.citations : []).forEach((citation) => {
-      const docDelta = baseDelta * (event.target === 'shortlist' ? 1.25 : 1);
-      incrementWeightedMapValue(profile.docWeights, citation.docId || citation.title, docDelta, 120);
-      (Array.isArray(citation.tags) ? citation.tags : []).forEach((tag) => {
-        incrementWeightedMapValue(profile.docTagWeights, tag, docDelta * 0.65, 60);
-      });
-    });
-    (Array.isArray(event.shownRiskTitles) ? event.shownRiskTitles : []).forEach((title) => {
-      incrementWeightedMapValue(profile.riskWeights, title, baseDelta * shortlistWeight);
-    });
-    (Array.isArray(event.keptRiskTitles) ? event.keptRiskTitles : []).forEach((title) => {
-      incrementWeightedMapValue(profile.riskWeights, title, 0.7 + Math.max(0, baseDelta) * 0.8);
-    });
-    (Array.isArray(event.removedRiskTitles) ? event.removedRiskTitles : []).forEach((title) => {
-      incrementWeightedMapValue(profile.riskWeights, title, -0.85 + Math.min(0, baseDelta) * 0.6);
-    });
-    (Array.isArray(event.addedRiskTitles) ? event.addedRiskTitles : []).forEach((title) => {
-      incrementWeightedMapValue(profile.riskWeights, title, 0.55 + draftWeight * Math.max(0, baseDelta));
-    });
-  });
-  profile.distinctUsers = submitters.size;
-  if (profile.draft.count) profile.draft.averageScore = Number((profile.draft.totalScore / profile.draft.count).toFixed(2));
-  if (profile.shortlist.count) profile.shortlist.averageScore = Number((profile.shortlist.totalScore / profile.shortlist.count).toFixed(2));
-  if (profile.risk.count) profile.risk.averageScore = Number((profile.risk.totalScore / profile.risk.count).toFixed(2));
+function applyColdStartDiscountToBucket(bucket, factor = 1) {
+  if (!bucket || typeof bucket !== 'object' || !Number.isFinite(factor) || factor === 1) return;
+  scaleWeightedMap(bucket.reasons, factor);
+  const signalCount = Number(bucket.signalCount || 0);
+  const neutralTotal = signalCount * 3;
+  bucket.totalScore = neutralTotal + ((Number(bucket.totalScore || 0) - neutralTotal) * factor);
+}
+
+function finaliseFeedbackProfile(profile) {
+  if (!profile || typeof profile !== 'object') return createEmptyFeedbackProfile();
+  const signalConfidence = profile.totalEvents < 3 ? 0.5 : 1;
+  profile.signalConfidence = signalConfidence;
+  profile.coldStartDiscountApplied = signalConfidence < 1;
+  if (signalConfidence < 1) {
+    applyColdStartDiscountToBucket(profile.draft, signalConfidence);
+    applyColdStartDiscountToBucket(profile.shortlist, signalConfidence);
+    applyColdStartDiscountToBucket(profile.risk, signalConfidence);
+    scaleWeightedMap(profile.riskWeights, signalConfidence);
+    scaleWeightedMap(profile.docWeights, signalConfidence);
+    scaleWeightedMap(profile.docTagWeights, signalConfidence);
+    profile.wrongDomainCount *= signalConfidence;
+    profile.weakCitationCount *= signalConfidence;
+    profile.missedRiskCount *= signalConfidence;
+    profile.unrelatedRiskCount *= signalConfidence;
+    profile.usefulWithEditsCount *= signalConfidence;
+  }
+  if (profile.draft.signalCount) profile.draft.averageScore = Number((profile.draft.totalScore / profile.draft.signalCount).toFixed(2));
+  if (profile.shortlist.signalCount) profile.shortlist.averageScore = Number((profile.shortlist.totalScore / profile.shortlist.signalCount).toFixed(2));
+  if (profile.risk.signalCount) profile.risk.averageScore = Number((profile.risk.totalScore / profile.risk.signalCount).toFixed(2));
   profile.topPositiveRisks = Object.entries(profile.riskWeights)
     .filter(([, value]) => Number(value) > 0.35)
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
@@ -184,6 +169,74 @@ function buildFeedbackProfile(events = []) {
     .slice(0, 6)
     .map(([docId, weight]) => ({ docId, weight: Number(weight.toFixed(2)) }));
   return profile;
+}
+
+function buildFeedbackProfile(events = []) {
+  const profile = createEmptyFeedbackProfile();
+  const submitters = new Set();
+  (Array.isArray(events) ? events : []).forEach((rawEvent) => {
+    const event = normaliseFeedbackEvent(rawEvent);
+    if (!event.score) return;
+    const decayWeight = getFeedbackDecayWeight(event.recordedAt);
+    profile.totalEvents += 1;
+    profile.latestAt = Math.max(profile.latestAt, Number(event.recordedAt || 0));
+    profile.runtimeCounts[event.runtimeMode] = Number(profile.runtimeCounts[event.runtimeMode] || 0) + 1;
+    if (event.runtimeMode === 'live_ai') profile.liveAiEvents += 1;
+    if (event.submittedBy) submitters.add(event.submittedBy);
+    const bucket = event.target === 'shortlist'
+      ? profile.shortlist
+      : event.target === 'risk'
+        ? profile.risk
+        : profile.draft;
+    bucket.count += 1;
+    bucket.signalCount += decayWeight;
+    bucket.totalScore += Number(event.score || 0) * decayWeight;
+    (Array.isArray(event.reasons) ? event.reasons : []).forEach((reason) => {
+      bucket.reasons[reason] = Number(bucket.reasons[reason] || 0) + decayWeight;
+      if (reason === 'wrong-domain') profile.wrongDomainCount += decayWeight;
+      if (reason === 'weak-citations') profile.weakCitationCount += decayWeight;
+      if (reason === 'missed-key-risk') profile.missedRiskCount += decayWeight;
+      if (reason === 'included-unrelated-risks') profile.unrelatedRiskCount += decayWeight;
+      if (reason === 'useful-with-edits') profile.usefulWithEditsCount += decayWeight;
+    });
+    if (event.runtimeMode !== 'live_ai') return;
+    const rawBaseDelta = feedbackScoreDelta(event.score);
+    const baseDelta = rawBaseDelta * decayWeight;
+    if (event.target === 'risk') {
+      if (event.riskTitle) {
+        incrementWeightedMapValue(profile.riskWeights, event.riskTitle, baseDelta * 1.5);
+        if (event.selectedInAssessment === true) {
+          incrementWeightedMapValue(profile.riskWeights, event.riskTitle, (0.3 + Math.max(0, rawBaseDelta) * 0.5) * decayWeight);
+        } else if (event.selectedInAssessment === false) {
+          incrementWeightedMapValue(profile.riskWeights, event.riskTitle, (-0.3 + Math.min(0, rawBaseDelta) * 0.5) * decayWeight);
+        }
+      }
+      return;
+    }
+    const draftWeight = event.target === 'draft' ? 0.9 : 0.45;
+    const shortlistWeight = event.target === 'shortlist' ? 0.95 : 0.3;
+    (Array.isArray(event.citations) ? event.citations : []).forEach((citation) => {
+      const docDelta = baseDelta * (event.target === 'shortlist' ? 1.25 : 1);
+      incrementWeightedMapValue(profile.docWeights, citation.docId || citation.title, docDelta, 120);
+      (Array.isArray(citation.tags) ? citation.tags : []).forEach((tag) => {
+        incrementWeightedMapValue(profile.docTagWeights, tag, docDelta * 0.65, 60);
+      });
+    });
+    (Array.isArray(event.shownRiskTitles) ? event.shownRiskTitles : []).forEach((title) => {
+      incrementWeightedMapValue(profile.riskWeights, title, baseDelta * shortlistWeight);
+    });
+    (Array.isArray(event.keptRiskTitles) ? event.keptRiskTitles : []).forEach((title) => {
+      incrementWeightedMapValue(profile.riskWeights, title, (0.7 + Math.max(0, rawBaseDelta) * 0.8) * decayWeight);
+    });
+    (Array.isArray(event.removedRiskTitles) ? event.removedRiskTitles : []).forEach((title) => {
+      incrementWeightedMapValue(profile.riskWeights, title, (-0.85 + Math.min(0, rawBaseDelta) * 0.6) * decayWeight);
+    });
+    (Array.isArray(event.addedRiskTitles) ? event.addedRiskTitles : []).forEach((title) => {
+      incrementWeightedMapValue(profile.riskWeights, title, (0.55 + draftWeight * Math.max(0, rawBaseDelta)) * decayWeight);
+    });
+  });
+  profile.distinctUsers = submitters.size;
+  return finaliseFeedbackProfile(profile);
 }
 
 function buildInactiveFeedbackProfile(label = '') {

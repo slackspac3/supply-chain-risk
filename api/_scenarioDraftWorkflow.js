@@ -5,6 +5,7 @@ const { buildTraceEntry, callAi, parseOrRepairStructuredJson, runStructuredQuali
 const { buildDeterministicFallbackResult, buildFallbackFromError, buildManualModeResult, buildWorkflowTimeoutProfile } = require('./_aiWorkflowSupport');
 const { buildFeedbackLearningPromptBlock, resolveHierarchicalFeedbackProfile, rerankRiskCardsWithFeedback } = require('./_learningAuthority');
 const { calibrateCoherenceConfidence } = require('./_confidenceCalibration');
+const { rerankWithEmbeddings } = require('./_embeddingReranker');
 const ScenarioClassification = require('./_scenarioClassification');
 const {
   SCENARIO_TAXONOMY_FAMILY_BY_KEY,
@@ -185,6 +186,10 @@ function normaliseCitationInput(item = {}) {
     sourceTitle: normaliseInlineInputText(item.sourceTitle || ''),
     excerpt: normaliseBlockInputText(item.excerpt || item.description || item.text || item.note || ''),
     url: String(item.url || item.link || '').trim(),
+    sourceUrl: String(item.sourceUrl || '').trim(),
+    sourceType: normaliseInlineInputText(item.sourceType || ''),
+    docId: normaliseInlineInputText(item.docId || ''),
+    lastUpdated: normaliseInlineInputText(item.lastUpdated || ''),
     relevanceReason: normaliseBlockInputText(item.relevanceReason || ''),
     score: normaliseNumericInput(item.score)
   });
@@ -897,6 +902,34 @@ function buildGuidedCitationPromptBlock(citations = [], {
     .filter(Boolean)
     .slice(0, limit);
   return items.length ? items.join('\n') : '(no external citations available)';
+}
+
+function buildScenarioCitationRerankQuery(input = {}, seedNarrative = '') {
+  return [
+    seedNarrative,
+    input?.guidedInput?.event,
+    input?.guidedInput?.cause,
+    input?.guidedInput?.impact,
+    input?.guidedInput?.asset
+  ]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function resolvePromptCitations(input = {}, seedNarrative = '') {
+  const citations = Array.isArray(input?.citations) ? input.citations.filter(Boolean) : [];
+  if (process.env.ENABLE_RAG_RERANKER !== 'true' || citations.length <= 1) return citations;
+  const query = buildScenarioCitationRerankQuery(input, seedNarrative);
+  if (!query) return citations;
+  try {
+    return await rerankWithEmbeddings(query, citations, {
+      topK: Math.min(5, citations.length)
+    });
+  } catch (error) {
+    console.warn('scenario citation reranker fallback:', error?.message || error);
+    return citations;
+  }
 }
 
 function hasGenericGovernanceShortlistWording(risk = {}) {
@@ -2805,8 +2838,9 @@ async function buildGuidedScenarioDraftWorkflow(input = {}) {
     businessUnit: input.businessUnit,
     scenarioLensHint: input.scenarioLensHint
   });
+  const promptCitations = await resolvePromptCitations(input, seedNarrative);
   const evidenceMeta = buildEvidenceMeta({
-    citations: input.citations || [],
+    citations: promptCitations,
     businessUnit: input.businessUnit,
     geography: input.geography,
     applicableRegulations: input.applicableRegulations,
@@ -2879,7 +2913,7 @@ Rules:
   });
   const scopedContextPromptBlock = buildGuidedScenarioContextPromptBlock(input.adminSettings || {}, input.businessUnit || null);
   const evidencePromptBlock = buildGuidedScenarioEvidencePromptBlock(evidenceMeta);
-  const citationPromptBlock = buildGuidedCitationPromptBlock(input.citations || [], {
+  const rerankedCitationPromptBlock = buildGuidedCitationPromptBlock(promptCitations, {
     seedNarrative,
     input,
     classification
@@ -2913,7 +2947,7 @@ Evidence quality context:
 ${evidencePromptBlock}
 
 Retrieved references:
-${citationPromptBlock}
+${rerankedCitationPromptBlock}
 
 If you are unsure, stay closer to the user's explicit event wording than to adjacent profile, compliance, or technology context.`;
   const feedbackPromptBlock = buildFeedbackLearningPromptBlock(feedbackProfile);
@@ -2960,7 +2994,7 @@ ${feedbackPromptBlock}`;
           `Applicable regulations: ${(Array.isArray(input.applicableRegulations) ? input.applicableRegulations : []).join(', ') || '(none)'}`,
           `Live context: ${truncateText(scopedContextPromptBlock, 1800)}`,
           `Evidence quality context: ${truncateText(evidencePromptBlock, 600)}`,
-          `Retrieved references: ${truncateText(citationPromptBlock, 1200)}`
+          `Retrieved references: ${truncateText(rerankedCitationPromptBlock, 1200)}`
         ].join('\n'),
         checklist: [
           'Keep the draft in the same event path as the user narrative.',
@@ -3052,7 +3086,7 @@ ${feedbackPromptBlock}`;
         label: traceLabel,
         promptSummary: generation.promptSummary,
         response: finalNarrative,
-        sources: input.citations || []
+        sources: promptCitations
       })
     }, evidenceMeta);
     result.shortlistCoherence = shortlistCoherence;

@@ -581,6 +581,7 @@ function renderStep2StructuredSummary(draft, selectedRisks, scenarioGeographies)
   const assumptions = Array.isArray(draft.inferredAssumptions) ? draft.inferredAssumptions.filter(Boolean).slice(0, 2) : [];
   const missing = Array.isArray(draft.missingInformation) ? draft.missingInformation.filter(Boolean).slice(0, 2) : [];
   const sourceBasis = normaliseCitations(draft.citations || []).slice(0, 2);
+  const primarySourceWarning = sourceBasis[0]?.stalenessWarning || null;
   const chips = [
     structured.assetService ? `Asset / service: ${structured.assetService}` : '',
     structured.eventPath ? `Event path: ${structured.eventPath}` : '',
@@ -608,6 +609,7 @@ function renderStep2StructuredSummary(draft, selectedRisks, scenarioGeographies)
       <div class="context-chip-panel">
         <div class="context-panel-title">Source basis</div>
         <p class="context-panel-copy">${escapeHtml(sourceBasis[0]?.title || 'No named source is attached yet. AI can still help, but a stronger source basis improves confidence.')}</p>
+        ${primarySourceWarning ? `<div class="citation-chips" style="margin-top:8px"><span class="badge ${primarySourceWarning.level === 'warning' ? 'badge--warning' : 'badge--gold'}">${escapeHtml(primarySourceWarning.message)}</span></div>` : ''}
       </div>
     </div>
   </div>`;
@@ -905,7 +907,7 @@ async function runLLMAssist() {
     AppState.draft.llmAssisted = true;
     AppState.draft.aiQualityState = result.usedFallback ? 'fallback' : 'ai';
     AppState.draft.enhancedNarrative = narrative;
-    AppState.draft.citations = normaliseCitations(result.citations || citations);
+    AppState.draft.citations = normaliseCitations(mergeCitationMetadata(result.citations || citations, citations));
     AppState.draft.recommendations = result.recommendations || [];
     AppState.draft.workflowGuidance = Array.isArray(result.workflowGuidance) ? result.workflowGuidance : AppState.draft.workflowGuidance;
     AppState.draft.benchmarkBasis = result.benchmarkBasis || AppState.draft.benchmarkBasis;

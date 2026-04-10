@@ -761,6 +761,23 @@ const RAGService = (() => {
    * Retrieve relevant docs for a BU + narrative query
    * [RAG-INTEGRATION] Replace with Azure Cognitive Search vector query
    */
+  function getDocStalenessWarning(doc = {}) {
+    const updatedAt = Date.parse(String(doc?.lastUpdated || '').trim());
+    if (!Number.isFinite(updatedAt)) return null;
+    const ageMonths = (Date.now() - updatedAt) / (86400000 * 30.4375);
+    if (ageMonths < 18) return null;
+    if (ageMonths <= 36) {
+      return {
+        level: 'info',
+        message: 'This source was last reviewed over 18 months ago.'
+      };
+    }
+    return {
+      level: 'warning',
+      message: 'This source is over 3 years old and may no longer reflect current standards.'
+    };
+  }
+
   async function retrieveRelevantDocs(buId, query, topK = 4) {
     const isDemo = typeof LLMService !== 'undefined'
       && typeof LLMService.isUsingStub === 'function'
@@ -791,6 +808,7 @@ const RAGService = (() => {
       docId: d.id,
       title: d.title,
       url: d.url,
+      sourceUrl: d.sourceUrl || null,
       excerpt: d.contentExcerpt,
       contentFull: index < 2
         ? (String(d.contentFull || '').trim() || '')
@@ -799,13 +817,15 @@ const RAGService = (() => {
       score: d._score,
       lastUpdated: d.lastUpdated,
       sourceType: _classifyDocSource(d),
-      relevanceReason: d._relevanceReason
+      relevanceReason: d._relevanceReason,
+      stalenessWarning: getDocStalenessWarning(d)
     }));
     try {
       if (typeof window !== 'undefined') {
         window._lastRagSources = selected.map((item) => ({
           title: item.title,
           url: item.url,
+          sourceUrl: item.sourceUrl,
           sourceType: item.sourceType,
           relevanceReason: item.relevanceReason
         }));
@@ -827,6 +847,7 @@ const RAGService = (() => {
       id: String(doc.id || '').trim(),
       title: String(doc.title || '').trim(),
       url: String(doc.url || '').trim(),
+      sourceUrl: String(doc.sourceUrl || '').trim() || null,
       contentExcerpt: String(doc.contentExcerpt || doc.excerpt || '').slice(0, 500).trim(),
       contentFull: String(doc.contentFull || doc.content || doc.contentExcerpt || '').slice(0, 8000).trim(),
       tags: Array.isArray(doc.tags) ? doc.tags.map(String).filter(Boolean) : [],
@@ -850,6 +871,7 @@ const RAGService = (() => {
         id: String(doc.id || '').trim(),
         title: String(doc.title || '').trim(),
         url: String(doc.url || '').trim(),
+        sourceUrl: String(doc.sourceUrl || '').trim() || null,
         contentExcerpt: String(doc.contentExcerpt || doc.excerpt || '').slice(0, 500).trim(),
         contentFull: String(doc.contentFull || doc.content || doc.contentExcerpt || '').slice(0, 8000).trim(),
         tags: Array.isArray(doc.tags) ? doc.tags.map(String).filter(Boolean) : [],
@@ -871,5 +893,5 @@ const RAGService = (() => {
     return _indexedDocs.length > 0;
   }
 
-  return { init, isReady, retrieveRelevantDocs, getDocsForBU, addDocument, bulkAddDocuments };
+  return { init, isReady, retrieveRelevantDocs, getDocStalenessWarning, getDocsForBU, addDocument, bulkAddDocuments };
 })();

@@ -96,6 +96,7 @@ const AiWorkflowClient = (() => {
       sourceTitle: normaliseInlineText(item.sourceTitle || ''),
       excerpt: normaliseBlockText(item.excerpt || item.description || item.text || item.note || ''),
       url: normaliseUrlLike(item.url || item.link || ''),
+      sourceUrl: normaliseUrlLike(item.sourceUrl || ''),
       relevanceReason: normaliseBlockText(item.relevanceReason || ''),
       score: normaliseNumber(item.score)
     });

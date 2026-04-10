@@ -5,7 +5,7 @@
     "criticalServices": ["Core compute clusters", "Container orchestration (K8s)", "API gateway", "Identity & access platform", "Secrets management"],
     "keySystems": ["Azure AKS", "Azure Key Vault", "HashiCorp Vault", "Terraform Cloud", "Datadog", "PagerDuty"],
     "dataTypes": ["Infrastructure configs", "Secrets & credentials", "Audit logs", "Customer workload data", "Telemetry"],
-    "regulatoryTags": ["UAE NESA IAS", "ISO 27001", "CSA CCM", "DORA (indirect)"],
+    "regulatoryTags": ["UAE Information Assurance Standard", "ISO 27001", "CSA CCM", "DORA (indirect)"],
     "notes": "Hosts multi-tenant workloads. Shared responsibility model applies. Tier-1 availability SLA: 99.99%. Change freeze during peak periods (Q4).",
     "defaultAssumptions": {
       "TEF": { "min": 0.5, "likely": 2, "max": 8 },
@@ -68,7 +68,7 @@
     "criticalServices": ["SIEM/SOAR platform", "Threat intelligence feeds", "Vulnerability management", "EDR/XDR deployment", "Red team ops"],
     "keySystems": ["Microsoft Sentinel", "Defender XDR", "Tenable.io", "Recorded Future", "CrowdStrike Falcon"],
     "dataTypes": ["Security logs", "Vulnerability data", "Threat indicators (IOCs)", "Incident records", "Penetration test reports"],
-    "regulatoryTags": ["UAE NESA IAS", "NCSC CAF", "ISO 27001", "NCA ECC (KSA partner ops)"],
+    "regulatoryTags": ["UAE Information Assurance Standard", "NCSC CAF", "ISO 27001", "NCA ECC (KSA partner ops)"],
     "notes": "CSOC itself is a high-value target. Insider threat risk elevated. Sensitive vuln data requires strict need-to-know. 24/7 ops dependency.",
     "defaultAssumptions": {
       "TEF": { "min": 2, "likely": 6, "max": 24 },
@@ -89,7 +89,7 @@
     "criticalServices": ["Active Directory / Entra ID", "Email & collaboration (M365)", "ERP (SAP)", "Employee device management", "VPN & remote access"],
     "keySystems": ["Azure Entra ID", "Microsoft 365", "SAP S/4HANA", "Intune MDM", "Zscaler ZPA"],
     "dataTypes": ["Employee HR data", "Financial ERP data", "Email content", "Payroll data", "Corporate IP"],
-    "regulatoryTags": ["UAE Labour Law (data)", "ISO 27001", "NESA IAS", "GDPR (EU employees)"],
+    "regulatoryTags": ["UAE Labour Law (data)", "ISO 27001", "UAE Information Assurance Standard", "GDPR (EU employees)"],
     "notes": "Primary attack surface for phishing/BEC. SAP landscape is business-critical for finance. Entra ID compromise would be catastrophic.",
     "defaultAssumptions": {
       "TEF": { "min": 3, "likely": 10, "max": 40 },
@@ -131,7 +131,7 @@
     "criticalServices": ["Device management platform", "OT/SCADA integration layer", "Edge compute nodes", "Building management systems", "Smart city sensors"],
     "keySystems": ["Azure IoT Hub", "Siemens MindSphere", "OSIsoft PI", "Claroty OT security", "AWS Greengrass"],
     "dataTypes": ["Operational telemetry", "SCADA/PLC configs", "Physical access logs", "Environmental sensor data", "Device firmware"],
-    "regulatoryTags": ["UAE Critical Infrastructure Law", "IEC 62443", "NESA IAS (critical infra)", "NERC CIP (energy)"],
+    "regulatoryTags": ["UAE Critical Infrastructure Law", "IEC 62443", "UAE Information Assurance Standard (critical infrastructure)", "NERC CIP (energy)"],
     "notes": "OT/IT convergence risk is high. Ransomware impact extends to physical operations. Device update lag creates persistent vulnerabilities.",
     "defaultAssumptions": {
       "TEF": { "min": 0.2, "likely": 1, "max": 5 },

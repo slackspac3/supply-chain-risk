@@ -3,7 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { extractLlmTextResponse } = require('../assets/state/llmResponseExtractor.js');
+const { extractLlmTextResponse, extractJsonFromLlmResponse } = require('../assets/state/llmResponseExtractor.js');
+const { DEFAULT_COMPASS_MODEL } = require('../api/_aiRuntime.js');
 
 function parseArgs(argv) {
   const args = {
@@ -39,20 +40,8 @@ function resolveJudgeConfig() {
   return {
     apiUrl: process.env.RC_COMPASS_API_URL || process.env.COMPASS_API_URL || 'https://api.core42.ai/v1/chat/completions',
     apiKey: process.env.RC_COMPASS_API_KEY || process.env.COMPASS_API_KEY || '',
-    model: process.env.RC_COMPASS_MODEL || process.env.COMPASS_MODEL || 'gpt-5.1'
+    model: process.env.RC_COMPASS_MODEL || process.env.COMPASS_MODEL || DEFAULT_COMPASS_MODEL
   };
-}
-
-function extractJsonFromLlmResponse(raw = '') {
-  const text = String(raw || '').trim();
-  const fenceMatch = text.match(/```(?:json)?\s*\r?\n?([\s\S]*?)```/i);
-  if (fenceMatch) {
-    const candidate = fenceMatch[1].trim();
-    if (candidate.startsWith('{') || candidate.startsWith('[')) return candidate;
-  }
-  const objectMatch = text.match(/(\{[\s\S]*\})/);
-  if (objectMatch) return objectMatch[1].trim();
-  return text;
 }
 
 function selectRows(report, args) {

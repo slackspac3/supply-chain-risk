@@ -19,10 +19,16 @@ const LLMService = (() => {
     return typeof AIGuardrails === 'object' && AIGuardrails ? AIGuardrails : null;
   }
 
+  function _getSharedExtractorFunction(name = '') {
+    const candidate = globalThis?.[name];
+    return typeof candidate === 'function' ? candidate : null;
+  }
+
   function _sanitizeAiText(value = '', { maxChars = 20000 } = {}) {
     const guardrails = _guardrails();
     if (guardrails?.sanitizeText) return guardrails.sanitizeText(value, { maxChars });
-    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxChars);
+    const sanitize = _getSharedExtractorFunction('sanitizeAiText');
+    return sanitize ? sanitize(value, { maxChars }) : String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxChars);
   }
 
   function _labelSuggestedDraft(value = '') {
@@ -133,7 +139,7 @@ const LLMService = (() => {
   }
 
   const DEFAULT_COMPASS_API_URL = resolveCompassApiUrl();
-  const DEFAULT_COMPASS_MODEL = 'gpt-5.1';
+  const DEFAULT_COMPASS_MODEL = AiStatusClient.DEFAULT_MODEL;
   let _compassApiUrl = DEFAULT_COMPASS_API_URL;
   let _compassModel = DEFAULT_COMPASS_MODEL;
   let _compassApiKey = '';
@@ -253,60 +259,13 @@ const LLMService = (() => {
   }
 
   function _extractBalancedJsonCandidate(text = '') {
-    const source = String(text || '');
-    const start = source.search(/[\[{]/);
-    if (start < 0) return '';
-    const stack = [];
-    let inString = false;
-    let escapeNext = false;
-    for (let index = start; index < source.length; index += 1) {
-      const ch = source[index];
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
-      if (ch === '\\') {
-        if (inString) escapeNext = true;
-        continue;
-      }
-      if (ch === '"') {
-        inString = !inString;
-        continue;
-      }
-      if (inString) continue;
-      if (ch === '{' || ch === '[') {
-        stack.push(ch);
-        continue;
-      }
-      if (ch === '}' || ch === ']') {
-        const expected = ch === '}' ? '{' : '[';
-        if (stack[stack.length - 1] !== expected) break;
-        stack.pop();
-        if (!stack.length) {
-          return source.slice(start, index + 1);
-        }
-      }
-    }
-    return '';
+    const extractor = _getSharedExtractorFunction('extractBalancedJsonCandidate');
+    return extractor ? extractor(text) : '';
   }
 
   function _extractJsonFromLlmResponse(raw) {
-    const text = String(raw || '').trim();
-
-    const fenceMatch = text.match(
-      /```(?:json)?\s*\r?\n?([\s\S]*?)```/i
-    );
-    if (fenceMatch) {
-      const candidate = fenceMatch[1].trim();
-      if (candidate.startsWith('{') || candidate.startsWith('[')) {
-        return candidate;
-      }
-    }
-
-    const objectMatch = text.match(/(\{[\s\S]*\})/);
-    if (objectMatch) return objectMatch[1].trim();
-
-    return text;
+    const extractor = _getSharedExtractorFunction('extractJsonFromLlmResponse');
+    return extractor ? extractor(raw) : String(raw || '').trim();
   }
 
   function _parseStructuredJson(raw) {
@@ -1212,14 +1171,14 @@ Return corrected JSON only.`;
           key: 'business-continuity',
           title: 'Business continuity and recovery failure',
           category: 'Business Continuity',
-          regulations: ['ISO 22301', 'NFPA 1600'],
+          regulations: ['NCEMA 7000:2021 Business Continuity', 'ISO 22301', 'NFPA 1600'],
           description: 'Missing disaster recovery or failover for the core messaging service could turn a manageable outage into a prolonged continuity event.'
         },
         {
           key: 'operational',
           title: 'Email outage business disruption',
           category: 'Operational Resilience',
-          regulations: ['ISO 22301', 'ISO 31000'],
+          regulations: ['NCEMA 7000:2021 Business Continuity', 'ISO 22301', 'ISO 31000'],
           description: 'A prolonged loss of the core email and communications service could disrupt coordination, approvals, and incident response activity.'
         },
         {
@@ -1234,7 +1193,7 @@ Return corrected JSON only.`;
     const catalog = [
       { key: 'strategic', title: 'Strategic execution or market-position risk', category: 'Strategic', regulations: ['ISO 31000', 'COSO ERM'], terms: ['strategy', 'strategic', 'expansion', 'transformation', 'market', 'competitive', 'portfolio', 'investment'] },
       { key: 'operational', title: 'Operational breakdown affecting core services', category: 'Operational', regulations: ['ISO 31000', 'ISO 22301'], terms: ['outage', 'downtime', 'availability', 'service disruption', 'operational disruption', 'failure', 'breakdown', 'backlog', 'capacity', 'process failure', 'human error', 'manual error', 'aging infrastructure', 'ageing infrastructure', 'legacy infrastructure', 'platform instability', 'system instability'] },
-      { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'UAE NESA IAS', 'ISO 27001'], terms: ['ransom', 'phish', 'malware', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud compromise', 'cloud exposure', 'cloud breach', 'misconfig', 'vulnerability', 'privileged'] },
+      { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'UAE Information Assurance Standard', 'ISO 27001'], terms: ['ransom', 'phish', 'malware', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud compromise', 'cloud exposure', 'cloud breach', 'misconfig', 'vulnerability', 'privileged'] },
       { key: 'third-party', title: 'Third-party dependency or supplier failure', category: 'Third-Party', regulations: ['ISO 27036', 'ISO 28000'], terms: ['supplier', 'vendor', 'third party', 'third-party', 'outsourc', 'dependency', 'subprocessor', 'partner'] },
       { key: 'regulatory', title: 'Regulatory or licensing exposure', category: 'Regulatory', regulations: ['BIS Export Controls', 'OFAC Sanctions', 'UAE PDPL'], terms: ['regulator', 'regulatory', 'licence', 'license', 'filing', 'notification', 'sanction', 'export control'] },
       { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'misstatement', 'bankruptcy', 'insolvency', 'receivable', 'bad debt', 'write-off', 'counterparty', 'customer default', 'client default', 'collections', 'working capital', 'provisioning'] },
@@ -1245,7 +1204,7 @@ Return corrected JSON only.`;
       { key: 'geopolitical', title: 'Geopolitical, sanctions, or market-access exposure', category: 'Geopolitical', regulations: ['OFAC Sanctions', 'BIS Export Controls'], terms: ['geopolitical', 'market access', 'sanctions', 'export control', 'sovereign', 'entity list', 'tariff', 'cross-border restriction'] },
       { key: 'supply-chain', title: 'Supply chain resilience disruption', category: 'Supply Chain', regulations: ['ISO 28000', 'ISO 22301'], terms: ['supply chain', 'logistics', 'inventory', 'shipment', 'fulfilment', 'single source', 'upstream'] },
       { key: 'procurement', title: 'Procurement governance or sourcing risk', category: 'Procurement', regulations: ['ISO 20400', 'ISO 37301'], terms: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'vendor selection', 'purchasing', 'critical spend', 'single-source spend'] },
-      { key: 'business-continuity', title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management', 'failover', 'email system', 'mail system', 'outlook', 'exchange', 'messaging service'] },
+      { key: 'business-continuity', title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['NCEMA 7000:2021 Business Continuity', 'ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management', 'failover', 'email system', 'mail system', 'outlook', 'exchange', 'messaging service'] },
       { key: 'physical-security', title: 'Physical security or facilities-protection breakdown', category: 'Physical Security', regulations: ['ISO 22301', 'UAE Fire and Life Safety Code'], terms: ['physical security', 'perimeter', 'site intrusion', 'badge control', 'facility breach', 'executive protection', 'visitor management'] },
       { key: 'ot-resilience', title: 'OT or industrial-control resilience failure', category: 'OT Resilience', regulations: ['IEC 62443', 'ISO 22301'], terms: ['ot', 'operational technology', 'industrial control', 'ics', 'scada', 'plant network', 'site systems', 'control room'] },
       { key: 'people-workforce', title: 'People, workforce, or labour-practice exposure', category: 'People / Workforce', regulations: ['UN Guiding Principles', 'SA8000', 'ILO-OSH 2001'], terms: ['workforce', 'labour', 'labor', 'attrition', 'staffing', 'fatigue', 'strike', 'worker welfare', 'human rights'] },
@@ -3562,7 +3521,7 @@ ${schema}`;
       riskTitles = [
         { title: 'Privileged account takeover through identity platform compromise', category: 'Identity & Access', description: 'Compromised Azure AD or Entra credentials could let an attacker take over privileged identities and move into federated services or administrative workflows.', regulations: ['UAE PDPL', 'UK GDPR', 'SEC cyber disclosure rules'] },
         { title: 'Business email compromise enabled by mailbox access', category: 'Financial Crime', description: 'Once identity controls are bypassed, mailbox access can support payment fraud, executive impersonation, and manipulation of approvals or supplier instructions.', regulations: ['UAE AML/CFT'] },
-        { title: 'Administrative lockout or unauthorised tenant changes', category: 'Operational Resilience', description: 'An attacker with elevated access could change authentication settings, conditional access, or directory controls, disrupting normal user access and response operations.', regulations: ['UAE Cybersecurity Council Guidance'] },
+        { title: 'Administrative lockout or unauthorised tenant changes', category: 'Operational Resilience', description: 'An attacker with elevated access could change authentication settings, conditional access, or directory controls, disrupting normal user access and response operations.', regulations: ['UAE Information Assurance Standard', 'UAE National Cyber Security Governance Framework'] },
         { title: 'Sensitive data exposure across mailboxes and connected cloud services', category: 'Data Protection', description: 'The same compromise could expose regulated or commercially sensitive information stored in mail, identity-linked applications, and collaboration platforms.', regulations: ['UAE PDPL', 'GDPR'] }
       ];
     } else if (resolvedClassificationKey === 'ransomware') {
@@ -4587,6 +4546,26 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
   }
 
 
+  function _buildEntityContextOrganisationBaseline(input = {}, maxChars = 1200) {
+    return _truncateText([
+      String(input.adminSettings?.companyContextProfile || '').trim(),
+      String(input.adminSettings?.companyStructureContext || '').trim(),
+      String(input.adminSettings?.adminContextSummary || '').trim()
+    ].filter(Boolean).join('\n\n'), maxChars);
+  }
+
+  function _isEsgEntityContext(input = {}) {
+    const haystack = [
+      input.entity?.name,
+      input.entity?.profile,
+      input.entity?.departmentHint,
+      input.parentLayer?.contextSummary,
+      input.adminSettings?.companyContextProfile,
+      input.uploadedText
+    ].map((item) => String(item || '').trim()).filter(Boolean).join(' ').toLowerCase();
+    return /(esg|sustainab|climate|greenwashing|ifrs s1|ifrs s2|gri|sasb|tnfd|tcfd|ghg|scope 1|scope 2|scope 3|responsible ai|human rights|supplier emissions|disclosure|assurance)/.test(haystack);
+  }
+
   function _buildEntityContextStub(input = {}) {
     const entityName = String(input.entity?.name || 'This entity').trim();
     const entityType = String(input.entity?.type || 'business unit').trim();
@@ -4595,6 +4574,7 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
     const parentProfile = String(input.parentLayer?.contextSummary || input.parentEntity?.profile || '').trim();
     const remit = String(input.entity?.profile || input.entity?.departmentHint || '').trim();
     const geography = String(input.adminSettings?.geography || input.parentLayer?.geography || '').trim();
+    const organisationBaseline = _buildEntityContextOrganisationBaseline(input, 360);
     const regulations = Array.from(new Set([
       ...(input.parentLayer?.applicableRegulations || []),
       ...(input.adminSettings?.applicableRegulations || [])
@@ -4603,15 +4583,16 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
     const shortParentContext = parentProfile.split(/(?<=[.!?])\s+/).slice(0, 1).join(' ').trim();
     const remitSource = remit || `supporting ${parentName} through ${entityName.toLowerCase()} responsibilities`;
     const isDepartment = String(input.entity?.type || '').toLowerCase() === 'department / function';
+    const isEsgFunction = isDepartment && _isEsgEntityContext(input);
     return {
       geography,
       contextSummary: isDepartment
-        ? `${entityName} is an ${relationshipText}. It is responsible for ${remitSource}. Keep the summary focused on the team's core remit, dependencies, decision rights, and control responsibilities in support of ${parentName}${shortParentContext ? `, which currently operates in this context: ${shortParentContext}` : ''}.`
+        ? `${entityName} is an ${relationshipText}. It is responsible for ${remitSource}. ${isEsgFunction ? 'Keep the summary anchored to sustainability governance, disclosure controls, policy or framework ownership, assurance coordination, and stakeholder reporting.' : `Keep the summary focused on the team's core remit, dependencies, decision rights, and control responsibilities in support of ${parentName}.`}${shortParentContext ? ` Use this direct parent context where relevant: ${shortParentContext}.` : ''}${organisationBaseline ? ` Use this wider organisation baseline only where it is directly relevant to the function remit: ${organisationBaseline}.` : ''}`
         : `${entityName} sits within ${parentName}. Capture the core remit, dependencies, operating model, and control responsibilities relevant to this entity${shortParentContext ? `, drawing on this parent context: ${shortParentContext}` : ''}.`,
       riskAppetiteStatement: `Keep ${entityName} aligned to ${parentName}'s risk appetite, but escalate issues that could materially disrupt critical services, weaken control assurance, or create regulatory exposure for the wider business unit.`,
       applicableRegulations: regulations,
       aiInstructions: isDepartment
-        ? `Tailor outputs for ${entityName} as a ${relationshipText}. Keep summaries brief, functional, and role-specific. Do not restate the full group profile. Focus on actual responsibilities, dependencies, controls, and key interfaces with ${parentName}.`
+        ? `Tailor outputs for ${entityName} as a ${relationshipText}. Keep summaries brief, functional, and role-specific. Do not restate the full group profile. Focus on actual responsibilities, dependencies, controls, and key interfaces with ${parentName}.${isEsgFunction ? ' If the context is ESG-oriented, prefer policy-framework ownership, disclosure governance, assurance, metrics control, and stakeholder reporting over generic group-sector descriptions.' : ''}`
         : `Tailor outputs for ${entityName} within ${parentName}. Avoid generic filler and emphasise operational responsibilities, dependencies, and control ownership.`,
       benchmarkStrategy: String(input.parentLayer?.benchmarkStrategy || input.adminSettings?.benchmarkStrategy || '').trim()
     };
@@ -4627,6 +4608,7 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
       };
     }
     try {
+      const organisationBaseline = _buildEntityContextOrganisationBaseline(input, 1800);
       const systemPrompt = `You are a senior enterprise risk and operating-context analyst. Return JSON only with this schema:
 {
   "geography": "string",
@@ -4636,7 +4618,19 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
   "aiInstructions": "string",
   "benchmarkStrategy": "string"
 }`;
-      const evidenceMeta = _buildEvidenceMeta({ citations: [], businessUnit: input.parentEntity, geography: input.adminSettings?.geography || input.parentLayer?.geography, applicableRegulations: input.parentLayer?.applicableRegulations || input.adminSettings?.applicableRegulations, organisationContext: input.parentLayer?.contextSummary || input.parentEntity?.profile, adminSettings: input.adminSettings, uploadedText: input.uploadedText });
+      const evidenceMeta = _buildEvidenceMeta({
+        citations: [],
+        businessUnit: input.parentEntity,
+        geography: input.adminSettings?.geography || input.parentLayer?.geography,
+        applicableRegulations: input.parentLayer?.applicableRegulations || input.adminSettings?.applicableRegulations,
+        organisationContext: [
+          input.parentLayer?.contextSummary,
+          input.parentEntity?.profile,
+          organisationBaseline
+        ].filter(Boolean).join('\n\n'),
+        adminSettings: input.adminSettings,
+        uploadedText: input.uploadedText
+      });
       const userPrompt = `Build retained context for this organisation node.
 
 Entity:
@@ -4660,6 +4654,9 @@ ${JSON.stringify({
         riskAppetiteStatement: input.adminSettings?.riskAppetiteStatement || ''
       }, null, 2)}
 
+Organisation context baseline:
+${organisationBaseline || '(none)'}
+
 ${_buildUploadedDocumentBlock(input)}
 
 Instructions:
@@ -4667,6 +4664,9 @@ Instructions:
 - if the entity is a department or function, inherit business-unit context and specialise it for the function
 - for departments and functions, keep the context summary to 2-4 sentences max
 - do not restate the full parent or group profile; only carry forward what is directly relevant to the function remit
+- use organisation policy, framework, and governance context when it is explicitly provided, but do not let broad group profile text override the function remit
+- do not mention platforms, sectors, or operating domains such as AI, cloud, data-centres, health data, public-sector workloads, or international infrastructure unless they are explicitly supported by the remit, uploaded material, parent layer, or organisation baseline
+- if the function is ESG or sustainability oriented, prefer sustainability governance, disclosure controls, policy or framework ownership, assurance coordination, metrics oversight, and stakeholder reporting when supported by the supplied context
 - avoid generic corporate language and avoid inventing unsupported facts
 - keep the context practical for future risk assessments and AI assistance
 - include relevant regulations only when supported by the inherited context or the admin baseline
@@ -4732,6 +4732,7 @@ ${evidenceMeta.promptBlock}`;
       };
     }
     try {
+      const organisationBaseline = _buildEntityContextOrganisationBaseline(input, 1800);
       const systemPrompt = `You are a senior enterprise risk and operating-context analyst. Refine an existing BU or function context based on user follow-up prompts. Return JSON only with this schema:
 {
   "geography": "string",
@@ -4747,7 +4748,12 @@ ${evidenceMeta.promptBlock}`;
         businessUnit: input.parentEntity,
         geography: currentContext.geography || input.adminSettings?.geography || input.parentLayer?.geography,
         applicableRegulations: currentContext.applicableRegulations.length ? currentContext.applicableRegulations : (input.parentLayer?.applicableRegulations || input.adminSettings?.applicableRegulations),
-        organisationContext: currentContext.contextSummary || input.parentLayer?.contextSummary || input.parentEntity?.profile,
+        organisationContext: [
+          currentContext.contextSummary,
+          input.parentLayer?.contextSummary,
+          input.parentEntity?.profile,
+          organisationBaseline
+        ].filter(Boolean).join('\n\n'),
         adminSettings: input.adminSettings,
         uploadedText: input.uploadedText
       });
@@ -4765,6 +4771,9 @@ ${JSON.stringify(currentContext, null, 2)}
 Parent layer:
 ${JSON.stringify(input.parentLayer || {}, null, 2)}
 
+Organisation context baseline:
+${organisationBaseline || '(none)'}
+
 ${_buildUploadedDocumentBlock(input)}
 
 Recent conversation:
@@ -4778,6 +4787,9 @@ Instructions:
 - preserve good existing detail unless the latest instruction clearly changes it
 - keep the context practical for future risk assessments and AI assistance
 - for departments and functions, keep the context summary concise at 2-4 sentences
+- keep the function remit primary; use broader organisation baseline only to sharpen supported responsibilities, controls, and governance references
+- do not introduce platforms, sectors, or operating domains such as AI, cloud, data-centres, health data, public-sector workloads, or international infrastructure unless the supplied context explicitly supports them
+- if the function is ESG or sustainability oriented, prefer sustainability governance, disclosure controls, policy or framework ownership, assurance coordination, metrics oversight, and stakeholder reporting when supported by the supplied context
 - avoid generic filler and avoid inventing unsupported facts
 - explain what changed in responseMessage in plain language
 

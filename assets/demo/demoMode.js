@@ -184,7 +184,7 @@ const DemoMode = (() => {
           ].join('. '),
           {
             ...(aiContext.businessUnit || bu || {}),
-            regulatoryTags: ['UAE PDPL', 'UAE Cybersecurity Council Guidance', 'ISO 27001'],
+            regulatoryTags: ['UAE PDPL', 'UAE Information Assurance Standard', 'UAE National Cyber Security Governance Framework', 'ISO 27001'],
             geography: DEMO_SCENARIO.geographies[0],
             benchmarkStrategy: aiContext.adminSettings?.benchmarkStrategy || '',
             companyContextProfile: aiContext.adminSettings?.companyContextProfile || '',

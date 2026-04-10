@@ -104,9 +104,14 @@ function resetWorkflowReuseState() {
   completedResults.clear();
 }
 
+function clearWorkflowCache() {
+  resetWorkflowReuseState();
+}
+
 module.exports = {
   buildWorkflowReuseKey,
   withWorkflowReuse,
+  clearWorkflowCache,
   resetWorkflowReuseState,
   __unsafeInternals: {
     inflightRequests,

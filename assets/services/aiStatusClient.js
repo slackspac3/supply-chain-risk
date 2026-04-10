@@ -1,7 +1,9 @@
 const AiStatusClient = (() => {
+  const DEFAULT_MODEL = 'gpt-5.1';
+
   function createClient({
     cacheTtlMs = 30000,
-    defaultModel = 'gpt-5.1',
+    defaultModel = DEFAULT_MODEL,
     buildStatusUrl,
     getSessionToken,
     normaliseError
@@ -67,6 +69,7 @@ const AiStatusClient = (() => {
   }
 
   return {
+    DEFAULT_MODEL,
     createClient
   };
 })();

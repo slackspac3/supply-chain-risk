@@ -1,6 +1,60 @@
 'use strict';
 
 (function attachLlmResponseExtractor(globalScope) {
+  function sanitizeAiText(value = '', { maxChars = 20000 } = {}) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxChars);
+  }
+
+  function extractBalancedJsonCandidate(text = '') {
+    const source = String(text || '');
+    const start = source.search(/[\[{]/);
+    if (start < 0) return '';
+    const stack = [];
+    let inString = false;
+    let escapeNext = false;
+    for (let index = start; index < source.length; index += 1) {
+      const ch = source[index];
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+      if (ch === '\\') {
+        if (inString) escapeNext = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === '{' || ch === '[') {
+        stack.push(ch);
+        continue;
+      }
+      if (ch === '}' || ch === ']') {
+        const expected = ch === '}' ? '{' : '[';
+        if (stack[stack.length - 1] !== expected) break;
+        stack.pop();
+        if (!stack.length) {
+          return source.slice(start, index + 1);
+        }
+      }
+    }
+    return '';
+  }
+
+  function extractJsonFromLlmResponse(raw = '') {
+    const text = String(raw || '').trim();
+    const fenceMatch = text.match(/```(?:json)?\s*\r?\n?([\s\S]*?)```/i);
+    if (fenceMatch) {
+      const candidate = fenceMatch[1].trim();
+      if (candidate.startsWith('{') || candidate.startsWith('[')) return candidate;
+    }
+    const objectMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (objectMatch) return objectMatch[1].trim();
+    return text;
+  }
+
   function coerceTextContent(value) {
     if (typeof value === 'string') return value;
     if (Array.isArray(value)) {
@@ -94,6 +148,9 @@
   }
 
   const api = {
+    sanitizeAiText,
+    extractBalancedJsonCandidate,
+    extractJsonFromLlmResponse,
     coerceTextContent,
     describeLlmResponse,
     extractLlmTextResponse

@@ -178,6 +178,19 @@ function renderPreRunActionSpotlight(draft, validation, safeIterations, distType
   </section>`;
 }
 
+function buildDraftFreshnessWarning(draft) {
+  const referenceAt = [
+    Number(AppState.draftLastSavedAt || 0),
+    Number(draft?.savedAt || 0),
+    Number(draft?.lifecycleUpdatedAt || 0),
+    Number(draft?.createdAt || 0)
+  ].find((value) => Number.isFinite(value) && value > 0) || 0;
+  if (!referenceAt) return '';
+  const ageDays = Math.max(0, Math.floor((Date.now() - referenceAt) / 86400000));
+  if (ageDays <= 14) return '';
+  return `This draft was last updated ${ageDays} day${ageDays === 1 ? '' : 's'} ago. Review the assumptions before running if conditions have changed.`;
+}
+
 function validateFairParams(runPayload = buildSimulationRunPayload(), { toast = true } = {}) {
   const validation = RiskEngine.validateRunParams(runPayload.ep);
   if (toast && !validation.valid) {
@@ -218,6 +231,7 @@ function renderWizard4() {
     inferredAssumptions: draft.inferredAssumptions,
     citations: draft.citations
   });
+  const draftFreshnessWarning = buildDraftFreshnessWarning(draft);
   setPage(`
     <main class="page" aria-label="Step 4: Review and Run Simulation">
       <div class="wizard-layout container container--narrow">
@@ -228,6 +242,7 @@ function renderWizard4() {
         </div>
         <div class="wizard-body">
           ${renderPreRunReviewRail(draft, validation, selectedRisks, safeIterations)}
+          ${draftFreshnessWarning ? `<div class="banner banner--info anim-fade-in" style="margin-top:var(--sp-4)"><span class="banner-icon">ℹ</span><span class="banner-text">${escapeHtml(draftFreshnessWarning)}</span></div>` : ''}
           ${renderPreRunTrustSummary(draft, safeIterations)}
           ${renderScenarioQualityCoach(scenarioQualityCoach, {
             title: 'Scenario quality check',

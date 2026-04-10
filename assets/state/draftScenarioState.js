@@ -308,14 +308,35 @@
     return Array.from(new Set(tags));
   }
 
+  function buildCitationIdentityKey(citation = {}) {
+    return [
+      citation?.docId || '',
+      citation?.title || '',
+      citation?.url || '',
+      citation?.excerpt || ''
+    ]
+      .join('|')
+      .trim()
+      .toLowerCase();
+  }
+
+  function mergeCitationMetadata(citations, metadataCitations) {
+    const metadataByKey = new Map(
+      (Array.isArray(metadataCitations) ? metadataCitations : [])
+        .map((citation) => [buildCitationIdentityKey(citation), citation])
+        .filter(([key]) => !!key)
+    );
+    return (Array.isArray(citations) ? citations : []).map((citation) => {
+      const metadata = metadataByKey.get(buildCitationIdentityKey(citation));
+      return metadata ? { ...metadata, ...citation } : citation;
+    });
+  }
+
   function normaliseCitations(citations) {
     const list = Array.isArray(citations) ? citations : [];
     const seen = new Set();
     const unique = list.filter((citation) => {
-      const key = [citation?.docId || '', citation?.title || '', citation?.url || '', citation?.excerpt || '']
-        .join('|')
-        .trim()
-        .toLowerCase();
+      const key = buildCitationIdentityKey(citation);
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;

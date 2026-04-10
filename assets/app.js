@@ -54,6 +54,46 @@ const DEFAULT_AI_FEEDBACK_TUNING = Object.freeze({
 const OPERATIONAL_TIME_LOCALE = 'en-GB';
 const OPERATIONAL_TIME_ZONE = 'Asia/Dubai';
 const OPERATIONAL_TIME_LABEL = 'Dubai time (GST)';
+const DEFAULT_UAE_GEOGRAPHY_REGULATIONS = Object.freeze([
+  'UAE PDPL',
+  'UAE Information Assurance Standard',
+  'UAE National Cyber Security Governance Framework',
+  'UAE National Third Party Security Policy',
+  'UAE National Secure Remote Work Policy',
+  'UAE National Vulnerability Disclosure Policy',
+  'UAE National Data Exchange Security Policy',
+  'UAE National Cloud Security Policy',
+  'UAE Cyber Incident Response Framework',
+  'UAE Critical Information Infrastructure Protection (CIIP) Policy',
+  'UAE National Cyber Security Policy for Artificial Intelligence',
+  'NCEMA 7000:2021 Business Continuity'
+]);
+const DEFAULT_ADGM_HOLDING_COMPANY_REGULATIONS = Object.freeze([
+  'ADGM Companies Regulations 2020',
+  'ADGM Beneficial Ownership and Control Regulations 2022',
+  'ADGM Data Protection Regulations 2021',
+  'ADGM Annual Accounts and Confirmation Statement obligations',
+  'ADGM Commercial Licence renewal obligations'
+]);
+const DEFAULT_ADMIN_APPLICABLE_REGULATIONS = Object.freeze([
+  ...DEFAULT_UAE_GEOGRAPHY_REGULATIONS,
+  ...DEFAULT_ADGM_HOLDING_COMPANY_REGULATIONS,
+  'BIS Export Controls',
+  'OFAC Sanctions',
+  'NIST SP 800-53',
+  'NIST RMF',
+  'ISO 27001',
+  'ISO 27002',
+  'ISO 27005',
+  'ISO 27017',
+  'ISO 27018',
+  'ISO 27701',
+  'ISO 22301',
+  'ISO 22313',
+  'ISO 27036',
+  'ISO 28000',
+  'ISO 31000'
+]);
 
 const DEFAULT_ADMIN_SETTINGS = {
   geography: 'United Arab Emirates',
@@ -64,14 +104,14 @@ const DEFAULT_ADMIN_SETTINGS = {
   entityContextLayers: [],
   entityObligations: [],
   riskAppetiteStatement: 'Moderate. Escalate risks that threaten regulated operations, cross-border data movement, or strategic platforms.',
-  applicableRegulations: ['UAE PDPL', 'BIS Export Controls', 'OFAC Sanctions', 'UAE Cybersecurity Council Guidance', 'NIST SP 800-53', 'NIST RMF', 'ISO 27001', 'ISO 27002', 'ISO 27005', 'ISO 27017', 'ISO 27018', 'ISO 27701', 'ISO 22301', 'ISO 22313', 'ISO 27036', 'ISO 28000', 'ISO 31000'],
+  applicableRegulations: [...DEFAULT_ADMIN_APPLICABLE_REGULATIONS],
   aiInstructions: 'Prioritise operational, regulatory, and strategic impact. Use British English.',
   benchmarkStrategy: 'Prefer GCC and UAE benchmark references where relevant. Where GCC data is thin, use the best available global benchmark and explain the fallback clearly.',
   defaultLinkMode: true,
   toleranceThresholdUsd: TOLERANCE_THRESHOLD,
   warningThresholdUsd: 3_000_000,
   annualReviewThresholdUsd: 12_000_000,
-  adminContextSummary: 'Use this workspace to maintain geography, regulations, thresholds, and AI guidance for the platform.',
+  adminContextSummary: 'Use this workspace to maintain geography, regulations, thresholds, and AI guidance for the platform. For UAE holding-company contexts, reflect ADGM corporate filing, beneficial ownership, data protection, NCEMA continuity, and Cyber Security Council policy obligations where relevant.',
   adminContextVisibleToUsers: true,
   escalationGuidance: 'Escalate to leadership when the scenario is above tolerance, close to tolerance, or materially affects regulated services.',
   typicalDepartments: [...DEFAULT_TYPICAL_DEPARTMENTS],
@@ -3423,9 +3463,9 @@ function renderGeographySelect(id, selected = '', placeholder = 'Choose geograph
 }
 
 const GEOGRAPHY_REGULATION_MAP = {
-  'United Arab Emirates': ['UAE PDPL', 'UAE Cybersecurity Council Guidance'],
-  'Abu Dhabi': ['UAE PDPL', 'UAE Cybersecurity Council Guidance'],
-  'Dubai': ['UAE PDPL', 'UAE Cybersecurity Council Guidance'],
+  'United Arab Emirates': [...DEFAULT_UAE_GEOGRAPHY_REGULATIONS],
+  'Abu Dhabi': [...DEFAULT_UAE_GEOGRAPHY_REGULATIONS],
+  'Dubai': [...DEFAULT_UAE_GEOGRAPHY_REGULATIONS],
   'GCC': ['GCC cross-border data transfer obligations'],
   'Saudi Arabia': ['Saudi PDPL'],
   'Qatar': ['Qatar Personal Data Privacy Protection Law'],
@@ -4989,6 +5029,344 @@ function formatCompanyContextProfile(result) {
   return serialiseCompanyContextSections(buildCompanyContextSections(result));
 }
 
+function buildEntityContextAdminSettings(settings = getAdminSettings()) {
+  return {
+    geography: settings.geography || '',
+    applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
+    aiInstructions: settings.aiInstructions || '',
+    benchmarkStrategy: settings.benchmarkStrategy || '',
+    riskAppetiteStatement: settings.riskAppetiteStatement || '',
+    companyContextProfile: settings.companyContextProfile || '',
+    companyStructureContext: buildOrganisationContextSummary(settings),
+    adminContextSummary: settings.adminContextSummary || ''
+  };
+}
+
+const ENTITY_CONTEXT_GROUNDING_STOP_WORDS = new Set([
+  'about', 'across', 'actual', 'aligned', 'also', 'among', 'because', 'being', 'brief', 'briefly', 'build',
+  'business', 'businesses', 'capture', 'current', 'decision', 'decisions', 'deliver', 'derive', 'draft',
+  'entity', 'entities', 'function', 'functions', 'further', 'global', 'group', 'guidance', 'helps', 'inherit',
+  'inherited', 'later', 'layer', 'layers', 'lower', 'maintain', 'management', 'model', 'needs', 'node',
+  'nodes', 'operating', 'organisation', 'organization', 'output', 'outputs', 'parent', 'practical', 'profile',
+  'remit', 'responsibilities', 'responsibility', 'review', 'role', 'roles', 'saved', 'shape', 'shapes',
+  'should', 'specific', 'summary', 'support', 'supports', 'supporting', 'tailor', 'team', 'their', 'this',
+  'unit', 'using', 'wider', 'within'
+]);
+
+const ENTITY_CONTEXT_GROUNDING_WEAK_PROOF_TOKENS = new Set([
+  'accountability', 'advisory', 'alignment', 'analysis', 'assurance', 'board', 'business', 'capability',
+  'compliance', 'control', 'controls', 'coordination', 'disclosure', 'disclosures', 'enterprise', 'escalation',
+  'execution', 'exposure', 'framework', 'frameworks', 'governance', 'guidance', 'incident', 'incidents',
+  'infrastructure', 'initiative', 'initiatives', 'management', 'metric', 'metrics', 'monitoring', 'operations',
+  'operational', 'oversight', 'ownership', 'performance', 'planning', 'policy', 'policies', 'procedure',
+  'procedures', 'programme', 'program', 'quality', 'regulation', 'regulations', 'regulatory', 'reporting',
+  'report', 'reports', 'requirement', 'requirements', 'response', 'responses', 'review', 'reviews', 'risk',
+  'risks', 'service', 'services', 'standard', 'standards', 'stakeholder', 'stakeholders', 'strategy', 'strategic',
+  'team', 'teams', 'testing'
+]);
+
+function normaliseEntityGroundingText(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s/+.-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function splitEntityGroundingSentences(value = '') {
+  return String(value || '')
+    .replace(/\r/g, '\n')
+    .split(/[\n]+|(?<=[.!?])\s+/)
+    .map(item => item.replace(/\s+/g, ' ').trim())
+    .filter(item => item.length >= 24);
+}
+
+function buildEntityGroundingIgnoreTokens(input = {}) {
+  const values = [
+    input.entity?.name,
+    input.parentEntity?.name,
+    input.parentEntity?.type,
+    input.entity?.type,
+    input.entity?.departmentRelationshipType
+  ];
+  return new Set(values.flatMap(value => (
+    normaliseEntityGroundingText(value)
+      .match(/[a-z0-9][a-z0-9/+.-]{3,}/g) || []
+  )));
+}
+
+function extractEntityGroundingTokens(value = '', { includeWeak = false, ignoreTokens = new Set() } = {}) {
+  const matches = normaliseEntityGroundingText(value).match(/[a-z0-9][a-z0-9/+.-]{3,}/g) || [];
+  return Array.from(new Set(matches.filter((token) => (
+    token.length >= 4
+    && !ENTITY_CONTEXT_GROUNDING_STOP_WORDS.has(token)
+    && !ignoreTokens.has(token)
+    && (includeWeak || !ENTITY_CONTEXT_GROUNDING_WEAK_PROOF_TOKENS.has(token))
+  ))));
+}
+
+function extractEntityGroundingPhrases(value = '', { ignoreTokens = new Set() } = {}) {
+  const words = normaliseEntityGroundingText(value).match(/[a-z0-9][a-z0-9/+.-]{3,}/g) || [];
+  const phrases = [];
+  for (let size = 2; size <= 3; size += 1) {
+    for (let index = 0; index <= words.length - size; index += 1) {
+      const phraseWords = words.slice(index, index + size);
+      if (phraseWords.some(token => ENTITY_CONTEXT_GROUNDING_STOP_WORDS.has(token) || ignoreTokens.has(token))) continue;
+      const strongTokens = phraseWords.filter(token => !ENTITY_CONTEXT_GROUNDING_WEAK_PROOF_TOKENS.has(token));
+      if (!strongTokens.length) continue;
+      if (strongTokens.length === 1 && size === 2 && strongTokens[0].length < 7) continue;
+      phrases.push(phraseWords.join(' '));
+    }
+  }
+  return Array.from(new Set(phrases)).slice(0, 10);
+}
+
+function buildEntityGroundingProofSegments(sourceText = '', options = {}) {
+  return splitEntityGroundingSentences(sourceText)
+    .map((sentence) => {
+      const specificTokens = extractEntityGroundingTokens(sentence, options);
+      const allTokens = extractEntityGroundingTokens(sentence, { ...options, includeWeak: true });
+      const phrases = extractEntityGroundingPhrases(sentence, options);
+      const distinctivenessScore = (specificTokens.length * 3) + (phrases.length * 2);
+      return {
+        sentence,
+        specificTokens,
+        allTokens,
+        phrases,
+        distinctivenessScore
+      };
+    })
+    .filter((segment) => segment.specificTokens.length >= 1 && (segment.phrases.length || segment.specificTokens.length >= 2))
+    .sort((left, right) => right.distinctivenessScore - left.distinctivenessScore || right.specificTokens.length - left.specificTokens.length)
+    .slice(0, 10);
+}
+
+function buildEntityGroundingProof(sourceText = '', summary = '', options = {}) {
+  const availableText = String(sourceText || '').trim();
+  if (availableText.length < 40) {
+    return { available: false, reflected: false, proofSignals: [], proofSnippets: [], proofScore: 0 };
+  }
+  const summaryText = normaliseEntityGroundingText(summary);
+  const summarySpecificTokens = new Set(extractEntityGroundingTokens(summaryText, options));
+  const summaryAllTokens = new Set(extractEntityGroundingTokens(summaryText, { ...options, includeWeak: true }));
+  const segments = buildEntityGroundingProofSegments(availableText, options);
+  const proofs = segments.map((segment) => {
+    const phraseHits = segment.phrases.filter(phrase => summaryText.includes(phrase));
+    const strongHits = segment.specificTokens.filter(token => summarySpecificTokens.has(token));
+    const totalHits = segment.allTokens.filter(token => summaryAllTokens.has(token));
+    const proofScore = (phraseHits.length * 5) + (strongHits.length * 3) + Math.min(2, totalHits.length);
+    const passed = phraseHits.length >= 1
+      || strongHits.length >= 2
+      || (strongHits.length >= 1 && totalHits.length >= 3);
+    return {
+      sentence: segment.sentence,
+      phraseHits,
+      strongHits,
+      totalHits,
+      proofScore,
+      passed
+    };
+  }).filter(item => item.passed)
+    .sort((left, right) => right.proofScore - left.proofScore || right.strongHits.length - left.strongHits.length);
+  const bestProof = proofs[0] || null;
+  return {
+    available: true,
+    reflected: Boolean(bestProof && bestProof.proofScore >= (options.minProofScore || 6)),
+    proofSignals: bestProof ? Array.from(new Set([...bestProof.phraseHits, ...bestProof.strongHits])).slice(0, 4) : [],
+    proofSnippets: proofs.slice(0, 2).map(item => item.sentence),
+    proofScore: Number(bestProof?.proofScore || 0)
+  };
+}
+
+function formatEntityGroundingList(items = []) {
+  const values = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!values.length) return '';
+  if (values.length === 1) return values[0];
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(', ')}, and ${values[values.length - 1]}`;
+}
+
+function getEntityGroundingSourceState(label, sourceText = '', summary = '', options = {}) {
+  const proof = buildEntityGroundingProof(sourceText, summary, options);
+  return {
+    label,
+    available: proof.available,
+    reflected: proof.reflected,
+    proofSignals: proof.proofSignals,
+    proofSnippets: proof.proofSnippets,
+    proofScore: proof.proofScore
+  };
+}
+
+function buildEntityContextGroundingAssessment({ result = {}, input = {} } = {}) {
+  const summary = String(result.contextSummary || input.currentContext?.contextSummary || input.entity?.profile || '').trim();
+  const ignoreTokens = buildEntityGroundingIgnoreTokens(input);
+  const buContextText = [
+    input.parentLayer?.contextSummary,
+    input.parentLayer?.riskAppetiteStatement,
+    input.parentLayer?.aiInstructions,
+    Array.isArray(input.parentLayer?.applicableRegulations) ? input.parentLayer.applicableRegulations.join(' ') : '',
+    input.parentEntity?.profile
+  ].map(item => String(item || '').trim()).filter(Boolean).join(' ');
+  const organisationContextText = [
+    input.adminSettings?.companyContextProfile,
+    input.adminSettings?.adminContextSummary
+  ].map(item => String(item || '').trim()).filter(Boolean).join(' ');
+  const organisationStructureText = String(input.adminSettings?.companyStructureContext || '').trim();
+  const uploadedText = String(input.uploadedText || '').trim();
+
+  const buContext = getEntityGroundingSourceState('BU context', buContextText, summary, {
+    ignoreTokens,
+    minProofScore: 6
+  });
+  const organisationContext = getEntityGroundingSourceState('Organisation context', organisationContextText, summary, {
+    ignoreTokens,
+    minProofScore: 6
+  });
+  const organisationStructure = getEntityGroundingSourceState('Organisation structure', organisationStructureText, summary, {
+    ignoreTokens,
+    minProofScore: 7
+  });
+  const uploadedMaterial = getEntityGroundingSourceState('Uploaded material', uploadedText, summary, {
+    ignoreTokens,
+    minProofScore: 6
+  });
+
+  const availableSavedSources = [buContext, organisationContext, organisationStructure].filter(source => source.available);
+  const reflectedSavedSources = [buContext, organisationContext, organisationStructure].filter(source => source.reflected);
+  const reflectedAllSources = [...reflectedSavedSources, ...(uploadedMaterial.reflected ? [uploadedMaterial] : [])];
+  const missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation.map(String) : [];
+  const thinSavedContext = missingInformation.some(item => /BU or function context is still thin/i.test(item));
+
+  let status = 'grounded';
+  let label = 'Grounded in saved context';
+  let message = '';
+  let nextAction = '';
+
+  if (!summary) {
+    status = 'generic';
+    label = 'Generic draft warning';
+    message = 'The draft is still empty or too thin to show strong grounding.';
+    nextAction = 'Add BU or organisation context, or upload source material, then run AI Assist again.';
+  } else if (!reflectedSavedSources.length) {
+    if (!availableSavedSources.length) {
+      status = uploadedMaterial.reflected ? 'partial' : 'generic';
+      label = uploadedMaterial.reflected ? 'Partly grounded' : 'Generic draft warning';
+      message = uploadedMaterial.reflected
+        ? 'The draft is grounded mainly in uploaded material because no strong saved BU or organisation context was available.'
+        : 'No strong saved BU or organisation context was available, so this draft may still read generic.';
+      nextAction = uploadedMaterial.reflected
+        ? 'If you want stronger inherited context, enrich the parent BU or organisation context before rerunning AI Assist.'
+        : 'Add or enrich saved BU or organisation context, or upload policy or framework material, then rerun AI Assist.';
+    } else {
+      status = 'partial';
+      label = 'Partly grounded';
+      message = 'Saved context exists, but it is not clearly reflected in the current draft yet.';
+      nextAction = 'Refine the draft or upload supporting policy or framework material so the BU or organisation context shows through more clearly.';
+    }
+  } else if (reflectedSavedSources.length < availableSavedSources.length || thinSavedContext || uploadedMaterial.reflected) {
+    status = 'partial';
+    label = 'Partly grounded';
+    if (buContext.reflected && organisationContext.available && !organisationContext.reflected) {
+      message = 'The draft is grounded mainly in BU context. Wider organisation context was available but is not clearly reflected yet.';
+    } else if (organisationContext.reflected && buContext.available && !buContext.reflected) {
+      message = 'The draft is grounded mainly in organisation context. BU-specific context was available but is not clearly reflected yet.';
+    } else if (organisationStructure.reflected && !buContext.reflected && !organisationContext.reflected) {
+      message = 'The draft reflects wider organisation structure context, but not a strong saved BU or organisation narrative yet.';
+    } else if (uploadedMaterial.reflected && !buContext.reflected && !organisationContext.reflected) {
+      message = 'The draft is grounded mainly in uploaded material, with only limited saved BU or organisation context showing through.';
+    } else {
+      message = `The draft is grounded in ${formatEntityGroundingList(reflectedSavedSources.map(source => source.label).slice(0, 3))}, but the overall grounding is still incomplete.`;
+    }
+    nextAction = 'Review the wording before saving and add more BU or organisation detail if you want the function context to be less generic.';
+  } else {
+    status = 'grounded';
+    label = 'Grounded in saved context';
+    message = `The draft is grounded in ${formatEntityGroundingList(reflectedSavedSources.map(source => source.label).slice(0, 3))}.`;
+    if (uploadedMaterial.reflected) {
+      nextAction = 'Uploaded source material also shaped the draft.';
+    }
+  }
+
+  return {
+    status,
+    label,
+    message,
+    nextAction,
+    reflectedSources: reflectedAllSources.map(source => source.label),
+    availableSources: [...availableSavedSources, ...(uploadedMaterial.available ? [uploadedMaterial] : [])].map(source => source.label),
+    proofSignals: Array.from(new Set(reflectedAllSources.flatMap(source => source.proofSignals || []))).slice(0, 8),
+    proofSnippets: reflectedAllSources.flatMap(source => source.proofSnippets || []).slice(0, 2)
+  };
+}
+
+function renderEntityContextGroundingCard(assessment = null, { idleMessage = '' } = {}) {
+  if (!assessment || typeof assessment !== 'object') {
+    return `
+      <div class="ai-grounding-card__eyebrow">AI grounding</div>
+      <div class="context-panel-copy" style="margin-top:6px">${escapeHtml(idleMessage || 'After AI Assist runs, this panel will show whether the draft was grounded in saved BU or organisation context or whether it is still generic.')}</div>`;
+  }
+  const sourceLabels = assessment.reflectedSources?.length ? assessment.reflectedSources : assessment.availableSources;
+  return `
+    <div class="ai-grounding-card__eyebrow">AI grounding</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <span class="badge ${assessment.status === 'grounded' ? 'badge--success' : assessment.status === 'generic' ? 'badge--warning' : 'badge--gold'}">${escapeHtml(String(assessment.label || 'AI grounding'))}</span>
+      ${Array.isArray(sourceLabels) ? sourceLabels.slice(0, 4).map(label => `<span class="badge badge--neutral">${escapeHtml(String(label))}</span>`).join('') : ''}
+    </div>
+    ${assessment.message ? `<div class="context-panel-copy" style="margin-top:10px">${escapeHtml(String(assessment.message))}</div>` : ''}
+    ${Array.isArray(assessment.proofSignals) && assessment.proofSignals.length ? `<div class="form-help" style="margin-top:8px">Proof signals seen in the draft: ${escapeHtml(assessment.proofSignals.join(', '))}</div>` : ''}
+    ${assessment.nextAction ? `<div class="form-help" style="margin-top:8px">${escapeHtml(String(assessment.nextAction))}</div>` : ''}`;
+}
+
+function applyEntityContextGroundingCard(element, assessment = null, options = {}) {
+  if (!element) return;
+  element.className = `card mt-4 ai-grounding-card ai-grounding-card--${assessment?.status || 'idle'}`;
+  element.innerHTML = renderEntityContextGroundingCard(assessment, options);
+}
+
+function buildEntityContextLayerFromResult(entity = {}, result = {}, { visibleToChildUsers = true } = {}) {
+  if (!entity?.id || !result || typeof result !== 'object') return null;
+  return {
+    entityId: entity.id,
+    entityName: entity.name || '',
+    geography: String(result.geography || '').trim(),
+    contextSummary: String(result.contextSummary || '').trim(),
+    visibleToChildUsers: visibleToChildUsers !== false,
+    riskAppetiteStatement: String(result.riskAppetiteStatement || '').trim(),
+    applicableRegulations: Array.isArray(result.applicableRegulations) ? result.applicableRegulations.map(String).filter(Boolean) : [],
+    aiInstructions: String(result.aiInstructions || '').trim(),
+    benchmarkStrategy: String(result.benchmarkStrategy || '').trim()
+  };
+}
+
+function upsertEntityContextLayers(layers = [], nextLayer = null) {
+  const nextLayers = Array.isArray(layers) ? [...layers] : [];
+  if (!nextLayer?.entityId) return nextLayers;
+  const index = nextLayers.findIndex(item => item.entityId === nextLayer.entityId);
+  if (index > -1) nextLayers[index] = nextLayer;
+  else nextLayers.push(nextLayer);
+  return nextLayers;
+}
+
+function mergeDerivedEntityContextLayer(settings = {}, entity = {}, derivedResult = null) {
+  const layers = Array.isArray(settings.entityContextLayers) ? settings.entityContextLayers : [];
+  if (!entity?.id || !derivedResult || typeof derivedResult !== 'object') return [...layers];
+  const existingLayer = layers.find(item => item.entityId === entity.id) || null;
+  const nextLayer = buildEntityContextLayerFromResult(entity, {
+    geography: derivedResult.geography || existingLayer?.geography || settings.geography || '',
+    contextSummary: derivedResult.contextSummary || existingLayer?.contextSummary || String(entity.profile || '').trim(),
+    riskAppetiteStatement: derivedResult.riskAppetiteStatement || existingLayer?.riskAppetiteStatement || settings.riskAppetiteStatement || '',
+    applicableRegulations: Array.isArray(derivedResult.applicableRegulations) && derivedResult.applicableRegulations.length
+      ? derivedResult.applicableRegulations
+      : (Array.isArray(existingLayer?.applicableRegulations) && existingLayer.applicableRegulations.length
+        ? existingLayer.applicableRegulations
+        : (Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [])),
+    aiInstructions: derivedResult.aiInstructions || existingLayer?.aiInstructions || settings.aiInstructions || '',
+    benchmarkStrategy: derivedResult.benchmarkStrategy || existingLayer?.benchmarkStrategy || settings.benchmarkStrategy || ''
+  }, { visibleToChildUsers: existingLayer?.visibleToChildUsers !== false });
+  return upsertEntityContextLayers(layers, nextLayer);
+}
+
 function getRelationshipOptions(structure = [], type = '', excludeId = '') {
   const nodes = structure.filter(node => node.id !== excludeId);
   if (isDepartmentEntityType(type)) {
@@ -5100,6 +5478,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       <button class="btn btn--secondary" id="btn-org-build-context" type="button">Build Context from Website</button>
       <span class="form-help" id="org-context-actions-help">Use AI to gather website and public-source context before saving.</span>
     </div>
+    <div id="org-context-grounding"></div>
     ${UI.aiRefinementCard({
       intro: 'Use follow-up prompts to keep shaping the context until it is ready to save.',
       historyId: 'org-context-refinement-history',
@@ -5143,6 +5522,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
   const ownerHelpEl = document.getElementById('org-owner-help');
   const contextActionsEl = document.getElementById('org-context-actions');
   const contextActionsHelpEl = document.getElementById('org-context-actions-help');
+  const contextGroundingEl = document.getElementById('org-context-grounding');
   const contextSectionsWrapEl = document.getElementById('org-context-sections-wrap');
   const contextRefinementWrapEl = document.getElementById('org-context-refinement-wrap');
   const contextRefinementHelpEl = document.getElementById('org-context-refinement-help');
@@ -5150,6 +5530,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
   const contextFollowupEl = document.getElementById('org-context-followup');
   const contextRefineStatusEl = document.getElementById('org-context-refine-status');
   const contextRefinementHistory = [];
+  let latestDerivedDepartmentContext = null;
 
   function getSelectedNodeType() {
     return departmentEditorMode ? 'Department / function' : typeEl.value;
@@ -5210,6 +5591,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     websiteWrapEl.style.display = departmentEditorMode ? 'none' : '';
     contextActionsEl.style.display = '';
     contextSectionsWrapEl.style.display = departmentEditorMode ? 'none' : '';
+    if (contextGroundingEl) contextGroundingEl.style.display = departmentEditorMode ? '' : 'none';
     if (contextRefinementWrapEl) contextRefinementWrapEl.style.display = '';
     const buildContextBtn = document.getElementById('btn-org-build-context');
     if (buildContextBtn) buildContextBtn.textContent = departmentEditorMode ? 'AI Assist Context' : 'Build Context from Website';
@@ -5232,6 +5614,10 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       : 'Capture public business profile, ownership context, strategic role, and major risk signals for this entity.';
   }
 
+  applyEntityContextGroundingCard(contextGroundingEl, null, {
+    idleMessage: 'After AI Assist runs, this panel will show whether the function draft was grounded in saved BU or organisation context or whether it is still generic.'
+  });
+
   if (!departmentEditorMode) typeEl.addEventListener('change', refreshEntityEditorState);
   departmentTemplateEl.addEventListener('change', () => {
     if (departmentTemplateEl.value && (!nameEl.value.trim() || TYPICAL_DEPARTMENTS.includes(nameEl.value.trim()))) {
@@ -5248,13 +5634,14 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     const settings = getAdminSettings();
     const parentEntity = getEntityById(structure, parentId);
     const parentLayer = parentEntity?.id ? getEntityLayerById(settings, parentEntity.id) : null;
+    const existingLayer = node.id ? getEntityLayerById(settings, node.id) : null;
     const llmConfig = getSessionLLMConfig();
     LLMService.setCompassConfig({
       apiUrl: llmConfig.apiUrl || DEFAULT_COMPASS_PROXY_URL,
-      model: llmConfig.model || 'gpt-5.1',
+      model: llmConfig.model || AiStatusClient.DEFAULT_MODEL,
       apiKey: llmConfig.apiKey || ''
     });
-    const result = await LLMService.buildEntityContext({
+    const buildInput = {
       entity: {
         id: node.id || '',
         name: nameEl.value.trim() || defaultDepartmentHint || 'New function',
@@ -5271,19 +5658,27 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         profile: parentEntity.profile || '',
         websiteUrl: parentEntity.websiteUrl || ''
       } : null,
-      existingLayer: null,
+      existingLayer: latestDerivedDepartmentContext || existingLayer || null,
       parentLayer: parentLayer || null,
-      adminSettings: {
-        geography: settings.geography || '',
-        applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
-        aiInstructions: settings.aiInstructions || '',
-        benchmarkStrategy: settings.benchmarkStrategy || '',
-        riskAppetiteStatement: settings.riskAppetiteStatement || ''
-      },
+      adminSettings: buildEntityContextAdminSettings(settings),
       uploadedText: uploaded.text,
       uploadedDocumentName: uploaded.name
+    };
+    let result;
+    try {
+      result = await LLMService.buildEntityContext(buildInput);
+    } catch (error) {
+      console.warn('Function context build fallback:', error?.message || error);
+      result = buildLocalEntityContextBootstrapFallback(buildInput);
+    }
+    result.groundingAssessment = buildEntityContextGroundingAssessment({
+      result,
+      input: buildInput
     });
     if (result.contextSummary) profileEl.value = result.contextSummary;
+    applyEntityContextGroundingCard(contextGroundingEl, result.groundingAssessment);
+    latestDerivedDepartmentContext = result;
+    return result;
   }
 
   renderOrgContextRefinementHistory();
@@ -5295,12 +5690,20 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       btn.textContent = 'Building context…';
       try {
         const uploaded = await loadContextSupportSource('org-context-source-file', 'org-context-source-help');
-        await buildDepartmentContextFromParent(uploaded);
+        const result = await buildDepartmentContextFromParent(uploaded);
         contextRefinementHistory.length = 0;
         contextRefinementHistory.push({ role: 'assistant', text: uploaded.text ? 'Initial function context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.' : 'Initial function context draft created. Use follow-up prompts below if you want to reshape it further.' });
         renderOrgContextRefinementHistory();
         if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
-        UI.toast('Function context drafted from the parent business context.', 'success', 5000);
+        UI.toast(
+          result?.groundingAssessment?.status === 'generic'
+            ? 'Function context drafted, but it is not strongly grounded in saved BU or organisation context yet.'
+            : result?.groundingAssessment?.status === 'partial'
+              ? 'Function context drafted. Some inherited context was used, but the grounding is only partial.'
+              : 'Function context drafted from the parent business context.',
+          result?.groundingAssessment?.status === 'generic' ? 'warning' : 'success',
+          5000
+        );
       } catch (error) {
         UI.toast('Context build failed. Try again or shorten the source material.', 'danger', 6000);
       } finally {
@@ -5377,6 +5780,8 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         const parentId = parentEl.value || node.parentId || seed.parentId || '';
         const parentEntity = getEntityById(structure, parentId);
         const parentLayer = parentEntity?.id ? getEntityLayerById(settings, parentEntity.id) : null;
+        const existingLayer = node.id ? getEntityLayerById(settings, node.id) : null;
+        const currentLayer = latestDerivedDepartmentContext || existingLayer || {};
         const refineInput = {
           entity: {
             id: node.id || '',
@@ -5395,21 +5800,17 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
             websiteUrl: parentEntity.websiteUrl || ''
           } : null,
           currentContext: {
-            geography: settings.geography || '',
-            contextSummary: profileEl.value.trim(),
-            applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
-            aiInstructions: settings.aiInstructions || '',
-            benchmarkStrategy: settings.benchmarkStrategy || '',
-            riskAppetiteStatement: settings.riskAppetiteStatement || ''
+            geography: currentLayer.geography || settings.geography || '',
+            contextSummary: profileEl.value.trim() || currentLayer.contextSummary || '',
+            applicableRegulations: Array.isArray(currentLayer.applicableRegulations) && currentLayer.applicableRegulations.length
+              ? currentLayer.applicableRegulations
+              : (Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : []),
+            aiInstructions: currentLayer.aiInstructions || settings.aiInstructions || '',
+            benchmarkStrategy: currentLayer.benchmarkStrategy || settings.benchmarkStrategy || '',
+            riskAppetiteStatement: currentLayer.riskAppetiteStatement || settings.riskAppetiteStatement || ''
           },
           parentLayer: parentLayer || null,
-          adminSettings: {
-            geography: settings.geography || '',
-            applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
-            aiInstructions: settings.aiInstructions || '',
-            benchmarkStrategy: settings.benchmarkStrategy || '',
-            riskAppetiteStatement: settings.riskAppetiteStatement || ''
-          },
+          adminSettings: buildEntityContextAdminSettings(settings),
           history: contextRefinementHistory,
           userPrompt: prompt,
           uploadedText: uploaded.text,
@@ -5421,7 +5822,13 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         } catch {
           result = buildLocalEntityContextFallback(refineInput);
         }
+        result.groundingAssessment = buildEntityContextGroundingAssessment({
+          result,
+          input: refineInput
+        });
         if (result.contextSummary) profileEl.value = result.contextSummary;
+        applyEntityContextGroundingCard(contextGroundingEl, result.groundingAssessment);
+        latestDerivedDepartmentContext = result;
         contextRefinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the function context based on your latest prompt.' });
       } else {
         const settings = getAdminSettings();
@@ -5458,7 +5865,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     }
   });
 
-  document.getElementById('org-save').addEventListener('click', () => {
+  document.getElementById('org-save').addEventListener('click', async () => {
     const selectedNodeType = getSelectedNodeType();
     const parentId = parentEl.value;
     if (requiresParentEntity(selectedNodeType) && !parentId) {
@@ -5470,27 +5877,47 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       UI.toast(departmentEditorMode ? 'Enter the department or function name.' : 'Enter the entity name.', 'warning');
       return;
     }
-    onSave?.({
-      ...node,
-      id: node.id || `org_${Date.now()}`,
-      type: selectedNodeType,
-      name,
-      parentId: parentId || null,
-      websiteUrl: departmentEditorMode ? '' : websiteEl.value.trim(),
-      profile: profileEl.value.trim(),
-      ownerUsername: ownerEl.value,
-      departmentRelationshipType: departmentEditorMode ? typeEl.value : '',
-      contextSections: departmentEditorMode ? null : {
-        companySummary: document.getElementById('org-section-summary').value.trim(),
-        businessModel: document.getElementById('org-section-business-model').value.trim(),
-        operatingModel: document.getElementById('org-section-operating-model').value.trim(),
-        publicCommitments: document.getElementById('org-section-commitments').value.trim(),
-        keyRiskSignals: document.getElementById('org-section-risks').value.trim(),
-        obligations: document.getElementById('org-section-obligations').value.trim(),
-        sources: document.getElementById('org-section-sources').value.trim()
-      },
-      departmentHint: departmentEditorMode ? (departmentTemplateEl.value || name) : ''
-    }, modal);
+    const saveBtn = document.getElementById('org-save');
+    const isNewDepartment = departmentEditorMode && !String(node.id || '').trim();
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = departmentEditorMode ? 'Saving Function…' : 'Saving Entity…';
+    }
+    try {
+      if (isNewDepartment && !latestDerivedDepartmentContext) {
+        try {
+          await buildDepartmentContextFromParent({ text: '', name: '' });
+        } catch (error) {
+          console.warn('Auto-deriving new function context failed:', error?.message || error);
+        }
+      }
+      await onSave?.({
+        ...node,
+        id: node.id || `org_${Date.now()}`,
+        type: selectedNodeType,
+        name,
+        parentId: parentId || null,
+        websiteUrl: departmentEditorMode ? '' : websiteEl.value.trim(),
+        profile: profileEl.value.trim(),
+        ownerUsername: ownerEl.value,
+        departmentRelationshipType: departmentEditorMode ? typeEl.value : '',
+        contextSections: departmentEditorMode ? null : {
+          companySummary: document.getElementById('org-section-summary').value.trim(),
+          businessModel: document.getElementById('org-section-business-model').value.trim(),
+          operatingModel: document.getElementById('org-section-operating-model').value.trim(),
+          publicCommitments: document.getElementById('org-section-commitments').value.trim(),
+          keyRiskSignals: document.getElementById('org-section-risks').value.trim(),
+          obligations: document.getElementById('org-section-obligations').value.trim(),
+          sources: document.getElementById('org-section-sources').value.trim()
+        },
+        departmentHint: departmentEditorMode ? (departmentTemplateEl.value || name) : ''
+      }, modal, latestDerivedDepartmentContext);
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = departmentEditorMode ? 'Save Function' : 'Save Entity';
+      }
+    }
   });
   refreshEntityEditorState();
   return {
@@ -5546,13 +5973,7 @@ function buildEntityContextRequest(entity, settings = getAdminSettings(), existi
     } : null,
     existingLayer: existingLayer || {},
     parentLayer: parentLayer || null,
-    adminSettings: {
-      geography: settings.geography || '',
-      applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
-      aiInstructions: settings.aiInstructions || '',
-      benchmarkStrategy: settings.benchmarkStrategy || '',
-      riskAppetiteStatement: settings.riskAppetiteStatement || ''
-    }
+    adminSettings: buildEntityContextAdminSettings(settings)
   };
 }
 
@@ -5607,6 +6028,7 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
         <button class="btn btn--secondary" id="btn-entity-layer-ai" type="button">Build with AI</button>
         <span class="form-help">Derive context from the entity, the parent BU, and the current admin baseline.</span>
       </div>
+      <div id="entity-layer-grounding"></div>
       ${UI.aiRefinementCard({
         title: 'Refine With Follow-Up Prompts',
         intro: 'Ask follow-up questions or give directions like “make this more specific to data residency”, “tighten the summary for a COO”, or “focus more on vendor dependencies”.',
@@ -5637,6 +6059,7 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
   const historyEl = document.getElementById('entity-layer-refinement-history');
   const followupEl = document.getElementById('entity-layer-followup');
   const refineStatusEl = document.getElementById('entity-layer-refine-status');
+  const groundingEl = document.getElementById('entity-layer-grounding');
 
   function getCurrentContextDraft() {
     return {
@@ -5677,6 +6100,9 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
   }
 
   renderRefinementHistory();
+  applyEntityContextGroundingCard(groundingEl, null, {
+    idleMessage: 'After AI Assist runs, this panel will show whether the retained context draft was grounded in saved BU or organisation context or whether it is still generic.'
+  });
   document.getElementById('entity-layer-cancel').addEventListener('click', () => modal.close());
   document.getElementById('btn-entity-layer-ai').addEventListener('click', async () => {
     const btn = document.getElementById('btn-entity-layer-ai');
@@ -5686,7 +6112,7 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
     try {
       LLMService.setCompassConfig({
         apiUrl: llmConfig.apiUrl || DEFAULT_COMPASS_PROXY_URL,
-        model: llmConfig.model || 'gpt-5.1',
+        model: llmConfig.model || AiStatusClient.DEFAULT_MODEL,
         apiKey: llmConfig.apiKey || ''
       });
       const uploaded = await loadContextSupportSource('entity-layer-source-file', 'entity-layer-source-help');
@@ -5695,11 +6121,28 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
         uploadedText: uploaded.text,
         uploadedDocumentName: uploaded.name
       });
+      result.groundingAssessment = buildEntityContextGroundingAssessment({
+        result,
+        input: {
+          ...contextRequest,
+          uploadedText: uploaded.text,
+          uploadedDocumentName: uploaded.name
+        }
+      });
       applyContextResult(result, { onlyEmptyGeography: true });
+      applyEntityContextGroundingCard(groundingEl, result.groundingAssessment);
       refinementHistory.push({ role: 'assistant', text: uploaded.text ? `Initial context draft created for ${entity.name} and grounded with the uploaded source material. Review it or use follow-up prompts below to shape it further.` : `Initial context draft created for ${entity.name}. Review it or use follow-up prompts below to shape it further.` });
       renderRefinementHistory();
       if (refineStatusEl) refineStatusEl.textContent = 'Initial AI draft applied. Use a follow-up prompt below if you want to reshape it further.';
-      UI.toast(`Context built for ${entity.name}. Review and save it.`, 'success', 5000);
+      UI.toast(
+        result?.groundingAssessment?.status === 'generic'
+          ? `Context built for ${entity.name}, but it is not strongly grounded in saved BU or organisation context yet.`
+          : result?.groundingAssessment?.status === 'partial'
+            ? `Context built for ${entity.name}. Some inherited context was used, but the grounding is only partial.`
+            : `Context built for ${entity.name}. Review and save it.`,
+        result?.groundingAssessment?.status === 'generic' ? 'warning' : 'success',
+        5000
+      );
     } catch (error) {
       UI.toast('Context build failed. Try again or shorten the source material.', 'danger', 6000);
     } finally {
@@ -5723,7 +6166,7 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       renderRefinementHistory();
       LLMService.setCompassConfig({
         apiUrl: llmConfig.apiUrl || DEFAULT_COMPASS_PROXY_URL,
-        model: llmConfig.model || 'gpt-5.1',
+        model: llmConfig.model || AiStatusClient.DEFAULT_MODEL,
         apiKey: llmConfig.apiKey || ''
       });
       const uploaded = await loadContextSupportSource('entity-layer-source-file', 'entity-layer-source-help');
@@ -5741,7 +6184,12 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       } catch {
         result = buildLocalEntityContextFallback(refineInput);
       }
+      result.groundingAssessment = buildEntityContextGroundingAssessment({
+        result,
+        input: refineInput
+      });
       applyContextResult(result);
+      applyEntityContextGroundingCard(groundingEl, result.groundingAssessment);
       refinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the context based on your latest prompt.' });
       renderRefinementHistory();
       followupEl.value = '';
@@ -6250,6 +6698,51 @@ function buildLocalEntityContextFallback(refineInput = {}) {
   };
 }
 
+function buildLocalEntityContextBootstrapFallback(input = {}) {
+  const entityName = String(input.entity?.name || 'This function').trim();
+  const parentName = String(input.parentEntity?.name || 'the parent business').trim();
+  const remit = String(input.entity?.profile || input.entity?.departmentHint || '').trim();
+  const parentContext = String(input.parentLayer?.contextSummary || input.parentEntity?.profile || '').trim();
+  const organisationBaseline = [
+    input.adminSettings?.companyContextProfile,
+    input.adminSettings?.companyStructureContext,
+    input.adminSettings?.adminContextSummary
+  ].map((item) => String(item || '').trim()).filter(Boolean).join(' ');
+  const combinedContext = [entityName, remit, parentContext, organisationBaseline].join(' ').toLowerCase();
+  const isEsg = /(esg|sustainab|climate|greenwashing|ifrs s1|ifrs s2|gri|sasb|tnfd|tcfd|ghg|scope 1|scope 2|scope 3|responsible ai|human rights|supplier emissions|disclosure|assurance)/.test(combinedContext);
+  const summary = [
+    `${entityName} sits within ${parentName}.`,
+    remit
+      ? `Its remit is ${remit}.`
+      : 'Keep the context focused on the function remit, decision rights, dependencies, and control responsibilities.',
+    isEsg
+      ? 'Anchor the summary to sustainability governance, disclosure controls, policy or framework ownership, assurance coordination, metrics oversight, and stakeholder reporting when those responsibilities are supported by the inherited context.'
+      : `Use the inherited business context only where it directly shapes ${entityName}'s responsibilities, controls, or stakeholder interfaces.`,
+    parentContext ? `Relevant parent context: ${parentContext}` : '',
+    organisationBaseline ? `Relevant organisation baseline: ${organisationBaseline}` : ''
+  ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  return {
+    geography: String(input.adminSettings?.geography || input.parentLayer?.geography || '').trim(),
+    contextSummary: summary,
+    riskAppetiteStatement: String(
+      input.existingLayer?.riskAppetiteStatement
+      || input.parentLayer?.riskAppetiteStatement
+      || input.adminSettings?.riskAppetiteStatement
+      || `Keep ${entityName} aligned to ${parentName}'s risk appetite, but escalate issues that could materially disrupt critical services, weaken control assurance, or create regulatory exposure for the wider business unit.`
+    ).trim(),
+    applicableRegulations: Array.from(new Set([
+      ...(input.existingLayer?.applicableRegulations || []),
+      ...(input.parentLayer?.applicableRegulations || []),
+      ...(input.adminSettings?.applicableRegulations || [])
+    ].map(String).filter(Boolean))),
+    aiInstructions: isEsg
+      ? 'Tailor outputs to the function remit. Prefer policy or framework ownership, disclosure governance, assurance coordination, metrics control, and stakeholder reporting over generic group-sector descriptions.'
+      : 'Tailor outputs to the function remit. Focus on actual responsibilities, dependencies, control ownership, and key interfaces. Do not restate the full group profile.',
+    benchmarkStrategy: String(input.existingLayer?.benchmarkStrategy || input.parentLayer?.benchmarkStrategy || input.adminSettings?.benchmarkStrategy || '').trim(),
+    responseMessage: 'I generated a locally derived function context using the enriched parent and organisation sources.'
+  };
+}
+
 function buildLocalCompanyContextFallback(refineInput = {}) {
   const current = refineInput.currentSections || {};
   const prompt = String(refineInput.userPrompt || '').trim();
@@ -6276,7 +6769,7 @@ function getAdminLLMConfig() {
   if (!isLocalDevAiRuntimeConfigAllowed()) {
     return {
       apiUrl: DEFAULT_COMPASS_PROXY_URL,
-      model: 'gpt-5.1',
+      model: AiStatusClient.DEFAULT_MODEL,
       apiKey: ''
     };
   }
@@ -6285,7 +6778,7 @@ function getAdminLLMConfig() {
   const apiKeyEl = document.getElementById('admin-compass-key');
   return {
     apiUrl: apiUrlEl?.value.trim() || saved.apiUrl || DEFAULT_COMPASS_PROXY_URL,
-    model: modelEl?.value.trim() || saved.model || 'gpt-5.1',
+    model: modelEl?.value.trim() || saved.model || AiStatusClient.DEFAULT_MODEL,
     apiKey: apiKeyEl?.value.trim() || saved.apiKey || ''
   };
 }
@@ -6293,7 +6786,7 @@ function getAdminLLMConfig() {
 function getSessionLLMConfig() {
   const defaultConfig = {
     apiUrl: DEFAULT_COMPASS_PROXY_URL,
-    model: 'gpt-5.1',
+    model: AiStatusClient.DEFAULT_MODEL,
     apiKey: ''
   };
   if (!isLocalDevAiRuntimeConfigAllowed()) {
@@ -6841,7 +7334,7 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
   const patterns = [
     { key: 'strategic', title: 'Strategic execution or market-position risk', category: 'Strategic', regulations: ['ISO 31000', 'COSO ERM'], terms: ['strategy', 'strategic', 'expansion', 'transformation', 'growth', 'market', 'competitive', 'portfolio', 'investment'] },
     { key: 'operational', title: 'Operational breakdown affecting core services', category: 'Operational', regulations: ['ISO 31000', 'ISO 22301'], terms: ['outage', 'downtime', 'availability', 'service disruption', 'operational disruption', 'failure', 'breakdown', 'backlog', 'capacity', 'process failure', 'human error', 'manual error', 'aging infrastructure', 'ageing infrastructure', 'legacy infrastructure', 'platform instability', 'system instability'] },
-    { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'ISO 27001'], terms: ['ransom', 'malware', 'phish', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud compromise', 'cloud exposure', 'cloud breach', 'misconfig', 'vulnerability', 'privileged'] },
+    { key: 'cyber', title: 'Cyber compromise of critical platforms or data', category: 'Cyber', regulations: ['UAE PDPL', 'UAE Information Assurance Standard', 'ISO 27001'], terms: ['ransom', 'malware', 'phish', 'identity', 'credential', 'sso', 'entra', 'azure ad', 'breach', 'exfil', 'cloud compromise', 'cloud exposure', 'cloud breach', 'misconfig', 'vulnerability', 'privileged'] },
     { key: 'third-party', title: 'Third-party dependency or supplier failure', category: 'Third-Party', regulations: ['ISO 27036', 'ISO 28000'], terms: ['vendor', 'supplier', 'third-party', 'third party', 'outsourc', 'dependency', 'subprocessor', 'partner'] },
     { key: 'regulatory', title: 'Regulatory or licensing exposure', category: 'Regulatory', regulations: ['BIS Export Controls', 'OFAC Sanctions'], terms: ['regulator', 'regulatory', 'licence', 'license', 'supervisory', 'filing', 'notification', 'sanction', 'export control'] },
     { key: 'financial', title: 'Financial loss, fraud, or capital exposure', category: 'Financial', regulations: ['UAE AML/CFT', 'PCI-DSS 4.0'], terms: ['fraud', 'payment', 'invoice', 'treasury', 'liquidity', 'cash', 'capital', 'financial reporting', 'misstatement', 'bankruptcy', 'insolvency', 'receivable', 'bad debt', 'write-off', 'counterparty', 'customer default', 'client default', 'collections', 'working capital', 'provisioning'] },
@@ -6852,7 +7345,7 @@ function guessRisksFromText(text, { lensHint = null } = {}) {
     { key: 'geopolitical', title: 'Geopolitical, sanctions, or market-access exposure', category: 'Geopolitical', regulations: ['OFAC Sanctions', 'BIS Export Controls'], terms: ['geopolitical', 'market access', 'sanctions', 'export control', 'sovereign', 'cross-border restriction', 'entity list', 'tariff'] },
     { key: 'supply-chain', title: 'Supply chain resilience disruption', category: 'Supply Chain', regulations: ['ISO 28000', 'ISO 22301'], terms: ['supply chain', 'logistics', 'inventory', 'fulfilment', 'shipment', 'single source', 'upstream'] },
     { key: 'procurement', title: 'Procurement governance or sourcing risk', category: 'Procurement', regulations: ['ISO 20400', 'ISO 37301'], terms: ['procurement', 'sourcing', 'tender', 'bid', 'contract award', 'vendor selection', 'purchasing', 'critical spend', 'single-source spend'] },
-    { key: 'business-continuity', title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management'] },
+    { key: 'business-continuity', title: 'Business continuity and recovery failure', category: 'Business Continuity', regulations: ['NCEMA 7000:2021 Business Continuity', 'ISO 22301', 'NFPA 1600'], terms: ['continuity', 'recovery', 'dr', 'disaster recovery', 'rto', 'rpo', 'crisis management'] },
     { key: 'physical-security', title: 'Physical security or facilities-protection breakdown', category: 'Physical Security', regulations: ['ISO 22301', 'UAE Fire and Life Safety Code'], terms: ['physical security', 'perimeter', 'site intrusion', 'badge control', 'facility breach', 'executive protection', 'visitor management'] },
     { key: 'ot-resilience', title: 'OT or industrial-control resilience failure', category: 'OT Resilience', regulations: ['IEC 62443', 'ISO 22301'], terms: ['ot', 'industrial control', 'ics', 'scada', 'plant network', 'site systems', 'control room', 'operational technology'] },
     { key: 'people-workforce', title: 'People, workforce, or labour-practice exposure', category: 'People / Workforce', regulations: ['UN Guiding Principles', 'SA8000', 'ILO-OSH 2001'], terms: ['workforce', 'labour', 'labor', 'attrition', 'staffing', 'fatigue', 'strike', 'worker welfare', 'human rights'] },
@@ -7688,16 +8181,24 @@ function renderCitationBlock(citations) {
   if (!unique.length) return '';
   const primary = unique.slice(0, 4);
   const remaining = unique.length - primary.length;
+  const renderCitationTitle = (citation) => {
+    const title = escapeHtml(citation?.title || 'Untitled source');
+    const sourceUrl = String(citation?.sourceUrl || '').trim();
+    if (!sourceUrl) {
+      return `<span style="font-weight:600;color:var(--text-primary)">${title}</span>`;
+    }
+    return `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" style="font-weight:600;color:var(--text-primary);text-decoration:underline;text-underline-offset:2px">${title}</a>`;
+  };
   return `<div class="card mt-4 anim-fade-in">
     <div class="context-panel-title">Key references used</div>
     <div class="form-help" style="margin-top:6px">Most relevant sources are shown first so it is easier to see what grounded the AI output.</div>
     <div style="display:flex;flex-direction:column;gap:12px;margin-top:var(--sp-4)">
-      ${primary.map(c => `<button class="citation-chip" style="justify-content:space-between;align-items:flex-start;padding:var(--sp-4);width:100%;text-align:left" data-doc-id="${c.docId || ''}" data-doc-title="${escapeHtml(c.title || '')}" data-doc-url="${escapeHtml(c.url || '')}">
+      ${primary.map(c => `<div class="citation-chip" style="justify-content:space-between;align-items:flex-start;padding:var(--sp-4);width:100%;text-align:left;cursor:default" data-doc-id="${c.docId || ''}" data-doc-title="${escapeHtml(c.title || '')}" data-doc-url="${escapeHtml(c.sourceUrl || c.url || '')}">
         <span style="display:flex;flex-direction:column;gap:6px;min-width:0">
-          <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="citation-chip-icon">📄</span><span style="font-weight:600;color:var(--text-primary)">${escapeHtml(c.title || 'Untitled source')}</span><span class="badge badge--neutral">${escapeHtml(c.sourceType || 'Source')}</span></span>
+          <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="citation-chip-icon">📄</span>${renderCitationTitle(c)}<span class="badge badge--neutral">${escapeHtml(c.sourceType || 'Source')}</span>${c.stalenessWarning ? `<span class="badge ${c.stalenessWarning.level === 'warning' ? 'badge--warning' : 'badge--gold'}">${escapeHtml(c.stalenessWarning.message || 'Source age review needed')}</span>` : ''}</span>
           ${c.relevanceReason ? `<span style="font-size:.8rem;color:var(--text-secondary)">Why used: ${escapeHtml(c.relevanceReason)}</span>` : ''}
         </span>
-      </button>`).join('')}
+      </div>`).join('')}
     </div>
     ${remaining > 0 ? `<div class="form-help" style="margin-top:12px">${remaining} additional source${remaining === 1 ? '' : 's'} are also attached to this assessment.</div>` : ''}
   </div>`;
@@ -7711,6 +8212,22 @@ function renderWorkflowGuidanceBlock(items, title = 'AI Guidance Through the Wor
       ${items.map((item, idx) => `<div style="display:flex;gap:var(--sp-3);align-items:flex-start"><span class="badge badge--gold" style="min-width:28px;justify-content:center">${idx + 1}</span><div class="context-panel-copy" style="margin:0">${item}</div></div>`).join('')}
     </div>
   </div>`;
+}
+
+function buildBenchmarkAgeLabel(lastUpdated = '') {
+  const safe = String(lastUpdated || '').trim();
+  const yearMatch = safe.match(/(20\d{2})/);
+  if (!yearMatch) return { label: '', stale: false };
+  const ageYears = Math.max(0, new Date().getFullYear() - Number(yearMatch[1]));
+  const label = ageYears <= 0
+    ? 'this year'
+    : ageYears === 1
+      ? '1 year ago'
+      : `${ageYears} years ago`;
+  return {
+    label,
+    stale: ageYears > 3
+  };
 }
 
 function renderBenchmarkRationaleBlock(benchmarkBasis, inputRationale, benchmarkReferences = []) {
@@ -7742,7 +8259,10 @@ function renderBenchmarkRationaleBlock(benchmarkBasis, inputRationale, benchmark
     <div class="context-panel-title">Benchmark Logic and Number Rationale</div>
     <div style="display:flex;flex-direction:column;gap:var(--sp-4);margin-top:var(--sp-4)">
       ${rows.map(([label, value]) => `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${label}</div><div style="font-size:.85rem;color:var(--text-secondary);margin-top:6px;line-height:1.7">${value}</div></div>`).join('')}
-      ${refs.length ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Benchmark sources used</div><div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">${refs.map(ref => `<div><div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap"><strong style="font-size:.85rem;color:var(--text-primary)">${escapeHtml(String(ref.title || ref.sourceTitle || 'Benchmark source'))}</strong><span class="badge badge--neutral">${escapeHtml(String(ref.scope || 'benchmark'))}</span><span class="badge badge--gold">${escapeHtml(String(ref.sourceTypeLabel || ref.sourceType || 'Reference'))}</span>${ref.coverageLabel ? `<span class="badge badge--neutral">${escapeHtml(String(ref.coverageLabel))}</span>` : ''}${ref.confidenceLabel ? `<span class="badge badge--success">${escapeHtml(String(ref.confidenceLabel))}</span>` : ''}${ref.freshnessLabel ? `<span class="badge badge--neutral">${escapeHtml(String(ref.freshnessLabel))}</span>` : ''}${ref.lastUpdated ? `<span class="badge badge--neutral">${escapeHtml(String(ref.lastUpdated))}</span>` : ''}</div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(ref.sourceTitle || ''))}${ref.summary ? ` — ${escapeHtml(String(ref.summary))}` : ''}</div>${ref.requestedGeographies?.length ? `<div class="form-help" style="margin-top:6px">Requested region${ref.requestedGeographies.length === 1 ? '' : 's'}: ${escapeHtml(String(ref.requestedGeographies.join(', ')))}</div>` : ''}${ref.matchedGeographies?.length ? `<div class="form-help" style="margin-top:4px">Comparator used: ${escapeHtml(String(ref.matchedGeographies.join(', ')))}</div>` : ''}${ref.coverageSummary ? `<div class="form-help" style="margin-top:6px">${escapeHtml(String(ref.coverageSummary))}</div>` : ''}</div>`).join('')}</div></div>` : ''}
+      ${refs.length ? `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Benchmark sources used</div><div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">${refs.map(ref => {
+        const benchmarkAge = buildBenchmarkAgeLabel(ref.lastUpdated);
+        return `<div><div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap"><strong style="font-size:.85rem;color:var(--text-primary)">${escapeHtml(String(ref.title || ref.sourceTitle || 'Benchmark source'))}</strong><span class="badge badge--neutral">${escapeHtml(String(ref.scope || 'benchmark'))}</span><span class="badge badge--gold">${escapeHtml(String(ref.sourceTypeLabel || ref.sourceType || 'Reference'))}</span>${ref.coverageLabel ? `<span class="badge badge--neutral">${escapeHtml(String(ref.coverageLabel))}</span>` : ''}${ref.confidenceLabel ? `<span class="badge badge--success">${escapeHtml(String(ref.confidenceLabel))}</span>` : ''}${ref.freshnessLabel ? `<span class="badge badge--neutral">${escapeHtml(String(ref.freshnessLabel))}</span>` : ''}${ref.lastUpdated ? `<span class="badge badge--neutral">${escapeHtml(String(ref.lastUpdated))}</span>` : ''}</div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(ref.sourceTitle || ''))}${ref.summary ? ` — ${escapeHtml(String(ref.summary))}` : ''}</div>${ref.sourceTitle ? `<div class="form-help${benchmarkAge.stale ? ' benchmark-stale' : ''}" style="margin-top:6px">Source: ${escapeHtml(String(ref.sourceTitle))}${benchmarkAge.label ? ` (${escapeHtml(benchmarkAge.label)})` : ''}</div>` : ''}${benchmarkAge.stale ? `<div class="form-help benchmark-stale" style="margin-top:4px">This benchmark may not reflect current conditions.</div>` : ''}${ref.requestedGeographies?.length ? `<div class="form-help" style="margin-top:6px">Requested region${ref.requestedGeographies.length === 1 ? '' : 's'}: ${escapeHtml(String(ref.requestedGeographies.join(', ')))}</div>` : ''}${ref.matchedGeographies?.length ? `<div class="form-help" style="margin-top:4px">Comparator used: ${escapeHtml(String(ref.matchedGeographies.join(', ')))}</div>` : ''}${ref.coverageSummary ? `<div class="form-help" style="margin-top:6px">${escapeHtml(String(ref.coverageSummary))}</div>` : ''}</div>`;
+      }).join('')}</div></div>` : ''}
     </div>
   </div>`;
 }
@@ -7753,7 +8273,10 @@ function renderInputProvenanceBlock(inputProvenance = []) {
   return `<div class="card card--elevated anim-fade-in">
     <div class="context-panel-title">Where the key numbers came from</div>
     <div style="display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)">
-      ${items.map(item => `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap"><strong style="font-size:.85rem;color:var(--text-primary)">${escapeHtml(String(item.label || 'Input'))}</strong><span class="badge badge--neutral">${escapeHtml(String(item.origin || 'Inference'))}</span>${item.scope ? `<span class="badge badge--gold">${escapeHtml(String(item.scope))}</span>` : ''}${item.coverageLabel ? `<span class="badge badge--neutral">${escapeHtml(String(item.coverageLabel))}</span>` : ''}${item.sourceTypeLabel ? `<span class="badge badge--neutral">${escapeHtml(String(item.sourceTypeLabel))}</span>` : ''}${item.confidenceLabel ? `<span class="badge badge--success">${escapeHtml(String(item.confidenceLabel))}</span>` : ''}${item.freshnessLabel ? `<span class="badge badge--neutral">${escapeHtml(String(item.freshnessLabel))}</span>` : ''}</div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(item.reason || 'Starting point generated from current scenario context.'))}</div>${item.requestedGeographies?.length ? `<div class="form-help" style="margin-top:6px">Requested region${item.requestedGeographies.length === 1 ? '' : 's'}: ${escapeHtml(String(item.requestedGeographies.join(', ')))}</div>` : ''}${item.matchedGeographies?.length ? `<div class="form-help" style="margin-top:4px">Comparator used: ${escapeHtml(String(item.matchedGeographies.join(', ')))}</div>` : ''}${item.coverageSummary ? `<div class="form-help" style="margin-top:6px">${escapeHtml(String(item.coverageSummary))}</div>` : ''}${item.supportingKinds?.length ? `<div class="form-help" style="margin-top:6px">Support used: ${escapeHtml(String(item.supportingKinds.join(', ')))}</div>` : ''}${item.sourceTitle ? `<div class="form-help" style="margin-top:6px">${escapeHtml(String(item.sourceTitle))}${item.lastUpdated ? ` · ${escapeHtml(String(item.lastUpdated))}` : ''}</div>` : ''}</div>`).join('')}
+      ${items.map(item => {
+        const benchmarkAge = buildBenchmarkAgeLabel(item.lastUpdated);
+        return `<div style="background:var(--bg-elevated);padding:var(--sp-4);border-radius:var(--radius-lg)"><div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap"><strong style="font-size:.85rem;color:var(--text-primary)">${escapeHtml(String(item.label || 'Input'))}</strong><span class="badge badge--neutral">${escapeHtml(String(item.origin || 'Inference'))}</span>${item.scope ? `<span class="badge badge--gold">${escapeHtml(String(item.scope))}</span>` : ''}${item.coverageLabel ? `<span class="badge badge--neutral">${escapeHtml(String(item.coverageLabel))}</span>` : ''}${item.sourceTypeLabel ? `<span class="badge badge--neutral">${escapeHtml(String(item.sourceTypeLabel))}</span>` : ''}${item.confidenceLabel ? `<span class="badge badge--success">${escapeHtml(String(item.confidenceLabel))}</span>` : ''}${item.freshnessLabel ? `<span class="badge badge--neutral">${escapeHtml(String(item.freshnessLabel))}</span>` : ''}</div><div class="context-panel-copy" style="margin-top:6px">${escapeHtml(String(item.reason || 'Starting point generated from current scenario context.'))}</div>${item.requestedGeographies?.length ? `<div class="form-help" style="margin-top:6px">Requested region${item.requestedGeographies.length === 1 ? '' : 's'}: ${escapeHtml(String(item.requestedGeographies.join(', ')))}</div>` : ''}${item.matchedGeographies?.length ? `<div class="form-help" style="margin-top:4px">Comparator used: ${escapeHtml(String(item.matchedGeographies.join(', ')))}</div>` : ''}${item.coverageSummary ? `<div class="form-help" style="margin-top:6px">${escapeHtml(String(item.coverageSummary))}</div>` : ''}${item.supportingKinds?.length ? `<div class="form-help" style="margin-top:6px">Support used: ${escapeHtml(String(item.supportingKinds.join(', ')))}</div>` : ''}${item.sourceTitle ? `<div class="form-help${benchmarkAge.stale ? ' benchmark-stale' : ''}" style="margin-top:6px">Source: ${escapeHtml(String(item.sourceTitle))}${benchmarkAge.label ? ` (${escapeHtml(benchmarkAge.label)})` : ''}${item.lastUpdated ? ` · ${escapeHtml(String(item.lastUpdated))}` : ''}</div>` : ''}${benchmarkAge.stale ? `<div class="form-help benchmark-stale" style="margin-top:4px">This benchmark may not reflect current conditions.</div>` : ''}</div>`;
+      }).join('')}
     </div>
   </div>`;
 }
@@ -11303,13 +11826,18 @@ function renderAdminBU() {
           type: 'Department / function',
           parentId: company.id
         },
-        onSave: async (node, modal) => {
+        onSave: async (node, modal, derivedContextResult) => {
           const nextSettings = getAdminSettings();
           const nextStructure = Array.isArray(nextSettings.companyStructure) ? [...nextSettings.companyStructure] : [];
           nextStructure.push(node);
+          const nextLayers = mergeDerivedEntityContextLayer({
+            ...buildEntityContextAdminSettings(nextSettings),
+            entityContextLayers: nextSettings.entityContextLayers
+          }, node, derivedContextResult);
           const saved = await saveAdminSettings({
             ...nextSettings,
-            companyStructure: nextStructure
+            companyStructure: nextStructure,
+            entityContextLayers: nextLayers
           });
           if (!saved) return;
           modal.close();
@@ -11326,14 +11854,19 @@ function renderAdminBU() {
       openOrgEntityEditor({
         structure: companyStructure,
         existingNode: department,
-        onSave: async (node, modal) => {
+        onSave: async (node, modal, derivedContextResult) => {
           const nextSettings = getAdminSettings();
           const nextStructure = Array.isArray(nextSettings.companyStructure) ? [...nextSettings.companyStructure] : [];
           const index = nextStructure.findIndex(item => item.id === node.id);
           if (index > -1) nextStructure[index] = node;
+          const nextLayers = mergeDerivedEntityContextLayer({
+            ...buildEntityContextAdminSettings(nextSettings),
+            entityContextLayers: nextSettings.entityContextLayers
+          }, node, derivedContextResult);
           const saved = await saveAdminSettings({
             ...nextSettings,
-            companyStructure: nextStructure
+            companyStructure: nextStructure,
+            entityContextLayers: nextLayers
           });
           if (!saved) return;
           modal.close();

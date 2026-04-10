@@ -1907,7 +1907,7 @@ function renderWizard3() {
       AppState.draft.supportingReferences = Array.isArray(result.supportingReferences) ? result.supportingReferences : (AppState.draft.supportingReferences || []);
       AppState.draft.inferredAssumptions = Array.isArray(result.inferredAssumptions) ? result.inferredAssumptions : (AppState.draft.inferredAssumptions || []);
       AppState.draft.missingInformation = Array.isArray(result.missingInformation) ? result.missingInformation : (AppState.draft.missingInformation || []);
-      AppState.draft.citations = normaliseCitations(result.citations || citations);
+      AppState.draft.citations = normaliseCitations(mergeCitationMetadata(result.citations || citations, citations));
       AppState.draft.learningNote = result.changesSummary || result.summary || '';
       saveDraft();
       renderWizard3();

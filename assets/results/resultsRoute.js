@@ -4885,6 +4885,7 @@ function renderResults(id, isShared) {
     executiveAnnualView,
     exceedancePct,
     completedLabel,
+    assessmentFreshnessWarning,
     lifecycle,
     scenarioNarrative,
     technicalInputs,
@@ -4981,6 +4982,7 @@ function renderResults(id, isShared) {
 
   const executiveTab = `
     <section class="results-executive-view ${boardroomMode ? 'results-executive-view--boardroom' : ''} ${activeTab === 'executive' ? '' : 'hidden'}" id="results-tab-executive" role="tabpanel" aria-labelledby="results-tab-btn-executive" tabindex="-1" data-results-panel="executive" data-page-focus>
+      ${assessmentFreshnessWarning ? `<div class="banner banner--info mb-6"><span class="banner-icon">ℹ</span><span class="banner-text">${escapeHtml(assessmentFreshnessWarning)}</span></div>` : ''}
       ${renderReviewerBriefPanel(assessment, rolePresentation)}
       ${executiveHero}
       ${reviewSubmitBanner}

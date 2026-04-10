@@ -1,14 +1,16 @@
 'use strict';
 
 const { getCompassProviderConfig } = require('./_aiRuntime');
-const { extractLlmTextResponse, describeLlmResponse } = require('../assets/state/llmResponseExtractor');
+const {
+  sanitizeAiText,
+  extractBalancedJsonCandidate,
+  extractJsonFromLlmResponse,
+  extractLlmTextResponse,
+  describeLlmResponse
+} = require('../assets/state/llmResponseExtractor');
 
 const AI_MAX_RETRIES = 2;
 const AI_TIMEOUT_MS = 30000;
-
-function sanitizeAiText(value = '', { maxChars = 20000 } = {}) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxChars);
-}
 
 function buildPromptPayload(systemPrompt, userPrompt, options = {}) {
   const priorMessages = (Array.isArray(options.priorMessages) ? options.priorMessages : [])
@@ -66,56 +68,6 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = AI_TIMEOUT_MS) {
   } finally {
     clearTimeout(timeout);
   }
-}
-
-function extractBalancedJsonCandidate(text = '') {
-  const source = String(text || '');
-  const start = source.search(/[\[{]/);
-  if (start < 0) return '';
-  const stack = [];
-  let inString = false;
-  let escapeNext = false;
-  for (let index = start; index < source.length; index += 1) {
-    const ch = source[index];
-    if (escapeNext) {
-      escapeNext = false;
-      continue;
-    }
-    if (ch === '\\') {
-      if (inString) escapeNext = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-    if (ch === '{' || ch === '[') {
-      stack.push(ch);
-      continue;
-    }
-    if (ch === '}' || ch === ']') {
-      const expected = ch === '}' ? '{' : '[';
-      if (stack[stack.length - 1] !== expected) break;
-      stack.pop();
-      if (!stack.length) {
-        return source.slice(start, index + 1);
-      }
-    }
-  }
-  return '';
-}
-
-function extractJsonFromLlmResponse(raw) {
-  const text = String(raw || '').trim();
-  const fenceMatch = text.match(/```(?:json)?\s*\r?\n?([\s\S]*?)```/i);
-  if (fenceMatch) {
-    const candidate = fenceMatch[1].trim();
-    if (candidate.startsWith('{') || candidate.startsWith('[')) return candidate;
-  }
-  const objectMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  if (objectMatch) return objectMatch[1].trim();
-  return text;
 }
 
 function parseStructuredJson(raw) {

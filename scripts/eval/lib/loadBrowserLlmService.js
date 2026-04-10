@@ -96,6 +96,7 @@ function buildTimer(fastTimers = true) {
 }
 
 function loadBrowserLlmService(options = {}) {
+  const llmResponseExtractor = require(path.resolve(__dirname, '../../../assets/state/llmResponseExtractor.js'));
   const servicePaths = [
     path.resolve(__dirname, '../../../assets/services/apiOriginResolver.js'),
     path.resolve(__dirname, '../../../assets/services/aiTraceRuntime.js'),
@@ -154,7 +155,7 @@ function loadBrowserLlmService(options = {}) {
     },
     BenchmarkService: buildBenchmarkServiceStub(),
     AIGuardrails: buildGuardrailsStub(),
-    describeLlmResponse: require(path.resolve(__dirname, '../../../assets/state/llmResponseExtractor.js')).describeLlmResponse,
+    ...llmResponseExtractor,
     logAuditEvent: async () => {},
     setTimeout: timers.setTimeout,
     clearTimeout: timers.clearTimeout

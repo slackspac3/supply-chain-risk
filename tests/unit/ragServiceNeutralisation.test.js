@@ -9,8 +9,8 @@ const vm = require('node:vm');
 function loadRagInternals() {
   const filePath = path.resolve(__dirname, '../../assets/services/ragService.js');
   const source = fs.readFileSync(filePath, 'utf8').replace(
-    '  return { init, isReady, retrieveRelevantDocs, getDocsForBU, addDocument, bulkAddDocuments };',
-    '  globalThis.__ragInternals = { _getFeedbackRetrievalProfile, _feedbackBoost }; return { init, isReady, retrieveRelevantDocs, getDocsForBU, addDocument, bulkAddDocuments };'
+    /\n  return \{[^}]+\};\n\}\)\(\);\s*$/,
+    '\n  globalThis.__ragInternals = { _getFeedbackRetrievalProfile, _feedbackBoost };\n  return { init, isReady, retrieveRelevantDocs, getDocStalenessWarning, getDocsForBU, addDocument, bulkAddDocuments };\n})();'
   );
   const context = {
     module: { exports: {} },

@@ -80,6 +80,27 @@
     }
   };
 
+  function resolveFreshnessTimestamp(value) {
+    if (value == null || value === '') return 0;
+    if (typeof value === 'number' && Number.isFinite(value)) return value > 1e12 ? value : (value > 1e9 ? value * 1000 : 0);
+    const parsed = Date.parse(String(value || '').trim());
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function buildAssessmentFreshnessWarning(assessment) {
+    const referenceAt = [
+      assessment?.lastRunAt,
+      assessment?.savedAt,
+      assessment?.completedAt,
+      assessment?.lifecycleUpdatedAt,
+      assessment?.createdAt
+    ].map(resolveFreshnessTimestamp).find((value) => value > 0) || 0;
+    if (!referenceAt) return '';
+    const ageDays = Math.max(0, Math.floor((Date.now() - referenceAt) / 86400000));
+    if (ageDays <= 30) return '';
+    return `This assessment was last run ${ageDays} day${ageDays === 1 ? '' : 's'} ago. Consider re-running the simulation if conditions have changed.`;
+  }
+
   function normaliseRuntimeResults(assessment, rawResults) {
     return {
       ...rawResults,
@@ -150,6 +171,7 @@
       ? (r.toleranceDetail.lmExceedProb * 100).toFixed(1)
       : null;
     const completedLabel = new Date(assessment.completedAt || Date.now()).toLocaleDateString('en-AE', { year: 'numeric', month: 'long', day: 'numeric' });
+    const assessmentFreshnessWarning = buildAssessmentFreshnessWarning(assessment);
     const lifecycle = getAssessmentLifecyclePresentation(assessment);
     const scenarioNarrative = ReportPresentation.buildExecutiveScenarioSummary(assessment) || 'No scenario narrative available.';
     const technicalInputs = r.inputs || assessment.fairParams || {};
@@ -253,6 +275,7 @@
       scenarioScopeSummary,
       exceedancePct,
       completedLabel,
+      assessmentFreshnessWarning,
       lifecycle,
       scenarioNarrative,
       technicalInputs,

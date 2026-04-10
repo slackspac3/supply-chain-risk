@@ -142,6 +142,30 @@ function buildEvalInput(row) {
   };
 }
 
+function buildEvalRetrievalQuery(row) {
+  const geography = Array.isArray(row?.scenario_context?.geography)
+    ? row.scenario_context.geography.filter(Boolean).join(', ')
+    : '';
+  const regulatoryOverlay = Array.isArray(row?.scenario_context?.regulatory_overlay)
+    ? row.scenario_context.regulatory_overlay.filter(Boolean)
+    : [];
+  return {
+    text: [
+      String(row?.scenario_text || '').trim(),
+      String(row?.event_path_summary || '').trim(),
+      String(row?.primary_driver || '').trim(),
+      String(row?.main_business_consequence || '').trim(),
+      geography ? `Geography: ${geography}` : '',
+      regulatoryOverlay.length ? `Applicable regulations: ${regulatoryOverlay.join(', ')}` : ''
+    ].filter(Boolean).join('\n'),
+    scenarioLens: {
+      key: normaliseLensKey(row?.expected_primary_lens || row?.domain)
+    },
+    geography,
+    applicableRegulations: regulatoryOverlay
+  };
+}
+
 function extractRiskTitles(risks = []) {
   return (Array.isArray(risks) ? risks : [])
     .map((risk) => {
@@ -257,6 +281,46 @@ function scoreGeneratedScenario(row, output) {
   };
 }
 
+function scoreRetrievalQuality(row, actualCitationDocIds = []) {
+  const expectedDocIds = Array.from(new Set(
+    (Array.isArray(row?.expected_doc_ids) ? row.expected_doc_ids : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  const actualDocIds = Array.from(new Set(
+    (Array.isArray(actualCitationDocIds) ? actualCitationDocIds : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  if (!expectedDocIds.length) {
+    return {
+      scored: false,
+      expectedDocIds,
+      actualDocIds,
+      matchedDocIds: [],
+      precision: null,
+      recall: null,
+      f1: null
+    };
+  }
+  const expectedSet = new Set(expectedDocIds);
+  const matchedDocIds = actualDocIds.filter((docId) => expectedSet.has(docId));
+  const precision = actualDocIds.length ? matchedDocIds.length / actualDocIds.length : 0;
+  const recall = expectedDocIds.length ? matchedDocIds.length / expectedDocIds.length : 0;
+  const f1 = precision > 0 && recall > 0
+    ? (2 * precision * recall) / (precision + recall)
+    : 0;
+  return {
+    scored: true,
+    expectedDocIds,
+    actualDocIds,
+    matchedDocIds,
+    precision: Number(precision.toFixed(3)),
+    recall: Number(recall.toFixed(3)),
+    f1: Number(f1.toFixed(3))
+  };
+}
+
 function summariseScenarioScores(records = []) {
   const totals = {
     total: records.length,
@@ -266,7 +330,11 @@ function summariseScenarioScores(records = []) {
     avgValidRiskRecall: 0,
     avgInvalidRiskLeakageRate: 0,
     avgAnchorCoverage: 0,
-    fallbackRuns: 0
+    fallbackRuns: 0,
+    retrievalRows: 0,
+    avgRetrievalPrecision: 0,
+    avgRetrievalRecall: 0,
+    avgRetrievalF1: 0
   };
   if (!records.length) return totals;
   for (const record of records) {
@@ -277,6 +345,12 @@ function summariseScenarioScores(records = []) {
     totals.avgValidRiskRecall += Number(record?.deterministic?.validRiskRecall || 0);
     totals.avgInvalidRiskLeakageRate += Number(record?.deterministic?.invalidRiskLeakageRate || 0);
     totals.avgAnchorCoverage += Number(record?.deterministic?.anchorCoverage || 0);
+    if (record?.retrieval?.scored) {
+      totals.retrievalRows += 1;
+      totals.avgRetrievalPrecision += Number(record.retrieval.precision || 0);
+      totals.avgRetrievalRecall += Number(record.retrieval.recall || 0);
+      totals.avgRetrievalF1 += Number(record.retrieval.f1 || 0);
+    }
   }
   totals.passRate = Number((totals.passed / records.length).toFixed(3));
   totals.primaryLensAccuracy = Number((totals.primaryLensPass / records.length).toFixed(3));
@@ -285,6 +359,11 @@ function summariseScenarioScores(records = []) {
   totals.avgInvalidRiskLeakageRate = Number((totals.avgInvalidRiskLeakageRate / records.length).toFixed(3));
   totals.avgAnchorCoverage = Number((totals.avgAnchorCoverage / records.length).toFixed(3));
   totals.fallbackRate = Number((totals.fallbackRuns / records.length).toFixed(3));
+  if (totals.retrievalRows > 0) {
+    totals.avgRetrievalPrecision = Number((totals.avgRetrievalPrecision / totals.retrievalRows).toFixed(3));
+    totals.avgRetrievalRecall = Number((totals.avgRetrievalRecall / totals.retrievalRows).toFixed(3));
+    totals.avgRetrievalF1 = Number((totals.avgRetrievalF1 / totals.retrievalRows).toFixed(3));
+  }
   return totals;
 }
 
@@ -313,8 +392,10 @@ module.exports = {
   normaliseLensKey,
   normaliseLensLabel,
   buildEvalInput,
+  buildEvalRetrievalQuery,
   extractOutputSummary,
   scoreGeneratedScenario,
+  scoreRetrievalQuality,
   summariseScenarioScores,
   filterDataset
 };

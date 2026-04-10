@@ -106,14 +106,14 @@ function hasStep1PaymentControlSignal(text = '') {
 const STEP1_USE_GUIDED_SERVER_HELPERS = false;
 
 const STEP1_LENS_REGULATION_SUGGESTIONS = {
-  cyber: ['UAE PDPL', 'UAE Cybersecurity Council Guidance', 'NIST SP 800-53', 'NIST RMF', 'ISO 27001'],
+  cyber: ['UAE PDPL', 'UAE Information Assurance Standard', 'UAE National Cyber Security Governance Framework', 'NIST SP 800-53', 'NIST RMF', 'ISO 27001'],
   regulatory: ['BIS Export Controls', 'OFAC Sanctions'],
   financial: ['UAE AML/CFT', 'COSO Internal Control Framework'],
   'fraud-integrity': ['ISO 37001', 'UAE AML/CFT'],
   esg: ['IFRS S1', 'IFRS S2', 'GRI Universal Standards'],
   procurement: ['ISO 20400', 'ISO 37301'],
   'supply-chain': ['ISO 28000', 'ISO 27036'],
-  'business-continuity': ['ISO 22301', 'ISO 22313', 'NFPA 1600'],
+  'business-continuity': ['NCEMA 7000:2021 Business Continuity', 'ISO 22301', 'ISO 22313', 'NFPA 1600'],
   'physical-security': ['UAE Fire and Life Safety Code', 'ISO 22301'],
   'ot-resilience': ['IEC 62443', 'ISO 22301'],
   'people-workforce': ['UN Guiding Principles', 'SA8000', 'ILO-OSH 2001'],

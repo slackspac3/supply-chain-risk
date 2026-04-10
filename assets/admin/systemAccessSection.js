@@ -23,7 +23,7 @@ const AdminSystemAccessSection = (() => {
       activePath,
       checkedLabel,
       providerLabel,
-      model: String(status?.model || 'gpt-5.1')
+      model: String(status?.model || AiStatusClient.DEFAULT_MODEL)
     };
 
     if (!status) {
@@ -162,7 +162,7 @@ const AdminSystemAccessSection = (() => {
         </div>
         <div class="form-group">
           <label class="form-label" for="admin-compass-model">Model</label>
-          <input class="form-input" id="admin-compass-model" value="${escape(sessionLLM.model || 'gpt-5.1')}">
+          <input class="form-input" id="admin-compass-model" value="${escape(sessionLLM.model || AiStatusClient.DEFAULT_MODEL)}">
         </div>
       </div>
       <div class="form-group mt-4">

@@ -4,6 +4,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
+function assertApproximately(actual, expected, tolerance = 0.03) {
+  assert.ok(
+    Math.abs(Number(actual) - Number(expected)) <= tolerance,
+    `expected ${actual} to be within ${tolerance} of ${expected}`
+  );
+}
+
 function loadLearningAuthority({ settings = {}, feedback = { updatedAt: 0, events: [] }, userState = null } = {}) {
   const learningPath = path.resolve(__dirname, '../../api/_learningAuthority.js');
   const kvPath = require.resolve('../../api/_kvStore.js');
@@ -162,6 +169,120 @@ test('server learning authority reranks risk cards using server-resolved feedbac
     });
 
     assert.equal(reranked[0].title, 'Privileged account compromise');
+  } finally {
+    restore();
+  }
+});
+
+test('server learning authority applies 90-day half-life decay to live-AI feedback weights', async () => {
+  const now = Date.now();
+  const { learningAuthority, restore } = loadLearningAuthority({
+    userState: {
+      learningStore: {
+        aiFeedback: {
+          events: [
+            {
+              target: 'risk',
+              score: 5,
+              runtimeMode: 'live_ai',
+              buId: 'g42',
+              functionKey: 'technology',
+              lensKey: 'cyber',
+              riskTitle: 'Fresh signal',
+              recordedAt: now,
+              submittedBy: 'sam'
+            },
+            {
+              target: 'risk',
+              score: 5,
+              runtimeMode: 'live_ai',
+              buId: 'g42',
+              functionKey: 'technology',
+              lensKey: 'cyber',
+              riskTitle: '90-day signal',
+              recordedAt: now - (90 * 24 * 60 * 60 * 1000),
+              submittedBy: 'sam'
+            },
+            {
+              target: 'risk',
+              score: 5,
+              runtimeMode: 'live_ai',
+              buId: 'g42',
+              functionKey: 'technology',
+              lensKey: 'cyber',
+              riskTitle: '180-day signal',
+              recordedAt: now - (180 * 24 * 60 * 60 * 1000),
+              submittedBy: 'sam'
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  try {
+    const profile = await learningAuthority.resolveHierarchicalFeedbackProfile({
+      username: 'sam',
+      buId: 'g42',
+      functionKey: 'technology',
+      scenarioLensKey: 'cyber'
+    });
+
+    const weights = profile.user.profile.riskWeights;
+    assertApproximately(weights['Fresh signal'], 1.5);
+    assertApproximately(weights['90-day signal'], 0.75);
+    assertApproximately(weights['180-day signal'], 0.375);
+  } finally {
+    restore();
+  }
+});
+
+test('server learning authority discounts thin-signal profiles by 50 percent', async () => {
+  const now = Date.now();
+  const { learningAuthority, restore } = loadLearningAuthority({
+    userState: {
+      learningStore: {
+        aiFeedback: {
+          events: [
+            {
+              target: 'risk',
+              score: 5,
+              runtimeMode: 'live_ai',
+              buId: 'g42',
+              functionKey: 'technology',
+              lensKey: 'cyber',
+              riskTitle: 'Thin signal risk',
+              recordedAt: now,
+              submittedBy: 'sam'
+            },
+            {
+              target: 'risk',
+              score: 5,
+              runtimeMode: 'live_ai',
+              buId: 'g42',
+              functionKey: 'technology',
+              lensKey: 'cyber',
+              riskTitle: 'Thin signal risk',
+              recordedAt: now,
+              submittedBy: 'sam'
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  try {
+    const profile = await learningAuthority.resolveHierarchicalFeedbackProfile({
+      username: 'sam',
+      buId: 'g42',
+      functionKey: 'technology',
+      scenarioLensKey: 'cyber'
+    });
+
+    assert.equal(profile.user.profile.coldStartDiscountApplied, true);
+    assertApproximately(profile.user.profile.signalConfidence, 0.5, 0.001);
+    assertApproximately(profile.user.profile.riskWeights['Thin signal risk'], 1.5);
   } finally {
     restore();
   }

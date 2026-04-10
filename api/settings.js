@@ -3,6 +3,7 @@ const { appendAuditEvent } = require('./_audit');
 const { isRequestSecretValid, sendApiError, requireSession, sendConflictError, validateSessionFromRequest } = require('./_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
 const { get: kvGet, getKvConfig, set: kvSet, withLock: withKvLock } = require('./_kvStore');
+const { clearWorkflowCache } = require('./_workflowReuse');
 const { normaliseEntityObligations } = require('../assets/state/obligationResolution.js');
 
 const SETTINGS_KEY = process.env.SETTINGS_STORE_KEY || 'risk_calculator_settings';
@@ -26,6 +27,46 @@ const DEFAULT_AI_FEEDBACK_TUNING = Object.freeze({
   shortlistDiscipline: 'strict',
   learningSensitivity: 'balanced'
 });
+const DEFAULT_UAE_GEOGRAPHY_REGULATIONS = Object.freeze([
+  'UAE PDPL',
+  'UAE Information Assurance Standard',
+  'UAE National Cyber Security Governance Framework',
+  'UAE National Third Party Security Policy',
+  'UAE National Secure Remote Work Policy',
+  'UAE National Vulnerability Disclosure Policy',
+  'UAE National Data Exchange Security Policy',
+  'UAE National Cloud Security Policy',
+  'UAE Cyber Incident Response Framework',
+  'UAE Critical Information Infrastructure Protection (CIIP) Policy',
+  'UAE National Cyber Security Policy for Artificial Intelligence',
+  'NCEMA 7000:2021 Business Continuity'
+]);
+const DEFAULT_ADGM_HOLDING_COMPANY_REGULATIONS = Object.freeze([
+  'ADGM Companies Regulations 2020',
+  'ADGM Beneficial Ownership and Control Regulations 2022',
+  'ADGM Data Protection Regulations 2021',
+  'ADGM Annual Accounts and Confirmation Statement obligations',
+  'ADGM Commercial Licence renewal obligations'
+]);
+const DEFAULT_ADMIN_APPLICABLE_REGULATIONS = Object.freeze([
+  ...DEFAULT_UAE_GEOGRAPHY_REGULATIONS,
+  ...DEFAULT_ADGM_HOLDING_COMPANY_REGULATIONS,
+  'BIS Export Controls',
+  'OFAC Sanctions',
+  'NIST SP 800-53',
+  'NIST RMF',
+  'ISO 27001',
+  'ISO 27002',
+  'ISO 27005',
+  'ISO 27017',
+  'ISO 27018',
+  'ISO 27701',
+  'ISO 22301',
+  'ISO 22313',
+  'ISO 27036',
+  'ISO 28000',
+  'ISO 31000'
+]);
 const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET || '';
 
 function hasWritableKv() {
@@ -49,14 +90,14 @@ function getDefaultSettings() {
     buOverrides: [],
     docOverrides: [],
     riskAppetiteStatement: 'Moderate. Escalate risks that threaten regulated operations, cross-border data movement, or strategic platforms.',
-    applicableRegulations: ['UAE PDPL', 'BIS Export Controls', 'OFAC Sanctions', 'UAE Cybersecurity Council Guidance', 'NIST SP 800-53', 'NIST RMF', 'ISO 27001', 'ISO 27002', 'ISO 27005', 'ISO 27017', 'ISO 27018', 'ISO 27701', 'ISO 22301', 'ISO 22313', 'ISO 27036', 'ISO 28000', 'ISO 31000'],
+    applicableRegulations: [...DEFAULT_ADMIN_APPLICABLE_REGULATIONS],
     aiInstructions: 'Prioritise operational, regulatory, and strategic impact. Use British English.',
     benchmarkStrategy: 'Prefer GCC and UAE benchmark references where relevant. Where GCC data is thin, use the best available global benchmark and explain the fallback clearly.',
     defaultLinkMode: true,
     toleranceThresholdUsd: 5000000,
     warningThresholdUsd: 3000000,
     annualReviewThresholdUsd: 12000000,
-    adminContextSummary: 'Use this workspace to maintain geography, regulations, thresholds, and AI guidance for the platform.',
+    adminContextSummary: 'Use this workspace to maintain geography, regulations, thresholds, and AI guidance for the platform. For UAE holding-company contexts, reflect ADGM corporate filing, beneficial ownership, data protection, NCEMA continuity, and Cyber Security Council policy obligations where relevant.',
     escalationGuidance: 'Escalate to leadership when the scenario is above tolerance, close to tolerance, or materially affects regulated services.',
     typicalDepartments: [...DEFAULT_TYPICAL_DEPARTMENTS],
     aiFeedbackTuning: { ...DEFAULT_AI_FEEDBACK_TUNING },
@@ -392,6 +433,7 @@ module.exports = async function handler(req, res) {
         return;
       }
       const settings = writeResult.settings;
+      clearWorkflowCache();
       await appendAuditEvent({ category: body.audit?.category || 'settings', eventType: body.audit?.eventType || 'settings_updated', actorUsername: session?.username || 'admin', actorRole: session?.role || 'admin', target: body.audit?.target || 'global_settings', status: 'success', source: 'server', details: body.audit?.details || {} });
       res.status(200).json({ settings });
       return;

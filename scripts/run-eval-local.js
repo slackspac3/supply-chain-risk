@@ -3,16 +3,20 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { DEFAULT_COMPASS_MODEL } = require('../api/_aiRuntime.js');
 const {
   DEFAULT_DATASET_PATH,
   loadEvalDataset,
   buildEvalInput,
+  buildEvalRetrievalQuery,
   extractOutputSummary,
   scoreGeneratedScenario,
+  scoreRetrievalQuality,
   summariseScenarioScores,
   filterDataset
 } = require('./eval/lib/scenarioEval.js');
 const { loadBrowserLlmService } = require('./eval/lib/loadBrowserLlmService.js');
+const { loadBrowserRagService } = require('./eval/lib/loadBrowserRagService.js');
 
 function parseArgs(argv) {
   const args = {
@@ -48,7 +52,7 @@ function resolveLiveCompassConfig() {
   return {
     apiUrl: process.env.RC_COMPASS_API_URL || process.env.COMPASS_API_URL || 'https://api.core42.ai/v1/chat/completions',
     apiKey: process.env.RC_COMPASS_API_KEY || process.env.COMPASS_API_KEY || '',
-    model: process.env.RC_COMPASS_MODEL || process.env.COMPASS_MODEL || 'gpt-5.1'
+    model: process.env.RC_COMPASS_MODEL || process.env.COMPASS_MODEL || DEFAULT_COMPASS_MODEL
   };
 }
 
@@ -60,7 +64,12 @@ async function main() {
   }
 
   const liveMode = args.mode === 'live';
-  const llmService = loadBrowserLlmService({ fastTimers: !liveMode });
+  const llmService = loadBrowserLlmService({
+    fastTimers: !liveMode,
+    origin: 'http://127.0.0.1:8080',
+    apiOrigin: 'http://127.0.0.1:8080'
+  });
+  const ragService = loadBrowserRagService();
   if (liveMode) {
     const liveConfig = resolveLiveCompassConfig();
     if (!liveConfig.apiKey) {
@@ -71,7 +80,7 @@ async function main() {
     llmService.setCompassConfig({
       apiUrl: 'https://api.core42.ai/v1/chat/completions',
       apiKey: '',
-      model: 'gpt-5.1'
+      model: DEFAULT_COMPASS_MODEL
     });
   }
 
@@ -81,6 +90,9 @@ async function main() {
     const generated = await llmService.enhanceRiskContext(input);
     const actual = extractOutputSummary(generated);
     const deterministic = scoreGeneratedScenario(row, actual);
+    const retrievalQuery = buildEvalRetrievalQuery(row);
+    const retrievedCitations = await ragService.retrieveRelevantDocs('g42', retrievalQuery, 5);
+    const retrieval = scoreRetrievalQuality(row, retrievedCitations.map((citation) => citation?.docId));
     scenarios.push({
       id: row.id,
       domain: row.domain,
@@ -93,7 +105,15 @@ async function main() {
         keyAnchorTerms: row.key_anchor_terms
       },
       actual,
-      deterministic
+      deterministic,
+      retrieval: {
+        ...retrieval,
+        citations: retrievedCitations.map((citation) => ({
+          docId: citation.docId,
+          title: citation.title,
+          score: Number(Number(citation.score || 0).toFixed(3))
+        }))
+      }
     });
   }
 

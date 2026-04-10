@@ -234,7 +234,7 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
           const llmConfig = getSessionLLMConfig();
           LLMService.setCompassConfig({
             apiUrl: llmConfig.apiUrl || DEFAULT_COMPASS_PROXY_URL,
-            model: llmConfig.model || 'gpt-5.1',
+            model: llmConfig.model || AiStatusClient.DEFAULT_MODEL,
             apiKey: llmConfig.apiKey || ''
           });
           const businessEntity = getEntityById(companyStructure, draftSettings.userProfile.businessUnitEntityId || '');

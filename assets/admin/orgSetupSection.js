@@ -223,16 +223,25 @@ const AdminOrgSetupSection = (() => {
     _bindStructureActionHandlers();
   }
 
-  async function _upsertCompanyStructureNode(node) {
-    const { companyStructure } = latestContext;
+  async function _upsertCompanyStructureNode(node, derivedContextResult = null) {
+    const { companyStructure, entityContextLayers } = latestContext;
     const index = companyStructure.findIndex(item => item.id === node.id);
     const previousNode = index > -1 ? { ...companyStructure[index] } : null;
+    const previousLayers = entityContextLayers.map(layer => ({ ...layer }));
     if (index > -1) companyStructure[index] = node;
     else companyStructure.push(node);
+    if (derivedContextResult) {
+      const nextLayers = mergeDerivedEntityContextLayer({
+        ...buildEntityContextAdminSettings(getAdminSettings()),
+        entityContextLayers
+      }, node, derivedContextResult);
+      entityContextLayers.splice(0, entityContextLayers.length, ...nextLayers);
+    }
     const saved = await _persistAdminTreeState();
     if (!saved) {
       if (index > -1) companyStructure[index] = previousNode;
       else companyStructure.pop();
+      entityContextLayers.splice(0, entityContextLayers.length, ...previousLayers);
       return false;
     }
     _refreshStructureSummary();
@@ -248,11 +257,11 @@ const AdminOrgSetupSection = (() => {
       structure: companyStructure,
       existingNode,
       seed,
-      onSave: async (node, modal) => {
+      onSave: async (node, modal, derivedContextResult) => {
         if (node.contextSections) {
           node.profile = serialiseCompanyContextSections(node.contextSections);
         }
-        const saved = await _upsertCompanyStructureNode(node);
+        const saved = await _upsertCompanyStructureNode(node, derivedContextResult);
         if (!saved) return;
         if (node.profile && profileEl) profileEl.value = node.profile;
         if (node.websiteUrl && websiteEl) websiteEl.value = node.websiteUrl;
