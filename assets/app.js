@@ -8,7 +8,7 @@
 const TOLERANCE_THRESHOLD = 5_000_000;
 const DEFAULT_FX_RATE = 3.6725;
 const DEFAULT_COMPASS_PROXY_URL = resolveCompassProxyUrl();
-const APP_ASSET_VERSION = '20260409v1';
+const APP_ASSET_VERSION = '20260410v4';
 const APP_RELEASE = Object.freeze((typeof window !== 'undefined' && window.__RISK_CALCULATOR_RELEASE__) || {
   version: '0.10.0-pilot.1',
   channel: 'pilot',
@@ -11211,6 +11211,11 @@ function renderHelpPage() {
               tone: 'trust',
               title: 'What this does not mean',
               body: 'Saving feedback does not retrain the base model in real time. The platform is learning around the model first by changing retrieval, ranking, and prompt assembly. True model training, if introduced later, should come only from reviewed and curated feedback data.'
+            })}
+            ${renderHelpCallout({
+              tone: 'best',
+              title: 'How thin domains get stronger',
+              body: 'When one domain is still weak, the platform is usually improved in three layers: tighter taxonomy and guardrails, better source material in the document library, and targeted eval rows that score both scenario quality and retrieval quality. One bad draft on its own is not enough evidence for a shared tuning change.'
             })}
             ${renderHelpCallout({
               tone: 'best',

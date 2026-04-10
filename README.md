@@ -161,6 +161,25 @@ Recent grounding improvements:
   - forced labour / modern slavery due diligence
   - alternate workspace and manual fallback continuity language
   - fatigue, understaffing, and worker-welfare scenarios
+- first-class Step 1 hardening now covers a wider set of non-cyber domains, including:
+  - geopolitical / market access
+  - legal / contract
+  - investment / JV
+  - AI / model risk
+  - data governance / privacy
+  - fraud / integrity
+  - physical security
+  - OT / industrial resilience
+  - people / workforce / human rights
+  - supply chain
+  - procurement
+- procurement is now modeled with explicit pre-award sourcing patterns such as:
+  - maverick or off-contract spend
+  - tender-method and whole-life-cost failure
+  - lotting and competition-design failure
+  - constrained-market contracting under pressure
+  - bundled-award and price-validity traps
+  - urgent direct-negotiation readiness gaps
 - official UAE and ADGM references are now included for document-grounded retrieval, including NCEMA continuity, ADGM annual filings, ADGM beneficial ownership, ADGM data protection, and named UAE Cyber Security Council policy references
 - Step 1 citation selection now prefers event-matching references over generic governance references when both are available
 - citations can now carry:
@@ -235,6 +254,7 @@ Benchmark fixture:
 - [tests/fixtures/eval/g42_eval_master_repaired.jsonl](./tests/fixtures/eval/g42_eval_master_repaired.jsonl)
 - [tests/fixtures/eval/g42_eval_growth_pack.jsonl](./tests/fixtures/eval/g42_eval_growth_pack.jsonl)
   - bounded supplemental pack for live PoC drift areas such as AI/model-risk abstention, privacy transfer/retention, supplier delay, vendor access, workforce fatigue, ESG substantiation, continuity fallback, and transformation-delivery drift
+- fixture rows can also carry `expected_doc_ids` so the local eval can score retrieval quality, not only lens and risk-title quality
 
 Commands:
 - `npm run test:eval:fixture`
@@ -252,6 +272,11 @@ Outputs:
 - local deterministic report: `test-results/eval/local-eval-report.json`
 - AI judge report: `test-results/eval/ai-judge-report.json`
 - harvested growth candidates: `test-results/eval/eval-growth-candidates.jsonl`
+
+Current eval focus:
+- targeted slices are now used to harden thin domains one by one instead of relying only on whole-fixture averages
+- retrieval scoring now reports precision, recall, and F1 where `expected_doc_ids` are present
+- recent targeted slices include geopolitical, legal / contract, investment / JV, AI / model risk, data governance / privacy, fraud / integrity, physical security, OT / industrial resilience, people / workforce, supply chain, and procurement
 
 Additional regression coverage:
 - targeted unit packs now lock:

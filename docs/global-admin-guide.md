@@ -81,6 +81,7 @@ Current baseline areas that deserve explicit review:
 - Check company context and document coverage first.
 - Confirm the issue is not caused by stale defaults, weak grounding, or bad user inputs.
 - If BU or function admins are saving context with `Generic draft warning`, fix the inherited context or document coverage before retuning model behavior.
+- If the issue looks domain-specific, run the affected eval slice and check retrieval precision / recall / F1 as well as primary-lens accuracy before changing shared tuning.
 - Change one parameter at a time:
   - alignment priority
   - draft style
@@ -111,6 +112,7 @@ Good tuning discipline:
 - use `executive-brief` draft style when drafts are too generic or too long
 - use `strict` shortlist discipline when off-path risks are surviving too easily
 - use `balanced` or `conservative` learning sensitivity unless there is strong repeated live-AI evidence
+- prefer taxonomy, retrieval, and source-coverage fixes before prompt-style fixes when the problem is isolated to one domain such as procurement, legal / contract, geopolitical, or OT
 
 ## When a weak output appears
 
@@ -158,6 +160,7 @@ npm run check:syntax
 npm run test:unit
 npm run check:smoke
 npm run test:e2e:smoke
+npm run test:eval:fixture
 node scripts/readme-scan.js
 ```
 
@@ -166,3 +169,8 @@ If the change affects help, admin settings, or routes, verify:
 - the help page reflects the current logged-in role
 - pilot AI readiness state still renders cleanly
 - the AI Feedback & Tuning screen loads without client errors
+
+If the change affects taxonomy, retrieval, or domain grounding, also verify:
+- the affected eval slice still classifies the right primary lens
+- retrieval metrics are still acceptable for rows carrying `expected_doc_ids`
+- the document library now contains event-matching references rather than only generic governance material
