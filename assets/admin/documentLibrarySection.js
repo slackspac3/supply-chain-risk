@@ -45,14 +45,9 @@ const AdminDocumentLibrarySection = (() => {
     const docList = getDocList();
     const snapshotLoadedAt = Date.now();
     const settingsUpdatedAt = Number(getAdminSettings()?._meta?.updatedAt || 0);
-    // Bulk-ingest all stored documents into RAGService on admin load
-    if (typeof RAGService !== 'undefined' && RAGService.addDocument) {
-      const storedDocs = getDocList ? getDocList() : (AppState.docList || []);
-      storedDocs.forEach(doc => {
-        if (doc.contentFull || doc.contentExcerpt || doc.content) {
-          RAGService.addDocument(doc);
-        }
-      });
+    if (typeof RAGService !== 'undefined' && typeof RAGService.init === 'function') {
+      const storedDocs = typeof getDocList === 'function' ? getDocList() : (AppState.docList || []);
+      RAGService.init(storedDocs, getBUList());
     }
     const availableTags = sortDocumentTags(docList.flatMap(doc => Array.isArray(doc.tags) ? doc.tags : []));
     setPage(adminLayout('docs', `
