@@ -3731,6 +3731,12 @@ function applyBUOverrideToSettings(baseSettings, buOverride = null) {
 function activateAuthenticatedState() {
   updateAuthSessionState({ currentUser: AuthService.getCurrentUser() });
   if (!AppState.currentUser) {
+    clearAdminSettingsState();
+    try {
+      localStorage.removeItem(GLOBAL_ADMIN_STORAGE_KEY);
+      localStorage.removeItem('rq_bu_override');
+      localStorage.removeItem('rq_doc_override');
+    } catch {}
     resetUserStateCache('');
     updateDraftAssessmentState({ draft: {}, draftDirty: false, draftLastSavedAt: 0 });
     resetSimulationState();

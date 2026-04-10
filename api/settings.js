@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { appendAuditEvent } = require('./_audit');
-const { isRequestSecretValid, sendApiError, requireSession, sendConflictError, validateSessionFromRequest } = require('./_apiAuth');
+const { isRequestSecretValid, sendApiError, requireSession, sendConflictError } = require('./_apiAuth');
 const { applyCorsHeaders, getUnexpectedFields, isAllowedOrigin, isPlainObject, parseRequestBody } = require('./_request');
 const { get: kvGet, getKvConfig, set: kvSet, withLock: withKvLock } = require('./_kvStore');
 const { clearWorkflowCache } = require('./_workflowReuse');
@@ -261,6 +261,226 @@ function normaliseObligationForCompare(obligation = {}) {
   };
 }
 
+function normaliseUsername(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function slugifyValue(value = '') {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function isDepartmentEntityType(nodeOrType = '') {
+  const type = typeof nodeOrType === 'string' ? nodeOrType : nodeOrType?.type;
+  return String(type || '').trim().toLowerCase() === 'department / function';
+}
+
+function isCompanyEntityType(nodeOrType = '') {
+  const type = typeof nodeOrType === 'string' ? nodeOrType : nodeOrType?.type;
+  return !!String(type || '').trim() && !isDepartmentEntityType(type);
+}
+
+function getEntityById(structure = [], entityId = '') {
+  const safeEntityId = String(entityId || '').trim();
+  if (!safeEntityId) return null;
+  return (Array.isArray(structure) ? structure : []).find(node => String(node?.id || '').trim() === safeEntityId) || null;
+}
+
+function resolveSettingsScopeForSession(settings = {}, session = {}) {
+  const structure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
+  const username = normaliseUsername(session?.username);
+  const ownedBusiness = structure.find(node => isCompanyEntityType(node) && normaliseUsername(node?.ownerUsername) === username) || null;
+  const ownedDepartment = structure.find(node => isDepartmentEntityType(node) && normaliseUsername(node?.ownerUsername) === username) || null;
+  const fallbackBusinessUnitEntityId = String(ownedBusiness?.id || ownedDepartment?.parentId || '').trim();
+  const fallbackDepartmentEntityId = String(ownedDepartment?.id || '').trim();
+  const requestedDepartmentEntityId = String(session?.departmentEntityId || fallbackDepartmentEntityId || '').trim();
+  const requestedBusinessUnitEntityId = String(
+    session?.businessUnitEntityId
+    || fallbackBusinessUnitEntityId
+    || (requestedDepartmentEntityId ? getEntityById(structure, requestedDepartmentEntityId)?.parentId : '')
+    || ''
+  ).trim();
+  const requestedRole = String(session?.role || 'user').trim().toLowerCase() || 'user';
+  const effectiveRole = requestedRole === 'admin'
+    ? 'admin'
+    : ownedBusiness
+      ? 'bu_admin'
+      : ownedDepartment
+        ? 'function_admin'
+        : requestedRole;
+  return {
+    username,
+    effectiveRole,
+    businessUnitEntityId: requestedBusinessUnitEntityId,
+    departmentEntityId: requestedDepartmentEntityId,
+    ownedBusinessId: String(ownedBusiness?.id || '').trim(),
+    ownedDepartmentId: String(ownedDepartment?.id || '').trim()
+  };
+}
+
+function getAllowedEntityIdsForScope(settings = {}, scope = {}) {
+  const structure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
+  const allowedEntityIds = new Set();
+  const businessUnitEntityId = String(
+    scope.effectiveRole === 'bu_admin'
+      ? scope.ownedBusinessId || scope.businessUnitEntityId || ''
+      : scope.businessUnitEntityId
+        || (scope.departmentEntityId ? getEntityById(structure, scope.departmentEntityId)?.parentId : '')
+        || ''
+  ).trim();
+  const departmentEntityId = String(
+    scope.effectiveRole === 'function_admin'
+      ? scope.ownedDepartmentId || scope.departmentEntityId || ''
+      : scope.departmentEntityId || ''
+  ).trim();
+
+  if (businessUnitEntityId) {
+    allowedEntityIds.add(businessUnitEntityId);
+  }
+  if (departmentEntityId) {
+    allowedEntityIds.add(departmentEntityId);
+  }
+  if (scope.effectiveRole === 'bu_admin' && businessUnitEntityId) {
+    structure.forEach((node) => {
+      if (isDepartmentEntityType(node) && String(node?.parentId || '').trim() === businessUnitEntityId) {
+        allowedEntityIds.add(String(node?.id || '').trim());
+      }
+    });
+  }
+  return {
+    allowedEntityIds,
+    businessUnitEntityId,
+    departmentEntityId
+  };
+}
+
+function filterStructureNodeForScope(node = {}, scope = {}, { allowedEntityIds = new Set(), allowFullDetails = false } = {}) {
+  const entityId = String(node?.id || '').trim();
+  if (!entityId || !allowedEntityIds.has(entityId)) return null;
+  const parentId = allowedEntityIds.has(String(node?.parentId || '').trim()) ? String(node?.parentId || '').trim() : '';
+  const ownerUsername = normaliseUsername(node?.ownerUsername) === scope.username ? String(node?.ownerUsername || '').trim() : '';
+  if (allowFullDetails) {
+    return {
+      ...node,
+      parentId,
+      ownerUsername
+    };
+  }
+  return {
+    ...node,
+    parentId,
+    websiteUrl: '',
+    profile: '',
+    contextSections: null,
+    ownerUsername
+  };
+}
+
+function filterLayerForScope(layer = {}, { allowFullDetails = false } = {}) {
+  if (allowFullDetails || layer?.visibleToChildUsers !== false) {
+    return {
+      ...layer
+    };
+  }
+  return {
+    ...layer,
+    contextSummary: '',
+    aiInstructions: ''
+  };
+}
+
+function filterBuOverrideForScope(override = {}, { allowFullDetails = false } = {}) {
+  if (allowFullDetails || override?.contextVisibleToUsers !== false) {
+    return {
+      ...override
+    };
+  }
+  return {
+    ...override,
+    contextSummary: ''
+  };
+}
+
+function filterObligationForScope(obligation = {}, { allowFullDetails = false } = {}) {
+  if (allowFullDetails || obligation?.visibleToChildUsers !== false) {
+    return obligation;
+  }
+  return null;
+}
+
+function filterSettingsForSession(settings = {}, session = {}) {
+  const safeSettings = normaliseSettings(settings);
+  const scope = resolveSettingsScopeForSession(safeSettings, session);
+  if (scope.effectiveRole === 'admin') {
+    return {
+      settings: safeSettings,
+      scope: {
+        role: 'admin',
+        businessUnitEntityId: scope.businessUnitEntityId,
+        departmentEntityId: scope.departmentEntityId,
+        redacted: false
+      }
+    };
+  }
+
+  const { allowedEntityIds, businessUnitEntityId, departmentEntityId } = getAllowedEntityIdsForScope(safeSettings, scope);
+  const allowFullDetails = scope.effectiveRole === 'bu_admin' || scope.effectiveRole === 'function_admin';
+  const filteredStructure = (Array.isArray(safeSettings.companyStructure) ? safeSettings.companyStructure : [])
+    .map(node => filterStructureNodeForScope(node, scope, { allowedEntityIds, allowFullDetails }))
+    .filter(Boolean);
+  const allowedBusinessUnitIds = new Set(
+    [businessUnitEntityId]
+      .concat(
+        filteredStructure
+          .filter(node => isCompanyEntityType(node))
+          .map(node => slugifyValue(node?.name || ''))
+      )
+      .map(value => String(value || '').trim())
+      .filter(Boolean)
+  );
+  const filteredLayers = (Array.isArray(safeSettings.entityContextLayers) ? safeSettings.entityContextLayers : [])
+    .filter(layer => allowedEntityIds.has(String(layer?.entityId || '').trim()))
+    .map(layer => filterLayerForScope(layer, { allowFullDetails }));
+  const filteredObligations = normaliseEntityObligations(
+    (Array.isArray(safeSettings.entityObligations) ? safeSettings.entityObligations : [])
+      .filter(obligation => allowedEntityIds.has(String(obligation?.sourceEntityId || '').trim()))
+      .map(obligation => filterObligationForScope(obligation, { allowFullDetails }))
+      .filter(Boolean)
+  );
+  const filteredBuOverrides = (Array.isArray(safeSettings.buOverrides) ? safeSettings.buOverrides : [])
+    .filter((override) => {
+      const orgEntityId = String(override?.orgEntityId || '').trim();
+      const overrideId = slugifyValue(override?.id || '');
+      return allowedBusinessUnitIds.has(orgEntityId) || allowedBusinessUnitIds.has(overrideId);
+    })
+    .map(override => filterBuOverrideForScope(override, { allowFullDetails }));
+  const adminContextVisibleToUsers = safeSettings.adminContextVisibleToUsers !== false;
+
+  return {
+    settings: {
+      ...safeSettings,
+      companyContextProfile: '',
+      companyContextSections: null,
+      adminContextSummary: allowFullDetails || adminContextVisibleToUsers
+        ? safeSettings.adminContextSummary
+        : '',
+      companyStructure: filteredStructure,
+      entityContextLayers: filteredLayers,
+      entityObligations: filteredObligations,
+      buOverrides: filteredBuOverrides
+    },
+    scope: {
+      role: scope.effectiveRole,
+      businessUnitEntityId,
+      departmentEntityId,
+      redacted: true
+    }
+  };
+}
+
 function sameValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -384,12 +604,13 @@ module.exports = async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const settings = await readSettings();
-      const response = { settings };
-      const validatedSession = req.headers['x-session-token']
-        ? await validateSessionFromRequest(req)
-        : { session: null, error: null };
-      if (isAdminSecretValid(req) || validatedSession.session?.role === 'admin') {
+      const session = isAdminSecretValid(req)
+        ? { username: 'admin', role: 'admin' }
+        : await requireSession(req, res);
+      if (!session) return;
+      const { settings, scope } = filterSettingsForSession(await readSettings(), session);
+      const response = { settings, scope };
+      if (session.role === 'admin') {
         response.storage = {
           writable: hasWritableKv(),
           mode: hasWritableKv() ? 'shared-kv' : 'fallback-defaults'
@@ -449,3 +670,5 @@ module.exports = async function handler(req, res) {
 module.exports.normaliseSettings = normaliseSettings;
 module.exports.writeSettings = writeSettings;
 module.exports.readSettings = readSettings;
+module.exports.filterSettingsForSession = filterSettingsForSession;
+module.exports.resolveSettingsScopeForSession = resolveSettingsScopeForSession;
