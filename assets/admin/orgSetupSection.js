@@ -73,6 +73,11 @@ const AdminOrgSetupSection = (() => {
     const idToNode = new Map(companyStructure.map(node => [node.id, node]));
     layerSummaryEl.innerHTML = entityContextLayers.map(layer => {
       const node = idToNode.get(layer.entityId);
+      const reviewModel = typeof getContextReviewDisplayModel === 'function'
+        ? getContextReviewDisplayModel(layer.contextMeta, {
+            subject: String(node?.type || '').toLowerCase() === 'department / function' ? 'Function context' : 'Business context'
+          })
+        : null;
       // Entity context can come from admin-managed free text, so escape it before injecting into the summary panel.
       return `
         <div class="card" style="padding:var(--sp-4);margin-top:12px">
@@ -81,10 +86,12 @@ const AdminOrgSetupSection = (() => {
             <strong style="color:var(--text-primary)">${escapeHtml(String(node?.name || layer.entityName || 'Saved layer'))}</strong>
             ${layer.geography ? `<span class="form-help" style="margin-top:0">${escapeHtml(String(layer.geography))}</span>` : ''}
             <span class="badge ${layer.visibleToChildUsers === false ? 'badge--warning' : 'badge--neutral'}">${layer.visibleToChildUsers === false ? 'Hidden from child users' : 'Visible to child users'}</span>
+            ${reviewModel ? `<span class="badge ${reviewModel.badgeClass}">${escapeHtml(String(reviewModel.badge || 'Review state'))}</span>` : ''}
             <button class="btn btn--ghost btn--sm admin-layer-edit" data-layer-id="${escapeHtml(String(layer.entityId || ''))}" type="button">Edit</button>
             <button class="btn btn--ghost btn--sm admin-layer-delete" data-layer-id="${escapeHtml(String(layer.entityId || ''))}" type="button">Remove</button>
           </div>
           ${layer.contextSummary ? `<div class="form-help" style="margin-top:8px">${escapeHtml(String(layer.contextSummary))}</div>` : ''}
+          ${reviewModel?.message ? `<div class="form-help" style="margin-top:8px">${escapeHtml(String(reviewModel.message))}</div>` : ''}
           ${layer.applicableRegulations?.length ? `<div class="citation-chips" style="margin-top:8px">${layer.applicableRegulations.map(tag => `<span class="badge badge--neutral">${escapeHtml(String(tag))}</span>`).join('')}</div>` : ''}
         </div>`;
     }).join('');

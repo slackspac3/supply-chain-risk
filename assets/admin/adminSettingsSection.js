@@ -47,6 +47,16 @@
   }
 
   function renderCompanyBuilderSection({ settings, companyContextSections }) {
+    const contextReview = typeof getContextReviewDisplayModel === 'function'
+      ? getContextReviewDisplayModel(settings.companyContextMeta, { subject: 'Shared company context' })
+      : {
+          badge: 'Review needed',
+          badgeClass: 'badge--warning',
+          message: 'Review this company context before relying on it as inherited grounding.',
+          showApprovalToggle: true,
+          approvalLabel: 'I reviewed this shared company context and approve it for inherited grounding.',
+          reviewApprovedChecked: false
+        };
     return renderSettingsSection({
       title: 'AI Company Context Builder',
       scope: 'admin-settings',
@@ -104,6 +114,25 @@
       <div class="flex items-center gap-3 mt-4" style="flex-wrap:wrap">
         <button class="btn btn--secondary" id="btn-build-company-context">Build from Website</button>
         <span class="form-help">This opens a review step so you can decide where the entity sits in the group.</span>
+      </div>
+      <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-canvas)" id="admin-company-review-card">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div class="context-panel-title">Inheritance review</div>
+          <span class="badge ${contextReview.badgeClass}" id="admin-company-review-badge">${escapeHtml(contextReview.badge)}</span>
+        </div>
+        <div class="form-help" style="margin-top:8px" id="admin-company-review-copy">${escapeHtml(contextReview.message)}</div>
+        <label class="form-checkbox" id="admin-company-review-toggle-wrap" style="margin-top:10px;${contextReview.showApprovalToggle ? '' : 'display:none'}">
+          <input type="checkbox" id="admin-company-review-approved" ${contextReview.reviewApprovedChecked ? 'checked' : ''}>
+          <span id="admin-company-review-label">${escapeHtml(contextReview.approvalLabel || '')}</span>
+        </label>
+        <span class="form-help" style="margin-top:8px;display:block">AI-generated or fallback company context stays out of inherited grounding until it is reviewed and then saved with approval.</span>
+        <input type="hidden" id="admin-company-context-status" value="${escapeHtml(String(settings.companyContextMeta?.status || ''))}">
+        <input type="hidden" id="admin-company-context-source" value="${escapeHtml(String(settings.companyContextMeta?.source || ''))}">
+        <input type="hidden" id="admin-company-context-generated-at" value="${escapeHtml(String(Number(settings.companyContextMeta?.generatedAt || 0)))}">
+        <input type="hidden" id="admin-company-context-reviewed-at" value="${escapeHtml(String(Number(settings.companyContextMeta?.reviewedAt || 0)))}">
+        <input type="hidden" id="admin-company-context-review-due-at" value="${escapeHtml(String(Number(settings.companyContextMeta?.reviewDueAt || 0)))}">
+        <input type="hidden" id="admin-company-context-fallback-used" value="${settings.companyContextMeta?.fallbackUsed === true ? 'true' : 'false'}">
+        <input type="hidden" id="admin-company-context-source-url" value="${escapeHtml(String(settings.companyContextMeta?.sourceUrl || settings.companyWebsiteUrl || ''))}">
       </div>
       <details class="dashboard-disclosure card mt-4">
         <summary>Refine with AI <span class="badge badge--neutral">Advanced</span></summary>

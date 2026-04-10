@@ -498,13 +498,53 @@
   }
 
   async function suggestGuidedPromptIdeas(input = {}) {
-    // Prompt ideas are bounded assistive hints only. Keep them local/deterministic so
-    // Step 1 does not spend extra backend budget on non-authoritative suggestion chips.
-    return {
-      ideas: Array.isArray(input?.fallbackSuggestions) ? input.fallbackSuggestions : [],
-      usedFallback: true,
-      aiUnavailable: false
-    };
+    const fallbackSuggestions = Array.isArray(input?.fallbackSuggestions) ? input.fallbackSuggestions : [];
+    try {
+      if (!LLMService || typeof LLMService.suggestGuidedPromptIdeas !== 'function') {
+        return {
+          ideas: fallbackSuggestions,
+          usedFallback: true,
+          aiUnavailable: false
+        };
+      }
+      const buId = String(input?.buId || AppState?.draft?.buId || '').trim();
+      const bu = typeof getBUList === 'function'
+        ? (getBUList() || []).find((item) => item?.id === buId) || null
+        : null;
+      const aiContext = typeof buildCurrentAIAssistContext === 'function'
+        ? buildCurrentAIAssistContext({ buId })
+        : { businessUnit: bu, adminSettings: {} };
+      const geography = typeof formatScenarioGeographies === 'function' && typeof getScenarioGeographies === 'function'
+        ? formatScenarioGeographies(getScenarioGeographies())
+        : '';
+      const scenarioFingerprint = _buildStep1ScenarioFingerprint({
+        narrative: String(input?.riskStatement || '').trim(),
+        guidedInput: input?.guidedInput,
+        businessUnit: input?.businessUnit || aiContext.businessUnit || bu,
+        geography,
+        scenarioLensHint: input?.scenarioLensHint
+      });
+      const result = await LLMService.suggestGuidedPromptIdeas({
+        ...input,
+        businessUnit: input?.businessUnit || aiContext.businessUnit || bu,
+        priorMessages: _getStep1PriorMessages({ scenarioFingerprint }),
+        traceLabel: STEP1_TRACE_LABELS.promptIdeas
+      });
+      return result && typeof result === 'object'
+        ? result
+        : {
+            ideas: fallbackSuggestions,
+            usedFallback: true,
+            aiUnavailable: false
+          };
+    } catch (error) {
+      console.warn('suggestGuidedPromptIdeas live assist fallback:', error?.message || error);
+      return {
+        ideas: fallbackSuggestions,
+        usedFallback: true,
+        aiUnavailable: error?.code === 'LLM_UNAVAILABLE'
+      };
+    }
   }
 
   async function runIntakeAssist() {

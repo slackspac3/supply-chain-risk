@@ -3,22 +3,21 @@ let activeUserSettingsRenderToken = 0;
 
 function buildLocalUserCompanyContextFallback(refineInput = {}) {
   const current = refineInput.currentSections || {};
-  const prompt = String(refineInput.userPrompt || '').trim();
   return {
     ...current,
-    companySummary: applyLocalRefinementToText(String(current.companySummary || '').trim(), prompt),
-    businessModel: applyLocalRefinementToText(String(current.businessModel || '').trim(), prompt),
-    operatingModel: applyLocalRefinementToText(String(current.operatingModel || '').trim(), prompt),
-    publicCommitments: applyLocalRefinementToText(String(current.publicCommitments || '').trim(), prompt),
-    keyRiskSignals: applyLocalRefinementToText(String(current.keyRiskSignals || '').trim(), prompt),
-    obligations: applyLocalRefinementToText(String(current.obligations || '').trim(), prompt),
+    companySummary: String(current.companySummary || '').trim(),
+    businessModel: String(current.businessModel || '').trim(),
+    operatingModel: String(current.operatingModel || '').trim(),
+    publicCommitments: String(current.publicCommitments || '').trim(),
+    keyRiskSignals: String(current.keyRiskSignals || '').trim(),
+    obligations: String(current.obligations || '').trim(),
     sources: String(current.sources || '').trim(),
     aiGuidance: String(refineInput.currentAiGuidance || '').trim(),
     suggestedGeography: String(refineInput.currentGeography || '').trim(),
     regulatorySignals: Array.isArray(refineInput.currentRegulations) ? refineInput.currentRegulations : [],
-    responseMessage: prompt
-      ? 'I reworked the existing company context locally using your latest instruction. Review the updated sections and tighten any remaining wording manually if needed.'
-      : 'I applied a local refinement to keep the company context moving. Review the updated sections and tighten anything else manually if needed.'
+    aiUnavailable: true,
+    continuityOnly: true,
+    responseMessage: 'Live AI was unavailable, so the current company context was kept unchanged. Retry when live AI is available if you want a refined update.'
   };
 }
 
@@ -856,10 +855,28 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
         });
         applyUserCompanyContextResult(result);
       }
-      companyRefinementHistory.push({ role: 'assistant', text: uploaded.text ? 'Initial company context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.' : 'Initial company context draft created. Use follow-up prompts below if you want to reshape it further.' });
+      const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
+      companyRefinementHistory.push({
+        role: 'assistant',
+        text: degraded && uploaded.text
+          ? 'Initial company context draft was built, but the uploaded-source refinement could not run because live AI was unavailable. Retry when live AI is available if you want the uploaded material folded in.'
+          : (uploaded.text
+            ? 'Initial company context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.'
+            : 'Initial company context draft created. Use follow-up prompts below if you want to reshape it further.')
+      });
       renderUserCompanyRefinementHistory();
-      if (companyRefineStatusEl) companyRefineStatusEl.textContent = 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
-      UI.toast('Personal company context built from public sources.', 'success', 5000);
+      if (companyRefineStatusEl) {
+        companyRefineStatusEl.textContent = degraded
+          ? 'Initial company draft is in place, but the latest refinement could not run because live AI was unavailable.'
+          : 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
+      }
+      UI.toast(
+        degraded
+          ? 'Personal company context built, but the latest refinement could not run because live AI was unavailable.'
+          : 'Personal company context built from public sources.',
+        degraded ? 'warning' : 'success',
+        5000
+      );
     } catch (error) {
       UI.toast('Company context build failed. Try again or shorten the source material.', 'danger', 6000);
     } finally {
@@ -906,12 +923,26 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       } catch {
         result = buildLocalUserCompanyContextFallback(refineInput);
       }
+      const continuityOnly = result?.continuityOnly === true;
+      const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
       applyUserCompanyContextResult(result);
       companyRefinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the company context based on your latest prompt.' });
       renderUserCompanyRefinementHistory();
       companyFollowupEl.value = '';
-      if (companyRefineStatusEl) companyRefineStatusEl.textContent = 'Latest follow-up applied. Keep iterating until the context feels right.';
-      UI.toast('Personal company context refined.', 'success', 5000);
+      if (companyRefineStatusEl) {
+        companyRefineStatusEl.textContent = continuityOnly
+          ? 'Live AI was unavailable, so the current company context was kept unchanged.'
+          : 'Latest follow-up applied. Keep iterating until the context feels right.';
+      }
+      UI.toast(
+        continuityOnly
+          ? 'Live AI was unavailable. The current personal company context stayed unchanged.'
+          : degraded
+            ? 'Personal company context updated with fallback support. Review it carefully.'
+            : 'Personal company context refined.',
+        degraded ? 'warning' : 'success',
+        5000
+      );
     } catch (error) {
       UI.toast('Company context refinement failed. Try again or shorten the prompt.', 'danger', 6000);
       if (companyRefineStatusEl) companyRefineStatusEl.textContent = 'Company context refinement failed. Try again or shorten the prompt.';
@@ -939,7 +970,16 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       if (result.aiInstructions && !document.getElementById('user-ai-instructions').value.trim()) {
         document.getElementById('user-ai-instructions').value = result.aiInstructions;
       }
-      UI.toast(result.usedFallback ? 'Suggested role-context draft loaded with deterministic fallback support.' : 'Suggested role-context draft loaded.', result.usedFallback ? 'warning' : 'success', 5000);
+      const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
+      UI.toast(
+        result?.continuityOnly
+          ? 'Live AI was unavailable. Your current role-context settings stayed unchanged.'
+          : degraded
+            ? 'Suggested role-context draft loaded with fallback support.'
+            : 'Suggested role-context draft loaded.',
+        degraded ? 'warning' : 'success',
+        5000
+      );
     } catch (error) {
       UI.toast('AI assist failed. Try again in a moment.', 'danger', 6000);
     } finally {
@@ -963,7 +1003,16 @@ function renderUserPreferences(existingSettings = getUserSettings()) {
       const result = await LLMService.buildUserPreferenceAssist(buildUserAssistInput(sourceText));
       document.getElementById('user-context-summary').value = result.adminContextSummary || document.getElementById('user-context-summary').value;
       document.getElementById('user-ai-instructions').value = result.aiInstructions || document.getElementById('user-ai-instructions').value;
-      UI.toast(result.usedFallback ? 'Suggested personal-defaults draft loaded with deterministic fallback support.' : 'Suggested personal-defaults draft loaded.', result.usedFallback ? 'warning' : 'success', 5000);
+      const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
+      UI.toast(
+        result?.continuityOnly
+          ? 'Live AI was unavailable. Your current personal-default settings stayed unchanged.'
+          : degraded
+            ? 'Suggested personal-defaults draft loaded with fallback support.'
+            : 'Suggested personal-defaults draft loaded.',
+        degraded ? 'warning' : 'success',
+        5000
+      );
     } catch (error) {
       UI.toast('AI assist failed. Try again in a moment.', 'danger', 6000);
     } finally {

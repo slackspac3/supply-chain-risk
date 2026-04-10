@@ -264,7 +264,15 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
           });
           document.getElementById('onboard-working-context').value = result.workingContext || document.getElementById('onboard-working-context').value;
           document.getElementById('onboard-preferred-outputs').value = result.preferredOutputs || document.getElementById('onboard-preferred-outputs').value;
-          UI.toast(`${result.usedFallback ? 'Loaded a fallback suggested draft' : 'Loaded a suggested draft'} for this step${onboardingAiSourceName ? ` using ${onboardingAiSourceName}` : ''}.`, result.usedFallback ? 'warning' : 'success');
+          const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
+          UI.toast(
+            `${result?.continuityOnly
+              ? 'Live AI was unavailable, so the current onboarding draft stayed unchanged'
+              : degraded
+                ? 'Loaded a fallback-supported suggested draft'
+                : 'Loaded a suggested draft'} for this step${onboardingAiSourceName ? ` using ${onboardingAiSourceName}` : ''}.`,
+            degraded ? 'warning' : 'success'
+          );
         } catch (error) {
           UI.toast('AI assist failed. Try again in a moment.', 'danger');
         } finally {

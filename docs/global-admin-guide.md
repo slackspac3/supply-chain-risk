@@ -33,7 +33,7 @@ What not to do:
 - `#/admin/home`
   - platform front door
   - use this first to decide what needs attention
-- `#/admin/settings/system`
+- `#/admin/settings/access`
   - system access and pilot AI readiness
   - verify the live path in the current browser session before AI-quality-dependent activity
 - `#/admin/settings/feedback`
@@ -45,7 +45,7 @@ What not to do:
   - platform defaults that shape downstream drafting and review
 - `#/admin/settings/users`
   - user access, BU assignment, and function assignment
-- `#/admin/settings/documents`
+- `#/admin/docs`
   - document library and grounding coverage
 - `#/help`
   - role-aware help page for the current signed-in user
@@ -59,7 +59,7 @@ Current baseline areas that deserve explicit review:
 ## Suggested operating rhythm
 
 ### Before a demo, review, or sign-off session
-- Open `System Access`.
+- Open `System Access` at `#/admin/settings/access`.
 - Confirm the active runtime is live AI in the current browser session.
 - If the session is in local fallback, do not treat the AI output as pilot-quality sign-off material.
 

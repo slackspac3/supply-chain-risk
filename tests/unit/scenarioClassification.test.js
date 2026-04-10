@@ -25,11 +25,13 @@ function assertConfidenceMetadata(classification = {}) {
 }
 
 test('canonical phase 1.1 taxonomy exposes the exact domain, overlay, mechanism, and family shape', () => {
-  assert.equal(SCENARIO_TAXONOMY.taxonomyVersion, 'phase1.1.8-2026-04-09');
+  assert.equal(SCENARIO_TAXONOMY.taxonomyVersion, 'phase1.1.19-2026-04-10');
   assert.deepEqual(
     SCENARIO_TAXONOMY_DOMAINS.map((item) => item.key),
     [
       'cyber',
+      'ai_model',
+      'data_governance',
       'operational',
       'business_continuity',
       'finance',
@@ -88,8 +90,8 @@ test('canonical phase 1.1 taxonomy exposes the exact domain, overlay, mechanism,
     ]
   );
 
-  assert.equal(SCENARIO_TAXONOMY_FAMILIES.length, 67);
-  assert.equal(SCENARIO_TAXONOMY_ACTIVE_FAMILIES.length, 59);
+  assert.equal(SCENARIO_TAXONOMY_FAMILIES.length, 104);
+  assert.equal(SCENARIO_TAXONOMY_ACTIVE_FAMILIES.length, 96);
   assert.deepEqual(
     SCENARIO_TAXONOMY_FAMILIES
       .filter((family) => family.status === 'compatibility_only')
@@ -288,7 +290,7 @@ test('privacy non-compliance stays in compliance when obligation failure is prim
     { scenarioLensHint: 'cyber' }
   );
 
-  assert.equal(privacy.domain, 'compliance');
+  assert.equal(privacy.domain, 'data_governance');
   assert.equal(privacy.primaryFamily?.key, 'privacy_non_compliance');
   assert.ok(privacy.reasonCodes.includes('PRECEDENCE_RULE_APPLIED'));
   assert.ok(privacy.mechanisms.some((mechanism) => mechanism.key === 'unlawful_processing'));
@@ -326,7 +328,7 @@ test('mixed identity scenarios keep the identity event path primary while surfac
   assert.ok(classification.secondaryFamilies.some((family) => ['data_disclosure', 'cloud_control_failure'].includes(family.key)));
   assert.ok(classification.overlays.some((overlay) => overlay.key === 'data_exposure'));
   assert.ok(Array.isArray(classification.matchedAntiSignals));
-  assert.equal(classification.taxonomyVersion, 'phase1.1.8-2026-04-09');
+  assert.equal(classification.taxonomyVersion, 'phase1.1.19-2026-04-10');
 });
 
 test('consequence-heavy ambiguous text does not create fake precision', () => {

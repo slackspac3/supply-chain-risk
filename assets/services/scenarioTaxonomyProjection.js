@@ -16,6 +16,31 @@
     mailbox: 'email',
     credentials: 'credential'
   });
+  const MORPHOLOGICAL_SUFFIXES = Object.freeze([
+    'ation',
+    'ition',
+    'tion',
+    'sion',
+    'ment',
+    'ness',
+    'ality',
+    'ility',
+    'ance',
+    'ence',
+    'ive',
+    'al',
+    'ing',
+    'ed',
+    'es',
+    's',
+    'ly'
+  ]);
+  const COMPLIANCE_LED_PRIVACY_FAMILY_KEYS = new Set([
+    'privacy_governance_gap',
+    'privacy_non_compliance',
+    'records_retention_non_compliance',
+    'cross_border_transfer_non_compliance'
+  ]);
   const EXTRA_HINT_ALIASES = Object.freeze({
     technology: 'cyber',
     cyber: 'cyber',
@@ -189,7 +214,9 @@
       if (haystackToken === token) return true;
       const shorter = haystackToken.length <= token.length ? haystackToken : token;
       const longer = shorter === haystackToken ? token : haystackToken;
-      return shorter.length >= 6 && longer.startsWith(shorter);
+      if (shorter.length < 6 || !longer.startsWith(shorter)) return false;
+      const suffix = longer.slice(shorter.length);
+      return MORPHOLOGICAL_SUFFIXES.some((candidate) => suffix === candidate);
     }));
   }
 
@@ -306,15 +333,16 @@
 
   function serialiseEvaluation(evaluation = null, primaryFamilyKey = '') {
     if (!evaluation?.familyKey || !evaluation?.family) return null;
+    const operationalLens = getOperationalLensProfile(evaluation.family);
     return {
       familyKey: evaluation.familyKey,
       familyLabel: String(evaluation.family.label || '').trim(),
       domain: String(evaluation.family.domain || '').trim(),
       legacyKey: String(evaluation.family.legacyKey || '').trim(),
-      lensKey: String(evaluation.family.lensKey || '').trim(),
-      lensLabel: String(evaluation.family.lensLabel || '').trim(),
-      functionKey: String(evaluation.family.functionKey || '').trim(),
-      estimatePresetKey: String(evaluation.family.estimatePresetKey || '').trim(),
+      lensKey: operationalLens.key,
+      lensLabel: operationalLens.label,
+      functionKey: operationalLens.functionKey,
+      estimatePresetKey: operationalLens.estimatePresetKey,
       score: roundScore(evaluation.score),
       eventScore: roundScore(evaluation.eventScore),
       positiveScore: roundScore(evaluation.positiveScore),
@@ -440,6 +468,26 @@
     return /(privacy|data protection|lawful basis|retention|records|personal data|processing|cross-border transfer)/i.test(haystack);
   }
 
+  function getOperationalLensProfile(family = null, fallbackKey = '') {
+    const familyKey = String(family?.key || '').trim();
+    if (familyKey && COMPLIANCE_LED_PRIVACY_FAMILY_KEYS.has(familyKey)) {
+      return {
+        key: 'compliance',
+        label: 'Compliance',
+        functionKey: 'compliance',
+        estimatePresetKey: String(family?.estimatePresetKey || 'compliance').trim() || 'compliance'
+      };
+    }
+    const lensKey = String(family?.lensKey || fallbackKey || '').trim();
+    const profile = lensProfileByKey[lensKey] || null;
+    return {
+      key: lensKey || String(profile?.key || 'general').trim() || 'general',
+      label: String(family?.lensLabel || profile?.label || 'General enterprise risk').trim() || 'General enterprise risk',
+      functionKey: String(family?.functionKey || profile?.functionKey || 'general').trim() || 'general',
+      estimatePresetKey: String(family?.estimatePresetKey || profile?.estimatePresetKey || 'general').trim() || 'general'
+    };
+  }
+
   function selectCompliancePrimary(qualified = []) {
     return (Array.isArray(qualified) ? qualified : [])
       .filter((evaluation) => [
@@ -519,7 +567,11 @@
       .sort((left, right) => right.score - left.score);
     const rankedCompetitive = rankCompetitiveEvaluations(primaryEvaluation, qualified, competitive);
     const topEvaluation = primaryEvaluation || rankedCompetitive[0] || null;
-    const runnerUpEvaluation = rankedCompetitive.find((evaluation) => evaluation.familyKey !== topEvaluation?.familyKey) || null;
+    const runnerUpEvaluation = (
+      qualified.find((evaluation) => evaluation.familyKey !== topEvaluation?.familyKey)
+      || rankedCompetitive.find((evaluation) => evaluation.familyKey !== topEvaluation?.familyKey)
+      || null
+    );
     const ambiguityFlags = buildCompetitionAmbiguityFlags({
       primaryEvaluation,
       topEvaluation,
@@ -542,22 +594,26 @@
       );
     } else {
       const primaryFamily = primaryEvaluation.family;
+      const operationalLens = getOperationalLensProfile(primaryFamily);
+      const legacyKey = COMPLIANCE_LED_PRIVACY_FAMILY_KEYS.has(String(primaryFamily?.key || '').trim())
+        ? operationalLens.key
+        : String(primaryFamily?.legacyKey || '').trim();
       const secondaryFamilyKeys = deriveSecondaryFamilies(primaryEvaluation, qualified);
       const secondaryKeys = secondaryFamilyKeys
         .map((familyKey) => familyByKey[familyKey])
-        .map((family) => String(family?.legacyKey || '').trim())
-        .filter((key, index, values) => key && key !== primaryFamily.legacyKey && values.indexOf(key) === index)
+        .map((family) => getOperationalLensProfile(family).key)
+        .filter((key, index, values) => key && key !== operationalLens.key && values.indexOf(key) === index)
         .slice(0, 3);
       classification = {
         familyKey: primaryFamily.key,
         familyLabel: primaryFamily.label,
         domain: primaryFamily.domain,
-        legacyKey: primaryFamily.legacyKey,
-        key: primaryFamily.legacyKey,
-        lensKey: primaryFamily.lensKey,
-        lensLabel: primaryFamily.lensLabel,
-        functionKey: primaryFamily.functionKey,
-        estimatePresetKey: primaryFamily.estimatePresetKey,
+        legacyKey,
+        key: legacyKey,
+        lensKey: operationalLens.key,
+        lensLabel: operationalLens.label,
+        functionKey: operationalLens.functionKey,
+        estimatePresetKey: operationalLens.estimatePresetKey,
         secondaryFamilyKeys,
         secondaryKeys,
         confidence: primaryEvaluation.score >= 6 ? 'high' : primaryEvaluation.score >= 3 ? 'medium' : 'low',
@@ -608,16 +664,19 @@
   }
 
   function buildScenarioLens(classification = {}, fallback = null) {
+    const family = classification?.familyKey ? familyByKey[classification.familyKey] || null : null;
     const hintKey = normaliseHintKey(classification?.lensKey || classification?.key || fallback);
-    const profile = lensProfileByKey[hintKey] || lensProfileByKey.general || {
-      key: 'general',
-      label: 'General enterprise risk',
-      functionKey: 'general',
-      estimatePresetKey: 'general'
-    };
+    const profile = family
+      ? getOperationalLensProfile(family, hintKey)
+      : (lensProfileByKey[hintKey] || lensProfileByKey.general || {
+          key: 'general',
+          label: 'General enterprise risk',
+          functionKey: 'general',
+          estimatePresetKey: 'general'
+        });
     const secondaryFamilyKeys = Array.isArray(classification?.secondaryFamilyKeys) ? classification.secondaryFamilyKeys : [];
     const secondaryKeys = secondaryFamilyKeys
-      .map((familyKey) => familyByKey[familyKey]?.lensKey)
+      .map((familyKey) => getOperationalLensProfile(familyByKey[familyKey] || null).key)
       .filter((key, index, values) => key && key !== profile.key && values.indexOf(key) === index)
       .slice(0, 3);
     return {

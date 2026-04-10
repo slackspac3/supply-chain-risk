@@ -63,11 +63,137 @@ const LLMService = (() => {
   }
 
   const AI_TRACE_LIMIT = 20;
+  const AI_COMPASS_FAILURE_LIMIT = 30;
   const _traceRuntime = typeof AiTraceRuntime !== 'undefined'
     && AiTraceRuntime
     && typeof AiTraceRuntime.createRuntime === 'function'
       ? AiTraceRuntime.createRuntime({ traceLimit: AI_TRACE_LIMIT })
       : null;
+  let _adminCompassFailureEntries = [];
+
+  function _safeCompassFailureText(value = '', maxChars = 4000) {
+    return String(value || '')
+      .replace(/\u0000/g, '')
+      .trim()
+      .slice(0, Math.max(0, Number(maxChars || 0) || 0));
+  }
+
+  function _safeCompassFailurePreview(value = '', maxChars = 4000) {
+    if (value == null) return '';
+    if (typeof value === 'string') return _safeCompassFailureText(value, maxChars);
+    try {
+      return _safeCompassFailureText(JSON.stringify(value, null, 2), maxChars);
+    } catch {
+      return _safeCompassFailureText(String(value || ''), maxChars);
+    }
+  }
+
+  function _readAdminCompassFailureLog() {
+    return Array.isArray(_adminCompassFailureEntries)
+      ? _adminCompassFailureEntries.slice()
+      : [];
+  }
+
+  function _writeAdminCompassFailureLog(entries = []) {
+    _adminCompassFailureEntries = (Array.isArray(entries) ? entries : [])
+      .filter(Boolean)
+      .slice(-AI_COMPASS_FAILURE_LIMIT);
+  }
+
+  function _extractLlmHttpStatus(error = null) {
+    const explicitStatus = Number(error?.statusCode || 0);
+    if (Number.isFinite(explicitStatus) && explicitStatus >= 100) return explicitStatus;
+    const match = String(error?.message || error || '').match(/LLM API error (\d{3})/i);
+    return match ? Number(match[1]) : 0;
+  }
+
+  function _inferCompassFailureStage(error = null) {
+    const explicitStage = String(error?.failureStage || '').trim();
+    if (explicitStage) return explicitStage;
+    const message = String(error?.message || error || '').trim();
+    if (error?.name === 'AbortError' || /timed out/i.test(message)) return 'timeout';
+    if (/LLM API error 429/i.test(message)) return 'rate_limit';
+    if (/LLM API error \d{3}/i.test(message)) return 'http';
+    if (/response shape was not usable|structured response/i.test(message)) return 'response_shape';
+    if (/valid json|Unexpected token|JSON/i.test(message)) return 'response_parse';
+    if (/Failed to fetch|NetworkError|preflight|CORS/i.test(message)) return 'network';
+    if (/unavailable/i.test(message)) return 'workflow_unavailable';
+    return 'request_error';
+  }
+
+  function _buildCompassFailureAttempt(error = null, attempt = 1) {
+    return {
+      attempt: Number(attempt || 0) || 1,
+      stage: _safeCompassFailureText(_inferCompassFailureStage(error), 80),
+      statusCode: _extractLlmHttpStatus(error) || null,
+      message: _safeCompassFailureText(error?.message || error || 'Unknown AI failure', 600),
+      diagnostic: _safeCompassFailureText(error?.diagnostic || '', 1200),
+      responsePreview: _safeCompassFailurePreview(error?.responsePreview || '', 2000)
+    };
+  }
+
+  function _storeAdminCompassFailureEntry(entry = {}) {
+    const runtimeStatus = getRuntimeStatus();
+    const promptPayload = entry?.promptPayload && typeof entry.promptPayload === 'object'
+      ? entry.promptPayload
+      : null;
+    const promptSummary = entry.promptSummary || (promptPayload ? _buildTracePromptSummary(promptPayload) : '');
+    const attempts = (Array.isArray(entry.attempts) ? entry.attempts : [])
+      .filter(Boolean)
+      .map((item, index) => ({
+        attempt: Number(item?.attempt || 0) || index + 1,
+        stage: _safeCompassFailureText(item?.stage || '', 80),
+        statusCode: Number(item?.statusCode || 0) || null,
+        message: _safeCompassFailureText(item?.message || '', 600),
+        diagnostic: _safeCompassFailureText(item?.diagnostic || '', 1200),
+        responsePreview: _safeCompassFailurePreview(item?.responsePreview || '', 2000)
+      }));
+    const nextEntry = {
+      id: `compass_fail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+      taskName: _safeCompassFailureText(entry.taskName || '', 120) || 'ai_request',
+      traceLabel: _safeCompassFailureText(entry.traceLabel || '', 160),
+      stage: _safeCompassFailureText(entry.stage || _inferCompassFailureStage(entry.error), 80) || 'request_error',
+      callType: _safeCompassFailureText(
+        entry.callType
+          || (runtimeStatus.usingDirectCompass ? 'direct_compass' : 'hosted_proxy'),
+        80
+      ),
+      endpoint: _safeCompassFailureText(entry.endpoint || runtimeStatus.apiUrl || '', 320),
+      model: _safeCompassFailureText(entry.model || runtimeStatus.model || '', 160),
+      usingDirectCompass: !!runtimeStatus.usingDirectCompass,
+      usingProxy: !!runtimeStatus.usingProxy,
+      localDevMode: !!runtimeStatus.localDevMode,
+      attemptCount: attempts.length || Number(entry.attemptCount || 0) || 1,
+      statusCode: Number(entry.statusCode || _extractLlmHttpStatus(entry.error) || 0) || null,
+      timeoutMs: Number(entry.timeoutMs || 0) || null,
+      maxCompletionTokens: Number(entry.maxCompletionTokens || 0) || null,
+      promptTruncated: !!promptPayload?.truncated,
+      systemPromptChars: Number(promptPayload?.systemPrompt?.length || 0) || 0,
+      userPromptChars: Number(promptPayload?.userPrompt?.length || 0) || 0,
+      priorMessagesCount: Array.isArray(promptPayload?.priorMessages) ? promptPayload.priorMessages.length : 0,
+      promptSummary: _safeCompassFailurePreview(promptSummary, 5000),
+      requestPreview: _safeCompassFailurePreview(entry.requestPreview || '', 4000),
+      errorName: _safeCompassFailureText(entry.error?.name || '', 120),
+      errorCode: _safeCompassFailureText(entry.error?.code || '', 120),
+      errorMessage: _safeCompassFailureText(entry.error?.message || entry.error || '', 1200),
+      diagnostic: _safeCompassFailureText(entry.diagnostic || entry.error?.diagnostic || '', 2000),
+      responsePreview: _safeCompassFailurePreview(entry.responsePreview || entry.error?.responsePreview || '', 4000),
+      attempts
+    };
+    const nextEntries = _readAdminCompassFailureLog();
+    nextEntries.push(nextEntry);
+    _writeAdminCompassFailureLog(nextEntries);
+    return nextEntry;
+  }
+
+  function readAdminCompassFailureLog() {
+    return _readAdminCompassFailureLog();
+  }
+
+  function clearAdminCompassFailureLog() {
+    _writeAdminCompassFailureLog([]);
+  }
 
   function _readAiTrace() {
     return _traceRuntime ? _traceRuntime.readEntries() : [];
@@ -312,15 +438,65 @@ Repair the response into the required JSON schema. Preserve scenario-specific me
   }
 
   async function _parseOrRepairStructuredJson(raw, schemaHint = '', options = {}) {
+    let parseError = null;
     try {
       return _parseStructuredJson(raw);
-    } catch (parseError) {
-      try {
-        const repaired = await _repairStructuredJson(raw, schemaHint, options);
-        if (repaired) return repaired;
-      } catch {}
-      throw parseError;
+    } catch (error) {
+      parseError = error;
     }
+    let repairError = null;
+    try {
+      const repaired = await _repairStructuredJson(raw, schemaHint, options);
+      if (repaired) return repaired;
+    } catch (error) {
+      repairError = error;
+    }
+    if (options?.failureLogContext) {
+      const repairDiagnostic = repairError
+        ? `Repair attempt failed: ${String(repairError?.message || repairError || '').trim()}`
+        : 'Structured response could not be repaired into valid JSON.';
+      _storeAdminCompassFailureEntry({
+        ...options.failureLogContext,
+        stage: 'structured_parse',
+        error: parseError,
+        diagnostic: repairDiagnostic,
+        responsePreview: raw,
+        attemptCount: repairError ? 2 : 1,
+        attempts: [
+          {
+            attempt: 1,
+            stage: 'structured_parse',
+            message: String(parseError?.message || parseError || 'Structured parse failed')
+          },
+          ...(repairError ? [_buildCompassFailureAttempt(repairError, 2)] : [])
+        ]
+      });
+    }
+    throw parseError;
+  }
+
+  function _buildCompassFailureParseContext({
+    taskName = '',
+    traceLabel = '',
+    systemPrompt = '',
+    userPrompt = '',
+    maxPromptChars,
+    maxCompletionTokens,
+    timeoutMs,
+    priorMessages = [],
+    requestPreview = ''
+  } = {}) {
+    return {
+      taskName,
+      traceLabel,
+      promptPayload: _buildPromptPayload(systemPrompt, userPrompt, {
+        maxPromptChars,
+        priorMessages
+      }),
+      maxCompletionTokens,
+      timeoutMs,
+      requestPreview
+    };
   }
 
   function _canUseLiveAi() {
@@ -1041,6 +1217,38 @@ Return corrected JSON only.`;
         }
       ];
     }
+    if (/exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights/.test(source)) {
+      return [
+        {
+          key: 'esg',
+          title: 'ESG and human-rights disclosure or remediation exposure',
+          category: 'ESG',
+          regulations: ['IFRS S1', 'GRI Universal Standards'],
+          description: 'Once abusive labor practices are identified, management may face disclosure, remediation, and stakeholder scrutiny over the wider operating model.'
+        },
+        {
+          key: 'people-workforce',
+          title: 'People and human-rights harm in the workforce model',
+          category: 'People / Workforce',
+          regulations: ['UN Guiding Principles', 'SA8000'],
+          description: 'Worker exploitation, recruitment abuse, or grievance failure should stay on the people and human-rights event path rather than being reduced to a disclosure issue alone.'
+        },
+        {
+          key: 'procurement',
+          title: 'Supplier labor-practice and due-diligence failure',
+          category: 'Procurement',
+          regulations: ['ISO 20400', 'ISO 37301'],
+          description: 'Weak sub-tier oversight or sourcing due diligence may have allowed exploitative labor practices to persist inside the supply base.'
+        },
+        {
+          key: 'compliance',
+          title: 'Regulatory or compliance action over supplier conduct',
+          category: 'Compliance',
+          regulations: ['ISO 37301'],
+          description: 'Exploitative labor practices can trigger investigation, fines, contract challenge, and assurance pressure around supplier governance.'
+        }
+      ];
+    }
     if (_hasInternalPeopleWorkforceSignals(source)) {
       return [
         {
@@ -1088,38 +1296,6 @@ Return corrected JSON only.`;
           category: 'Legal / Contract',
           regulations: ['ISO 37301'],
           description: 'Recovery may depend on enforceability of credit terms, security, guarantees, or the speed of insolvency-related legal action.'
-        }
-      ];
-    }
-    if (/exploitative labor|exploitative labour|forced labor|forced labour|child labor|child labour|modern slavery|labor practice|labour practice|worker exploitation|worker abuse|human rights/.test(source)) {
-      return [
-        {
-          key: 'people-workforce',
-          title: 'People and human-rights harm in the workforce model',
-          category: 'People / Workforce',
-          regulations: ['UN Guiding Principles', 'SA8000'],
-          description: 'Worker exploitation, recruitment abuse, or grievance failure should stay on the people and human-rights event path rather than being reduced to a disclosure issue alone.'
-        },
-        {
-          key: 'esg',
-          title: 'ESG and human-rights disclosure or remediation exposure',
-          category: 'ESG',
-          regulations: ['IFRS S1', 'GRI Universal Standards'],
-          description: 'Once abusive labor practices are identified, management may face disclosure, remediation, and stakeholder scrutiny over the wider operating model.'
-        },
-        {
-          key: 'procurement',
-          title: 'Supplier labor-practice and due-diligence failure',
-          category: 'Procurement',
-          regulations: ['ISO 20400', 'ISO 37301'],
-          description: 'Weak sub-tier oversight or sourcing due diligence may have allowed exploitative labor practices to persist inside the supply base.'
-        },
-        {
-          key: 'compliance',
-          title: 'Regulatory or compliance action over supplier conduct',
-          category: 'Compliance',
-          regulations: ['ISO 37301'],
-          description: 'Exploitative labor practices can trigger investigation, fines, contract challenge, and assurance pressure around supplier governance.'
         }
       ];
     }
@@ -1613,6 +1789,7 @@ Return corrected JSON only.`;
     const maxCompletionTokens = Number(options.maxCompletionTokens || 1200);
     const promptPayload = _buildPromptPayload(systemPrompt, userPrompt, options);
     let lastError = null;
+    const attempts = [];
 
     for (let attempt = 1; attempt <= AI_MAX_RETRIES; attempt += 1) {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -1644,17 +1821,36 @@ Return corrected JSON only.`;
               ]
             })
           });
+          const responseText = await res.text();
           if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`LLM API error ${res.status}: ${errText}`);
+            const httpError = new Error(`LLM API error ${res.status}: ${responseText}`);
+            httpError.statusCode = res.status;
+            httpError.responsePreview = responseText;
+            httpError.failureStage = res.status === 429 ? 'rate_limit' : 'http';
+            throw httpError;
           }
-          const data = await res.json();
+          let data = null;
+          try {
+            data = responseText ? JSON.parse(responseText) : null;
+          } catch (parseError) {
+            const responseParseError = new Error('AI provider response was not valid JSON.');
+            responseParseError.statusCode = res.status;
+            responseParseError.failureStage = 'response_parse';
+            responseParseError.diagnostic = 'Compass or the hosted proxy returned a body that could not be parsed as JSON.';
+            responseParseError.responsePreview = responseText;
+            throw responseParseError;
+          }
           const responseInfo = typeof describeLlmResponse === 'function'
             ? describeLlmResponse(data)
             : { text: data.choices?.[0]?.message?.content || null, diagnostic: '' };
           const extracted = responseInfo?.text || null;
           if (!extracted) {
-            throw new Error(`AI response shape was not usable. ${String(responseInfo?.diagnostic || '').trim()}`.trim());
+            const responseShapeError = new Error(`AI response shape was not usable. ${String(responseInfo?.diagnostic || '').trim()}`.trim());
+            responseShapeError.statusCode = res.status;
+            responseShapeError.failureStage = 'response_shape';
+            responseShapeError.diagnostic = String(responseInfo?.diagnostic || '').trim();
+            responseShapeError.responsePreview = _safeCompassFailurePreview(data, 3000);
+            throw responseShapeError;
           }
           if (options.traceLabel) {
             _storeAiTraceEntry({
@@ -1682,6 +1878,7 @@ Return corrected JSON only.`;
         return response;
       } catch (error) {
         lastError = error;
+        attempts.push(_buildCompassFailureAttempt(error, attempt));
         const message = String(error?.message || error || '');
         if (attempt < AI_MAX_RETRIES && (
           /timed out/i.test(message) ||
@@ -1698,6 +1895,23 @@ Return corrected JSON only.`;
         if (timeoutId) clearTimeout(timeoutId);
       }
     }
+
+    _storeAdminCompassFailureEntry({
+      taskName: options.taskName || 'ai_request',
+      traceLabel: options.traceLabel || '',
+      stage: _inferCompassFailureStage(lastError),
+      callType: directCompass ? 'direct_compass' : 'hosted_proxy',
+      endpoint: _compassApiUrl,
+      model: _compassModel,
+      timeoutMs,
+      maxCompletionTokens,
+      promptPayload,
+      error: lastError,
+      statusCode: _extractLlmHttpStatus(lastError),
+      diagnostic: lastError?.diagnostic || '',
+      responsePreview: lastError?.responsePreview || '',
+      attempts
+    });
 
     const message = String(lastError?.message || lastError || '');
     if (lastError?.name === 'AbortError' || /timed out/i.test(message)) {
@@ -5000,25 +5214,25 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
 
   async function buildCompanyContext(websiteUrl) {
     const endpoint = _getCompanyContextUrl();
+    const requestBody = {
+      websiteUrl: _sanitizeAiText(websiteUrl, { maxChars: 240 })
+    };
     if (!endpoint) {
-      const fallback = _decorateAiResult({
-        companySummary: 'Suggested draft: Company context could not be built from a live service in this session. Use the website and your source material to keep drafting safely.',
-        businessProfile: 'Suggested draft: Review the company website, operating model, and uploaded material to complete this profile.',
-        operatingModel: 'Suggested draft: Add the main operating model, critical services, and control dependencies here.',
-        publicCommitments: [],
-        riskSignals: [],
-        likelyObligations: [],
-        regulatorySignals: [],
-        aiGuidance: 'Suggested draft: Keep outputs concise, grounded in uploaded material, and clearly marked as working draft content.',
-        suggestedGeography: '',
-        sources: [],
-        responseMessage: 'Suggested draft: A live company-context service was unavailable, so the current content was kept as a working draft.'
-      }, { summary: 'Evidence used: website URL only.' }, {
-        contentFields: ['companySummary', 'businessProfile', 'operatingModel', 'aiGuidance', 'responseMessage'],
-        fallbackUsed: true
+      const unavailableError = Object.assign(
+        new Error('Live company-context building is unavailable in this session. Retry with the hosted AI path if you want a drafted company profile.'),
+        { code: 'LLM_UNAVAILABLE', retriable: true, failureStage: 'workflow_unavailable' }
+      );
+      _storeAdminCompassFailureEntry({
+        taskName: 'buildCompanyContext',
+        traceLabel: 'Company context build',
+        stage: 'workflow_unavailable',
+        callType: 'company_context_route',
+        endpoint: '(unconfigured)',
+        requestPreview: requestBody,
+        error: unavailableError
       });
       await _auditAiEvent('ai_fallback_used', 'success', { taskName: 'buildCompanyContext', reason: 'proxy_unavailable' });
-      return { ...fallback, aiUnavailable: true };
+      throw unavailableError;
     }
     try {
       const headers = {
@@ -5031,21 +5245,47 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
       const res = await fetch(endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ websiteUrl: _sanitizeAiText(websiteUrl, { maxChars: 240 }) })
+        body: JSON.stringify(requestBody)
       });
+      const responseText = await res.text();
       if (!res.ok) {
-        const errText = await res.text();
-        throw _normaliseLLMError(new Error(`LLM API error ${res.status}: ${errText}`));
+        const httpError = new Error(`LLM API error ${res.status}: ${responseText}`);
+        httpError.statusCode = res.status;
+        httpError.responsePreview = responseText;
+        httpError.failureStage = 'workflow_http';
+        throw httpError;
       }
-      const data = await res.json();
+      let data = null;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch (parseError) {
+        const responseParseError = new Error('Company context route returned invalid JSON.');
+        responseParseError.failureStage = 'workflow_response_parse';
+        responseParseError.responsePreview = responseText;
+        throw responseParseError;
+      }
       if (data?.error) {
-        throw new Error(data.error);
+        const workflowError = new Error(data.error);
+        workflowError.failureStage = 'workflow_application';
+        workflowError.responsePreview = responseText;
+        throw workflowError;
       }
       return _decorateAiResult(data, { summary: 'Evidence used: public website and retrieved public sources.' }, {
         contentFields: ['companySummary', 'businessProfile', 'operatingModel', 'aiGuidance', 'responseMessage'],
         fallbackUsed: false
       });
     } catch (error) {
+      _storeAdminCompassFailureEntry({
+        taskName: 'buildCompanyContext',
+        traceLabel: 'Company context build',
+        stage: _inferCompassFailureStage(error),
+        callType: 'company_context_route',
+        endpoint,
+        requestPreview: requestBody,
+        error,
+        statusCode: _extractLlmHttpStatus(error),
+        responsePreview: error?.responsePreview || ''
+      });
       await _auditAiFallback('buildCompanyContext', error, { websiteUrl: _sanitizeAiText(websiteUrl, { maxChars: 120 }) });
       const normalisedError = _normaliseLLMError(error);
       throw Object.assign(new Error(normalisedError?.message || error?.message || 'AI request failed'), {
@@ -5120,8 +5360,7 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
     }
     try {
       const organisationBaseline = _buildEntityContextOrganisationBaseline(input, 1800);
-      const systemPrompt = `You are a senior enterprise risk and operating-context analyst. Return JSON only with this schema:
-{
+      const schema = `{
   "geography": "string",
   "contextSummary": "string",
   "riskAppetiteStatement": "string",
@@ -5129,6 +5368,8 @@ Treat the primary lens hint as the leading domain for this scenario unless the n
   "aiInstructions": "string",
   "benchmarkStrategy": "string"
 }`;
+      const systemPrompt = `You are a senior enterprise risk and operating-context analyst. Return JSON only with this schema:
+${schema}`;
       const evidenceMeta = _buildEvidenceMeta({
         citations: [],
         businessUnit: input.parentEntity,
@@ -5184,9 +5425,25 @@ Instructions:
 
 Evidence quality context:
 ${evidenceMeta.promptBlock}`;
+      const parseFailureContext = _buildCompassFailureParseContext({
+        taskName: 'buildEntityContext',
+        traceLabel: 'Entity context build',
+        systemPrompt,
+        userPrompt,
+        maxCompletionTokens: 700,
+        timeoutMs: 15000,
+        requestPreview: {
+          entityName: String(input.entity?.name || '').trim(),
+          entityType: String(input.entity?.type || '').trim(),
+          parentEntityName: String(input.parentEntity?.name || '').trim()
+        }
+      });
       const raw = await _callLLM(systemPrompt, userPrompt, { maxCompletionTokens: 700, timeoutMs: 15000, taskName: 'buildEntityContext' });
       if (!raw) return _decorateAiResult(_withEvidenceMeta(stub, evidenceMeta), evidenceMeta, { contentFields: ['contextSummary', 'riskAppetiteStatement', 'aiInstructions', 'benchmarkStrategy'], fallbackUsed: true, uploadedDocumentName: input.uploadedDocumentName });
-      const parsed = JSON.parse(_extractJsonFromLlmResponse(raw));
+      const parsed = await _parseOrRepairStructuredJson(raw, schema, {
+        taskName: 'repairBuildEntityContext',
+        failureLogContext: parseFailureContext
+      }) || {};
       return _decorateAiResult(_withEvidenceMeta({
         geography: String(parsed.geography || stub.geography || '').trim(),
         contextSummary: _cleanUserFacingText(parsed.contextSummary || stub.contextSummary || '', { maxSentences: isDepartment ? 4 : 5 }),
@@ -5221,6 +5478,33 @@ ${evidenceMeta.promptBlock}`;
     };
   }
 
+  function _buildUserPreferenceAssistContinuityResult(input = {}) {
+    const currentSettings = input?.currentSettings && typeof input.currentSettings === 'object'
+      ? input.currentSettings
+      : {};
+    const userProfile = input?.userProfile && typeof input.userProfile === 'object'
+      ? input.userProfile
+      : {};
+    return {
+      workingContext: _cleanUserFacingText(
+        userProfile.workingContext || currentSettings.workingContext || '',
+        { maxSentences: 4 }
+      ),
+      preferredOutputs: _cleanUserFacingText(
+        userProfile.preferredOutputs || currentSettings.preferredOutputs || '',
+        { maxSentences: 3 }
+      ),
+      aiInstructions: _cleanUserFacingText(currentSettings.aiInstructions || '', { maxSentences: 3 }),
+      adminContextSummary: _cleanUserFacingText(
+        currentSettings.adminContextSummary || currentSettings.userProfileSummary || '',
+        { maxSentences: 3 }
+      ),
+      responseMessage: 'Live AI was unavailable, so the current personal settings were kept unchanged. Retry when live AI is available if you want a drafted update.',
+      aiUnavailable: true,
+      continuityOnly: true
+    };
+  }
+
   async function refineEntityContext(input = {}) {
     const currentContext = {
       geography: String(input.currentContext?.geography || '').trim(),
@@ -5230,22 +5514,20 @@ ${evidenceMeta.promptBlock}`;
       aiInstructions: String(input.currentContext?.aiInstructions || '').trim(),
       benchmarkStrategy: String(input.currentContext?.benchmarkStrategy || '').trim()
     };
-    const fallbackMessage = 'I refined the context using your latest instruction. Review the updated summary, appetite, regulations, and guidance before saving.';
+    const continuityMessage = 'Live AI was unavailable, so the current context draft was kept unchanged. Retry when live AI is available if you want a refined update.';
     if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
       return {
         ...currentContext,
+        usedFallback: false,
         aiUnavailable: true,
-        responseMessage: fallbackMessage,
-        confidenceLabel: 'Local fallback',
-        evidenceQuality: 'No live model',
-        evidenceSummary: 'A live AI model was not available, so the current context was kept as the working draft.',
-        missingInformation: ['Connect a live AI model if you want iterative refinement from follow-up prompts.']
+        continuityOnly: true,
+        preserveExistingReviewMeta: true,
+        responseMessage: continuityMessage
       };
     }
     try {
       const organisationBaseline = _buildEntityContextOrganisationBaseline(input, 1800);
-      const systemPrompt = `You are a senior enterprise risk and operating-context analyst. Refine an existing BU or function context based on user follow-up prompts. Return JSON only with this schema:
-{
+      const schema = `{
   "geography": "string",
   "contextSummary": "string",
   "riskAppetiteStatement": "string",
@@ -5254,6 +5536,8 @@ ${evidenceMeta.promptBlock}`;
   "benchmarkStrategy": "string",
   "responseMessage": "string"
 }`;
+      const systemPrompt = `You are a senior enterprise risk and operating-context analyst. Refine an existing BU or function context based on user follow-up prompts. Return JSON only with this schema:
+${schema}`;
       const evidenceMeta = _buildEvidenceMeta({
         citations: [],
         businessUnit: input.parentEntity,
@@ -5306,11 +5590,32 @@ Instructions:
 
 Evidence quality context:
 ${evidenceMeta.promptBlock}`;
+      const parseFailureContext = _buildCompassFailureParseContext({
+        taskName: 'refineEntityContext',
+        traceLabel: 'Entity context refinement',
+        systemPrompt,
+        userPrompt,
+        maxCompletionTokens: 700,
+        timeoutMs: 12000,
+        requestPreview: {
+          entityName: String(input.entity?.name || '').trim(),
+          entityType: String(input.entity?.type || '').trim()
+        }
+      });
       const raw = await _callLLM(systemPrompt, userPrompt, { maxCompletionTokens: 700, timeoutMs: 12000, taskName: 'refineEntityContext' });
       if (!raw) {
-        return _decorateAiResult(_withEvidenceMeta({ ...currentContext, responseMessage: fallbackMessage }, evidenceMeta), evidenceMeta, { contentFields: ['contextSummary', 'riskAppetiteStatement', 'aiInstructions', 'benchmarkStrategy', 'responseMessage'], fallbackUsed: true, uploadedDocumentName: input.uploadedDocumentName });
+        return {
+          ...currentContext,
+          aiUnavailable: true,
+          continuityOnly: true,
+          preserveExistingReviewMeta: true,
+          responseMessage: continuityMessage
+        };
       }
-      const parsed = JSON.parse(_extractJsonFromLlmResponse(raw));
+      const parsed = await _parseOrRepairStructuredJson(raw, schema, {
+        taskName: 'repairRefineEntityContext',
+        failureLogContext: parseFailureContext
+      }) || {};
       const isDepartment = String(input.entity?.type || '').toLowerCase() === 'department / function';
       return _decorateAiResult(_withEvidenceMeta({
         geography: String(parsed.geography || currentContext.geography || '').trim(),
@@ -5319,7 +5624,7 @@ ${evidenceMeta.promptBlock}`;
         applicableRegulations: Array.isArray(parsed.applicableRegulations) ? parsed.applicableRegulations.map(String).filter(Boolean) : currentContext.applicableRegulations,
         aiInstructions: _cleanUserFacingText(parsed.aiInstructions || currentContext.aiInstructions || '', { maxSentences: 3 }),
         benchmarkStrategy: _cleanUserFacingText(parsed.benchmarkStrategy || currentContext.benchmarkStrategy || '', { maxSentences: 2 }),
-        responseMessage: _cleanUserFacingText(parsed.responseMessage || fallbackMessage, { maxSentences: 3 })
+        responseMessage: _cleanUserFacingText(parsed.responseMessage || continuityMessage, { maxSentences: 3 })
       }, evidenceMeta), evidenceMeta, { contentFields: ['contextSummary', 'riskAppetiteStatement', 'aiInstructions', 'benchmarkStrategy', 'responseMessage'], fallbackUsed: false, uploadedDocumentName: input.uploadedDocumentName });
     } catch (error) {
       await _auditAiFallback('refineEntityContext', error, { entityName: String(input.entity?.name || '').trim() });
@@ -5343,24 +5648,22 @@ ${evidenceMeta.promptBlock}`;
       obligations: String(input.currentSections?.obligations || '').trim(),
       sources: String(input.currentSections?.sources || '').trim()
     };
-    const fallbackMessage = 'I refined the company context using your latest instruction. Review the updated sections before saving.';
+    const continuityMessage = 'Live AI was unavailable, so the current company context was kept unchanged. Retry when live AI is available if you want a refined update.';
     if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
       return {
         ...currentSections,
+        usedFallback: false,
         aiUnavailable: true,
-        responseMessage: fallbackMessage,
-        confidenceLabel: 'Local fallback',
-        evidenceQuality: 'No live model',
-        evidenceSummary: 'A live AI model was not available, so the current company context was kept as the working draft.',
-        missingInformation: ['Connect a live AI model if you want iterative refinement from follow-up prompts.'],
+        continuityOnly: true,
+        preserveExistingReviewMeta: true,
+        responseMessage: continuityMessage,
         regulatorySignals: input.currentRegulations || [],
         aiGuidance: input.currentAiGuidance || '',
         suggestedGeography: input.currentGeography || ''
       };
     }
     try {
-      const systemPrompt = `You are a senior enterprise risk and company-context analyst. Refine an existing company context based on user follow-up prompts. Return JSON only with this schema:
-{
+      const schema = `{
   "companySummary": "string",
   "businessModel": "string",
   "operatingModel": "string",
@@ -5373,6 +5676,8 @@ ${evidenceMeta.promptBlock}`;
   "regulatorySignals": ["string"],
   "responseMessage": "string"
 }`;
+      const systemPrompt = `You are a senior enterprise risk and company-context analyst. Refine an existing company context based on user follow-up prompts. Return JSON only with this schema:
+${schema}`;
       const evidenceMeta = _buildEvidenceMeta({
         citations: [],
         geography: input.currentGeography,
@@ -5415,17 +5720,35 @@ Instructions:
 
 Evidence quality context:
 ${evidenceMeta.promptBlock}`;
+      const parseFailureContext = _buildCompassFailureParseContext({
+        taskName: 'refineCompanyContext',
+        traceLabel: 'Company context refinement',
+        systemPrompt,
+        userPrompt,
+        maxCompletionTokens: 800,
+        timeoutMs: 12000,
+        requestPreview: {
+          websiteUrl: String(input.websiteUrl || '').trim(),
+          currentGeography: String(input.currentGeography || '').trim()
+        }
+      });
       const raw = await _callLLM(systemPrompt, userPrompt, { maxCompletionTokens: 800, timeoutMs: 12000, taskName: 'refineCompanyContext' });
       if (!raw) {
-        return _decorateAiResult(_withEvidenceMeta({
+        return {
           ...currentSections,
           aiGuidance: String(input.currentAiGuidance || '').trim(),
           suggestedGeography: String(input.currentGeography || '').trim(),
           regulatorySignals: Array.isArray(input.currentRegulations) ? input.currentRegulations : [],
-          responseMessage: fallbackMessage
-        }, evidenceMeta), evidenceMeta, { contentFields: ['companySummary', 'businessModel', 'operatingModel', 'publicCommitments', 'keyRiskSignals', 'obligations', 'sources', 'aiGuidance', 'responseMessage'], fallbackUsed: true, uploadedDocumentName: input.uploadedDocumentName });
+          aiUnavailable: true,
+          continuityOnly: true,
+          preserveExistingReviewMeta: true,
+          responseMessage: continuityMessage
+        };
       }
-      const parsed = JSON.parse(_extractJsonFromLlmResponse(raw));
+      const parsed = await _parseOrRepairStructuredJson(raw, schema, {
+        taskName: 'repairRefineCompanyContext',
+        failureLogContext: parseFailureContext
+      }) || {};
       return _decorateAiResult(_withEvidenceMeta({
         companySummary: _cleanUserFacingText(parsed.companySummary || currentSections.companySummary || '', { maxSentences: 4 }),
         businessModel: _cleanUserFacingText(parsed.businessModel || currentSections.businessModel || '', { maxSentences: 4 }),
@@ -5437,7 +5760,7 @@ ${evidenceMeta.promptBlock}`;
         aiGuidance: _cleanUserFacingText(parsed.aiGuidance || input.currentAiGuidance || '', { maxSentences: 3 }),
         suggestedGeography: String(parsed.suggestedGeography || input.currentGeography || '').trim(),
         regulatorySignals: Array.isArray(parsed.regulatorySignals) ? parsed.regulatorySignals.map(String).filter(Boolean) : (Array.isArray(input.currentRegulations) ? input.currentRegulations : []),
-        responseMessage: _cleanUserFacingText(parsed.responseMessage || fallbackMessage, { maxSentences: 3 })
+        responseMessage: _cleanUserFacingText(parsed.responseMessage || continuityMessage, { maxSentences: 3 })
       }, evidenceMeta), evidenceMeta, { contentFields: ['companySummary', 'businessModel', 'operatingModel', 'publicCommitments', 'keyRiskSignals', 'obligations', 'sources', 'aiGuidance', 'responseMessage'], fallbackUsed: false, uploadedDocumentName: input.uploadedDocumentName });
     } catch (error) {
       await _auditAiFallback('refineCompanyContext', error, { websiteUrl: _sanitizeAiText(input.websiteUrl || '', { maxChars: 120 }) });
@@ -5453,15 +5776,18 @@ ${evidenceMeta.promptBlock}`;
 
   async function buildUserPreferenceAssist(input = {}) {
     const stub = _buildUserPreferenceAssistStub(input);
-    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) return _decorateAiResult({ ...stub, aiUnavailable: true }, _buildEvidenceMeta({ uploadedText: input.uploadedText, userProfile: input.userProfile, geography: input.organisationContext?.geography || input.currentSettings?.primaryGeography, applicableRegulations: input.currentSettings?.applicableRegulations, organisationContext: input.organisationContext, adminSettings: input.currentSettings, citations: [] }), { contentFields: ['workingContext', 'preferredOutputs', 'aiInstructions', 'adminContextSummary'], fallbackUsed: true });
+    if (_isDirectCompassUrl(_compassApiUrl) && !_compassApiKey) {
+      return _buildUserPreferenceAssistContinuityResult(input);
+    }
     try {
-      const systemPrompt = `You are a senior enterprise risk assistant helping personalise a user's working context. Return JSON only with this schema:
-{
+      const schema = `{
   "workingContext": "string",
   "preferredOutputs": "string",
   "aiInstructions": "string",
   "adminContextSummary": "string"
 }`;
+      const systemPrompt = `You are a senior enterprise risk assistant helping personalise a user's working context. Return JSON only with this schema:
+${schema}`;
       const evidenceMeta = _buildEvidenceMeta({ uploadedText: input.uploadedText, userProfile: input.userProfile, geography: input.organisationContext?.geography || input.currentSettings?.primaryGeography, applicableRegulations: input.currentSettings?.applicableRegulations, organisationContext: input.organisationContext, adminSettings: input.currentSettings, citations: [] });
       const userPrompt = `Create concise personalised settings for this user.
 
@@ -5489,9 +5815,25 @@ Instructions:
 
 Evidence quality context:
 ${evidenceMeta.promptBlock}`;
+      const parseFailureContext = _buildCompassFailureParseContext({
+        taskName: 'buildUserPreferenceAssist',
+        traceLabel: 'User preference assist',
+        systemPrompt,
+        userPrompt,
+        maxCompletionTokens: 700,
+        timeoutMs: 15000,
+        requestPreview: {
+          role: String(input.userProfile?.jobTitle || '').trim(),
+          businessUnit: String(input.userProfile?.businessUnit || '').trim(),
+          department: String(input.userProfile?.department || '').trim()
+        }
+      });
       const raw = await _callLLM(systemPrompt, userPrompt, { maxCompletionTokens: 700, timeoutMs: 15000, taskName: 'buildUserPreferenceAssist' });
-      if (!raw) return _decorateAiResult(_withEvidenceMeta(stub, evidenceMeta), evidenceMeta, { contentFields: ['workingContext', 'preferredOutputs', 'aiInstructions', 'adminContextSummary'], fallbackUsed: true });
-      const parsed = JSON.parse(_extractJsonFromLlmResponse(raw));
+      if (!raw) return _buildUserPreferenceAssistContinuityResult(input);
+      const parsed = await _parseOrRepairStructuredJson(raw, schema, {
+        taskName: 'repairBuildUserPreferenceAssist',
+        failureLogContext: parseFailureContext
+      }) || {};
       return _decorateAiResult(_withEvidenceMeta({
         workingContext: _cleanUserFacingText(parsed.workingContext || stub.workingContext || '', { maxSentences: 4 }),
         preferredOutputs: _cleanUserFacingText(parsed.preferredOutputs || stub.preferredOutputs || '', { maxSentences: 3 }),
@@ -6339,6 +6681,8 @@ Keep the numbers realistic, internally ordered, and anchored to the user's own h
     coachRiskShortlist,
     suggestSmartParamPrefill,
     getLatestTrace,
+    readAdminCompassFailureLog,
+    clearAdminCompassFailureLog,
     getRuntimeStatus,
     getCachedServerAiStatus,
     fetchServerAiStatus,

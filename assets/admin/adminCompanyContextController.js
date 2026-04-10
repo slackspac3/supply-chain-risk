@@ -14,6 +14,22 @@
     const historyEl = document.getElementById('admin-company-refinement-history');
     const followupEl = document.getElementById('admin-company-followup');
     const statusEl = document.getElementById('admin-company-refine-status');
+    const reviewBadgeEl = document.getElementById('admin-company-review-badge');
+    const reviewCopyEl = document.getElementById('admin-company-review-copy');
+    const reviewToggleWrapEl = document.getElementById('admin-company-review-toggle-wrap');
+    const reviewApprovedEl = document.getElementById('admin-company-review-approved');
+    const reviewLabelEl = document.getElementById('admin-company-review-label');
+    let currentContextMeta = typeof normaliseContextReviewMeta === 'function'
+      ? normaliseContextReviewMeta({
+          status: document.getElementById('admin-company-context-status')?.value || '',
+          source: document.getElementById('admin-company-context-source')?.value || '',
+          generatedAt: Number(document.getElementById('admin-company-context-generated-at')?.value || 0),
+          reviewedAt: Number(document.getElementById('admin-company-context-reviewed-at')?.value || 0),
+          reviewDueAt: Number(document.getElementById('admin-company-context-review-due-at')?.value || 0),
+          fallbackUsed: document.getElementById('admin-company-context-fallback-used')?.value === 'true',
+          sourceUrl: document.getElementById('admin-company-context-source-url')?.value || ''
+        })
+      : null;
 
     function getCurrentSections() {
       return {
@@ -25,6 +41,41 @@
         obligations: document.getElementById('admin-company-section-obligations')?.value.trim() || '',
         sources: document.getElementById('admin-company-section-sources')?.value.trim() || ''
       };
+    }
+
+    function writeContextMeta(meta = null) {
+      currentContextMeta = typeof normaliseContextReviewMeta === 'function' ? normaliseContextReviewMeta(meta) : null;
+      const model = typeof getContextReviewDisplayModel === 'function'
+        ? getContextReviewDisplayModel(currentContextMeta, { subject: 'Shared company context' })
+        : {
+            badge: 'Review needed',
+            badgeClass: 'badge--warning',
+            message: 'Review this company context before relying on it as inherited grounding.',
+            showApprovalToggle: true,
+            approvalLabel: 'I reviewed this shared company context and approve it for inherited grounding.',
+            reviewApprovedChecked: false
+          };
+      if (reviewBadgeEl) {
+        reviewBadgeEl.className = `badge ${model.badgeClass}`;
+        reviewBadgeEl.textContent = model.badge;
+      }
+      if (reviewCopyEl) reviewCopyEl.textContent = model.message;
+      if (reviewToggleWrapEl) reviewToggleWrapEl.style.display = model.showApprovalToggle ? '' : 'none';
+      if (reviewLabelEl) reviewLabelEl.textContent = model.approvalLabel || '';
+      if (reviewApprovedEl) reviewApprovedEl.checked = !!model.reviewApprovedChecked;
+      const hiddenValues = {
+        'admin-company-context-status': currentContextMeta?.status || '',
+        'admin-company-context-source': currentContextMeta?.source || '',
+        'admin-company-context-generated-at': String(Number(currentContextMeta?.generatedAt || 0)),
+        'admin-company-context-reviewed-at': String(Number(currentContextMeta?.reviewedAt || 0)),
+        'admin-company-context-review-due-at': String(Number(currentContextMeta?.reviewDueAt || 0)),
+        'admin-company-context-fallback-used': currentContextMeta?.fallbackUsed === true ? 'true' : 'false',
+        'admin-company-context-source-url': currentContextMeta?.sourceUrl || (websiteEl?.value.trim() || '')
+      };
+      Object.entries(hiddenValues).forEach(([id, value]) => {
+        const field = document.getElementById(id);
+        if (field) field.value = value;
+      });
     }
 
     function applyResult(result = {}) {
@@ -58,6 +109,12 @@
       }
       if (Array.isArray(result.regulatorySignals) && result.regulatorySignals.length && regsInput?.setTags) {
         regsInput.setTags(Array.from(new Set([...(regsInput.getTags() || []), ...result.regulatorySignals])));
+      }
+      if (typeof buildAiContextReviewMeta === 'function') {
+        writeContextMeta(buildAiContextReviewMeta(result, {
+          existingMeta: currentContextMeta,
+          sourceUrl: websiteEl?.value.trim() || ''
+        }));
       }
       return { sections, profileText };
     }
@@ -104,15 +161,22 @@
           });
           ({ sections, profileText } = applyResult(result));
         }
+        const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
         history.length = 0;
         history.push({
           role: 'assistant',
-          text: uploaded.text
-            ? 'Initial company context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.'
-            : 'Initial company context draft created. Use follow-up prompts below if you want to reshape it further.'
+          text: degraded && uploaded.text
+            ? 'Initial company context draft was built, but the uploaded-source refinement could not run because live AI was unavailable. Retry when live AI is available if you want the uploaded material folded in.'
+            : (uploaded.text
+              ? 'Initial company context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.'
+              : 'Initial company context draft created. Use follow-up prompts below if you want to reshape it further.')
         });
         renderHistory();
-        if (statusEl) statusEl.textContent = 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
+        if (statusEl) {
+          statusEl.textContent = degraded
+            ? 'Initial company draft is in place, but the latest refinement could not run because live AI was unavailable.'
+            : 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
+        }
         AdminOrgSetupSection.openEntityEditor(null, {
           name: inferCompanyNameFromUrl(websiteUrl),
           websiteUrl,
@@ -120,7 +184,13 @@
           contextSections: sections,
           type: 'Holding company'
         });
-        UI.toast('Company context built from public sources. Review the entity and place it into the organisation tree.', 'success', 5000);
+        UI.toast(
+          degraded
+            ? 'Company context built, but the latest refinement could not run because live AI was unavailable.'
+            : 'Company context built from public sources. Review the entity and place it into the organisation tree.',
+          degraded ? 'warning' : 'success',
+          5000
+        );
       } catch (error) {
         UI.toast('Company context build failed. Try again or shorten the source material.', 'danger', 6000);
         if (statusEl) statusEl.textContent = 'Company context build failed. Try again or shorten the source material.';
@@ -168,12 +238,26 @@
         } catch {
           result = buildLocalCompanyContextFallback(refineInput);
         }
+        const continuityOnly = result?.continuityOnly === true;
+        const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
         applyResult(result);
         history.push({ role: 'assistant', text: result.responseMessage || 'I refined the company context based on your latest prompt.' });
         renderHistory();
         if (followupEl) followupEl.value = '';
-        if (statusEl) statusEl.textContent = 'Latest follow-up applied. Keep iterating until the context feels right.';
-        UI.toast('Admin company context refined.', 'success', 5000);
+        if (statusEl) {
+          statusEl.textContent = continuityOnly
+            ? 'Live AI was unavailable, so the current company context was kept unchanged.'
+            : 'Latest follow-up applied. Keep iterating until the context feels right.';
+        }
+        UI.toast(
+          continuityOnly
+            ? 'Live AI was unavailable. The current admin company context stayed unchanged.'
+            : degraded
+              ? 'Admin company context updated with fallback support. Review it carefully.'
+              : 'Admin company context refined.',
+          degraded ? 'warning' : 'success',
+          5000
+        );
       } catch (error) {
         UI.toast('Company context refinement failed. Try again or shorten the prompt.', 'danger', 6000);
         if (statusEl) statusEl.textContent = 'Company context refinement failed. Try again or shorten the prompt.';
@@ -184,6 +268,7 @@
     }
 
     renderHistory();
+    writeContextMeta(currentContextMeta);
 
     return {
       bind() {

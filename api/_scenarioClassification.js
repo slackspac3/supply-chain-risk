@@ -114,6 +114,13 @@ const LENS_LABELS = Object.freeze({
   general: 'General enterprise risk'
 });
 
+const COMPLIANCE_LED_PRIVACY_FAMILY_KEYS = new Set([
+  'privacy_governance_gap',
+  'privacy_non_compliance',
+  'records_retention_non_compliance',
+  'cross_border_transfer_non_compliance'
+]);
+
 const LENS_COMPATIBILITY = Object.freeze({
   cyber: ['identity', 'phishing', 'ransomware', 'cloud', 'data-breach', 'availability-attack'],
   identity: ['cyber', 'phishing', 'cloud', 'data-breach'],
@@ -1436,12 +1443,18 @@ function buildPrimaryProfile(family = null) {
       effect: 'Business disruption or exposure'
     };
   }
+  const lensKey = COMPLIANCE_LED_PRIVACY_FAMILY_KEYS.has(String(family?.key || '').trim())
+    ? 'compliance'
+    : String(family?.lensKey || 'general');
+  const lensLabel = lensKey === 'compliance'
+    ? LENS_LABELS.compliance
+    : String(family?.lensLabel || LENS_LABELS[lensKey] || LENS_LABELS.general);
   const effect = Array.isArray(family.typicalConsequences) && family.typicalConsequences.length
     ? uniqueStrings(family.typicalConsequences).slice(0, 3).join(', ')
     : family.description;
   return {
-    key: String(family.lensKey || 'general'),
-    label: String(family.lensLabel || LENS_LABELS[family.lensKey] || LENS_LABELS.general),
+    key: lensKey,
+    label: lensLabel,
     scenarioType: `${String(family.label || 'Risk').trim()} Scenario`,
     primaryDriver: cleanSentenceFragment(family.typicalCauses?.[0] || family.description),
     eventPath: cleanSentenceFragment(family.description),
@@ -1577,7 +1590,11 @@ function classifyScenario(narrative = '', options = {}) {
     reasonCodes: uniqueStrings(reasonCodes),
     ambiguityFlags: uniqueStrings(ambiguityFlags),
     taxonomyVersion: SCENARIO_TAXONOMY.taxonomyVersion,
-    secondaryKeys: uniqueStrings(secondaryFamilies.map((family) => family.lensKey)).filter((key) => key && key !== primaryProfile.key)
+    secondaryKeys: uniqueStrings(secondaryFamilies.map((family) => (
+      COMPLIANCE_LED_PRIVACY_FAMILY_KEYS.has(String(family?.key || '').trim())
+        ? 'compliance'
+        : family?.lensKey
+    ))).filter((key) => key && key !== primaryProfile.key)
   };
   const calibratedConfidence = calibrateClassificationConfidence({
     bestScore: Number(best?.score || 0),
@@ -1617,12 +1634,24 @@ function buildScenarioLens(classification = {}) {
   const family = classification?.primaryFamily?.key
     ? SCENARIO_TAXONOMY_FAMILY_BY_KEY[classification.primaryFamily.key] || null
     : findFamilyByHint(classification?.key || classification?.domain || classification?.primaryFamily || '');
-  const key = String(family?.lensKey || normaliseScenarioHintKey(classification?.key || classification) || 'general').trim() || 'general';
-  const label = String(family?.lensLabel || LENS_LABELS[key] || LENS_LABELS.general).trim();
+  const key = String(
+    COMPLIANCE_LED_PRIVACY_FAMILY_KEYS.has(String(family?.key || '').trim())
+      ? 'compliance'
+      : (family?.lensKey || normaliseScenarioHintKey(classification?.key || classification) || 'general')
+  ).trim() || 'general';
+  const label = String(
+    COMPLIANCE_LED_PRIVACY_FAMILY_KEYS.has(String(family?.key || '').trim())
+      ? LENS_LABELS.compliance
+      : (family?.lensLabel || LENS_LABELS[key] || LENS_LABELS.general)
+  ).trim();
   const functionKey = String(family?.functionKey || 'general').trim() || 'general';
   const estimatePresetKey = String(family?.estimatePresetKey || 'general').trim() || 'general';
   const secondaryKeys = uniqueStrings([
-    ...(Array.isArray(classification?.secondaryFamilies) ? classification.secondaryFamilies.map((item) => item?.lensKey || item?.key || item) : []),
+    ...(Array.isArray(classification?.secondaryFamilies) ? classification.secondaryFamilies.map((item) => (
+      COMPLIANCE_LED_PRIVACY_FAMILY_KEYS.has(String(item?.key || '').trim())
+        ? 'compliance'
+        : (item?.lensKey || item?.key || item)
+    )) : []),
     ...(Array.isArray(classification?.secondaryKeys) ? classification.secondaryKeys : [])
   ])
     .map((item) => normaliseScenarioHintKey(item) || String(item || '').trim())

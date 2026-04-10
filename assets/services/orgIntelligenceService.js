@@ -320,12 +320,28 @@ const OrgIntelligenceService = (() => {
     return token ? { 'x-session-token': token } : {};
   }
 
+  function _canUseSharedOrgIntelligence() {
+    const hasAuthService = typeof AuthService !== 'undefined' && AuthService;
+    const sessionToken = hasAuthService && typeof AuthService.getApiSessionToken === 'function'
+      ? AuthService.getApiSessionToken()
+      : '';
+    const isAdmin = hasAuthService && typeof AuthService.isAdminAuthenticated === 'function'
+      ? AuthService.isAdminAuthenticated()
+      : true;
+    return typeof AuthService !== 'undefined'
+      && AuthService
+      && typeof AuthService.getApiSessionToken === 'function'
+      && isAdmin
+      && !!sessionToken;
+  }
+
   function _getApiUrl() {
     return resolveOrgIntelligenceApiUrl('/api/org-intelligence');
   }
 
   async function refresh(force = false) {
     const cached = getCachedState();
+    if (!_canUseSharedOrgIntelligence()) return cached;
     const freshEnough = !force && cached.updatedAt && (Date.now() - cached.updatedAt) < 60_000;
     if (freshEnough) return cached;
     if (_refreshPromise) return _refreshPromise;
@@ -349,6 +365,7 @@ const OrgIntelligenceService = (() => {
   }
 
   async function _post(type, payload = {}) {
+    if (!_canUseSharedOrgIntelligence()) return null;
     try {
       const response = await fetch(_getApiUrl(), {
         method: 'POST',

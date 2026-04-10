@@ -84,6 +84,7 @@ function getDefaultSettings() {
     companyWebsiteUrl: '',
     companyContextProfile: '',
     companyContextSections: null,
+    companyContextMeta: null,
     companyStructure: [],
     entityContextLayers: [],
     entityObligations: [],
@@ -105,6 +106,24 @@ function getDefaultSettings() {
       revision: 0,
       updatedAt: 0
     }
+  };
+}
+
+function normaliseContextReviewMeta(meta = null) {
+  if (!meta || typeof meta !== 'object') return null;
+  const source = String(meta.source || '').trim().toLowerCase() === 'ai' ? 'ai' : 'manual';
+  const rawStatus = String(meta.status || '').trim().toLowerCase();
+  const status = ['reviewed', 'draft', 'fallback', 'legacy'].includes(rawStatus)
+    ? rawStatus
+    : (source === 'ai' ? 'draft' : 'legacy');
+  return {
+    status,
+    source,
+    fallbackUsed: meta.fallbackUsed === true,
+    generatedAt: Number(meta.generatedAt || 0),
+    reviewedAt: Number(meta.reviewedAt || 0),
+    reviewDueAt: Number(meta.reviewDueAt || 0),
+    sourceUrl: String(meta.sourceUrl || '').trim()
   };
 }
 
@@ -133,8 +152,9 @@ function normaliseSettings(settings = {}) {
     ...settings,
     applicableRegulations: mergedRegulations,
     companyContextSections: settings.companyContextSections && typeof settings.companyContextSections === 'object' ? settings.companyContextSections : null,
-    companyStructure: Array.isArray(settings.companyStructure) ? settings.companyStructure : [],
-    entityContextLayers: Array.isArray(settings.entityContextLayers) ? settings.entityContextLayers : [],
+    companyContextMeta: normaliseContextReviewMeta(settings.companyContextMeta),
+    companyStructure: Array.isArray(settings.companyStructure) ? settings.companyStructure.map(normaliseStructureNode) : [],
+    entityContextLayers: Array.isArray(settings.entityContextLayers) ? settings.entityContextLayers.map(normaliseLayer) : [],
     entityObligations: normaliseEntityObligations(settings.entityObligations),
     buOverrides: Array.isArray(settings.buOverrides) ? settings.buOverrides : [],
     docOverrides: Array.isArray(settings.docOverrides) ? settings.docOverrides : [],
@@ -224,7 +244,8 @@ function normaliseStructureNode(node = {}) {
     departmentHint: String(node.departmentHint || ''),
     departmentRelationshipType: String(node.departmentRelationshipType || ''),
     ownerUsername: String(node.ownerUsername || ''),
-    contextSections: node.contextSections && typeof node.contextSections === 'object' ? node.contextSections : null
+    contextSections: node.contextSections && typeof node.contextSections === 'object' ? node.contextSections : null,
+    contextMeta: normaliseContextReviewMeta(node.contextMeta)
   };
 }
 
@@ -233,11 +254,13 @@ function normaliseLayer(layer = {}) {
     entityId: String(layer.entityId || ''),
     entityName: String(layer.entityName || ''),
     geography: String(layer.geography || ''),
+    visibleToChildUsers: layer.visibleToChildUsers !== false,
     riskAppetiteStatement: String(layer.riskAppetiteStatement || ''),
     applicableRegulations: Array.isArray(layer.applicableRegulations) ? [...layer.applicableRegulations].sort() : [],
     aiInstructions: String(layer.aiInstructions || ''),
     benchmarkStrategy: String(layer.benchmarkStrategy || ''),
-    contextSummary: String(layer.contextSummary || '')
+    contextSummary: String(layer.contextSummary || ''),
+    contextMeta: normaliseContextReviewMeta(layer.contextMeta)
   };
 }
 
@@ -494,6 +517,7 @@ function canBuAdminWriteSettings(currentSettings, proposedSettings, session) {
     'companyWebsiteUrl',
     'companyContextProfile',
     'companyContextSections',
+    'companyContextMeta',
     'buOverrides',
     'docOverrides',
     'riskAppetiteStatement',

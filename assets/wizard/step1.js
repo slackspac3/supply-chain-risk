@@ -101,9 +101,10 @@ function hasStep1PaymentControlSignal(text = '') {
   return STEP1_PAYMENT_CONTROL_SIGNAL_RE.test(String(text || '').toLowerCase());
 }
 
-// Keep Step 1 on one authoritative server draft call. Prompt ideas and pre-build preview
-// remain deterministic local UX only so they do not add extra hosted backend load.
-const STEP1_USE_GUIDED_SERVER_HELPERS = false;
+// Keep the authoritative draft build on the server, and also allow guided prompt-idea
+// enrichment to use the live path when enough signal exists. The pre-build preview can
+// still remain local when no stronger live result is returned.
+const STEP1_USE_GUIDED_SERVER_HELPERS = true;
 
 const STEP1_LENS_REGULATION_SUGGESTIONS = {
   cyber: ['UAE PDPL', 'UAE Information Assurance Standard', 'UAE National Cyber Security Governance Framework', 'NIST SP 800-53', 'NIST RMF', 'ISO 27001'],
@@ -262,19 +263,30 @@ function hasStep1StrongCrossLensCompetition(topFamilies = []) {
   );
 }
 
+function hasStep1SupplierProgrammeCompetition(text = '') {
+  const haystack = String(text || '').toLowerCase();
+  return (
+    /(supplier|vendor|third[- ]party|third party)/.test(haystack)
+    && /(delay|delayed|slip|slippage|missed|late)/.test(haystack)
+    && /(transformation|programme|program|milestone|go-live|rollout|cutover|major project|dependent project|dependent projects)/.test(haystack)
+  );
+}
+
 function buildStep1ProjectionHintModel(text = '', scenarioLensHint = '') {
   const analysis = evaluateStep1ScenarioWithProjection(text, scenarioLensHint);
   if (!analysis) return null;
   const topFamilies = Array.isArray(analysis.topFamilies) ? analysis.topFamilies : [];
+  const competitiveTopFamilies = topFamilies.filter((family) => family?.qualified || family?.primary);
   const ambiguityFlags = uniqueStep1Keys([
     ...(analysis.ambiguityFlags || analysis.classification?.ambiguityFlags || []),
-    ...(hasStep1StrongCrossLensCompetition(topFamilies) ? ['MIXED_TOP_FAMILIES'] : [])
+    ...(hasStep1StrongCrossLensCompetition(topFamilies) ? ['MIXED_TOP_FAMILIES'] : []),
+    ...(hasStep1SupplierProgrammeCompetition(text) ? ['LOW_SEPARATION', 'MIXED_TOP_FAMILIES'] : [])
   ]);
   const familyOrder = getStep1ProjectionFamilyOrder(analysis, 3);
   const candidateLensKeys = uniqueStep1Keys([
-    analysis.topLensKey,
+    analysis.classification?.familyKey ? analysis.topLensKey : '',
     ...(Array.isArray(analysis.classification?.secondaryKeys) ? analysis.classification.secondaryKeys : []),
-    ...topFamilies.map((family) => String(family?.lensKey || '').trim())
+    ...competitiveTopFamilies.map((family) => String(family?.lensKey || '').trim())
   ].filter(Boolean));
   const lowConfidence = String(analysis.confidenceBand || analysis.classification?.confidence || '').trim().toLowerCase() === 'low'
     || ambiguityFlags.includes('LOW_PRIMARY_CONFIDENCE')
@@ -288,7 +300,7 @@ function buildStep1ProjectionHintModel(text = '', scenarioLensHint = '') {
   return {
     helper: getStep1ScenarioTaxonomyProjection(),
     analysis,
-    topFamilies,
+    topFamilies: competitiveTopFamilies,
     familyOrder,
     candidateLensKeys,
     preferredLens,
@@ -350,6 +362,8 @@ function getStep1PromptIdeaConfidenceState({
   fallbackLens = null,
   hasLiveSignal = false
 } = {}) {
+  const hasCompetitiveFamilies = Array.isArray(projectionHint?.topFamilies)
+    && projectionHint.topFamilies.some((family) => family?.qualified || family?.primary);
   if (
     projectionHint?.directional
     && projectionHint.analysis?.classification?.familyKey
@@ -357,7 +371,7 @@ function getStep1PromptIdeaConfidenceState({
   ) {
     return STEP1_PROMPT_IDEA_CONFIDENCE_STATES.high;
   }
-  if (hasLiveSignal && (Array.isArray(projectionHint?.topFamilies) && projectionHint.topFamilies.length)) {
+  if (hasLiveSignal && hasCompetitiveFamilies) {
     return STEP1_PROMPT_IDEA_CONFIDENCE_STATES.candidate;
   }
   if (hasLiveSignal && fallbackLens?.key && fallbackLens.key !== 'general') {

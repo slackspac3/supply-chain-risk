@@ -1,6 +1,6 @@
 /**
  * app.js — Main application entry point
- * G42 Tech & Cyber Risk Quantifier PoC
+ * G42 Risk Intelligence Platform PoC
  */
 
 'use strict';
@@ -100,6 +100,7 @@ const DEFAULT_ADMIN_SETTINGS = {
   companyWebsiteUrl: '',
   companyContextProfile: '',
   companyContextSections: null,
+  companyContextMeta: null,
   companyStructure: [],
   entityContextLayers: [],
   entityObligations: [],
@@ -120,6 +121,176 @@ const DEFAULT_ADMIN_SETTINGS = {
     ? window.ValueQuantService.getDefaultBenchmarkSettings()
     : { internalHourlyRatesUsd: {}, externalDayRatesUsd: {} }
 };
+
+const CONTEXT_REVIEW_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+
+function stripSuggestedDraftLabel(value = '') {
+  return String(value || '').replace(/^Suggested draft:\s*/i, '').trim();
+}
+
+function normaliseContextReviewMeta(meta = null) {
+  if (!meta || typeof meta !== 'object') return null;
+  const source = String(meta.source || '').trim().toLowerCase() === 'ai' ? 'ai' : 'manual';
+  const rawStatus = String(meta.status || '').trim().toLowerCase();
+  const status = ['reviewed', 'draft', 'fallback', 'legacy'].includes(rawStatus)
+    ? rawStatus
+    : (source === 'ai' ? 'draft' : 'legacy');
+  return {
+    status,
+    source,
+    fallbackUsed: meta.fallbackUsed === true,
+    generatedAt: Number(meta.generatedAt || 0),
+    reviewedAt: Number(meta.reviewedAt || 0),
+    reviewDueAt: Number(meta.reviewDueAt || 0),
+    sourceUrl: String(meta.sourceUrl || '').trim()
+  };
+}
+
+function isContextApprovedForInheritance(meta = null) {
+  const normalised = normaliseContextReviewMeta(meta);
+  if (!normalised) return true;
+  return normalised.status === 'reviewed' || normalised.status === 'legacy';
+}
+
+function isContextReviewDue(meta = null, now = Date.now()) {
+  const normalised = normaliseContextReviewMeta(meta);
+  return !!normalised?.reviewDueAt && Number(normalised.reviewDueAt) > 0 && Number(normalised.reviewDueAt) <= Number(now);
+}
+
+function buildAiContextReviewMeta(result = {}, { existingMeta = null, sourceUrl = '' } = {}) {
+  if (result?.preserveExistingReviewMeta === true) {
+    return normaliseContextReviewMeta(existingMeta);
+  }
+  const generatedAt = Date.now();
+  const fallbackUsed = result?.usedFallback === true || result?.aiUnavailable === true;
+  return normaliseContextReviewMeta({
+    ...normaliseContextReviewMeta(existingMeta),
+    status: fallbackUsed ? 'fallback' : 'draft',
+    source: 'ai',
+    fallbackUsed,
+    generatedAt,
+    reviewedAt: 0,
+    reviewDueAt: generatedAt + CONTEXT_REVIEW_WINDOW_MS,
+    sourceUrl: String(sourceUrl || existingMeta?.sourceUrl || '').trim()
+  });
+}
+
+function buildReviewedContextReviewMeta(existingMeta = null, { sourceUrl = '' } = {}) {
+  const base = normaliseContextReviewMeta(existingMeta) || {
+    status: 'legacy',
+    source: 'manual',
+    fallbackUsed: false,
+    generatedAt: Date.now(),
+    reviewedAt: 0,
+    reviewDueAt: 0,
+    sourceUrl: ''
+  };
+  const reviewedAt = Date.now();
+  return normaliseContextReviewMeta({
+    ...base,
+    status: 'reviewed',
+    source: base.source || 'manual',
+    reviewedAt,
+    reviewDueAt: reviewedAt + CONTEXT_REVIEW_WINDOW_MS,
+    sourceUrl: String(sourceUrl || base.sourceUrl || '').trim()
+  });
+}
+
+function getContextReviewDisplayModel(meta = null, { subject = 'Context' } = {}) {
+  const normalised = normaliseContextReviewMeta(meta);
+  if (!normalised) {
+    return {
+      status: 'legacy',
+      badge: 'Legacy metadata missing',
+      badgeClass: 'badge--warning',
+      message: `${subject} is active for inherited grounding but has no freshness metadata yet. Re-save after review to start review tracking.`,
+      showApprovalToggle: true,
+      approvalLabel: `I reviewed this ${subject.toLowerCase()} and want to start freshness tracking on save.`,
+      reviewApprovedChecked: false,
+      inheritedActive: true
+    };
+  }
+  if (normalised.status === 'fallback') {
+    return {
+      status: 'fallback',
+      badge: 'Fallback draft',
+      badgeClass: 'badge--danger',
+      message: `${subject} came from fallback or local AI output. It is quarantined from inherited grounding until a human reviews it and saves approval.`,
+      showApprovalToggle: true,
+      approvalLabel: `I reviewed this ${subject.toLowerCase()} and approve it for inherited grounding.`,
+      reviewApprovedChecked: false,
+      inheritedActive: false
+    };
+  }
+  if (normalised.status === 'draft') {
+    return {
+      status: 'draft',
+      badge: 'Review pending',
+      badgeClass: 'badge--warning',
+      message: `${subject} was generated or reshaped with AI and is quarantined from inherited grounding until a human reviews it and saves approval.`,
+      showApprovalToggle: true,
+      approvalLabel: `I reviewed this ${subject.toLowerCase()} and approve it for inherited grounding.`,
+      reviewApprovedChecked: false,
+      inheritedActive: false
+    };
+  }
+  if (isContextReviewDue(normalised)) {
+    return {
+      status: 'reviewed',
+      badge: 'Review due',
+      badgeClass: 'badge--warning',
+      message: `${subject} is still active for inherited grounding, but its review window has expired. Refresh the review if the business model, obligations, or control environment changed.`,
+      showApprovalToggle: true,
+      approvalLabel: `Refresh the review timestamp for this ${subject.toLowerCase()} on save.`,
+      reviewApprovedChecked: false,
+      inheritedActive: true
+    };
+  }
+  return {
+    status: 'reviewed',
+    badge: 'Reviewed',
+    badgeClass: 'badge--success',
+    message: `${subject} is approved for inherited grounding and still within its review window.`,
+    showApprovalToggle: false,
+    approvalLabel: '',
+    reviewApprovedChecked: true,
+    inheritedActive: true
+  };
+}
+
+function buildInheritanceSafeAdminSettings(settings = getAdminSettings()) {
+  const safeSettings = normaliseAdminSettings(settings);
+  const allowCompanyContext = isContextApprovedForInheritance(safeSettings.companyContextMeta);
+  return {
+    ...safeSettings,
+    companyContextProfile: allowCompanyContext ? safeSettings.companyContextProfile : '',
+    companyContextSections: allowCompanyContext ? safeSettings.companyContextSections : null,
+    companyStructure: (Array.isArray(safeSettings.companyStructure) ? safeSettings.companyStructure : []).map(node => {
+      const allowNodeContext = isContextApprovedForInheritance(node?.contextMeta);
+      return allowNodeContext
+        ? { ...node }
+        : {
+            ...node,
+            profile: '',
+            contextSections: null
+          };
+    }),
+    entityContextLayers: (Array.isArray(safeSettings.entityContextLayers) ? safeSettings.entityContextLayers : []).map(layer => {
+      const allowLayerContext = isContextApprovedForInheritance(layer?.contextMeta);
+      return allowLayerContext
+        ? { ...layer }
+        : {
+            ...layer,
+            geography: '',
+            contextSummary: '',
+            riskAppetiteStatement: '',
+            applicableRegulations: [],
+            aiInstructions: '',
+            benchmarkStrategy: ''
+          };
+    })
+  };
+}
 
 function buildDefaultLearningStoreState() {
   return {
@@ -835,8 +1006,20 @@ function normaliseAdminSettings(settings = {}) {
     ...settings,
     applicableRegulations: mergedRegulations,
     companyContextSections: settings.companyContextSections && typeof settings.companyContextSections === 'object' ? settings.companyContextSections : null,
-    companyStructure: Array.isArray(settings.companyStructure) ? settings.companyStructure : [],
-    entityContextLayers: Array.isArray(settings.entityContextLayers) ? settings.entityContextLayers : [],
+    companyContextMeta: normaliseContextReviewMeta(settings.companyContextMeta),
+    companyStructure: Array.isArray(settings.companyStructure)
+      ? settings.companyStructure.map(node => ({
+          ...node,
+          contextSections: node?.contextSections && typeof node.contextSections === 'object' ? node.contextSections : null,
+          contextMeta: normaliseContextReviewMeta(node?.contextMeta)
+        }))
+      : [],
+    entityContextLayers: Array.isArray(settings.entityContextLayers)
+      ? settings.entityContextLayers.map(layer => ({
+          ...layer,
+          contextMeta: normaliseContextReviewMeta(layer?.contextMeta)
+        }))
+      : [],
     entityObligations: resolver?.normaliseEntityObligations
       ? resolver.normaliseEntityObligations(settings.entityObligations)
       : [],
@@ -3555,20 +3738,21 @@ async function clearUserPersistentState(username) {
 }
 
 function getUserSettingsDefaults(globalSettings = getAdminSettings()) {
+  const inheritedSettings = buildInheritanceSafeAdminSettings(globalSettings);
   return {
-    geography: globalSettings.geography,
-    geographyPrimary: globalSettings.geography,
+    geography: inheritedSettings.geography,
+    geographyPrimary: inheritedSettings.geography,
     geographySecondary: '',
     geographyTertiary: '',
-    companyWebsiteUrl: globalSettings.companyWebsiteUrl,
-    companyContextProfile: globalSettings.companyContextProfile,
-    companyContextSections: globalSettings.companyContextSections,
-    riskAppetiteStatement: globalSettings.riskAppetiteStatement,
-    applicableRegulations: [...globalSettings.applicableRegulations],
-    aiInstructions: globalSettings.aiInstructions,
-    benchmarkStrategy: globalSettings.benchmarkStrategy,
-    defaultLinkMode: globalSettings.defaultLinkMode,
-    adminContextSummary: globalSettings.adminContextSummary,
+    companyWebsiteUrl: inheritedSettings.companyWebsiteUrl,
+    companyContextProfile: inheritedSettings.companyContextProfile,
+    companyContextSections: inheritedSettings.companyContextSections,
+    riskAppetiteStatement: inheritedSettings.riskAppetiteStatement,
+    applicableRegulations: [...inheritedSettings.applicableRegulations],
+    aiInstructions: inheritedSettings.aiInstructions,
+    benchmarkStrategy: inheritedSettings.benchmarkStrategy,
+    defaultLinkMode: inheritedSettings.defaultLinkMode,
+    adminContextSummary: inheritedSettings.adminContextSummary,
     onboardedAt: '',
     userProfile: {
       fullName: '',
@@ -3693,16 +3877,22 @@ function getCompanyEntityForDepartment(structure = getAdminSettings().companyStr
 
 function applyEntityLayerToSettings(baseSettings, layer = null, node = null) {
   if (!layer && !node) return baseSettings;
+  const allowLayerContext = isContextApprovedForInheritance(layer?.contextMeta);
+  const allowNodeContext = isContextApprovedForInheritance(node?.contextMeta);
   return {
     ...baseSettings,
-    geography: layer?.geography || baseSettings.geography,
-    companyContextProfile: node?.profile || baseSettings.companyContextProfile,
-    companyContextSections: node?.contextSections || baseSettings.companyContextSections,
-    riskAppetiteStatement: layer?.riskAppetiteStatement || baseSettings.riskAppetiteStatement,
-    applicableRegulations: Array.from(new Set([...(baseSettings.applicableRegulations || []), ...(layer?.applicableRegulations || [])])),
-    aiInstructions: layer?.aiInstructions || baseSettings.aiInstructions,
-    benchmarkStrategy: layer?.benchmarkStrategy || baseSettings.benchmarkStrategy,
-    adminContextSummary: layer?.contextSummary || node?.profile || baseSettings.adminContextSummary
+    geography: allowLayerContext ? (layer?.geography || baseSettings.geography) : baseSettings.geography,
+    companyContextProfile: allowNodeContext ? (node?.profile || baseSettings.companyContextProfile) : baseSettings.companyContextProfile,
+    companyContextSections: allowNodeContext ? (node?.contextSections || baseSettings.companyContextSections) : baseSettings.companyContextSections,
+    riskAppetiteStatement: allowLayerContext ? (layer?.riskAppetiteStatement || baseSettings.riskAppetiteStatement) : baseSettings.riskAppetiteStatement,
+    applicableRegulations: allowLayerContext
+      ? Array.from(new Set([...(baseSettings.applicableRegulations || []), ...(layer?.applicableRegulations || [])]))
+      : [...(baseSettings.applicableRegulations || [])],
+    aiInstructions: allowLayerContext ? (layer?.aiInstructions || baseSettings.aiInstructions) : baseSettings.aiInstructions,
+    benchmarkStrategy: allowLayerContext ? (layer?.benchmarkStrategy || baseSettings.benchmarkStrategy) : baseSettings.benchmarkStrategy,
+    adminContextSummary: allowLayerContext
+      ? (layer?.contextSummary || (allowNodeContext ? (node?.profile || '') : '') || baseSettings.adminContextSummary)
+      : (allowNodeContext ? (node?.profile || baseSettings.adminContextSummary) : baseSettings.adminContextSummary)
   };
 }
 
@@ -4045,7 +4235,7 @@ function hasUserSettingOverride(key, settings = {}, defaults = {}) {
 }
 
 function getInheritedSettingsForUserSelection(user = AuthService.getCurrentUser(), candidateSettings = {}) {
-  const globalSettings = getAdminSettings();
+  const globalSettings = buildInheritanceSafeAdminSettings(getAdminSettings());
   if (!user || user.role === 'admin') {
     return globalSettings;
   }
@@ -4217,7 +4407,7 @@ function launchPilotSampleAssessment() {
 }
 
 function getEffectiveSettings() {
-  const globalSettings = getAdminSettings();
+  const globalSettings = buildInheritanceSafeAdminSettings(getAdminSettings());
   const user = AuthService.getCurrentUser();
   if (!user || user.role === 'admin') {
     return globalSettings;
@@ -4298,7 +4488,7 @@ function isContextVisibleToChildUsers(flagValue) {
 }
 
 function buildInheritedContextDisplayModel(options = {}) {
-  const globalSettings = options.globalSettings || getAdminSettings();
+  const globalSettings = buildInheritanceSafeAdminSettings(options.globalSettings || getAdminSettings());
   const user = options.user || AuthService.getCurrentUser();
   if (!user || user.role === 'admin') {
     return { highlights: [], visibleDetails: [], hasHiddenDetails: false };
@@ -4424,7 +4614,7 @@ function renderContextInfluencePreview(model = {}) {
 }
 
 function buildCurrentAIAssistContext(options = {}) {
-  const globalSettings = getAdminSettings();
+  const globalSettings = buildInheritanceSafeAdminSettings(getAdminSettings());
   const user = AuthService.getCurrentUser();
   const userSettings = getUserSettings();
   const effective = getEffectiveSettings();
@@ -4906,20 +5096,24 @@ function getEntityLayerById(settings = getAdminSettings(), entityId = '') {
 
 function buildBUFromOrgEntity(entity, settings = getAdminSettings()) {
   const layer = getEntityLayerById(settings, entity?.id);
-  const contextSections = entity?.contextSections || {};
+  const allowNodeContext = isContextApprovedForInheritance(entity?.contextMeta);
+  const allowLayerContext = isContextApprovedForInheritance(layer?.contextMeta);
+  const contextSections = allowNodeContext ? (entity?.contextSections || {}) : {};
   return {
     id: slugify(entity?.name || `bu-${Date.now()}`),
     name: entity?.name || '',
     orgEntityId: entity?.id || '',
-    geography: layer?.geography || '',
+    geography: allowLayerContext ? (layer?.geography || '') : '',
     criticalServices: [],
     keySystems: [],
     dataTypes: [],
     regulatoryTags: [...new Set([
-      ...(layer?.applicableRegulations || [])
+      ...(allowLayerContext ? (layer?.applicableRegulations || []) : [])
     ])],
-    contextSummary: layer?.contextSummary || contextSections.companySummary || entity?.profile || '',
-    aiGuidance: layer?.aiInstructions || '',
+    contextSummary: allowLayerContext
+      ? (layer?.contextSummary || contextSections.companySummary || (allowNodeContext ? (entity?.profile || '') : ''))
+      : (contextSections.companySummary || (allowNodeContext ? (entity?.profile || '') : '')),
+    aiGuidance: allowLayerContext ? (layer?.aiInstructions || '') : '',
     benchmarkStrategy: '',
     defaultLinkMode: null,
     riskAppetiteStatement: '',
@@ -4962,6 +5156,7 @@ function buildCompanyStructureContext(structure = []) {
   if (!structure.length) return '';
   const idToNode = new Map(structure.map(node => [node.id, node]));
   return structure.map(node => {
+    const allowNodeContext = isContextApprovedForInheritance(node?.contextMeta);
     const parent = node.parentId ? idToNode.get(node.parentId) : null;
     const parts = [
       `${node.name} (${node.type})`,
@@ -4970,7 +5165,7 @@ function buildCompanyStructureContext(structure = []) {
     if (node.websiteUrl) parts.push(`website: ${node.websiteUrl}`);
     if (node.departmentHint) parts.push(`department family: ${node.departmentHint}`);
     if (node.departmentRelationshipType) parts.push(`delivery model: ${node.departmentRelationshipType}`);
-    if (node.profile) parts.push(`context: ${truncateText(node.profile, 220)}`);
+    if (allowNodeContext && node.profile) parts.push(`context: ${truncateText(node.profile, 220)}`);
     return `- ${parts.join(' | ')}`;
   }).join('\n');
 }
@@ -4979,6 +5174,7 @@ function buildEntityLayerContext(layers = [], structure = []) {
   if (!layers.length) return '';
   const idToNode = new Map(structure.map(node => [node.id, node]));
   return layers.map(layer => {
+    if (!isContextApprovedForInheritance(layer?.contextMeta)) return '';
     const node = idToNode.get(layer.entityId);
     const parts = [
       `${node?.name || layer.entityName || 'Unknown entity'} layer`
@@ -4990,7 +5186,7 @@ function buildEntityLayerContext(layers = [], structure = []) {
     if (layer.benchmarkStrategy) parts.push(`benchmark strategy: ${truncateText(layer.benchmarkStrategy, 180)}`);
     if (layer.contextSummary) parts.push(`context summary: ${truncateText(layer.contextSummary, 180)}`);
     return `- ${parts.join(' | ')}`;
-  }).join('\n');
+  }).filter(Boolean).join('\n');
 }
 
 function buildOrganisationContextSummary(settings = getAdminSettings()) {
@@ -5009,13 +5205,21 @@ function buildOrganisationContextSummary(settings = getAdminSettings()) {
 
 function buildCompanyContextSections(result = {}) {
   return {
-    companySummary: String(result.companySummary || '').trim(),
-    businessModel: String(result.businessProfile || '').trim(),
-    operatingModel: String(result.operatingModel || '').trim(),
-    publicCommitments: Array.isArray(result.publicCommitments) ? result.publicCommitments.map(String).join('\n') : String(result.publicCommitments || '').trim(),
-    keyRiskSignals: Array.isArray(result.riskSignals) ? result.riskSignals.map(String).join('\n') : String(result.riskSignals || '').trim(),
-    obligations: Array.isArray(result.likelyObligations) ? result.likelyObligations.map(String).join('\n') : String(result.likelyObligations || '').trim(),
-    sources: Array.isArray(result.sources) ? result.sources.map(source => source.note || source.url).filter(Boolean).join('\n') : String(result.sources || '').trim()
+    companySummary: stripSuggestedDraftLabel(result.companySummary || ''),
+    businessModel: stripSuggestedDraftLabel(result.businessProfile || ''),
+    operatingModel: stripSuggestedDraftLabel(result.operatingModel || ''),
+    publicCommitments: Array.isArray(result.publicCommitments)
+      ? result.publicCommitments.map(item => stripSuggestedDraftLabel(item)).filter(Boolean).join('\n')
+      : stripSuggestedDraftLabel(result.publicCommitments || ''),
+    keyRiskSignals: Array.isArray(result.riskSignals)
+      ? result.riskSignals.map(item => stripSuggestedDraftLabel(item)).filter(Boolean).join('\n')
+      : stripSuggestedDraftLabel(result.riskSignals || ''),
+    obligations: Array.isArray(result.likelyObligations)
+      ? result.likelyObligations.map(item => stripSuggestedDraftLabel(item)).filter(Boolean).join('\n')
+      : stripSuggestedDraftLabel(result.likelyObligations || ''),
+    sources: Array.isArray(result.sources)
+      ? result.sources.map(source => stripSuggestedDraftLabel(source?.note || source?.url || '')).filter(Boolean).join('\n')
+      : stripSuggestedDraftLabel(result.sources || '')
   };
 }
 
@@ -5036,15 +5240,16 @@ function formatCompanyContextProfile(result) {
 }
 
 function buildEntityContextAdminSettings(settings = getAdminSettings()) {
+  const inheritedSettings = buildInheritanceSafeAdminSettings(settings);
   return {
-    geography: settings.geography || '',
-    applicableRegulations: Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations : [],
-    aiInstructions: settings.aiInstructions || '',
-    benchmarkStrategy: settings.benchmarkStrategy || '',
-    riskAppetiteStatement: settings.riskAppetiteStatement || '',
-    companyContextProfile: settings.companyContextProfile || '',
-    companyStructureContext: buildOrganisationContextSummary(settings),
-    adminContextSummary: settings.adminContextSummary || ''
+    geography: inheritedSettings.geography || '',
+    applicableRegulations: Array.isArray(inheritedSettings.applicableRegulations) ? inheritedSettings.applicableRegulations : [],
+    aiInstructions: inheritedSettings.aiInstructions || '',
+    benchmarkStrategy: inheritedSettings.benchmarkStrategy || '',
+    riskAppetiteStatement: inheritedSettings.riskAppetiteStatement || '',
+    companyContextProfile: inheritedSettings.companyContextProfile || '',
+    companyStructureContext: buildOrganisationContextSummary(inheritedSettings),
+    adminContextSummary: inheritedSettings.adminContextSummary || ''
   };
 }
 
@@ -5335,13 +5540,15 @@ function buildEntityContextLayerFromResult(entity = {}, result = {}, { visibleTo
   return {
     entityId: entity.id,
     entityName: entity.name || '',
-    geography: String(result.geography || '').trim(),
-    contextSummary: String(result.contextSummary || '').trim(),
+    geography: stripSuggestedDraftLabel(result.geography || ''),
+    contextSummary: stripSuggestedDraftLabel(result.contextSummary || ''),
     visibleToChildUsers: visibleToChildUsers !== false,
-    riskAppetiteStatement: String(result.riskAppetiteStatement || '').trim(),
-    applicableRegulations: Array.isArray(result.applicableRegulations) ? result.applicableRegulations.map(String).filter(Boolean) : [],
-    aiInstructions: String(result.aiInstructions || '').trim(),
-    benchmarkStrategy: String(result.benchmarkStrategy || '').trim()
+    riskAppetiteStatement: stripSuggestedDraftLabel(result.riskAppetiteStatement || ''),
+    applicableRegulations: Array.isArray(result.applicableRegulations)
+      ? result.applicableRegulations.map(item => stripSuggestedDraftLabel(item)).filter(Boolean)
+      : [],
+    aiInstructions: stripSuggestedDraftLabel(result.aiInstructions || ''),
+    benchmarkStrategy: stripSuggestedDraftLabel(result.benchmarkStrategy || '')
   };
 }
 
@@ -5370,6 +5577,7 @@ function mergeDerivedEntityContextLayer(settings = {}, entity = {}, derivedResul
     aiInstructions: derivedResult.aiInstructions || existingLayer?.aiInstructions || settings.aiInstructions || '',
     benchmarkStrategy: derivedResult.benchmarkStrategy || existingLayer?.benchmarkStrategy || settings.benchmarkStrategy || ''
   }, { visibleToChildUsers: existingLayer?.visibleToChildUsers !== false });
+  nextLayer.contextMeta = normaliseContextReviewMeta(derivedResult.contextMeta) || normaliseContextReviewMeta(existingLayer?.contextMeta);
   return upsertEntityContextLayers(layers, nextLayer);
 }
 
@@ -5401,6 +5609,9 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
   const defaultSections = node.contextSections || seed.contextSections || null;
   const defaultDepartmentHint = node.departmentHint || seed.departmentHint || '';
   const defaultOwner = node.ownerUsername || seed.ownerUsername || '';
+  const defaultContextReview = getContextReviewDisplayModel(node.contextMeta, {
+    subject: isSeedDepartment ? 'Function context' : 'Entity context'
+  });
   const managedAccounts = getManagedAccountsForAdmin(getAdminSettings());
   const body = `
     <div class="context-panel-copy" style="margin-bottom:12px">Capture how this entity fits into the wider group so later assessments inherit the right business, ownership, and department context.</div>
@@ -5484,6 +5695,17 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       <button class="btn btn--secondary" id="btn-org-build-context" type="button">Build Context from Website</button>
       <span class="form-help" id="org-context-actions-help">Use AI to gather website and public-source context before saving.</span>
     </div>
+    <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-canvas)" id="org-context-review-card">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="context-panel-title">Inheritance review</div>
+        <span class="badge ${defaultContextReview.badgeClass}" id="org-context-review-badge">${escapeHtml(defaultContextReview.badge)}</span>
+      </div>
+      <div class="form-help" style="margin-top:8px" id="org-context-review-copy">${escapeHtml(defaultContextReview.message)}</div>
+      <label class="form-checkbox" id="org-context-review-toggle-wrap" style="margin-top:10px;${defaultContextReview.showApprovalToggle ? '' : 'display:none'}">
+        <input type="checkbox" id="org-context-review-approved" ${defaultContextReview.reviewApprovedChecked ? 'checked' : ''}>
+        <span id="org-context-review-label">${escapeHtml(defaultContextReview.approvalLabel || '')}</span>
+      </label>
+    </div>
     <div id="org-context-grounding"></div>
     ${UI.aiRefinementCard({
       intro: 'Use follow-up prompts to keep shaping the context until it is ready to save.',
@@ -5535,8 +5757,14 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
   const contextRefinementHistoryEl = document.getElementById('org-context-refinement-history');
   const contextFollowupEl = document.getElementById('org-context-followup');
   const contextRefineStatusEl = document.getElementById('org-context-refine-status');
+  const contextReviewBadgeEl = document.getElementById('org-context-review-badge');
+  const contextReviewCopyEl = document.getElementById('org-context-review-copy');
+  const contextReviewToggleWrapEl = document.getElementById('org-context-review-toggle-wrap');
+  const contextReviewApprovedEl = document.getElementById('org-context-review-approved');
+  const contextReviewLabelEl = document.getElementById('org-context-review-label');
   const contextRefinementHistory = [];
   let latestDerivedDepartmentContext = null;
+  let currentContextMeta = normaliseContextReviewMeta(node.contextMeta);
 
   function getSelectedNodeType() {
     return departmentEditorMode ? 'Department / function' : typeEl.value;
@@ -5579,6 +5807,20 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         <div class="context-panel-title" style="font-size:.82rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">${entry.role === 'user' ? 'Your prompt' : 'AI update'}</div>
         <div style="margin-top:6px;color:var(--text-primary);line-height:1.55">${escapeHtml(entry.text || '')}</div>
       </div>`).join('');
+  }
+
+  function renderContextReviewState(meta = currentContextMeta) {
+    const model = getContextReviewDisplayModel(meta, {
+      subject: departmentEditorMode ? 'Function context' : 'Entity context'
+    });
+    if (contextReviewBadgeEl) {
+      contextReviewBadgeEl.className = `badge ${model.badgeClass}`;
+      contextReviewBadgeEl.textContent = model.badge;
+    }
+    if (contextReviewCopyEl) contextReviewCopyEl.textContent = model.message;
+    if (contextReviewToggleWrapEl) contextReviewToggleWrapEl.style.display = model.showApprovalToggle ? '' : 'none';
+    if (contextReviewLabelEl) contextReviewLabelEl.textContent = model.approvalLabel || '';
+    if (contextReviewApprovedEl) contextReviewApprovedEl.checked = !!model.reviewApprovedChecked;
   }
 
   function refreshEntityEditorState() {
@@ -5638,8 +5880,10 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       return;
     }
     const settings = getAdminSettings();
-    const parentEntity = getEntityById(structure, parentId);
-    const parentLayer = parentEntity?.id ? getEntityLayerById(settings, parentEntity.id) : null;
+    const inheritedSafeSettings = buildInheritanceSafeAdminSettings(settings);
+    const rawParentEntity = getEntityById(structure, parentId);
+    const parentEntity = getEntityById(inheritedSafeSettings.companyStructure, parentId) || rawParentEntity;
+    const parentLayer = parentEntity?.id ? getEntityLayerById(inheritedSafeSettings, parentEntity.id) : null;
     const existingLayer = node.id ? getEntityLayerById(settings, node.id) : null;
     const llmConfig = getSessionLLMConfig();
     LLMService.setCompassConfig({
@@ -5677,6 +5921,8 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       console.warn('Function context build fallback:', error?.message || error);
       result = buildLocalEntityContextBootstrapFallback(buildInput);
     }
+    currentContextMeta = buildAiContextReviewMeta(result, { existingMeta: currentContextMeta });
+    result.contextMeta = currentContextMeta;
     result.groundingAssessment = buildEntityContextGroundingAssessment({
       result,
       input: buildInput
@@ -5684,10 +5930,12 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
     if (result.contextSummary) profileEl.value = result.contextSummary;
     applyEntityContextGroundingCard(contextGroundingEl, result.groundingAssessment);
     latestDerivedDepartmentContext = result;
+    renderContextReviewState();
     return result;
   }
 
   renderOrgContextRefinementHistory();
+  renderContextReviewState();
 
   if (departmentEditorMode) {
     document.getElementById('btn-org-build-context').addEventListener('click', async () => {
@@ -5697,17 +5945,31 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       try {
         const uploaded = await loadContextSupportSource('org-context-source-file', 'org-context-source-help');
         const result = await buildDepartmentContextFromParent(uploaded);
+        const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
         contextRefinementHistory.length = 0;
-        contextRefinementHistory.push({ role: 'assistant', text: uploaded.text ? 'Initial function context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.' : 'Initial function context draft created. Use follow-up prompts below if you want to reshape it further.' });
+        contextRefinementHistory.push({
+          role: 'assistant',
+          text: degraded
+            ? 'Live AI was unavailable, so a minimal continuity draft was loaded from the inherited business context. Review it carefully or retry when live AI is available.'
+            : (uploaded.text
+              ? 'Initial function context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.'
+              : 'Initial function context draft created. Use follow-up prompts below if you want to reshape it further.')
+        });
         renderOrgContextRefinementHistory();
-        if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
+        if (contextRefineStatusEl) {
+          contextRefineStatusEl.textContent = degraded
+            ? 'Live AI was unavailable, so a continuity draft was loaded. Retry when live AI is available if you want a stronger drafted context.'
+            : 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
+        }
         UI.toast(
-          result?.groundingAssessment?.status === 'generic'
-            ? 'Function context drafted, but it is not strongly grounded in saved BU or organisation context yet.'
-            : result?.groundingAssessment?.status === 'partial'
-              ? 'Function context drafted. Some inherited context was used, but the grounding is only partial.'
-              : 'Function context drafted from the parent business context.',
-          result?.groundingAssessment?.status === 'generic' ? 'warning' : 'success',
+          degraded
+            ? 'Live AI was unavailable. Loaded a minimal continuity draft from the inherited business context.'
+            : result?.groundingAssessment?.status === 'generic'
+              ? 'Function context drafted, but it is not strongly grounded in saved BU or organisation context yet.'
+              : result?.groundingAssessment?.status === 'partial'
+                ? 'Function context drafted. Some inherited context was used, but the grounding is only partial.'
+                : 'Function context drafted from the parent business context.',
+          degraded || result?.groundingAssessment?.status === 'generic' ? 'warning' : 'success',
           5000
         );
       } catch (error) {
@@ -5732,6 +5994,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         LLMService.setCompassConfig(llmConfig);
         const uploaded = await loadContextSupportSource('org-context-source-file', 'org-context-source-help');
         let result = await LLMService.buildCompanyContext(targetUrl);
+        currentContextMeta = buildAiContextReviewMeta(result, { existingMeta: currentContextMeta, sourceUrl: targetUrl });
         applyOrgCompanyContextResult(result);
         if (uploaded.text) {
           result = await LLMService.refineCompanyContext({
@@ -5745,16 +6008,36 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
             uploadedText: uploaded.text,
             uploadedDocumentName: uploaded.name
           });
+          currentContextMeta = buildAiContextReviewMeta(result, { existingMeta: currentContextMeta, sourceUrl: targetUrl });
           applyOrgCompanyContextResult(result);
         }
+        const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
+        renderContextReviewState();
         if (!nameEl.value.trim()) {
           nameEl.value = inferCompanyNameFromUrl(targetUrl);
         }
         contextRefinementHistory.length = 0;
-        contextRefinementHistory.push({ role: 'assistant', text: uploaded.text ? 'Initial company context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.' : 'Initial company context draft created. Use follow-up prompts below if you want to reshape it further.' });
+        contextRefinementHistory.push({
+          role: 'assistant',
+          text: degraded && uploaded.text
+            ? 'Initial company context draft was built, but the uploaded-source refinement could not run because live AI was unavailable. Retry when live AI is available if you want the uploaded material folded in.'
+            : (uploaded.text
+              ? 'Initial company context draft created and refined using the uploaded source material. Use follow-up prompts below if you want to reshape it further.'
+              : 'Initial company context draft created. Use follow-up prompts below if you want to reshape it further.')
+        });
         renderOrgContextRefinementHistory();
-        if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
-        UI.toast('Company context built. Review the entity details and save it into the organisation tree.', 'success', 5000);
+        if (contextRefineStatusEl) {
+          contextRefineStatusEl.textContent = degraded
+            ? 'Initial company draft is in place, but the latest refinement could not run because live AI was unavailable.'
+            : 'Initial AI draft applied. Use the follow-up prompt box below to keep refining it.';
+        }
+        UI.toast(
+          degraded
+            ? 'Company context built, but the latest refinement could not run because live AI was unavailable.'
+            : 'Company context built. Review the entity details and save it into the organisation tree.',
+          degraded ? 'warning' : 'success',
+          5000
+        );
       } catch (error) {
         UI.toast('Company context build failed. Try again or shorten the source material.', 'danger', 6000);
         if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Company context build failed. Try again or shorten the source material.';
@@ -5783,9 +6066,11 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
       const uploaded = await loadContextSupportSource('org-context-source-file', 'org-context-source-help');
       if (departmentEditorMode) {
         const settings = getAdminSettings();
+        const inheritedSafeSettings = buildInheritanceSafeAdminSettings(settings);
         const parentId = parentEl.value || node.parentId || seed.parentId || '';
-        const parentEntity = getEntityById(structure, parentId);
-        const parentLayer = parentEntity?.id ? getEntityLayerById(settings, parentEntity.id) : null;
+        const rawParentEntity = getEntityById(structure, parentId);
+        const parentEntity = getEntityById(inheritedSafeSettings.companyStructure, parentId) || rawParentEntity;
+        const parentLayer = parentEntity?.id ? getEntityLayerById(inheritedSafeSettings, parentEntity.id) : null;
         const existingLayer = node.id ? getEntityLayerById(settings, node.id) : null;
         const currentLayer = latestDerivedDepartmentContext || existingLayer || {};
         const refineInput = {
@@ -5828,14 +6113,32 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         } catch {
           result = buildLocalEntityContextFallback(refineInput);
         }
+        currentContextMeta = buildAiContextReviewMeta(result, { existingMeta: currentContextMeta });
+        result.contextMeta = currentContextMeta;
         result.groundingAssessment = buildEntityContextGroundingAssessment({
           result,
           input: refineInput
         });
+        const continuityOnly = result?.continuityOnly === true;
+        const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
         if (result.contextSummary) profileEl.value = result.contextSummary;
         applyEntityContextGroundingCard(contextGroundingEl, result.groundingAssessment);
         latestDerivedDepartmentContext = result;
         contextRefinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the function context based on your latest prompt.' });
+        if (contextRefineStatusEl) {
+          contextRefineStatusEl.textContent = continuityOnly
+            ? 'Live AI was unavailable, so the current draft was kept unchanged.'
+            : 'Latest follow-up applied. Keep iterating until the context feels right.';
+        }
+        UI.toast(
+          continuityOnly
+            ? 'Live AI was unavailable. The current function context stayed unchanged.'
+            : degraded
+              ? 'Function context updated with fallback support. Review it carefully.'
+              : 'Function context refined.',
+          degraded ? 'warning' : 'success',
+          5000
+        );
       } else {
         const settings = getAdminSettings();
         const refineInput = {
@@ -5855,13 +6158,29 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         } catch {
           result = buildLocalCompanyContextFallback(refineInput);
         }
+        currentContextMeta = buildAiContextReviewMeta(result, { existingMeta: currentContextMeta, sourceUrl: websiteEl?.value.trim() || '' });
         applyOrgCompanyContextResult(result);
+        renderContextReviewState();
         contextRefinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the company context based on your latest prompt.' });
+        const continuityOnly = result?.continuityOnly === true;
+        const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
+        if (contextRefineStatusEl) {
+          contextRefineStatusEl.textContent = continuityOnly
+            ? 'Live AI was unavailable, so the current company context was kept unchanged.'
+            : 'Latest follow-up applied. Keep iterating until the context feels right.';
+        }
+        UI.toast(
+          continuityOnly
+            ? 'Live AI was unavailable. The current company context stayed unchanged.'
+            : degraded
+              ? 'Company context updated with fallback support. Review it carefully.'
+              : 'Entity context refined.',
+          degraded ? 'warning' : 'success',
+          5000
+        );
       }
       renderOrgContextRefinementHistory();
       if (contextFollowupEl) contextFollowupEl.value = '';
-      if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Latest follow-up applied. Keep iterating until the context feels right.';
-      UI.toast(departmentEditorMode ? 'Function context refined.' : 'Entity context refined.', 'success', 5000);
     } catch (error) {
       UI.toast('Context refinement failed. Try again or shorten the prompt.', 'danger', 6000);
       if (contextRefineStatusEl) contextRefineStatusEl.textContent = 'Context refinement failed. Try again or shorten the prompt.';
@@ -5897,6 +6216,21 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
           console.warn('Auto-deriving new function context failed:', error?.message || error);
         }
       }
+      const reviewModel = getContextReviewDisplayModel(currentContextMeta, {
+        subject: departmentEditorMode ? 'Function context' : 'Entity context'
+      });
+      const shouldApproveContext = !!(reviewModel.showApprovalToggle && contextReviewApprovedEl?.checked);
+      const hasContextContent = departmentEditorMode
+        ? !!profileEl.value.trim()
+        : !!(profileEl.value.trim() || Object.values(getCurrentOrgCompanySections()).some(value => String(value || '').trim()));
+      const nextContextMeta = !hasContextContent
+        ? null
+        : shouldApproveContext
+          ? buildReviewedContextReviewMeta(currentContextMeta, { sourceUrl: websiteEl?.value.trim() || '' })
+          : normaliseContextReviewMeta(currentContextMeta);
+      if (latestDerivedDepartmentContext) {
+        latestDerivedDepartmentContext.contextMeta = nextContextMeta;
+      }
       await onSave?.({
         ...node,
         id: node.id || `org_${Date.now()}`,
@@ -5905,6 +6239,7 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
         parentId: parentId || null,
         websiteUrl: departmentEditorMode ? '' : websiteEl.value.trim(),
         profile: profileEl.value.trim(),
+        contextMeta: nextContextMeta,
         ownerUsername: ownerEl.value,
         departmentRelationshipType: departmentEditorMode ? typeEl.value : '',
         contextSections: departmentEditorMode ? null : {
@@ -5957,9 +6292,10 @@ function openOrgEntityEditor({ structure = [], existingNode = null, seed = {}, o
 }
 
 function buildEntityContextRequest(entity, settings = getAdminSettings(), existingLayer = null) {
-  const structure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
+  const safeSettings = buildInheritanceSafeAdminSettings(settings);
+  const structure = Array.isArray(safeSettings.companyStructure) ? safeSettings.companyStructure : [];
   const parentEntity = entity?.parentId ? getEntityById(structure, entity.parentId) : null;
-  const parentLayer = parentEntity?.id ? getEntityLayerById(settings, parentEntity.id) : null;
+  const parentLayer = parentEntity?.id ? getEntityLayerById(safeSettings, parentEntity.id) : null;
   return {
     entity: {
       id: entity?.id || '',
@@ -5990,6 +6326,9 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
   const parentName = contextRequest.parentEntity?.name || '';
   const isDepartment = isDepartmentEntityType(entity.type);
   const refinementHistory = [];
+  const defaultContextReview = getContextReviewDisplayModel(existingLayer.contextMeta, {
+    subject: isDepartment ? 'Function context' : 'Business context'
+  });
   const modal = UI.modal({
     title: `Manage Context: ${entity.name}`,
     body: `
@@ -6034,6 +6373,17 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
         <button class="btn btn--secondary" id="btn-entity-layer-ai" type="button">Build with AI</button>
         <span class="form-help">Derive context from the entity, the parent BU, and the current admin baseline.</span>
       </div>
+      <div class="card mt-4" style="padding:var(--sp-4);background:var(--bg-canvas)" id="entity-layer-review-card">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div class="context-panel-title">Inheritance review</div>
+          <span class="badge ${defaultContextReview.badgeClass}" id="entity-layer-review-badge">${escapeHtml(defaultContextReview.badge)}</span>
+        </div>
+        <div class="form-help" style="margin-top:8px" id="entity-layer-review-copy">${escapeHtml(defaultContextReview.message)}</div>
+        <label class="form-checkbox" id="entity-layer-review-toggle-wrap" style="margin-top:10px;${defaultContextReview.showApprovalToggle ? '' : 'display:none'}">
+          <input type="checkbox" id="entity-layer-review-approved" ${defaultContextReview.reviewApprovedChecked ? 'checked' : ''}>
+          <span id="entity-layer-review-label">${escapeHtml(defaultContextReview.approvalLabel || '')}</span>
+        </label>
+      </div>
       <div id="entity-layer-grounding"></div>
       ${UI.aiRefinementCard({
         title: 'Refine With Follow-Up Prompts',
@@ -6066,6 +6416,12 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
   const followupEl = document.getElementById('entity-layer-followup');
   const refineStatusEl = document.getElementById('entity-layer-refine-status');
   const groundingEl = document.getElementById('entity-layer-grounding');
+  const reviewBadgeEl = document.getElementById('entity-layer-review-badge');
+  const reviewCopyEl = document.getElementById('entity-layer-review-copy');
+  const reviewToggleWrapEl = document.getElementById('entity-layer-review-toggle-wrap');
+  const reviewApprovedEl = document.getElementById('entity-layer-review-approved');
+  const reviewLabelEl = document.getElementById('entity-layer-review-label');
+  let currentContextMeta = normaliseContextReviewMeta(existingLayer.contextMeta);
 
   function getCurrentContextDraft() {
     return {
@@ -6079,16 +6435,21 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
   }
 
   function applyContextResult(result, { onlyEmptyGeography = false } = {}) {
-    if (result.geography && (!onlyEmptyGeography || !geoEl.value.trim())) {
-      geoEl.value = result.geography;
+    const nextGeography = stripSuggestedDraftLabel(result.geography || '');
+    const nextSummary = stripSuggestedDraftLabel(result.contextSummary || '');
+    const nextAppetite = stripSuggestedDraftLabel(result.riskAppetiteStatement || '');
+    const nextAiInstructions = stripSuggestedDraftLabel(result.aiInstructions || '');
+    const nextBenchmarkStrategy = stripSuggestedDraftLabel(result.benchmarkStrategy || '');
+    if (nextGeography && (!onlyEmptyGeography || !geoEl.value.trim())) {
+      geoEl.value = nextGeography;
     }
-    if (result.contextSummary) summaryEl.value = result.contextSummary;
-    if (result.riskAppetiteStatement) appetiteEl.value = result.riskAppetiteStatement;
+    if (nextSummary) summaryEl.value = nextSummary;
+    if (nextAppetite) appetiteEl.value = nextAppetite;
     if (Array.isArray(result.applicableRegulations) && result.applicableRegulations.length) {
-      regsInput.setTags(Array.from(new Set(result.applicableRegulations)));
+      regsInput.setTags(Array.from(new Set(result.applicableRegulations.map(item => stripSuggestedDraftLabel(item)).filter(Boolean))));
     }
-    if (result.aiInstructions) aiEl.value = result.aiInstructions;
-    if (result.benchmarkStrategy) benchmarkEl.value = result.benchmarkStrategy;
+    if (nextAiInstructions) aiEl.value = nextAiInstructions;
+    if (nextBenchmarkStrategy) benchmarkEl.value = nextBenchmarkStrategy;
   }
 
   function renderRefinementHistory() {
@@ -6105,7 +6466,22 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
     historyEl.scrollTop = historyEl.scrollHeight;
   }
 
+  function renderLayerContextReviewState(meta = currentContextMeta) {
+    const model = getContextReviewDisplayModel(meta, {
+      subject: isDepartment ? 'Function context' : 'Business context'
+    });
+    if (reviewBadgeEl) {
+      reviewBadgeEl.className = `badge ${model.badgeClass}`;
+      reviewBadgeEl.textContent = model.badge;
+    }
+    if (reviewCopyEl) reviewCopyEl.textContent = model.message;
+    if (reviewToggleWrapEl) reviewToggleWrapEl.style.display = model.showApprovalToggle ? '' : 'none';
+    if (reviewLabelEl) reviewLabelEl.textContent = model.approvalLabel || '';
+    if (reviewApprovedEl) reviewApprovedEl.checked = !!model.reviewApprovedChecked;
+  }
+
   renderRefinementHistory();
+  renderLayerContextReviewState();
   applyEntityContextGroundingCard(groundingEl, null, {
     idleMessage: 'After AI Assist runs, this panel will show whether the retained context draft was grounded in saved BU or organisation context or whether it is still generic.'
   });
@@ -6127,6 +6503,8 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
         uploadedText: uploaded.text,
         uploadedDocumentName: uploaded.name
       });
+      currentContextMeta = buildAiContextReviewMeta(result, { existingMeta: currentContextMeta });
+      result.contextMeta = currentContextMeta;
       result.groundingAssessment = buildEntityContextGroundingAssessment({
         result,
         input: {
@@ -6135,18 +6513,33 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
           uploadedDocumentName: uploaded.name
         }
       });
+      const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
       applyContextResult(result, { onlyEmptyGeography: true });
       applyEntityContextGroundingCard(groundingEl, result.groundingAssessment);
-      refinementHistory.push({ role: 'assistant', text: uploaded.text ? `Initial context draft created for ${entity.name} and grounded with the uploaded source material. Review it or use follow-up prompts below to shape it further.` : `Initial context draft created for ${entity.name}. Review it or use follow-up prompts below to shape it further.` });
+      renderLayerContextReviewState();
+      refinementHistory.push({
+        role: 'assistant',
+        text: degraded
+          ? `Live AI was unavailable, so a minimal continuity draft was loaded for ${entity.name}. Review it carefully or retry when live AI is available.`
+          : (uploaded.text
+            ? `Initial context draft created for ${entity.name} and grounded with the uploaded source material. Review it or use follow-up prompts below to shape it further.`
+            : `Initial context draft created for ${entity.name}. Review it or use follow-up prompts below to shape it further.`)
+      });
       renderRefinementHistory();
-      if (refineStatusEl) refineStatusEl.textContent = 'Initial AI draft applied. Use a follow-up prompt below if you want to reshape it further.';
+      if (refineStatusEl) {
+        refineStatusEl.textContent = degraded
+          ? 'Live AI was unavailable, so a continuity draft was loaded. Retry when live AI is available if you want a stronger drafted context.'
+          : 'Initial AI draft applied. Use a follow-up prompt below if you want to reshape it further.';
+      }
       UI.toast(
-        result?.groundingAssessment?.status === 'generic'
-          ? `Context built for ${entity.name}, but it is not strongly grounded in saved BU or organisation context yet.`
-          : result?.groundingAssessment?.status === 'partial'
-            ? `Context built for ${entity.name}. Some inherited context was used, but the grounding is only partial.`
-            : `Context built for ${entity.name}. Review and save it.`,
-        result?.groundingAssessment?.status === 'generic' ? 'warning' : 'success',
+        degraded
+          ? `Live AI was unavailable. Loaded a minimal continuity draft for ${entity.name}.`
+          : result?.groundingAssessment?.status === 'generic'
+            ? `Context built for ${entity.name}, but it is not strongly grounded in saved BU or organisation context yet.`
+            : result?.groundingAssessment?.status === 'partial'
+              ? `Context built for ${entity.name}. Some inherited context was used, but the grounding is only partial.`
+              : `Context built for ${entity.name}. Review and save it.`,
+        degraded || result?.groundingAssessment?.status === 'generic' ? 'warning' : 'success',
         5000
       );
     } catch (error) {
@@ -6190,17 +6583,34 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       } catch {
         result = buildLocalEntityContextFallback(refineInput);
       }
+      currentContextMeta = buildAiContextReviewMeta(result, { existingMeta: currentContextMeta });
+      result.contextMeta = currentContextMeta;
       result.groundingAssessment = buildEntityContextGroundingAssessment({
         result,
         input: refineInput
       });
+      const continuityOnly = result?.continuityOnly === true;
+      const degraded = result?.aiUnavailable === true || result?.usedFallback === true;
       applyContextResult(result);
       applyEntityContextGroundingCard(groundingEl, result.groundingAssessment);
+      renderLayerContextReviewState();
       refinementHistory.push({ role: 'assistant', text: result.responseMessage || 'I refined the context based on your latest prompt.' });
       renderRefinementHistory();
       followupEl.value = '';
-      if (refineStatusEl) refineStatusEl.textContent = 'Latest follow-up applied. Keep iterating until you are comfortable with the context.';
-      UI.toast(`Context refined for ${entity.name}.`, 'success', 5000);
+      if (refineStatusEl) {
+        refineStatusEl.textContent = continuityOnly
+          ? 'Live AI was unavailable, so the current draft was kept unchanged.'
+          : 'Latest follow-up applied. Keep iterating until you are comfortable with the context.';
+      }
+      UI.toast(
+        continuityOnly
+          ? `Live AI was unavailable. The current context for ${entity.name} stayed unchanged.`
+          : degraded
+            ? `Context updated with fallback support for ${entity.name}. Review it carefully.`
+            : `Context refined for ${entity.name}.`,
+        degraded ? 'warning' : 'success',
+        5000
+      );
     } catch (error) {
       UI.toast('Context refinement failed. Try again or shorten the prompt.', 'danger', 6000);
       if (refineStatusEl) refineStatusEl.textContent = 'Context refinement failed. Try again or shorten the prompt.';
@@ -6210,6 +6620,17 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
     }
   });
   document.getElementById('entity-layer-save').addEventListener('click', () => {
+    const reviewModel = getContextReviewDisplayModel(currentContextMeta, {
+      subject: isDepartment ? 'Function context' : 'Business context'
+    });
+    const shouldApproveContext = !!(reviewModel.showApprovalToggle && reviewApprovedEl?.checked);
+    const currentDraft = getCurrentContextDraft();
+    const hasContextContent = Object.values(currentDraft).some(value => Array.isArray(value) ? value.length : String(value || '').trim());
+    const nextContextMeta = !hasContextContent
+      ? null
+      : shouldApproveContext
+        ? buildReviewedContextReviewMeta(currentContextMeta)
+        : normaliseContextReviewMeta(currentContextMeta);
     onSave?.({
       entityId: entity.id,
       entityName: entity.name,
@@ -6219,7 +6640,8 @@ function openEntityContextLayerEditor({ entity, settings = getAdminSettings(), o
       riskAppetiteStatement: appetiteEl.value.trim(),
       applicableRegulations: regsInput.getTags(),
       aiInstructions: aiEl.value.trim(),
-      benchmarkStrategy: benchmarkEl.value.trim()
+      benchmarkStrategy: benchmarkEl.value.trim(),
+      contextMeta: nextContextMeta
     }, modal);
   });
   return modal;
@@ -6655,52 +7077,19 @@ function openEntityObligationManager({ entity, settings = getAdminSettings(), on
 }
 
 
-function getLocalRefinementDirectives(prompt = '') {
-  const lower = String(prompt || '').toLowerCase();
-  return {
-    excludePrivacy: /(does not|doesn't|not|without|exclude|remove).{0,30}(data privacy|privacy|personal data|pii)/i.test(lower),
-    excludeHealth: /(does not|doesn't|not|without|exclude|remove).{0,30}(health data|medical data|patient data|phi|health information)/i.test(lower),
-    emphasise: ((lower.match(/(?:focus on|emphasise|emphasize|highlight)\s+([^.;]+)/i) || [])[1] || '').trim()
-  };
-}
-
-function applyLocalRefinementToText(text = '', prompt = '') {
-  const source = String(text || '').trim();
-  if (!source) return '';
-  const directives = getLocalRefinementDirectives(prompt);
-  let sentences = source.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
-  if (directives.excludePrivacy) {
-    sentences = sentences.filter((sentence) => !/(privacy|personal data|data protection|pii|gdpr|pdpl)/i.test(sentence));
-  }
-  if (directives.excludeHealth) {
-    sentences = sentences.filter((sentence) => !/(health data|medical data|patient data|clinical|hospital|phi|health information)/i.test(sentence));
-  }
-  let result = sentences.join(' ').trim();
-  if (!result) result = source;
-  const clarifiers = [];
-  if (directives.excludePrivacy) clarifiers.push('This context should not be framed as a primary data-privacy scenario.');
-  if (directives.excludeHealth) clarifiers.push('This context should not be framed as handling health or patient data.');
-  if (directives.emphasise) clarifiers.push(`Keep the emphasis on ${directives.emphasise}.`);
-  if (clarifiers.length) {
-    result = [result.replace(/\s+/g, ' ').trim(), ...clarifiers].filter(Boolean).join(' ').trim();
-  }
-  return result;
-}
-
 function buildLocalEntityContextFallback(refineInput = {}) {
   const current = refineInput.currentContext || {};
-  const prompt = String(refineInput.userPrompt || '').trim();
-  const updatedSummary = applyLocalRefinementToText(String(current.contextSummary || '').trim(), prompt);
   return {
     geography: String(current.geography || '').trim(),
-    contextSummary: updatedSummary || String(current.contextSummary || '').trim(),
+    contextSummary: String(current.contextSummary || '').trim(),
     riskAppetiteStatement: String(current.riskAppetiteStatement || '').trim(),
     applicableRegulations: Array.isArray(current.applicableRegulations) ? current.applicableRegulations : [],
     aiInstructions: String(current.aiInstructions || '').trim(),
     benchmarkStrategy: String(current.benchmarkStrategy || '').trim(),
-    responseMessage: prompt
-      ? 'I reworked the existing context locally using your latest instruction. Review the wording and tighten anything that still needs adjustment.'
-      : 'I applied a local refinement to keep the context moving. Review the updated text and adjust anything else manually if needed.'
+    aiUnavailable: true,
+    continuityOnly: true,
+    preserveExistingReviewMeta: true,
+    responseMessage: 'Live AI was unavailable, so the current context draft was kept unchanged. Retry when live AI is available if you want a refined update.'
   };
 }
 
@@ -6745,28 +7134,30 @@ function buildLocalEntityContextBootstrapFallback(input = {}) {
       ? 'Tailor outputs to the function remit. Prefer policy or framework ownership, disclosure governance, assurance coordination, metrics control, and stakeholder reporting over generic group-sector descriptions.'
       : 'Tailor outputs to the function remit. Focus on actual responsibilities, dependencies, control ownership, and key interfaces. Do not restate the full group profile.',
     benchmarkStrategy: String(input.existingLayer?.benchmarkStrategy || input.parentLayer?.benchmarkStrategy || input.adminSettings?.benchmarkStrategy || '').trim(),
-    responseMessage: 'I generated a locally derived function context using the enriched parent and organisation sources.'
+    usedFallback: true,
+    aiUnavailable: true,
+    responseMessage: 'Live AI was unavailable, so a minimal parent-derived continuity draft was loaded from the saved organisation context. Review it carefully before saving.'
   };
 }
 
 function buildLocalCompanyContextFallback(refineInput = {}) {
   const current = refineInput.currentSections || {};
-  const prompt = String(refineInput.userPrompt || '').trim();
   return {
     ...current,
-    companySummary: applyLocalRefinementToText(String(current.companySummary || '').trim(), prompt),
-    businessModel: applyLocalRefinementToText(String(current.businessModel || '').trim(), prompt),
-    operatingModel: applyLocalRefinementToText(String(current.operatingModel || '').trim(), prompt),
-    publicCommitments: applyLocalRefinementToText(String(current.publicCommitments || '').trim(), prompt),
-    keyRiskSignals: applyLocalRefinementToText(String(current.keyRiskSignals || '').trim(), prompt),
-    obligations: applyLocalRefinementToText(String(current.obligations || '').trim(), prompt),
+    companySummary: String(current.companySummary || '').trim(),
+    businessModel: String(current.businessModel || '').trim(),
+    operatingModel: String(current.operatingModel || '').trim(),
+    publicCommitments: String(current.publicCommitments || '').trim(),
+    keyRiskSignals: String(current.keyRiskSignals || '').trim(),
+    obligations: String(current.obligations || '').trim(),
     sources: String(current.sources || '').trim(),
     aiGuidance: String(refineInput.currentAiGuidance || '').trim(),
     suggestedGeography: String(refineInput.currentGeography || '').trim(),
     regulatorySignals: Array.isArray(refineInput.currentRegulations) ? refineInput.currentRegulations : [],
-    responseMessage: prompt
-      ? 'I reworked the existing company context locally using your latest instruction. Review the updated sections and tighten any remaining wording manually if needed.'
-      : 'I applied a local refinement to keep the company context moving. Review the updated sections and tighten anything else manually if needed.'
+    aiUnavailable: true,
+    continuityOnly: true,
+    preserveExistingReviewMeta: true,
+    responseMessage: 'Live AI was unavailable, so the current company context was kept unchanged. Retry when live AI is available if you want a refined update.'
   };
 }
 
@@ -12049,6 +12440,24 @@ function renderAdminSettings(activeSection = 'org') {
       obligations: getInputValue('admin-company-section-obligations', currentSettings.companyContextSections?.obligations || ''),
       sources: getInputValue('admin-company-section-sources', currentSettings.companyContextSections?.sources || '')
     };
+    const currentCompanyContextMeta = normaliseContextReviewMeta({
+      status: getInputValue('admin-company-context-status', currentSettings.companyContextMeta?.status || ''),
+      source: getInputValue('admin-company-context-source', currentSettings.companyContextMeta?.source || ''),
+      generatedAt: Number(getInputValue('admin-company-context-generated-at', currentSettings.companyContextMeta?.generatedAt || 0)),
+      reviewedAt: Number(getInputValue('admin-company-context-reviewed-at', currentSettings.companyContextMeta?.reviewedAt || 0)),
+      reviewDueAt: Number(getInputValue('admin-company-context-review-due-at', currentSettings.companyContextMeta?.reviewDueAt || 0)),
+      fallbackUsed: getInputValue('admin-company-context-fallback-used', currentSettings.companyContextMeta?.fallbackUsed === true ? 'true' : 'false') === 'true',
+      sourceUrl: getInputValue('admin-company-context-source-url', currentSettings.companyContextMeta?.sourceUrl || currentSettings.companyWebsiteUrl || '')
+    });
+    const companyContextHasContent = Object.values(companyContextSections).some(value => String(value || '').trim());
+    const companyContextReviewModel = getContextReviewDisplayModel(currentCompanyContextMeta, { subject: 'Shared company context' });
+    const companyContextMeta = !companyContextHasContent
+      ? null
+      : (companyContextReviewModel.showApprovalToggle && document.getElementById('admin-company-review-approved')?.checked)
+        ? buildReviewedContextReviewMeta(currentCompanyContextMeta, {
+            sourceUrl: getInputValue('admin-company-url', currentSettings.companyWebsiteUrl || '')
+          })
+        : currentCompanyContextMeta;
     return {
       warningThresholdUsd,
       toleranceThresholdUsd,
@@ -12056,6 +12465,7 @@ function renderAdminSettings(activeSection = 'org') {
       payload: {
         ...currentSettings,
         companyContextSections,
+        companyContextMeta,
         geography: getInputValue('admin-geo', currentSettings.geography || DEFAULT_ADMIN_SETTINGS.geography) || DEFAULT_ADMIN_SETTINGS.geography,
         companyWebsiteUrl: getInputValue('admin-company-url', currentSettings.companyWebsiteUrl || ''),
         companyContextProfile: serialiseCompanyContextSections(companyContextSections),

@@ -142,6 +142,63 @@ test('settings GET allows admin-secret access and includes storage metadata', as
   assert.equal(res.payload?.storage?.mode, 'shared-kv');
 });
 
+test('settings GET normalises shared context review metadata for company, entity, and layer context', async () => {
+  kvStore.set('risk_calculator_settings', JSON.stringify({
+    companyContextProfile: 'Reviewed company context',
+    companyContextMeta: {
+      status: 'reviewed',
+      source: 'ai',
+      generatedAt: 1710000000000,
+      reviewedAt: 1710003600000,
+      reviewDueAt: 1717779600000,
+      sourceUrl: 'https://example.com'
+    },
+    companyStructure: [
+      {
+        id: 'corp-a',
+        type: 'Holding company',
+        name: 'Corp A',
+        profile: 'Entity profile',
+        contextMeta: {
+          status: 'draft',
+          source: 'ai',
+          generatedAt: 1710000000000
+        }
+      }
+    ],
+    entityContextLayers: [
+      {
+        entityId: 'corp-a',
+        entityName: 'Corp A',
+        contextSummary: 'Layer summary',
+        contextMeta: {
+          status: 'fallback',
+          source: 'ai',
+          fallbackUsed: true,
+          generatedAt: 1710000000000
+        }
+      }
+    ],
+    _meta: { revision: 2, updatedAt: 1710000000000 }
+  }));
+  const handler = loadFreshSettingsHandler();
+  const res = createRes();
+
+  await handler({
+    method: 'GET',
+    headers: {
+      'x-admin-secret': 'test-admin-secret'
+    }
+  }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.payload?.settings?.companyContextMeta?.status, 'reviewed');
+  assert.equal(res.payload?.settings?.companyContextMeta?.source, 'ai');
+  assert.equal(res.payload?.settings?.companyStructure?.[0]?.contextMeta?.status, 'draft');
+  assert.equal(res.payload?.settings?.entityContextLayers?.[0]?.contextMeta?.status, 'fallback');
+  assert.equal(res.payload?.settings?.entityContextLayers?.[0]?.contextMeta?.fallbackUsed, true);
+});
+
 test('settings GET redacts hidden global and out-of-scope context for standard users', async () => {
   kvStore.set('risk_calculator_settings', JSON.stringify({
     geography: 'United Arab Emirates',
