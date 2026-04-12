@@ -8,7 +8,8 @@ Use this checklist before promoting a new pilot build to GitHub Pages or Vercel-
 - Run `npm run qa:release`.
 - Use the package-managed browser scripts, not raw `npx playwright test`, so the SPA is verified against a clean managed static origin.
 - If `qa:release` fails on eval thresholds, treat that as a release blocker rather than a reporting warning.
-- Confirm GitHub Actions `Pilot CI` is green on the release commit.
+- Confirm GitHub Actions `Pilot CI` app-integrity job is green on the release commit.
+- Review the separate AI-quality job and its uploaded eval report before promotion, even though that CI job is currently advisory.
 - Confirm GitHub Pages deploy is waiting on the validation job and did not bypass it.
 
 ## Frontend

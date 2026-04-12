@@ -171,6 +171,7 @@ npm run qa:release
 Do not swap that for raw `npx playwright test`.
 For this static SPA, the package browser scripts provision a clean local static origin on purpose so cold-login, review-queue, and hosted-API-origin defects are not masked by whatever is already running on localhost.
 Also note that `qa:release` now fails on explicit eval thresholds. If the deterministic or live eval is materially weak, that is treated as a release-quality issue, not only an analytics report.
+In CI, the blocking job now uses `npm run qa:app` and the AI-quality eval runs in a separate advisory job, but actual release promotion should still respect the full local `qa:release` result.
 
 If the change affects help, admin settings, or routes, verify:
 - a cold login still hydrates shared org structure before the first authenticated workspace render

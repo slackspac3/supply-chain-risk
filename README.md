@@ -616,18 +616,34 @@ npm run eval:local
 node scripts/readme-scan.js
 ```
 
-Release-grade deterministic gate:
+App-integrity gate:
+
+```bash
+npm run qa:app
+```
+
+AI-quality gate:
+
+```bash
+npm run qa:ai
+```
+
+Full release gate:
 
 ```bash
 npm run qa:release
 ```
 
-What `qa:release` covers for this application:
+What the split gates mean for this application:
+- `qa:app` is the blocking engineering gate: syntax, taxonomy sync, smoke guardrails, unit coverage, eval fixture contract, docs consistency, and full Playwright
+- `qa:ai` is the model-quality gate: deterministic local eval plus explicit threshold enforcement
+- `qa:release` is the strict local promotion gate and runs both
+
+What `qa:app` covers for this application:
 - static syntax and smoke guardrails
 - taxonomy projection consistency
 - full unit coverage
-- deterministic eval-fixture and local stub eval coverage for AI/RAG drift
-- explicit AI/RAG release thresholds over the eval report rather than a report-only artifact
+- deterministic eval-fixture coverage for AI/RAG contract stability
 - full Playwright coverage, not just the smoke subset
 - documentation and release-contract consistency
 - a managed ephemeral static SPA origin for browser verification, so the gate does not inherit whatever already happens to be running on localhost
@@ -644,11 +660,16 @@ Browser test best practice for this repository:
 - that matters here because warm or reused localhost origins can hide the exact cold-session hydration and wrong-origin browser/API issues this application is most exposed to
 
 Eval gate best practice for this repository:
-- do not treat `eval:local` as an informational report only; `qa:release` now fails when release thresholds are missed
+- do not treat `eval:local` as an informational report only; `qa:ai` and `qa:release` fail when release thresholds are missed
 - the release checker is mode-aware:
   - `stub` mode gates taxonomy, risk recall/leakage, anchor coverage, retrieval coverage, and retrieval F1
   - `live` mode gates those same metrics and also limits fallback dependence
 - for this product, a green browser suite is not enough if the scenario eval still shows weak lane discipline, weak grounding, or excessive AI fallback
+
+CI policy for this repository:
+- `Pilot CI` now has a blocking app-integrity job and a separate AI-quality job
+- the AI-quality job stays visible and uploads the eval report artifact, but it does not block `master` while the current stub-quality baseline is still below target
+- actual release promotion should still use local `npm run qa:release`, not only the non-blocking CI AI job
 
 Repository consistency scan:
 - `node scripts/readme-scan.js`

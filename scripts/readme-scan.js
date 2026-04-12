@@ -101,6 +101,9 @@ const sectionAPaths = [
   'RELEASE_CHECKLIST.md',
   'ROLLBACK_PLAYBOOK.md',
   'AGENTS.md',
+  'scripts/qa-app.js',
+  'scripts/qa-ai.js',
+  'scripts/qa-shared.js',
   'scripts/run-playwright-static.js',
   'tests/fixtures/eval/g42_eval_master_repaired.jsonl',
   'scripts/run-eval-local.js',
@@ -138,6 +141,8 @@ if (!sectionAHasMissing) {
   [
     'check:syntax',
     'check:smoke',
+    'qa:app',
+    'qa:ai',
     'qa:release',
     'test:unit',
     'test:e2e:smoke',
@@ -150,6 +155,8 @@ if (!sectionAHasMissing) {
   ].forEach((key) => {
     expect(key in scripts, `[C] package.json missing script: ${key}`);
   });
+  expect(String(scripts['qa:app'] || '').includes('scripts/qa-app.js'), '[C] qa:app must point to the app-integrity gate runner');
+  expect(String(scripts['qa:ai'] || '').includes('scripts/qa-ai.js'), '[C] qa:ai must point to the AI-quality gate runner');
   expect(String(scripts['test:e2e'] || '').includes('run-playwright-static.js'), '[C] test:e2e must use the managed static-server Playwright runner');
   expect(String(scripts['test:e2e:smoke'] || '').includes('run-playwright-static.js'), '[C] test:e2e:smoke must use the managed static-server Playwright runner');
 }
