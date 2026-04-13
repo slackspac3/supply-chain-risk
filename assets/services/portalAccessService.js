@@ -189,6 +189,16 @@
     return whenGuest;
   }
 
+  function canAccessPortalKind(role, portalKind = '') {
+    const safeRole = normaliseRole(role, { defaultRole: 'user' });
+    const safePortalKind = String(portalKind || '').trim().toLowerCase();
+    if (!safePortalKind || safePortalKind === 'guest') return false;
+    const currentPortalKind = getPortalKindForRole(safeRole);
+    if (currentPortalKind === safePortalKind) return true;
+    if (safePortalKind === 'internal' && isAdminRole(safeRole)) return true;
+    return false;
+  }
+
   function listManageableRoles() {
     return MANAGED_ROLE_OPTIONS.map(role => ({ ...role }));
   }
@@ -281,6 +291,7 @@
     isInternalRole,
     getPortalKindForRole,
     getHomeRouteForRole,
+    canAccessPortalKind,
     listManageableRoles,
     listManageableRolesForActor,
     canManageUserRole,

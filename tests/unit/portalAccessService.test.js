@@ -18,6 +18,13 @@ test('portal access service maps roles to the correct portal homes', () => {
   assert.equal(PortalAccessService.getHomeRouteForRole('reviewer'), '/internal/home');
 });
 
+test('admin roles can preview the internal portal without gaining vendor access', () => {
+  assert.equal(PortalAccessService.canAccessPortalKind('admin', 'internal'), true);
+  assert.equal(PortalAccessService.canAccessPortalKind('bu_admin', 'internal'), true);
+  assert.equal(PortalAccessService.canAccessPortalKind('admin', 'vendor'), false);
+  assert.equal(PortalAccessService.canAccessPortalKind('vendor_contact', 'internal'), false);
+});
+
 test('manageable roles include the new vendor and GTR workflow roles', () => {
   const manageableRoles = PortalAccessService.listManageableRoles();
   assert.equal(manageableRoles.some((role) => role.value === 'vendor_contact'), true);

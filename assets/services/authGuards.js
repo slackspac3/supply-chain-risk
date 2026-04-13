@@ -44,10 +44,13 @@ function requireAdmin(targetRoute = '') {
 function requirePortalAccess(portalKind) {
   if (!requireAuth()) return false;
   const currentUser = AuthService?.getCurrentUser?.();
-  const currentPortalKind = typeof PortalAccessService !== 'undefined' && PortalAccessService
-    ? PortalAccessService.getPortalKindForRole(currentUser?.role)
-    : 'guest';
-  if (!portalKind || portalKind === currentPortalKind) return true;
+  const hasPortalAccess = typeof PortalAccessService !== 'undefined' && PortalAccessService
+    && typeof PortalAccessService.canAccessPortalKind === 'function'
+    ? PortalAccessService.canAccessPortalKind(currentUser?.role, portalKind)
+    : portalKind === (typeof PortalAccessService !== 'undefined' && PortalAccessService
+      ? PortalAccessService.getPortalKindForRole(currentUser?.role)
+      : 'guest');
+  if (hasPortalAccess) return true;
   const fallbackRoute = typeof PortalAccessService !== 'undefined' && PortalAccessService
     ? PortalAccessService.getHomeRouteForRole(currentUser?.role)
     : '/login';
