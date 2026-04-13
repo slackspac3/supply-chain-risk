@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadLlmService } = require('./helpers/loadLlmServiceHarness');
 
-function loadService(origin = 'https://slackspac3.github.io', { apiOrigin = 'https://risk-calculator-eight.vercel.app' } = {}) {
+function loadService(origin = 'https://slackspac3.github.io', { apiOrigin = 'https://supply-chain-risk-two.vercel.app' } = {}) {
   return loadLlmService({
     origin,
     apiOrigin,

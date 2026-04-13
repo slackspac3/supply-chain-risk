@@ -25,9 +25,9 @@ function loadOrgIntelligenceService({ origin = 'https://slackspac3.github.io', f
   const filePath = path.resolve(__dirname, '../../assets/services/orgIntelligenceService.js');
   const source = `${fs.readFileSync(filePath, 'utf8')}\nmodule.exports = OrgIntelligenceService;\n`;
   const apiOriginResolver = {
-    DEFAULT_API_ORIGIN: 'https://risk-calculator-eight.vercel.app',
+    DEFAULT_API_ORIGIN: 'https://supply-chain-risk-two.vercel.app',
     resolveApiUrl(path = '') {
-      return `https://risk-calculator-eight.vercel.app${String(path || '').trim()}`;
+      return `https://supply-chain-risk-two.vercel.app${String(path || '').trim()}`;
     }
   };
   const context = {
@@ -38,7 +38,7 @@ function loadOrgIntelligenceService({ origin = 'https://slackspac3.github.io', f
     window: {
       location: { origin },
       __RISK_CALCULATOR_RELEASE__: {
-        apiOrigin: 'https://risk-calculator-eight.vercel.app'
+        apiOrigin: 'https://supply-chain-risk-two.vercel.app'
       },
       ApiOriginResolver: apiOriginResolver
     },
@@ -84,7 +84,7 @@ test('OrgIntelligenceService uses the Vercel API origin outside vercel.app for s
     lensKey: 'cyber'
   });
 
-  assert.equal(calls[0], 'https://risk-calculator-eight.vercel.app/api/org-intelligence');
+  assert.equal(calls[0], 'https://supply-chain-risk-two.vercel.app/api/org-intelligence');
 });
 
 test('OrgIntelligenceService uses the Vercel API origin outside vercel.app for shared feedback reads', async () => {
@@ -115,7 +115,7 @@ test('OrgIntelligenceService uses the Vercel API origin outside vercel.app for s
 
   await service.refresh(true);
 
-  assert.equal(calls[0], 'https://risk-calculator-eight.vercel.app/api/org-intelligence');
+  assert.equal(calls[0], 'https://supply-chain-risk-two.vercel.app/api/org-intelligence');
 });
 
 test('OrgIntelligenceService ignores browser LearningStore feedback profiles for authoritative hierarchy resolution', async () => {

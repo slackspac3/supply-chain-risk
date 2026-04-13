@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const HOSTED_API_ORIGIN = 'https://risk-calculator-eight.vercel.app';
+const HOSTED_API_ORIGIN = 'https://supply-chain-risk-two.vercel.app';
 
 function buildSession(user, apiSessionToken = 'test-session-token') {
   return {

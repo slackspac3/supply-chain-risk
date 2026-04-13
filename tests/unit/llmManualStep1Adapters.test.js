@@ -32,7 +32,7 @@ test('buildManualDraftRefinement uses the server manual-draft-refinement endpoin
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/manual-draft-refinement');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/manual-draft-refinement');
   const requestBody = JSON.parse(fetchCalls[0].options.body);
   assert.equal(requestBody.riskStatement, 'Azure global admin credentials discovered on the dark web are used to access the tenant and modify critical configurations.');
   assert.deepEqual(requestBody.scenarioLensHint, { key: 'financial', label: 'Financial', functionKey: 'finance' });
@@ -63,7 +63,7 @@ test('buildManualIntakeAssist uses the server manual-intake-assist endpoint and 
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/manual-intake-assist');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/manual-intake-assist');
   const requestBody = JSON.parse(fetchCalls[0].options.body);
   assert.equal(requestBody.riskStatement, 'Key supplier misses a committed delivery date, delaying infrastructure deployment.');
   assert.equal(requestBody.registerText, 'Row 1\n\nRow 2');
@@ -98,5 +98,5 @@ test('buildManualShortlist still uses the server manual-shortlist endpoint when 
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/manual-shortlist');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/manual-shortlist');
 });

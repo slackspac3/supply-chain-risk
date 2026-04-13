@@ -4,9 +4,9 @@
   const release = Object.freeze({
     version: '0.10.0-pilot.1',
     channel: 'pilot',
-    build: '2026-04-09-cachefix1',
-    assetVersion: '20260409v1',
-    apiOrigin: 'https://risk-calculator-eight.vercel.app'
+    build: '2026-04-13-pages-hosting',
+    assetVersion: '20260413v2',
+    apiOrigin: 'https://supply-chain-risk-two.vercel.app'
   });
 
   if (typeof globalThis !== 'undefined' && globalThis) {

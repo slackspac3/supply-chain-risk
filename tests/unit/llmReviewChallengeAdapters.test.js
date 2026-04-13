@@ -139,12 +139,12 @@ test('reviewer/challenge methods use server endpoints and keep trace data in run
   assert.deepEqual(
     fetchCalls.map((call) => call.url),
     [
-      'https://risk-calculator-eight.vercel.app/api/ai/reviewer-brief',
-      'https://risk-calculator-eight.vercel.app/api/ai/challenge-assessment',
-      'https://risk-calculator-eight.vercel.app/api/ai/review-mediation',
-      'https://risk-calculator-eight.vercel.app/api/ai/parameter-challenge',
-      'https://risk-calculator-eight.vercel.app/api/ai/challenge-synthesis',
-      'https://risk-calculator-eight.vercel.app/api/ai/consensus-recommendation'
+      'https://supply-chain-risk-two.vercel.app/api/ai/reviewer-brief',
+      'https://supply-chain-risk-two.vercel.app/api/ai/challenge-assessment',
+      'https://supply-chain-risk-two.vercel.app/api/ai/review-mediation',
+      'https://supply-chain-risk-two.vercel.app/api/ai/parameter-challenge',
+      'https://supply-chain-risk-two.vercel.app/api/ai/challenge-synthesis',
+      'https://supply-chain-risk-two.vercel.app/api/ai/consensus-recommendation'
     ]
   );
   fetchCalls.forEach((call) => {
@@ -269,5 +269,5 @@ test('reviewer/challenge methods still use server endpoints even when local-dev 
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/consensus-recommendation');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/consensus-recommendation');
 });

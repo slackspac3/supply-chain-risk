@@ -76,7 +76,7 @@ test('suggestTreatmentImprovement uses the server treatment-suggestion endpoint 
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/treatment-suggestion');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/treatment-suggestion');
   assert.equal(fetchCalls[0].options.method, 'POST');
   assert.equal(fetchCalls[0].options.headers['x-session-token'], 'session-token');
   const requestBody = JSON.parse(fetchCalls[0].options.body);
@@ -159,5 +159,5 @@ test('suggestTreatmentImprovement still uses the server treatment-suggestion end
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/treatment-suggestion');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/treatment-suggestion');
 });

@@ -36,9 +36,9 @@ function loadAuthService({ sessionSeed = {}, localSeed = {}, fetchImpl = null } 
   const sessionStorage = createMemoryStorage(sessionSeed);
   const localStorage = createMemoryStorage(localSeed);
   const apiOriginResolver = {
-    DEFAULT_API_ORIGIN: 'https://risk-calculator-eight.vercel.app',
+    DEFAULT_API_ORIGIN: 'https://supply-chain-risk-two.vercel.app',
     resolveApiUrl(path = '') {
-      return `https://risk-calculator-eight.vercel.app${String(path || '').trim()}`;
+      return `https://supply-chain-risk-two.vercel.app${String(path || '').trim()}`;
     }
   };
   const context = {
@@ -55,7 +55,7 @@ function loadAuthService({ sessionSeed = {}, localSeed = {}, fetchImpl = null } 
         origin: 'http://127.0.0.1:8080'
       },
       __RISK_CALCULATOR_RELEASE__: {
-        apiOrigin: 'https://risk-calculator-eight.vercel.app'
+        apiOrigin: 'https://supply-chain-risk-two.vercel.app'
       },
       ApiOriginResolver: apiOriginResolver
     },

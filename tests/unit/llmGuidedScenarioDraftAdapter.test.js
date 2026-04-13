@@ -80,7 +80,7 @@ test('buildGuidedScenarioDraft uses the server scenario-draft endpoint and store
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/scenario-draft');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/scenario-draft');
   assert.equal(fetchCalls[0].options.method, 'POST');
   assert.equal(fetchCalls[0].options.headers['x-session-token'], 'session-token');
   const requestBody = JSON.parse(fetchCalls[0].options.body);
@@ -141,5 +141,5 @@ test('buildGuidedScenarioDraft still uses the server scenario-draft endpoint eve
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/scenario-draft');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/scenario-draft');
 });

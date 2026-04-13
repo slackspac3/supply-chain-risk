@@ -139,7 +139,7 @@ function loadBrowserLlmService(options = {}) {
         hostname: new URL(options.origin || 'https://slackspac3.github.io').hostname
       },
       __RISK_CALCULATOR_RELEASE__: {
-        apiOrigin: options.apiOrigin || 'https://risk-calculator-eight.vercel.app'
+        apiOrigin: options.apiOrigin || 'https://supply-chain-risk-two.vercel.app'
       },
       _lastRagSources: []
     },

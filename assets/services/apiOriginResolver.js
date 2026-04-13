@@ -1,5 +1,5 @@
 const ApiOriginResolver = (() => {
-  const DEFAULT_API_ORIGIN = 'https://risk-calculator-eight.vercel.app';
+  const DEFAULT_API_ORIGIN = 'https://supply-chain-risk-two.vercel.app';
 
   function _normaliseOrigin(value = '') {
     const raw = String(value || '').trim();

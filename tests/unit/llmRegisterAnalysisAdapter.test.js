@@ -60,7 +60,7 @@ test('analyseRiskRegister uses the server register-analysis endpoint and stores 
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/register-analysis');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/register-analysis');
   assert.equal(fetchCalls[0].options.method, 'POST');
   assert.equal(fetchCalls[0].options.headers['x-session-token'], 'session-token');
   const requestBody = JSON.parse(fetchCalls[0].options.body);
@@ -118,5 +118,5 @@ test('analyseRiskRegister still uses the server register-analysis endpoint even 
   });
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0].url, 'https://risk-calculator-eight.vercel.app/api/ai/register-analysis');
+  assert.equal(fetchCalls[0].url, 'https://supply-chain-risk-two.vercel.app/api/ai/register-analysis');
 });

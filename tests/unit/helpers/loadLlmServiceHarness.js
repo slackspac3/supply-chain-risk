@@ -24,7 +24,7 @@ function createNoopStorage() {
 
 function buildBaseContext({
   origin = 'https://slackspac3.github.io',
-  apiOrigin = 'https://risk-calculator-eight.vercel.app',
+  apiOrigin = 'https://supply-chain-risk-two.vercel.app',
   fetchImpl,
   sessionStorage = createNoopStorage(),
   localStorage = createNoopStorage(),
@@ -61,7 +61,7 @@ function buildBaseContext({
 
 function loadLlmServiceContext({
   origin = 'https://slackspac3.github.io',
-  apiOrigin = 'https://risk-calculator-eight.vercel.app',
+  apiOrigin = 'https://supply-chain-risk-two.vercel.app',
   fetchImpl,
   sessionStorage,
   localStorage,
