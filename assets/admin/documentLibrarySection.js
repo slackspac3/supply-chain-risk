@@ -127,7 +127,7 @@ const AdminDocumentLibrarySection = (() => {
         return age > 7 * 24 * 60 * 60 * 1000;
       }).length;
       const message = staleCount > 0
-        ? `Index rebuilt. ${staleCount} entity context${staleCount === 1 ? '' : 's'} may be stale — consider rebuilding from the Organisation Setup section.`
+        ? `Index rebuilt. ${staleCount} entity context${staleCount === 1 ? '' : 's'} may be stale — consider rebuilding from the Business Structure section.`
         : 'Index rebuilt. All entity contexts are recent.';
       UI.toast(message, staleCount > 0 ? 'warning' : 'success', 6000);
     });

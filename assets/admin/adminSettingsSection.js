@@ -2,29 +2,29 @@
   'use strict';
 
   const SETTINGS_SECTION_META = {
-    org: { title: 'Organisation Setup', description: 'Build the organisation tree first, then tune risk context from the left navigation.' },
-    company: { title: 'AI Company Context Builder', description: 'Build public company context and place it into the organisation structure.' },
-    defaults: { title: 'Platform Defaults', description: 'Manage thresholds, escalation posture, geography, and global linked-risk fallback.' },
-    governance: { title: 'Governance Inputs', description: 'Manage regulations, AI guidance, typical departments, and scoped governance overrides.' },
-    feedback: { title: 'AI Feedback & Tuning', description: 'Monitor draft, shortlist, and per-risk feedback; then tune alignment, writing style, shortlist discipline, and learning sensitivity.' },
-    access: { title: 'System Access', description: 'Review server-reported AI mode and local development overrides.' },
+    org: { title: 'Business Structure', description: 'Model business units, functions, and ownership boundaries before routing vendor work through the portals.' },
+    company: { title: 'Research Profiles', description: 'Build shared AI research context for companies, vendor types, and supporting operating profiles.' },
+    defaults: { title: 'Workflow Defaults', description: 'Manage vendor-risk thresholds, checkpoint posture, locations, and default review behaviour.' },
+    governance: { title: 'Policy Inputs', description: 'Manage policy guidance, clause inputs, regulatory prompts, and scoped control expectations.' },
+    feedback: { title: 'AI Review Tuning', description: 'Monitor AI review signal quality, then tune draft behaviour, tone, shortlist discipline, and shared-learning sensitivity.' },
+    access: { title: 'System Access', description: 'Review backend AI mode, environment status, and local development overrides.' },
     users: { title: 'User Account Control', description: 'Manage shared users, roles, BU assignments, and issued passwords.' },
     audit: { title: 'Audit Log', description: 'Review short-retention PoC audit events and sign-in statistics.' }
   };
 
   function getAdminGuidanceCopy(currentSettingsSection) {
     return currentSettingsSection === 'org'
-      ? 'Edit the organisation tree first. Context guidance and saved layer review stay below the workbench so structure remains the main task.'
+      ? 'Model business units and functions first. Shared research context and defaults stay secondary so ownership boundaries remain clear.'
       : currentSettingsSection === 'users'
         ? 'Review and search current accounts first. Creation and protected admin tools stay secondary so access changes remain controlled.'
         : currentSettingsSection === 'defaults'
-          ? 'Set global thresholds and fallback posture here. Governance inputs and scoped overrides live separately to reduce cognitive load.'
+          ? 'Set checkpoint posture, fallback behaviour, and workflow defaults here. Policy inputs and scoped overrides live separately to reduce cognitive load.'
           : currentSettingsSection === 'governance'
-            ? 'Use this screen for regulations, AI guidance, and scoped defaults. Financial thresholds remain on Platform Defaults.'
+            ? 'Use this screen for clause guidance, regulatory inputs, and scoped control expectations. Workflow defaults remain separate.'
             : currentSettingsSection === 'feedback'
-              ? 'Review the live feedback signal first, then tune only one behaviour at a time so you can see the downstream effect on alignment, writing quality, and shared learning.'
+              ? 'Review the live AI feedback signal first, then tune only one behaviour at a time so you can see the downstream effect on findings quality and shared learning.'
             : currentSettingsSection === 'company'
-              ? 'Generate first, refine second. Keep the main company-context draft simple before opening advanced AI refinement.'
+              ? 'Generate first, refine second. Keep the shared research profile simple before opening advanced AI refinement.'
               : currentSettingsSection === 'access'
                 ? 'These are stronger platform controls. Make one intentional change at a time and verify the downstream effect before saving.'
                 : 'Review short-retention audit activity without interrupting the main platform administration flow.';
@@ -36,13 +36,13 @@
       : currentSettingsSection === 'users'
         ? 'Access review first'
         : currentSettingsSection === 'defaults'
-          ? 'Thresholds first'
+          ? 'Workflow first'
           : currentSettingsSection === 'governance'
-            ? 'Guidance first'
+            ? 'Policy first'
             : currentSettingsSection === 'feedback'
               ? 'Signal first'
             : currentSettingsSection === 'company'
-              ? 'Build first'
+              ? 'Research first'
               : 'One intentional change at a time';
   }
 
@@ -58,14 +58,14 @@
           reviewApprovedChecked: false
         };
     return renderSettingsSection({
-      title: 'AI Company Context Builder',
+      title: 'Research Profile Builder',
       scope: 'admin-settings',
-      description: 'Build public context for a company website, then place it into the organisation tree as a holding company, subsidiary, portfolio company, partner, or operating business.',
+      description: 'Build shared public context for a company or vendor profile, then place it into the organisation tree for AI grounding and analyst reference.',
       meta: settings.companyWebsiteUrl ? 'Website loaded' : 'Optional',
       body: `<div class="admin-workbench-strip admin-workbench-strip--compact">
         <div>
-          <div class="admin-workbench-strip__label">Build first, refine second</div>
-          <strong>Generate the company context from a website first, then open AI refinement only when the draft needs reshaping.</strong>
+          <div class="admin-workbench-strip__label">Research first, refine second</div>
+          <strong>Generate a shared research profile from a website first, then open AI refinement only when the draft needs reshaping.</strong>
           <span>This keeps the workflow easier to control and avoids loading refinement tools before there is a usable draft.</span>
         </div>
       </div>
@@ -163,29 +163,29 @@
 
   function renderPlatformSnapshot({ companyEntities, departmentEntities, entityContextLayers, buCount, docCount }) {
     return `<details class="dashboard-disclosure card admin-snapshot-disclosure">
-      <summary>Platform snapshot <span class="badge badge--neutral">Reference</span></summary>
-      <div class="dashboard-disclosure-copy">A compact view of structure, context coverage, and where platform administration is concentrated. Open only when it helps the current task.</div>
+      <summary>Platform footprint <span class="badge badge--neutral">Reference</span></summary>
+      <div class="dashboard-disclosure-copy">A compact view of structure, AI context coverage, and where vendor-platform administration is concentrated. Open only when it helps the current task.</div>
       <div class="dashboard-disclosure-body">
         <div class="admin-overview-grid">
           <div class="admin-overview-card">
-            <div class="admin-overview-label">Businesses</div>
+            <div class="admin-overview-label">Business Entities</div>
             <div class="admin-overview-value">${companyEntities.length}</div>
             <div class="admin-overview-foot">Holding, operating, JV, listed, and partner entities in the structure</div>
           </div>
           <div class="admin-overview-card">
-            <div class="admin-overview-label">Departments</div>
+            <div class="admin-overview-label">Functions</div>
             <div class="admin-overview-value">${departmentEntities.length}</div>
             <div class="admin-overview-foot">Functions attached beneath business entities</div>
           </div>
           <div class="admin-overview-card">
-            <div class="admin-overview-label">Context Layers</div>
+            <div class="admin-overview-label">AI Context Layers</div>
             <div class="admin-overview-value">${entityContextLayers.length}</div>
-            <div class="admin-overview-foot">Entity-specific overlays for regulations, appetite, and AI behaviour</div>
+            <div class="admin-overview-foot">Entity-specific overlays for policy, posture, and AI behaviour</div>
           </div>
           <div class="admin-overview-card">
-            <div class="admin-overview-label">Org Customisation</div>
+            <div class="admin-overview-label">BU Profiles</div>
             <div class="admin-overview-value">${buCount}</div>
-            <div class="admin-overview-foot">Assessment-ready BU context derived from the organisation tree</div>
+            <div class="admin-overview-foot">Business-unit context derived from the organisation tree</div>
           </div>
           <div class="admin-overview-card">
             <div class="admin-overview-label">Document Library</div>

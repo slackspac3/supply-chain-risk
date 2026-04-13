@@ -52,7 +52,7 @@
             ? getDefaultRouteForCurrentUser()
             : '/dashboard';
           const fallbackLabel = fallbackRoute === '/admin/home'
-            ? '← Platform Home'
+            ? '← Admin Home'
             : fallbackRoute === '/vendor/home'
               ? '← Vendor Portal'
               : fallbackRoute === '/internal/home'

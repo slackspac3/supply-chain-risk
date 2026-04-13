@@ -11064,13 +11064,13 @@ function adminLayout(active, content, activeSettingsSection = 'org') {
       ]
     },
     {
-      label: 'Setup',
+      label: 'Administration',
       items: [
-        { href: '#/admin/settings/org', route: '/admin/settings/org', label: 'Organisation Setup', active: active === 'settings' && activeSettingsSection === 'org' },
-        { href: '#/admin/settings/company', route: '/admin/settings/company', label: 'AI Company Builder', active: active === 'settings' && activeSettingsSection === 'company' },
-        { href: '#/admin/settings/defaults', route: '/admin/settings/defaults', label: 'Platform Defaults', active: active === 'settings' && activeSettingsSection === 'defaults' },
-        { href: '#/admin/settings/governance', route: '/admin/settings/governance', label: 'Governance Inputs', active: active === 'settings' && activeSettingsSection === 'governance' },
-        { href: '#/admin/settings/feedback', route: '/admin/settings/feedback', label: 'AI Feedback &amp; Tuning', active: active === 'settings' && activeSettingsSection === 'feedback' },
+        { href: '#/admin/settings/org', route: '/admin/settings/org', label: 'Business Structure', active: active === 'settings' && activeSettingsSection === 'org' },
+        { href: '#/admin/settings/company', route: '/admin/settings/company', label: 'Research Profiles', active: active === 'settings' && activeSettingsSection === 'company' },
+        { href: '#/admin/settings/defaults', route: '/admin/settings/defaults', label: 'Workflow Defaults', active: active === 'settings' && activeSettingsSection === 'defaults' },
+        { href: '#/admin/settings/governance', route: '/admin/settings/governance', label: 'Policy Inputs', active: active === 'settings' && activeSettingsSection === 'governance' },
+        { href: '#/admin/settings/feedback', route: '/admin/settings/feedback', label: 'AI Review Tuning', active: active === 'settings' && activeSettingsSection === 'feedback' },
         { href: '#/admin/settings/access', route: '/admin/settings/access', label: 'System Access', active: active === 'settings' && activeSettingsSection === 'access' },
         { href: '#/admin/settings/users', route: '/admin/settings/users', label: 'User Accounts', active: active === 'settings' && activeSettingsSection === 'users' },
         { href: '#/admin/settings/audit', route: '/admin/settings/audit', label: 'Audit Log', active: active === 'settings' && activeSettingsSection === 'audit' }
@@ -11079,7 +11079,7 @@ function adminLayout(active, content, activeSettingsSection = 'org') {
     {
       label: 'Libraries',
       items: [
-        { href: '#/admin/bu', route: '/admin/bu', label: 'Org Customisation', active: active === 'bu' },
+        { href: '#/admin/bu', route: '/admin/bu', label: 'Business Unit Profiles', active: active === 'bu' },
         { href: '#/admin/docs', route: '/admin/docs', label: 'Document Library', active: active === 'docs' }
       ]
     }
@@ -11089,8 +11089,8 @@ function adminLayout(active, content, activeSettingsSection = 'org') {
       items: group.items.filter(item => canAccessAdminRoute(item.route))
     }))
     .filter(group => group.items.length);
-  const adminKicker = currentUserRole === 'bu_admin' ? 'BU Admin' : 'Admin';
-  const adminTitle = currentUserRole === 'bu_admin' ? 'Business-unit control' : 'Platform control';
+  const adminKicker = currentUserRole === 'bu_admin' ? 'BU Admin' : 'Global Admin';
+  const adminTitle = currentUserRole === 'bu_admin' ? 'Business unit administration' : 'Platform administration';
   return `<div class="admin-shell">
     <nav class="admin-sidebar">
       <div class="admin-sidebar-head">
@@ -12807,7 +12807,7 @@ function safeRenderAdminSettings(section = getPreferredAdminSection()) {
         : 'org';
       setPreferredAdminSection(fallbackSection);
       renderAdminSettings(fallbackSection);
-      UI.toast('A problem affected the selected admin section, so the page reopened in Organisation Setup.', 'warning', 5000);
+      UI.toast('A problem affected the selected admin section, so the page reopened in Business Structure.', 'warning', 5000);
     } catch (fallbackError) {
       console.error('safeRenderAdminSettings hard failure:', fallbackError);
       const currentUser = AuthService.getCurrentUser();
@@ -12816,7 +12816,7 @@ function safeRenderAdminSettings(section = getPreferredAdminSection()) {
         && typeof PortalAccessService.getDefaultAdminSectionForRole === 'function'
         ? PortalAccessService.getDefaultAdminSectionForRole(currentUser?.role, 'org')
         : 'org';
-      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="form-help mt-4">The platform logged the technical failure server-side or in the browser console for follow-up.</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/${fallbackSection}">Open Admin Console</a><a class="btn btn--ghost" href="#/admin/home">Platform Home</a></div></div></div></main>`);
+      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Business Structure and try again.</p><div class="form-help mt-4">The platform logged the technical failure server-side or in the browser console for follow-up.</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/${fallbackSection}">Open Configuration</a><a class="btn btn--ghost" href="#/admin/home">Admin Home</a></div></div></div></main>`);
     }
   }
 }
@@ -12921,11 +12921,11 @@ function renderAdminBU() {
   setPage(adminLayout('bu', `
     <div class="flex items-center justify-between mb-4">
       <div>
-        <h2>Organisation Customisation</h2>
+        <h2>Business Unit Profiles</h2>
         <p style="margin-top:6px">Review entities and functions, then open context editing only on the node you need to change.</p>
       </div>
       <div class="flex gap-3">
-        <a class="btn btn--primary btn--sm" href="#/admin/settings/org">Organisation Setup</a>
+        <a class="btn btn--primary btn--sm" href="#/admin/settings/org">Business Structure</a>
       </div>
     </div>
     <div class="admin-workbench-strip admin-workbench-strip--compact mb-5">
@@ -13085,7 +13085,7 @@ function openBUEditor(bu, options = {}) {
           <option value="">Not linked yet</option>
           ${getCompanyEntities(companyStructure).map(node => `<option value="${node.id}" ${bu?.orgEntityId === node.id ? 'selected' : ''}>${node.name} (${node.type})</option>`).join('')}
         </select>
-        <span class="form-help">Link this business unit to the company entity it represents in Organisation Setup.</span>
+        <span class="form-help">Link this business unit to the company entity it represents in Business Structure.</span>
       </div>
       <div class="form-group">
         <label class="form-label">BU Geography Override</label>

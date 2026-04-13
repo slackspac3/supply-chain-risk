@@ -102,6 +102,15 @@
         && PortalAccessService
         && typeof PortalAccessService.canAccessAdminRoute === 'function'
       ) ? PortalAccessService.canAccessAdminRoute(currentUserRole, route) : true;
+      const currentUser = global.AuthService?.getCurrentUser?.() || null;
+      const vendorCaseSummary = global.VendorCaseService?.getDashboardSummary?.(currentUser) || {
+        totalCases: 0,
+        awaitingVendor: 0,
+        internalReview: 0,
+        approvalPending: 0,
+        approved: 0,
+        periodicDue: 0
+      };
       const adminQuickActions = [
         canAccessAdminRoute('/admin/settings/users')
           ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-users">User Accounts</button>'
@@ -110,10 +119,10 @@
           ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-audit">Audit Log</button>'
           : '',
         canAccessAdminRoute('/admin/bu')
-          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-bu">Org Customisation</button>'
+          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-bu">Business Unit Profiles</button>'
           : '',
         canAccessAdminRoute('/admin/settings/defaults')
-          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-defaults">Platform Defaults</button>'
+          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-defaults">Workflow Defaults</button>'
           : '',
         canAccessAdminRoute('/admin/docs')
           ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-docs">Document Library</button>'
@@ -135,150 +144,91 @@
           <div class="settings-shell__header">
             <div class="flex items-center justify-between" style="gap:var(--sp-4);flex-wrap:wrap">
               <div>
-                <h2>Platform Home</h2>
-                <p style="margin-top:6px">A clean admin front door for starting assessments, checking the platform posture, and opening the admin console only when you need to change structure, defaults, access, or libraries.</p>
+                <h2>Administration</h2>
+                <p style="margin-top:6px">Control the vendor-assurance platform here: business structure, users, workflow defaults, AI settings, and shared evidence sources stay separate from day-to-day case handling.</p>
               </div>
-              <div class="admin-shell-note">Keep administration deliberate: start assessment work from here, then open the console only for platform changes.</div>
+              <div class="admin-shell-note">Keep vendor case work in the internal portal. Use admin screens only for governed platform changes.</div>
             </div>
             <div class="admin-guidance-strip">
               <span class="admin-guidance-strip__label">Admin guidance</span>
-              <strong>Assess first, administer second</strong>
-              <span>This page is the admin workspace front door. Use it to start new analysis, review the current platform footprint, and then move into the console when a governed change is actually needed.</span>
+              <strong>Operate through the portals, administer through the console</strong>
+              <span>This landing page is for platform control, not assessment work. Open the internal portal for vendor cases and use the console for structure, access, defaults, and evidence libraries.</span>
             </div>
           </div>
           <div class="admin-overview-grid">
             ${[
               UI.dashboardOverviewCard({
-                label: 'Assessments saved',
-                value: assessments.length,
-                foot: completedAssessments.length ? `${completedAssessments.length} completed result${completedAssessments.length === 1 ? '' : 's'} are currently available.` : 'No completed results are currently saved.'
+                label: 'Visible vendor cases',
+                value: vendorCaseSummary.totalCases,
+                foot: vendorCaseSummary.totalCases ? 'Cases across onboarding, reassessment, review, and approval stages are visible from the internal workspace.' : 'No vendor cases are visible yet.'
               }),
               UI.dashboardOverviewCard({
-                label: 'Needs review',
-                value: reviewQueue.length,
-                foot: reviewQueue.length ? 'Completed scenarios are waiting for management attention.' : 'No completed scenario currently needs escalation.'
+                label: 'Waiting on vendor',
+                value: vendorCaseSummary.awaitingVendor,
+                foot: vendorCaseSummary.awaitingVendor ? 'These cases still need questionnaire completion, clarifications, or evidence from the vendor.' : 'No cases are currently blocked on the vendor.'
               }),
               UI.dashboardOverviewCard({
-                label: 'Businesses',
-                value: companyEntities.length,
-                foot: departmentEntities.length ? `${departmentEntities.length} departments are attached across the current structure.` : 'No departments are configured yet.'
+                label: 'Internal review',
+                value: vendorCaseSummary.internalReview,
+                foot: vendorCaseSummary.internalReview ? 'GTR and specialist review activity is in progress on these cases.' : 'No cases are currently in internal review.'
               }),
               UI.dashboardOverviewCard({
-                label: 'Managed users',
-                value: managedAccounts.length,
-                foot: managedAccounts.length ? 'Shared users and role assignments are active in the platform.' : 'No managed users are currently configured.'
+                label: 'Approvals pending',
+                value: vendorCaseSummary.approvalPending,
+                foot: vendorCaseSummary.approvalPending ? 'These cases are waiting for approval or exception sign-off.' : 'No approval actions are currently pending.'
               })
             ].join('')}
           </div>
-          ${valueSummary && valueSummary.completedAssessments ? `<div style="margin-top:var(--sp-6)">
-            ${UI.dashboardSectionCard({
-              title: 'Platform value snapshot',
-              description: 'Measured cycle time, directional effort avoided, and modelled better-outcome value stay separate so the pilot story is easier to defend with leadership.',
-              className: 'dashboard-section-card--secondary admin-value-summary',
-              body: `
-                <div class="admin-overview-grid admin-overview-grid--compact">
-                  ${[
-                    UI.dashboardOverviewCard({
-                      label: 'Decision-ready outputs',
-                      value: valueSummary.completedAssessments,
-                      foot: `${valueSummary.completedAssessments} completed assessment${valueSummary.completedAssessments === 1 ? '' : 's'} are contributing to the platform value story.`
-                    }),
-                    UI.dashboardOverviewCard({
-                      label: 'Average cycle time',
-                      value: valueSummary.averageCycleLabel,
-                      foot: 'Measured from the first saved draft to the completed result.'
-                    }),
-                    UI.dashboardOverviewCard({
-                      label: 'Internal effort avoided',
-                      value: valueSummary.internalHoursAvoidedLabel,
-                      foot: 'Directional hours avoided versus the domain baseline library.'
-                    }),
-                    UI.dashboardOverviewCard({
-                      label: 'External specialist equivalent',
-                      value: valueSummary.externalEquivalentDaysLabel,
-                      foot: 'Directional Big 4-style UAE advisory effort benchmark across the completed set.'
-                    })
-                  ].join('')}
-                </div>
-                <div class="admin-value-summary__foot">
-                  <span>Directional value at the current Big 4-style UAE rate card: <strong>${fmtCurrency(valueSummary.internalCostAvoidedUsd)}</strong> internal cost avoided and <strong>${fmtCurrency(valueSummary.externalEquivalentValueUsd)}</strong> external-equivalent value.</span>
-                  <span>${valueSummary.trackedReductionCases ? `Modelled annual exposure reduction from saved better-outcome cases: ${fmtCurrency(valueSummary.totalModelledReductionUsd)}.` : 'No saved better-outcome case is attached yet, so modelled reduction is not included.'}</span>
-                </div>
-              `
-            })}
-          </div>` : ''}
           <div class="grid-2" style="margin-top:var(--sp-6);align-items:start">
             ${UI.dashboardSectionCard({
-              title: 'Internal portal',
-              description: 'Open the internal GTR workspace from here instead of dropping straight into the legacy wizard flow.',
+              title: 'Working portals',
+              description: 'Use the operating portals for actual case work. The admin console stays focused on platform control.',
               className: 'dashboard-section-card--spotlight',
               body: `
-                <div class="form-help">Use the internal team portal when you want to review vendor cases, findings, clause recommendations, and approval paths from the PoC front door.</div>
+                <div class="form-help">Internal teams review vendor cases, AI findings, clause recommendations, and approval paths in the internal portal. Vendors respond through their own case-linked workspace.</div>
                 <div class="flex items-center gap-3" style="flex-wrap:wrap">
-                  <button type="button" class="btn btn--primary" id="btn-admin-home-start-assessment">Start Guided Assessment</button>
-                  <a class="btn btn--secondary" href="#/internal/home" id="btn-admin-home-open-workspace">Open Internal Portal</a>
+                  <a class="btn btn--primary" href="#/internal/home" id="btn-admin-home-open-workspace">Open Internal Portal</a>
+                  <a class="btn btn--secondary" href="#/internal/cases" id="btn-admin-home-open-queue">Open Case Queue</a>
                 </div>
               `
             })}
             ${UI.dashboardSectionCard({
-              title: 'Admin console',
-              description: 'Key administration paths stay one click away without becoming the default landing page.',
+              title: 'Administration shortcuts',
+              description: 'Core platform-control areas stay one click away without turning the home screen into the old calculator workspace.',
               body: `
                 <div class="flex items-center gap-3" style="flex-wrap:wrap">
-                  <button type="button" class="btn btn--secondary" id="btn-admin-home-open-console">Open Admin Console</button>
+                  <button type="button" class="btn btn--secondary" id="btn-admin-home-open-console">Open Configuration</button>
                   ${adminQuickActions}
                 </div>
-                <div class="form-help">Structure, defaults, user access, and libraries stay grouped behind the console so the top-level experience remains calm.</div>
+                <div class="form-help">Structure, workflow defaults, user access, and document sources stay grouped behind configuration so the top-level experience stays calm.</div>
               `
             })}
           </div>
           <div style="margin-top:var(--sp-6)">
             ${UI.dashboardSectionCard({
-              title: 'Platform snapshot',
-              description: 'A compact read on the current administration footprint before you go deeper.',
+              title: 'Platform footprint',
+              description: 'A compact read on the current vendor-risk administration footprint.',
               body: `
-                <div class="form-help">Structure: ${companyEntities.length} business entity${companyEntities.length === 1 ? '' : 'ies'} and ${departmentEntities.length} department${departmentEntities.length === 1 ? '' : 's'}.</div>
-                <div class="form-help">Documents: ${docCount} library item${docCount === 1 ? '' : 's'} currently available for AI grounding.</div>
+                <div class="form-help">Structure: ${companyEntities.length} business entit${companyEntities.length === 1 ? 'y' : 'ies'} and ${departmentEntities.length} function${departmentEntities.length === 1 ? '' : 's'} mapped into the admin structure.</div>
+                <div class="form-help">Evidence sources: ${docCount} library item${docCount === 1 ? '' : 's'} currently available for AI grounding and analyst reference.</div>
+                <div class="form-help">Reassessment cycles: ${vendorCaseSummary.periodicDue} case${vendorCaseSummary.periodicDue === 1 ? '' : 's'} currently marked as periodic reassessment work.</div>
               `
-            })}
-          </div>
-          <div style="margin-top:var(--sp-6)">
-            ${UI.dashboardSectionCard({
-              title: 'Review queue',
-              description: 'Assessments submitted for management sign-off.',
-              body: `<div id="admin-review-queue-freshness">${renderReviewQueueFreshnessMeta('admin')}</div>
-              <div id="admin-review-queue-list">
-                <div class="form-help">Loading review queue…</div>
-              </div>`
-            })}
-          </div>
-          <div style="margin-top:var(--sp-6)">
-            ${UI.dashboardSectionCard({
-              title: 'Assumption drift alerts',
-              description: 'Cross-team calibration variance that may need a challenge or calibration session.',
-              body: `<div id="admin-drift-alert-list">
-                <div class="form-help">Loading calibration alerts…</div>
-              </div>`
             })}
           </div>
         </div>`);
     },
 
     bind({ preferredAdminRoute, managedAccounts }) {
-      document.getElementById('btn-admin-home-start-assessment')?.addEventListener('click', () => {
-        if (typeof window.launchGuidedAssessmentStart === 'function') {
-          window.launchGuidedAssessmentStart();
-          return;
-        }
-        resetDraft();
-        openDraftWorkspaceRoute();
-      });
       document.getElementById('btn-admin-home-open-workspace')?.addEventListener('click', event => {
         event.preventDefault();
         try {
           sessionStorage.setItem('rq_admin_workspace_preview', '1');
         } catch {}
         Router.navigate('/internal/home');
+      });
+      document.getElementById('btn-admin-home-open-queue')?.addEventListener('click', event => {
+        event.preventDefault();
+        Router.navigate('/internal/cases');
       });
       document.getElementById('btn-admin-home-open-console')?.addEventListener('click', () => {
         Router.navigate(preferredAdminRoute);
@@ -711,17 +661,21 @@
         }
       }
 
-      loadReviewQueue();
-      loadDriftAlerts();
-      const handleReviewQueueInvalidated = () => {
-        const freshnessEl = document.getElementById('admin-review-queue-freshness');
-        if (freshnessEl) freshnessEl.innerHTML = renderReviewQueueFreshnessMeta('admin');
-        void loadReviewQueue();
-      };
-      window.addEventListener('rq:review-queue-invalidated', handleReviewQueueInvalidated);
-      window.AppShellPage?.registerCleanup?.(() => {
-        window.removeEventListener('rq:review-queue-invalidated', handleReviewQueueInvalidated);
-      });
+      if (document.getElementById('admin-review-queue-list')) {
+        loadReviewQueue();
+        const handleReviewQueueInvalidated = () => {
+          const freshnessEl = document.getElementById('admin-review-queue-freshness');
+          if (freshnessEl) freshnessEl.innerHTML = renderReviewQueueFreshnessMeta('admin');
+          void loadReviewQueue();
+        };
+        window.addEventListener('rq:review-queue-invalidated', handleReviewQueueInvalidated);
+        window.AppShellPage?.registerCleanup?.(() => {
+          window.removeEventListener('rq:review-queue-invalidated', handleReviewQueueInvalidated);
+        });
+      }
+      if (document.getElementById('admin-drift-alert-list')) {
+        loadDriftAlerts();
+      }
     }
   };
 

@@ -181,8 +181,8 @@
     const navLinks = portalKind === 'admin'
       ? [
           // Keep the app bar at the section level so detailed admin destinations only live in the sidebar.
-          { href: '#/admin/home', label: 'Platform Home', active: isAdminHomeRoute(currentHash) },
-          { href: '#/admin/settings/org', label: 'Admin Console', active: isAdminConsoleRoute(currentHash) }
+          { href: '#/admin/home', label: 'Admin Home', active: isAdminHomeRoute(currentHash) },
+          { href: '#/admin/settings/org', label: 'Configuration', active: isAdminConsoleRoute(currentHash) }
         ]
       : portalKind === 'vendor'
         ? [

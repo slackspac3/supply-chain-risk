@@ -232,7 +232,7 @@ const AdminAiFeedbackSection = (() => {
       ? `${dashboard.liveAiEvents} live-AI event${dashboard.liveAiEvents === 1 ? '' : 's'}`
       : 'No live-AI signal yet';
     return renderSettingsSection({
-      title: 'AI Feedback & Tuning',
+      title: 'AI Review Tuning',
       scope: 'admin-settings',
       open: true,
       description: 'Monitor how users rate generated drafts, shortlists, and individual risk cards, then tune alignment, writing quality, shortlist discipline, and shared-learning sensitivity without guessing.',

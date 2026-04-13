@@ -122,9 +122,9 @@ const AdminPlatformDefaultsSection = (() => {
       : [];
     return `<div class="admin-workbench-strip">
       <div>
-        <div class="admin-workbench-strip__label">Governance inputs</div>
-        <strong>Regulations, AI guidance, departments, and scoped overrides</strong>
-        <span>Keep platform-level guidance and scoped defaults deliberate. Global financial thresholds stay on Platform Defaults.</span>
+        <div class="admin-workbench-strip__label">Policy inputs</div>
+        <strong>Clause guidance, AI instructions, functions, and scoped overrides</strong>
+        <span>Keep platform-level guidance and scoped defaults deliberate. Global workflow thresholds stay on Workflow Defaults.</span>
       </div>
       <div class="admin-workbench-strip__meta">
         <span class="badge badge--neutral">${Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations.length : 0} regulations</span>
@@ -200,7 +200,7 @@ const AdminPlatformDefaultsSection = (() => {
         </div>
         <div class="form-group" style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
           <button class="btn btn--secondary" id="btn-edit-scoped-defaults" type="button">Edit Scoped Defaults</button>
-          <a class="btn btn--ghost" href="#/admin/bu">Open Org Customisation</a>
+          <a class="btn btn--ghost" href="#/admin/bu">Open Business Unit Profiles</a>
         </div>
       </div>
       <div id="admin-scoped-default-summary" class="mt-4">${renderScopedDefaultsSummary(buList[0] || null, settings)}</div>
@@ -213,11 +213,11 @@ const AdminPlatformDefaultsSection = (() => {
   function renderSection({ settings, mode = 'defaults' }) {
     const isGovernance = mode === 'governance';
     return renderSettingsSection({
-      title: isGovernance ? 'Governance Inputs' : 'Platform Defaults',
+      title: isGovernance ? 'Policy Inputs' : 'Workflow Defaults',
       scope: 'admin-settings',
       description: isGovernance
-        ? 'Manage regulations, AI guidance, typical departments, and scoped governance overrides without crowding the platform default controls.'
-        : 'Set the global fallback thresholds and default posture first. Governance inputs and scoped overrides live separately so this screen stays easier to control.',
+        ? 'Manage regulatory prompts, AI guidance, typical functions, and scoped control overrides without crowding the workflow default controls.'
+        : 'Set the global fallback thresholds and default workflow posture first. Policy inputs and scoped overrides live separately so this screen stays easier to control.',
       meta: isGovernance ? `${Array.isArray(settings.applicableRegulations) ? settings.applicableRegulations.length : 0} regulation tags` : `${settings.geography} default geography`,
       body: isGovernance ? renderGovernanceBody(settings) : renderDefaultsBody(settings)
     });
