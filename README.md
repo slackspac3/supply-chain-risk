@@ -1,192 +1,153 @@
-# Risk Intelligence Platform
+# Supply Chain Risk Platform
 
-Risk Intelligence Platform is an internal enterprise risk decision-support product. It combines guided scenario building, AI-assisted structuring, FAIR-style quant logic, Monte Carlo simulation, evidence-grounded retrieval, and executive-grade reporting in one role-aware workflow.
+Supply Chain Risk is a `GTR` (`Group Technology Risk`) vendor risk management PoC that starts with `vendor security / cyber / technology risk` and is intended to evolve into a broader `supply chain risk` platform over time.
+
+Current repository state:
+
+- this codebase was inherited from the earlier `risk-calculator` shell
+- the product is now being refactored around `vendor cases`, `assessment cycles`, `questionnaires`, `evidence`, `findings`, `approvals`, and `reassessments`
+- some legacy risk-calculator infrastructure still exists while the vendor-risk workflows become the primary product surface
 
 Important pilot boundary:
+
 - this environment is still a PoC sandbox
-- do not use real company names, customer data, or live incident details
-- create dummy scenarios only
-- prefer generic labels such as `supplier`, `customer`, `service provider`, or `business unit`
+- do not use real company names, customer data, live contract data, or live incident details
+- use dummy vendors, dummy evidence, and masked contract language only
 
 This repository contains:
-- the GitHub Pages frontend SPA
+
+- the frontend SPA used for the PoC portals
 - the Vercel-hosted serverless API routes used by the shared pilot environment
 
-## What The Product Does
+## Product Direction
 
-The platform helps a user move from a vague issue to a structured, challengeable, quantified management view.
+Phase 1 focus:
 
-Core capabilities:
-- role-based dashboards for standard users, function admins, BU admins, and global admins
-- AI-assisted risk and context builder
-- grounded BU and function-context drafting with inline grounding feedback
-- scenario refinement and structured scenario shaping
-- plain-language estimation and advanced tuning
-- FAIR-style Monte Carlo simulation
-- executive, technical, and appendix result views
-- treatment comparison and better-outcome analysis
-- direct PDF export plus printable decision memo / board note outputs
-- evidence, provenance, assumptions, confidence, and citation surfacing
-- citation freshness labels, official external source links, and saved-assessment freshness advisories
-- document-grounded retrieval across standards, frameworks, and regulations
-- review submission and management sign-off workflow
-- admin governance for organisation setup, defaults, users, audit, and document library
+- vendor onboarding and assessment
+- vendor security / cyber / technology risk
+- AI-assisted internal review
+- evidence collection and clause recommendation
+- approval, conditional approval, and clarification loops
+
+Later direction:
+
+- broader supply chain risk coverage
+- deeper vendor profiling and continuous monitoring
+- Jira-linked open risk tracking
+- Entra, email, SharePoint, and procurement-tool integration
+
+## What The PoC Does Now
+
+Current first-class platform capabilities:
+
+- internal intake and case creation
+- a vendor-facing portal for questionnaire completion, file upload, clarifications, and follow-up
+- an internal portal for GTR review, findings, clause checks, and approval decisions
+- AI-assisted intake classification, service-type inference, evidence review, and risk-summary drafting
+- business-unit-scoped administration with both `global admin` and `BU admin`
+- a foundation for periodic reassessment and open-risk lifecycle tracking
+
+## Portals
+
+The PoC has three separate interfaces:
+
+- `Admin portal`
+  - global administration and BU-scoped administration
+- `Internal portal`
+  - GTR and internal-team workflow for intake, review, findings, and approval
+- `Vendor portal`
+  - external-party experience for questionnaire responses, evidence uploads, and clarification handling
+
+Typical local routes:
+
+- `#/admin/home`
+- `#/internal/home`
+- `#/vendor/home`
+
+## Primary Roles
+
+Current working roles:
+
+- `admin`
+  - global admin with full backend and platform access
+- `bu_admin`
+  - BU-scoped admin with access limited to their business unit, including BU-scoped user management and BU-scoped audit visibility
+- `gtr_analyst`
+- `reviewer`
+- `approver`
+- `vendor_contact`
+
+PoC-ready but not necessarily required in every workflow path yet:
+
+- `privacy`
+- `legal`
+- `procurement`
 
 ## Current Workflow
 
-1. Dashboard
-2. Start or resume an assessment
-3. Step 1: AI-assisted risk and context builder
-4. Step 2: scenario refinement and narrative shaping
-5. Step 3: estimation and advanced tuning
-6. Review & Run
-7. Results
-   - Executive Summary
-   - Technical Detail
-   - Appendix & Evidence
-8. Compare a better outcome, export, submit for review, or revisit later
-
-## Enterprise Risk Coverage
-
-The product now supports a broader enterprise risk lens, not only cyber. Current first-class or actively modeled domains include:
-
-- strategic
-- operational
-- cyber
-- third-party
-- regulatory
-- financial
-- ESG
-- compliance
-- supply chain
-- procurement
-- business continuity
-- HSE
-- AI / model risk
-- data governance / privacy
-- fraud / integrity
-- legal / contract
-- geopolitical / market access
-- physical security
-- OT / industrial resilience
-- people / workforce / human rights
-- investment / JV
-- project / programme / transformation delivery
-
-## Review And Approval Flow
-
-Completed assessments that breach tolerance, approach tolerance, or trigger annual review can now move into a lightweight management-review workflow.
-
-Current behavior:
-- the results hero can prompt the user to submit the assessment for review
-- submitters now choose an explicit reviewer instead of sending into an anonymous scope queue
-- regular users can submit to reviewer-capable people in their own function, with BU fallback when no function reviewer exists
-- `function_admin` users can route the assessment to any reviewer-capable person in their BU
-- `bu_admin` users can escalate unresolved in-scope BU reviews to a named holding-company `admin`, even when they are not the current assignee
-- submitted items are stored in the shared review queue API
-- the queue item now stores:
-  - submitter
-  - assigned reviewer
-  - review scope
-  - a bounded shared results snapshot so the assignee can open the result even if it is not already in their local browser workspace
-- results surfaces now show who the assessment is assigned to, not only that it is pending
-- the assigned reviewer can approve or request changes from the results page
-- BU heads can escalate from the results page to a named holding-company reviewer
-- oversight dashboards now expose a compact review inbox for unresolved assigned items
-- Platform Home still shows the central queue for admins, with named assignees surfaced there as well
-- the central queue now supports the same named holding-company escalation path for BU heads instead of showing an inert escalate action
-- results surfaces now reflect:
-  - pending
-  - approved
-  - changes requested
-  - escalated
-
-Pilot note:
-- the queue is backed by shared KV
-- notifications are currently in-app/browser-scoped for the pilot
-- there is no separate email or workflow-notification delivery path yet
+1. Internal team creates a vendor case and captures intake details.
+2. AI builds an initial assessment frame, including likely service type, data profile, regulatory impact, and criticality context.
+3. The vendor receives case-linked access and completes the right questionnaire path.
+4. The vendor uploads supporting evidence and answers clarification requests.
+5. Internal reviewers assess responses, evidence, required clauses, and likely findings.
+6. AI drafts recommendations, clause coverage gaps, and vendor risk summary content for the internal team.
+7. The case moves to approval, conditional approval, or follow-up remediation.
+8. The platform retains the case for reassessment and future open-risk tracking.
 
 ## AI And Grounding Model
 
-The product is assistant-driven, not chat-first. AI is used to:
-- improve and structure scenario drafts
-- refine narratives
-- generate challenge prompts
-- suggest likely risk groupings
-- build evidence-backed interpretation
+The platform is AI-infused, but AI is intended to run through backend workflows rather than as a browser-trusted orchestration layer.
+
+Current AI responsibilities:
+
+- intake interpretation and service-type classification
+- dynamic questionnaire selection based on service scope
+- vendor-response gap and inconsistency analysis
+- uploaded-document and evidence review
+- clause recommendation and required-clause coverage checks
+- draft findings, risk statements, likelihood / impact / mitigation summaries
 
 Current AI behavior:
-- the browser is now a thin client for the key AI workflows rather than the authoritative orchestration layer
-- server routes own prompt construction, structured-output repair, quality gates, readiness evaluation, and fallback policy for the main guided, register, treatment, and reviewer/challenge flows
-- browser-side admin context drafting and refinement currently use a temporary `28000`-character prompt ceiling for the PoC so long inherited context blocks are less likely to clip before send
-- the longer-term fix is prompt shaping rather than prompt growth alone; that backlog is tracked in [docs/future-fixes.md](./docs/future-fixes.md)
-- `Build scenario draft` remains the single authoritative Step 1 intelligence call; guided prompt ideas and pre-build preview are now deterministic/local so they do not add extra hosted backend traffic
-- Step 1 pre-draft hinting is now projection-first:
-  - the browser ranks competing taxonomy families, lenses, confidence, and separation before showing prompt ideas or a preferred local lens
-  - ambiguous close-call wording stays soft instead of forcing a hard lane from a single generic token such as `payment`, `breach`, `outage`, or `supplier`
-  - bounded browser fallback heuristics only run when the taxonomy projection is absent or clearly too weak
-  - the committed browser projection snapshot is now parity-checked against the canonical taxonomy, and can be regenerated with `npm run sync:taxonomy-projection`
-  - bounded novel-wording evals now cover paraphrase and near-miss phrasing across ransomware/extortion, privacy/retention/transfer, supplier delay, workforce fatigue, ESG, availability attack, payment-control-vs-fraud, and third-party access wording
-- the authoritative Step 1 draft path is now tighter about event-path preservation:
-  - prompt construction explicitly prioritises user event, trigger, affected asset/service, and main impact
-  - server-side quality gates now reject more consequence-led or off-path rewrites and shortlist drift
-  - weak inputs now get more specific missing-detail guidance instead of generic “add more context” nudges
-- browser API base-URL resolution is now config-driven: Vercel-hosted fronts stay same-origin, while static fronts use the configured hosted API origin without extra discovery requests
-- client workflow requests are normalized before transport so semantically identical inputs produce a stable request shape
+
+- the browser is a thin client for the key AI workflows rather than the authoritative orchestration layer
+- server routes own prompt construction, structured-output repair, quality gates, readiness evaluation, and fallback policy
+- vendor-assessment analysis is designed to run server-side so clause checks, scenario interpretation, service-type reasoning, and recommendations are not trusted to browser-only prompts
 - duplicate suppression now happens on both sides:
   - the browser suppresses same-input repeat clicks and very recent identical reruns
   - the server reuses identical in-flight work and short-lived recent results for the main AI routes
-- server AI routes now emit lightweight operational metrics for invocation volume, latency, timeout pressure, fallback/manual rate, and duplicate/cache reuse
-- wizard steps can still carry short-term runtime context memory across the draft flow
-- bounded AI rewriting is used where draft quality matters
+- server AI routes emit lightweight operational metrics for invocation volume, latency, timeout pressure, fallback/manual rate, and duplicate/cache reuse
 - explicit fallback and unavailable states are surfaced instead of silently masquerading as live AI
-- retrieval uses a stronger local hybrid scorer with lens-aware and concept-aware matching, but browser-local learning weights no longer authoritatively shape inference quality
-- domain guardrails now explicitly keep common continuity, counterparty-credit, ESG/human-rights, and geopolitical scenarios from drifting into adjacent cyber, fraud, or procurement lanes unless the user input actually supports that crossover
-- remaining browser-side helper AI stays assistive-only for bounded UX features such as company-context drafting and scenario memory; it is not part of the trusted assessment or review path
-- BU and function-context AI assist now inherits richer organisation context, parent-layer context, and saved regulations, then shows an inline grounding state:
-  - `Grounded in saved context`
-  - `Partly grounded`
-  - `Generic draft warning`
-- UAE default grounding now includes named national references for UAE contexts, including:
-  - `UAE Information Assurance Standard`
-  - `NCEMA 7000:2021 Business Continuity`
-  - named UAE Cyber Security Council policies
-  - ADGM holding-company obligations where the company baseline is relevant
-- supporting documents and standards are cited into the workflow and results
 
-The product is grounded by a growing enterprise corpus that includes ISO, NIST, COSO, IFRS/ESRS, OECD, UNGP, sector guidance, and UAE/GCC-relevant references.
+Grounding direction for this product:
 
-Recent grounding improvements:
-- retrieval metadata in [data/docs.json](./data/docs.json) is now sharper for high-drift Step 1 areas such as:
-  - vendor access and subcontractor reach
-  - ESG claim substantiation and Scope 2 disclosure supportability
-  - forced labour / modern slavery due diligence
-  - alternate workspace and manual fallback continuity language
-  - fatigue, understaffing, and worker-welfare scenarios
-- first-class Step 1 hardening now covers a wider set of non-cyber domains, including:
-  - geopolitical / market access
-  - legal / contract
-  - investment / JV
-  - AI / model risk
-  - data governance / privacy
-  - fraud / integrity
-  - physical security
-  - OT / industrial resilience
-  - people / workforce / human rights
-  - supply chain
-  - procurement
-- procurement is now modeled with explicit pre-award sourcing patterns such as:
-  - maverick or off-contract spend
-  - tender-method and whole-life-cost failure
-  - lotting and competition-design failure
-  - constrained-market contracting under pressure
-  - bundled-award and price-validity traps
-  - urgent direct-negotiation readiness gaps
-- official UAE and ADGM references are now included for document-grounded retrieval, including NCEMA continuity, ADGM annual filings, ADGM beneficial ownership, ADGM data protection, and named UAE Cyber Security Council policy references
-- Step 1 citation selection now prefers event-matching references over generic governance references when both are available
-- citations can now carry:
-  - staleness warnings when a source is old
-  - official external source links where a verified public source page exists
+- uploaded evidence such as policies, ISO certificates, SOC 2 reports, and clause packs should be reviewable by backend AI workflows
+- service-type-specific control expectations should be grounded by the questionnaire and clause-pack templates
+- future integrations should allow supporting evidence and risk actions to connect to SharePoint and Jira without changing the core domain model
+
+## Current Domain Model Direction
+
+The repo is moving toward these first-class concepts:
+
+- `vendor_case`
+- `assessment_cycle`
+- `questionnaire_response`
+- `evidence_item`
+- `risk_record`
+- `review_task`
+- `approval_decision`
+
+This is a deliberate shift away from the older scenario-first risk-calculator framing.
+
+## Near-Term Roadmap
+
+High-value next steps after the current PoC foundations:
+
+- vendor magic-link onboarding flow
+- richer internal review workbench
+- open-risk tracking screens with later Jira linkage
+- periodic reassessment orchestration
+- Privacy / Legal checklist integration in the main workflow
+- Entra, email, and SharePoint integration once the PoC flow is stable
 
 ## Pilot AI Readiness Policy
 
