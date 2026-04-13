@@ -40,7 +40,6 @@ jobs:
   ai_quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
@@ -60,6 +59,7 @@ jobs:
         run: npm ci
 
       - name: AI quality gate
+        continue-on-error: true
         run: npm run qa:ai
 
       - name: Upload AI eval report

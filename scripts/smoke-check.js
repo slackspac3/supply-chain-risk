@@ -166,7 +166,7 @@ expect(resultsRouteJs.includes('const canChooseDepartment = capability.canManage
 expect(systemAccessSectionJs.includes('Pilot release diagnostics'), 'admin system access section is missing pilot release diagnostics');
 expect(systemAccessSectionJs.includes('Server AI status'), 'admin system access section is missing server AI status guidance');
 expect(!demoModeJs.includes("Router.navigate('/results');"), 'demo mode still navigates to the stale /results route');
-expect(appJs.includes('href="#/admin/home">Platform Home</a>'), 'admin settings hard-failure fallback no longer points to platform home');
+expect(appJs.includes('href="#/admin/home">Admin Home</a>'), 'admin settings hard-failure fallback no longer points to admin home');
 
 expect(userPreferencesJs.includes('Your business-unit and function assignment is controlled by your current role.'), 'user preferences role guidance is missing');
 expect(userOnboardingJs.includes('Your organisation assignment is set by your current admin-managed role.'), 'user onboarding role guidance is missing');
