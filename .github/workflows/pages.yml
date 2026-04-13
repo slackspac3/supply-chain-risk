@@ -67,6 +67,11 @@ jobs:
           mkdir -p _site
           cp index.html _site/index.html
           cp README.md _site/README.md
+          for verification_file in google*.html; do
+            if [ -f "$verification_file" ]; then
+              cp "$verification_file" "_site/$verification_file"
+            fi
+          done
           cp -R assets _site/assets
           cp -R data _site/data
           touch _site/.nojekyll
