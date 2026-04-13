@@ -655,3 +655,10 @@ const UI = (() => {
 
   return { toast, modal, citationModal, openAiTraceModal, renderStepper, skeletonBlock, skeletonCard, wizardAssistSkeleton, adminSectionHeader, adminTableCard, dashboardOverviewCard, dashboardSectionCard, dashboardAssessmentRow, resultsVisualCard, resultsBriefCard, resultsSectionBlock, resultsSummaryCard, resultsDetailDisclosure, wizardInputSection, sectionStatusBadge, disclosureSection, contextInfoPanel, contextInfoGrid, aiAssistCard, aiRefinementCard, tagInput, confirm, drawHistogram, drawLEC, sectionEyebrow };
 })();
+
+if (typeof window !== 'undefined') {
+  window.UI = UI;
+}
+if (typeof globalThis !== 'undefined') {
+  globalThis.UI = UI;
+}

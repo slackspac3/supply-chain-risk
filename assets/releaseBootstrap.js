@@ -5,7 +5,7 @@
     version: '0.10.0-pilot.1',
     channel: 'pilot',
     build: '2026-04-13-pages-hosting',
-    assetVersion: '20260413v3',
+    assetVersion: '20260413v4',
     apiOrigin: 'https://supply-chain-risk-two.vercel.app'
   });
 
