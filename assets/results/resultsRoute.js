@@ -5222,12 +5222,17 @@ function setPreferredAdminSection(section) {
 
 function getDefaultRouteForCurrentUser() {
   const user = AuthService.getCurrentUser();
-  // Global admins need a proper front door that separates assessment work from console administration.
+  if (typeof PortalAccessService !== 'undefined' && PortalAccessService && typeof PortalAccessService.getHomeRouteForRole === 'function') {
+    return PortalAccessService.getHomeRouteForRole(user?.role, { whenGuest: '/login' });
+  }
   return user?.role === 'admin' ? '/admin/home' : '/dashboard';
 }
 
 function userNeedsOrganisationSelection(user = AuthService.getCurrentUser(), settings = getAdminSettings()) {
-  if (!user || user.role === 'admin') return false;
+  const safeRole = String(user?.role || '').trim().toLowerCase();
+  if (!user || ['admin', 'bu_admin'].includes(safeRole)) return false;
+  const roleRequiresManagedScope = ['user', 'function_admin'].includes(safeRole);
+  if (!roleRequiresManagedScope) return false;
   const companyStructure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
   const companies = getCompanyEntities(companyStructure);
   if (!companies.length) return false;
@@ -5245,7 +5250,7 @@ function renderLoginOrganisationSelection(currentUser, existingSettings = getUse
   const companyStructure = Array.isArray(adminSettings.companyStructure) ? adminSettings.companyStructure : [];
   const companies = getCompanyEntities(companyStructure);
   if (!companies.length) {
-    Router.navigate('/dashboard');
+    Router.navigate(getDefaultRouteForCurrentUser());
     return;
   }
   const selection = resolveUserOrganisationSelection(currentUser, existingSettings, adminSettings);
@@ -5329,7 +5334,7 @@ function renderLoginOrganisationSelection(currentUser, existingSettings = getUse
         }
       });
       activateAuthenticatedState();
-      Router.navigate('/dashboard');
+      Router.navigate(getDefaultRouteForCurrentUser());
     });
   }
 

@@ -14,8 +14,9 @@ function requireAuth() {
   return true;
 }
 
-function requireAdmin() {
+function requireAdmin(targetRoute = '') {
   if (!requireAuth()) return false;
+  const currentUser = AuthService?.getCurrentUser?.();
   if (!AuthService?.isAdminAuthenticated?.()) {
     if (String(window.location.hash || '') !== '#/settings') {
       window.location.hash = '#/settings';
@@ -24,7 +25,34 @@ function requireAdmin() {
     else Router?.navigate('/settings');
     return false;
   }
+  const safeTargetRoute = String(targetRoute || '').trim()
+    || String(window.location.hash || '').replace(/^#/, '').trim();
+  if (safeTargetRoute
+    && typeof PortalAccessService !== 'undefined'
+    && PortalAccessService
+    && typeof PortalAccessService.canAccessAdminRoute === 'function'
+    && !PortalAccessService.canAccessAdminRoute(currentUser?.role, safeTargetRoute)) {
+    const fallbackRoute = typeof PortalAccessService.getAdminFallbackRouteForRole === 'function'
+      ? PortalAccessService.getAdminFallbackRouteForRole(currentUser?.role, { requestedRoute: safeTargetRoute })
+      : '/admin/home';
+    Router?.navigate?.(fallbackRoute || '/admin/home');
+    return false;
+  }
   return true;
+}
+
+function requirePortalAccess(portalKind) {
+  if (!requireAuth()) return false;
+  const currentUser = AuthService?.getCurrentUser?.();
+  const currentPortalKind = typeof PortalAccessService !== 'undefined' && PortalAccessService
+    ? PortalAccessService.getPortalKindForRole(currentUser?.role)
+    : 'guest';
+  if (!portalKind || portalKind === currentPortalKind) return true;
+  const fallbackRoute = typeof PortalAccessService !== 'undefined' && PortalAccessService
+    ? PortalAccessService.getHomeRouteForRole(currentUser?.role)
+    : '/login';
+  Router?.navigate?.(fallbackRoute || '/login');
+  return false;
 }
 
 function withAuth(renderer) {
@@ -34,14 +62,23 @@ function withAuth(renderer) {
   };
 }
 
-function withAdmin(renderer) {
+function withAdmin(renderer, targetRoute = '') {
   return (params, hash) => {
-    if (!requireAdmin()) return;
+    if (!requireAdmin(targetRoute)) return;
+    renderer(params, hash);
+  };
+}
+
+function withPortalAccess(portalKind, renderer) {
+  return (params, hash) => {
+    if (!requirePortalAccess(portalKind)) return;
     renderer(params, hash);
   };
 }
 
 window.requireAuth = requireAuth;
 window.requireAdmin = requireAdmin;
+window.requirePortalAccess = requirePortalAccess;
 window.withAuth = withAuth;
 window.withAdmin = withAdmin;
+window.withPortalAccess = withPortalAccess;

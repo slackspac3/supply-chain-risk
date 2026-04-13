@@ -38,6 +38,14 @@ const LOGIN_FIELDS = ['action', 'password', 'username'];
 const ACCOUNT_FIELDS = ['businessUnitEntityId', 'departmentEntityId', 'displayName', 'password', 'role', 'username'];
 const PATCH_FIELDS = ['action', 'updates', 'username'];
 const UPDATE_FIELDS = ['businessUnitEntityId', 'departmentEntityId', 'displayName', 'role'];
+const BU_ADMIN_MANAGED_ROLES = new Set(['user', 'function_admin', 'vendor_contact']);
+
+function normaliseRole(role, defaultRole = 'user') {
+  const safeRole = String(role || '').trim().toLowerCase();
+  const safeDefault = String(defaultRole || 'user').trim().toLowerCase() || 'user';
+  const allowedRoles = new Set(['admin', 'bu_admin', 'function_admin', 'user', 'gtr_analyst', 'reviewer', 'approver', 'privacy', 'legal', 'procurement', 'vendor_contact']);
+  return allowedRoles.has(safeRole) ? safeRole : (allowedRoles.has(safeDefault) ? safeDefault : 'user');
+}
 
 function normaliseAccount(account = {}) {
   return {
@@ -48,7 +56,7 @@ function normaliseAccount(account = {}) {
     passwordVersion: String(account.passwordVersion || '').trim(),
     sessionVersion: Math.max(1, Number(account.sessionVersion || 1)),
     displayName: String(account.displayName || '').trim() || 'User',
-    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
+    role: normaliseRole(account.role),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
     departmentEntityId: String(account.departmentEntityId || '').trim()
   };
@@ -125,7 +133,7 @@ function sanitiseAccount(account = {}) {
   return {
     username: String(account.username || '').trim().toLowerCase(),
     displayName: String(account.displayName || '').trim() || 'User',
-    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
+    role: normaliseRole(account.role),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
     departmentEntityId: String(account.departmentEntityId || '').trim()
   };
@@ -138,6 +146,100 @@ function isAdminSecretValid(req) {
 function canSelfUpdateAccount(session, username) {
   const safeUsername = String(username || '').trim().toLowerCase();
   return !!session && (session.role === 'admin' || String(session.username || '').trim().toLowerCase() === safeUsername);
+}
+
+function isGlobalAdminActor(actor = {}) {
+  return normaliseRole(actor?.role) === 'admin';
+}
+
+function isScopedBuAdminActor(actor = {}) {
+  return normaliseRole(actor?.role) === 'bu_admin';
+}
+
+function getActorBusinessUnitEntityId(actor = {}) {
+  return String(actor?.businessUnitEntityId || '').trim();
+}
+
+function canBuAdminAccessAccount(actor = {}, account = {}) {
+  const actorBusinessUnitEntityId = getActorBusinessUnitEntityId(actor);
+  if (!actorBusinessUnitEntityId) return false;
+  return String(account?.businessUnitEntityId || '').trim() === actorBusinessUnitEntityId;
+}
+
+function canBuAdminManageRole(role = '') {
+  return BU_ADMIN_MANAGED_ROLES.has(normaliseRole(role));
+}
+
+function canActorManageAccount(actor = {}, account = {}) {
+  if (isGlobalAdminActor(actor)) return true;
+  if (isScopedBuAdminActor(actor)) {
+    return canBuAdminAccessAccount(actor, account) && canBuAdminManageRole(account?.role);
+  }
+  return false;
+}
+
+function filterAccountsForActor(accounts = [], actor = {}) {
+  if (isGlobalAdminActor(actor)) return accounts;
+  if (isScopedBuAdminActor(actor)) {
+    const actorUsername = String(actor?.username || '').trim().toLowerCase();
+    return accounts.filter(account => canBuAdminAccessAccount(actor, account)
+      || String(account?.username || '').trim().toLowerCase() === actorUsername);
+  }
+  return [];
+}
+
+function ensureScopedBuAdminContext(actor = {}, res) {
+  if (!isScopedBuAdminActor(actor)) return true;
+  if (getActorBusinessUnitEntityId(actor)) return true;
+  sendApiError(res, 403, 'FORBIDDEN', 'BU admin access requires a business-unit assignment.');
+  return false;
+}
+
+function ensureActorCanCreateAccount(actor = {}, account = {}, res) {
+  if (isGlobalAdminActor(actor)) return true;
+  if (!isScopedBuAdminActor(actor)) {
+    sendApiError(res, 403, 'FORBIDDEN', 'You are not allowed to create user accounts.');
+    return false;
+  }
+  if (!ensureScopedBuAdminContext(actor, res)) return false;
+  if (!canBuAdminManageRole(account.role)) {
+    sendApiError(res, 403, 'FORBIDDEN', 'BU admins can only create standard-user, function-admin, and vendor-contact accounts.');
+    return false;
+  }
+  if (!account.businessUnitEntityId || account.businessUnitEntityId !== getActorBusinessUnitEntityId(actor)) {
+    sendApiError(res, 403, 'FORBIDDEN', 'BU admins can only create accounts inside their assigned business unit.');
+    return false;
+  }
+  return true;
+}
+
+function ensureActorCanManageAccount(actor = {}, account = {}, res, actionLabel = 'manage this user') {
+  if (isGlobalAdminActor(actor)) return true;
+  if (!isScopedBuAdminActor(actor)) {
+    sendApiError(res, 403, 'FORBIDDEN', 'You are not allowed to manage user accounts.');
+    return false;
+  }
+  if (!ensureScopedBuAdminContext(actor, res)) return false;
+  if (!canActorManageAccount(actor, account)) {
+    sendApiError(res, 403, 'FORBIDDEN', `BU admins can only ${actionLabel} for standard-user, function-admin, and vendor-contact accounts inside their own business unit.`);
+    return false;
+  }
+  return true;
+}
+
+function buildScopedAuditDetails(actor = {}, details = {}, account = null) {
+  const safeDetails = isPlainObject(details) ? { ...details } : {};
+  const actorBusinessUnitEntityId = getActorBusinessUnitEntityId(actor);
+  if (actorBusinessUnitEntityId && !String(safeDetails.actorBusinessUnitEntityId || '').trim()) {
+    safeDetails.actorBusinessUnitEntityId = actorBusinessUnitEntityId;
+  }
+  if (account && String(account.businessUnitEntityId || '').trim() && !String(safeDetails.businessUnitEntityId || '').trim()) {
+    safeDetails.businessUnitEntityId = String(account.businessUnitEntityId || '').trim();
+  }
+  if (account && String(account.departmentEntityId || '').trim() && !String(safeDetails.departmentEntityId || '').trim()) {
+    safeDetails.departmentEntityId = String(account.departmentEntityId || '').trim();
+  }
+  return safeDetails;
 }
 
 function encodeTokenSegment(value) {
@@ -349,14 +451,15 @@ module.exports = async function handler(req, res) {
       }
       const actor = await resolveAdminActor(req, res, {
         isAdminSecretValid,
-        allowRoles: ['admin']
+        allowRoles: ['admin', 'bu_admin']
       });
       if (!actor) {
         return;
       }
+      if (!ensureScopedBuAdminContext(actor, res)) return;
       const accounts = await readAccounts();
       res.status(200).json({
-        accounts: accounts.map(sanitiseAccount),
+        accounts: filterAccountsForActor(accounts, actor).map(sanitiseAccount),
         storage: {
           writable: hasWritableKv(),
           mode: hasWritableKv() ? 'shared-kv' : (accounts.length ? 'bootstrap-fallback' : 'empty')
@@ -397,6 +500,7 @@ module.exports = async function handler(req, res) {
           return;
         }
         const accounts = await readAccounts();
+        const matchingUsernameAccount = accounts.find(account => account.username === username) || null;
         const matchIndex = accounts.findIndex(account => {
           if (account.username !== username) return false;
           return verifyAccountPassword(account, password).matched;
@@ -418,7 +522,7 @@ module.exports = async function handler(req, res) {
             actorRole: 'anonymous',
             status: 'failed',
             source: 'server',
-            details: nextThrottle.blocked ? { retryAfterSeconds: nextThrottle.retryAfterSeconds } : {}
+            details: buildScopedAuditDetails({}, nextThrottle.blocked ? { retryAfterSeconds: nextThrottle.retryAfterSeconds } : {}, matchingUsernameAccount)
           });
           sendApiError(res, 401, 'INVALID_CREDENTIALS', 'Invalid username or password.');
           return;
@@ -454,7 +558,15 @@ module.exports = async function handler(req, res) {
             console.warn('User login credential upgrade failed:', upgradeError.message);
           }
         }
-        await appendAuditEvent({ category: 'auth', eventType: 'login_success', actorUsername: matched.username, actorRole: matched.role, status: 'success', source: 'server' });
+        await appendAuditEvent({
+          category: 'auth',
+          eventType: 'login_success',
+          actorUsername: matched.username,
+          actorRole: matched.role,
+          status: 'success',
+          source: 'server',
+          details: buildScopedAuditDetails(matched, {}, matched)
+        });
         res.status(200).json({
           user: sanitiseAccount(matched),
           sessionToken: createSessionToken(matched)
@@ -464,11 +576,12 @@ module.exports = async function handler(req, res) {
 
       const actor = await resolveAdminActor(req, res, {
         isAdminSecretValid,
-        allowRoles: ['admin']
+        allowRoles: ['admin', 'bu_admin']
       });
       if (!actor) {
         return;
       }
+      if (!ensureScopedBuAdminContext(actor, res)) return;
 
       if (hasUnexpectedFields(body, ['action', 'account'])) {
         sendApiError(res, 400, 'VALIDATION_ERROR', 'Unexpected fields were included in the account request.');
@@ -497,6 +610,7 @@ module.exports = async function handler(req, res) {
         sendApiError(res, 400, 'PASSWORD_POLICY_FAILED', 'Password does not meet the current policy.');
         return;
       }
+      if (!ensureActorCanCreateAccount(actor, account, res)) return;
       let storedAccounts = null;
       const duplicateExists = await withKvLock(USERS_KEY, async () => {
         const accounts = await readAccounts();
@@ -516,14 +630,23 @@ module.exports = async function handler(req, res) {
         sendApiError(res, 409, 'USERNAME_EXISTS', 'That username is already in use.');
         return;
       }
-      await appendAuditEvent({ category: 'user_admin', eventType: 'user_created', actorUsername: actor.username, actorRole: actor.role, target: account.username, status: 'success', source: 'server', details: { role: account.role, businessUnitEntityId: account.businessUnitEntityId, departmentEntityId: account.departmentEntityId } });
+      await appendAuditEvent({
+        category: 'user_admin',
+        eventType: 'user_created',
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        target: account.username,
+        status: 'success',
+        source: 'server',
+        details: buildScopedAuditDetails(actor, { role: account.role }, account)
+      });
       res.status(201).json({
         account: sanitiseAccount({
           ...account,
           password: issuedPassword
         }),
         password: issuedPassword,
-        accounts: storedAccounts.map(sanitiseAccount)
+        accounts: filterAccountsForActor(storedAccounts, actor).map(sanitiseAccount)
       });
       return;
     }
@@ -587,12 +710,20 @@ module.exports = async function handler(req, res) {
       }
       const actor = await resolveAdminActor(req, res, {
         isAdminSecretValid,
-        allowRoles: ['admin']
+        allowRoles: ['admin', 'bu_admin']
       });
       if (!actor) {
         return;
       }
+      if (!ensureScopedBuAdminContext(actor, res)) return;
       if (body.action === 'reset-password') {
+        const existingAccounts = await readAccounts();
+        const existingAccount = existingAccounts.find(account => account.username === username);
+        if (!existingAccount) {
+          sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+          return;
+        }
+        if (!ensureActorCanManageAccount(actor, existingAccount, res, 'reset passwords')) return;
         const nextPassword = generateStrongPassword();
         const passwordCheck = validatePasswordPolicy(nextPassword);
         if (!passwordCheck.valid) {
@@ -617,15 +748,31 @@ module.exports = async function handler(req, res) {
           sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
           return;
         }
-        await appendAuditEvent({ category: 'user_admin', eventType: 'password_reset', actorUsername: actor.username, actorRole: actor.role, target: updatedAccount.username, status: 'success', source: 'server' });
+        await appendAuditEvent({
+          category: 'user_admin',
+          eventType: 'password_reset',
+          actorUsername: actor.username,
+          actorRole: actor.role,
+          target: updatedAccount.username,
+          status: 'success',
+          source: 'server',
+          details: buildScopedAuditDetails(actor, {}, updatedAccount)
+        });
         res.status(200).json({
           account: sanitiseAccount(updatedAccount),
           password: nextPassword,
-          accounts: storedAccounts.map(sanitiseAccount)
+          accounts: filterAccountsForActor(storedAccounts, actor).map(sanitiseAccount)
         });
         return;
       }
       if (body.action === 'delete-user') {
+        const existingAccounts = await readAccounts();
+        const existingAccount = existingAccounts.find(account => account.username === username);
+        if (!existingAccount) {
+          sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+          return;
+        }
+        if (!ensureActorCanManageAccount(actor, existingAccount, res, 'delete accounts')) return;
         let removed = null;
         const storedAccounts = await withKvLock(USERS_KEY, async () => {
           const accounts = await readAccounts();
@@ -643,10 +790,35 @@ module.exports = async function handler(req, res) {
           return;
         }
         await deleteUserState(removed.username);
-        await appendAuditEvent({ category: 'user_admin', eventType: 'user_deleted', actorUsername: actor.username, actorRole: actor.role, target: removed.username, status: 'success', source: 'server' });
-        res.status(200).json({ accounts: storedAccounts.map(sanitiseAccount) });
+        await appendAuditEvent({
+          category: 'user_admin',
+          eventType: 'user_deleted',
+          actorUsername: actor.username,
+          actorRole: actor.role,
+          target: removed.username,
+          status: 'success',
+          source: 'server',
+          details: buildScopedAuditDetails(actor, {}, removed)
+        });
+        res.status(200).json({ accounts: filterAccountsForActor(storedAccounts, actor).map(sanitiseAccount) });
         return;
       }
+      const existingAccounts = await readAccounts();
+      const currentAccountPreview = existingAccounts.find(account => account.username === username);
+      if (!currentAccountPreview) {
+        sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
+        return;
+      }
+      if (!ensureActorCanManageAccount(actor, currentAccountPreview, res, 'update access')) return;
+      const nextAccountPreview = normaliseAccount({
+        ...currentAccountPreview,
+        displayName: typeof updates.displayName === 'string' && updates.displayName.trim() ? updates.displayName.trim() : currentAccountPreview.displayName,
+        role: typeof updates.role === 'string' ? updates.role : currentAccountPreview.role,
+        businessUnitEntityId: typeof updates.businessUnitEntityId === 'string' ? updates.businessUnitEntityId : currentAccountPreview.businessUnitEntityId,
+        departmentEntityId: typeof updates.departmentEntityId === 'string' ? updates.departmentEntityId : currentAccountPreview.departmentEntityId,
+        sessionVersion: Math.max(1, Number(currentAccountPreview.sessionVersion || 1))
+      });
+      if (!ensureActorCanCreateAccount(actor, nextAccountPreview, res)) return;
       let updatedAccount = null;
       const storedAccounts = await withKvLock(USERS_KEY, async () => {
         const accounts = await readAccounts();
@@ -674,8 +846,17 @@ module.exports = async function handler(req, res) {
         sendApiError(res, 404, 'NOT_FOUND', 'User not found.');
         return;
       }
-      await appendAuditEvent({ category: 'user_admin', eventType: body.action === 'admin-update' ? 'managed_user_updated' : 'user_updated', actorUsername: actor.username, actorRole: actor.role, target: updatedAccount.username, status: 'success', source: 'server', details: { role: updatedAccount.role, businessUnitEntityId: updatedAccount.businessUnitEntityId, departmentEntityId: updatedAccount.departmentEntityId } });
-      res.status(200).json({ accounts: storedAccounts.map(sanitiseAccount) });
+      await appendAuditEvent({
+        category: 'user_admin',
+        eventType: body.action === 'admin-update' ? 'managed_user_updated' : 'user_updated',
+        actorUsername: actor.username,
+        actorRole: actor.role,
+        target: updatedAccount.username,
+        status: 'success',
+        source: 'server',
+        details: buildScopedAuditDetails(actor, { role: updatedAccount.role }, updatedAccount)
+      });
+      res.status(200).json({ accounts: filterAccountsForActor(storedAccounts, actor).map(sanitiseAccount) });
       return;
     }
 

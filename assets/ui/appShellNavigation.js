@@ -188,20 +188,30 @@
   }
 
   function getAppBarNavModel(currentUser, currentHash) {
-    const nonAdminCapability = currentUser && currentUser.role !== 'admin'
+    const portalKind = typeof PortalAccessService !== 'undefined' && PortalAccessService
+      ? PortalAccessService.getPortalKindForRole(currentUser?.role)
+      : (currentUser?.role === 'admin' ? 'admin' : currentUser ? 'internal' : 'guest');
+    const nonAdminCapability = currentUser && currentUser.role !== 'admin' && ['user', 'bu_admin', 'function_admin'].includes(currentUser.role)
       ? getNonAdminCapabilityState(currentUser, getUserSettings(), getAdminSettings())
       : null;
     const isOversightUser = !!(nonAdminCapability?.canManageBusinessUnit || nonAdminCapability?.canManageDepartment);
-    const navLinks = currentUser?.role === 'admin'
+    const navLinks = portalKind === 'admin'
       ? [
           // Keep the app bar at the section level so detailed admin destinations only live in the sidebar.
           { href: '#/admin/home', label: 'Platform Home', active: isAdminHomeRoute(currentHash) },
           { href: '#/admin/settings/org', label: 'Admin Console', active: isAdminConsoleRoute(currentHash) }
         ]
+      : portalKind === 'vendor'
+        ? [
+            { href: '#/vendor/home', label: 'Vendor Portal', active: currentHash.startsWith('#/vendor/home') },
+            { href: '#/vendor/questionnaire', label: 'Questionnaire', active: currentHash.startsWith('#/vendor/questionnaire') },
+            { href: '#/vendor/evidence', label: 'Evidence', active: currentHash.startsWith('#/vendor/evidence') }
+          ]
       : currentUser
         ? [
-            { href: '#/dashboard', label: isOversightUser ? 'Workspace' : 'Dashboard', active: currentHash.startsWith('#/dashboard') },
-            { href: '#/settings', label: isOversightUser ? (nonAdminCapability?.experience?.primaryActionLabel || 'Role Context') : 'Personal Settings', active: currentHash.startsWith('#/settings') }
+            { href: '#/internal/home', label: 'Internal Portal', active: currentHash.startsWith('#/internal/home') },
+            { href: '#/internal/cases', label: 'Case Queue', active: currentHash.startsWith('#/internal/cases') || currentHash.startsWith('#/internal/review') },
+            { href: '#/settings', label: isOversightUser ? (nonAdminCapability?.experience?.primaryActionLabel || 'Personal Settings') : 'Personal Settings', active: currentHash.startsWith('#/settings') }
           ]
         : [
             { href: '#/', label: 'Home', active: currentHash === '#/' || currentHash === '' }
@@ -209,7 +219,13 @@
     return {
       currentUser,
       currentHash,
-      homeHref: currentUser?.role === 'admin' ? '#/admin/home' : currentUser ? '#/dashboard' : '#/',
+      homeHref: portalKind === 'admin'
+        ? '#/admin/home'
+        : portalKind === 'vendor'
+          ? '#/vendor/home'
+          : currentUser
+            ? '#/internal/home'
+            : '#/',
       navLinks
     };
   }
@@ -227,7 +243,7 @@
             <span class="bar-logo-mark" aria-hidden="true">
               <img src="assets/brand/g42-catalyst-symbol-logo-inverted-rgb.svg" alt="">
             </span>
-            <span class="bar-logo-text">Risk <span>Intelligence</span> Platform</span>
+            <span class="bar-logo-text">GTR <span>Vendor Risk</span> Platform</span>
           </a>
           <nav class="bar-nav" aria-label="Primary">
             ${navModel.navLinks.map(link => `<a href="${link.href}" class="bar-nav-link${link.active ? ' active' : ''}"${link.active ? ' aria-current="page"' : ''}>${link.label}</a>`).join('')}

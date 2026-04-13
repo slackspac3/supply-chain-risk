@@ -18,6 +18,16 @@ const AuthService = (() => {
   let adminSecretMemory = '';
   const warnedAuthIssues = new Set();
 
+  function resolveRole(role, defaultRole = 'user') {
+    if (typeof PortalAccessService !== 'undefined' && PortalAccessService && typeof PortalAccessService.normaliseRole === 'function') {
+      return PortalAccessService.normaliseRole(role, { defaultRole });
+    }
+    const safeRole = String(role || '').trim().toLowerCase();
+    const safeDefault = String(defaultRole || 'user').trim().toLowerCase() || 'user';
+    const allowedRoles = new Set(['admin', 'bu_admin', 'function_admin', 'user', 'gtr_analyst', 'reviewer', 'approver', 'privacy', 'legal', 'procurement', 'vendor_contact']);
+    return allowedRoles.has(safeRole) ? safeRole : (allowedRoles.has(safeDefault) ? safeDefault : 'user');
+  }
+
 function resolveApiUrl(path) {
   const resolver = (typeof window !== 'undefined' && window?.ApiOriginResolver)
     || globalThis?.ApiOriginResolver
@@ -114,7 +124,7 @@ function resolveApiUrl(path) {
     return {
       username: account.username,
       displayName: account.displayName,
-      role: account.role,
+      role: resolveRole(account.role),
       businessUnitEntityId: account.businessUnitEntityId || '',
       departmentEntityId: account.departmentEntityId || ''
     };
@@ -125,7 +135,7 @@ function resolveApiUrl(path) {
       username: String(account.username || '').trim().toLowerCase(),
       password: String(account.password || ''),
       displayName: String(account.displayName || '').trim() || 'User',
-      role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
+      role: resolveRole(account.role),
       businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
       departmentEntityId: String(account.departmentEntityId || '').trim()
     };
@@ -356,7 +366,7 @@ function resolveApiUrl(path) {
       const knownAccounts = readCachedAccounts().filter(account => account.username !== data.user.username);
       saveCache([...knownAccounts, data.user]);
       writeSession({ ...data.user, apiSessionToken: data.sessionToken || '' });
-      if (data.user.role === 'admin') {
+      if (isAdminAuthenticated()) {
         try {
           await refreshManagedAccounts();
         } catch (refreshError) {
@@ -415,7 +425,19 @@ function resolveApiUrl(path) {
   }
 
   function isAdminAuthenticated() {
-    return readSession()?.user?.role === 'admin';
+    const role = readSession()?.user?.role || '';
+    if (typeof PortalAccessService !== 'undefined' && PortalAccessService && typeof PortalAccessService.isAdminRole === 'function') {
+      return PortalAccessService.isAdminRole(role);
+    }
+    return ['admin', 'bu_admin'].includes(String(role || '').trim().toLowerCase());
+  }
+
+  function isGlobalAdminAuthenticated() {
+    const role = readSession()?.user?.role || '';
+    if (typeof PortalAccessService !== 'undefined' && PortalAccessService && typeof PortalAccessService.isGlobalAdminRole === 'function') {
+      return PortalAccessService.isGlobalAdminRole(role);
+    }
+    return String(role || '').trim().toLowerCase() === 'admin';
   }
 
   function getCurrentUser() {
@@ -457,7 +479,7 @@ function resolveApiUrl(path) {
     const account = normaliseAccount({
       username,
       displayName,
-      role: role === 'bu_admin' ? 'bu_admin' : (role === 'function_admin' ? 'function_admin' : 'user'),
+      role: resolveRole(role),
       businessUnitEntityId,
       departmentEntityId
     });
@@ -536,6 +558,7 @@ function resolveApiUrl(path) {
     logout,
     isAuthenticated,
     isAdminAuthenticated,
+    isGlobalAdminAuthenticated,
     getCurrentUser,
     updateSessionContext,
     getApiSessionToken,

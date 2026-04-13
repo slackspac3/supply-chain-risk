@@ -221,6 +221,7 @@ const AdminAuditLogSection = (() => {
 
   function renderSection({ auditCache }) {
     const auditSummary = auditCache.summary || {};
+    const auditScope = auditCache.scope && typeof auditCache.scope === 'object' ? auditCache.scope : null;
     const loadedEntries = Array.isArray(auditCache.entries) ? auditCache.entries : [];
     const activeFilter = getActiveFilter();
     const secondaryFilters = getActiveSecondaryFilters();
@@ -250,7 +251,9 @@ const AdminAuditLogSection = (() => {
     return renderSettingsSection({
       title: 'Activity Log',
       scope: 'admin-settings',
-      description: 'Recent platform activity for sign-in events, review workflow actions, user changes, and shared settings updates.',
+      description: auditScope?.type === 'business_unit'
+        ? 'Recent platform activity limited to your assigned business unit. Global platform events remain visible to the global admin only.'
+        : 'Recent platform activity for sign-in events, review workflow actions, user changes, and shared settings updates.',
       meta: activeFilter
         ? `${filteredEntries.length} matching loaded events · ${auditSummary.total || loadedEntries.length || 0} recent events`
         : (auditSummary.total ? `${auditSummary.total} recent events` : 'Recent activity only'),

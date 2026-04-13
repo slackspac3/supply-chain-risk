@@ -93,9 +93,32 @@
       departmentEntities,
       managedAccounts,
       preferredAdminRoute,
+      currentUserRole,
       docCount,
       valueSummary
     }) {
+      const canAccessAdminRoute = (route) => (
+        typeof PortalAccessService !== 'undefined'
+        && PortalAccessService
+        && typeof PortalAccessService.canAccessAdminRoute === 'function'
+      ) ? PortalAccessService.canAccessAdminRoute(currentUserRole, route) : true;
+      const adminQuickActions = [
+        canAccessAdminRoute('/admin/settings/users')
+          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-users">User Accounts</button>'
+          : '',
+        canAccessAdminRoute('/admin/settings/audit')
+          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-audit">Audit Log</button>'
+          : '',
+        canAccessAdminRoute('/admin/bu')
+          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-bu">Org Customisation</button>'
+          : '',
+        canAccessAdminRoute('/admin/settings/defaults')
+          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-defaults">Platform Defaults</button>'
+          : '',
+        canAccessAdminRoute('/admin/docs')
+          ? '<button type="button" class="btn btn--ghost" id="btn-admin-home-docs">Document Library</button>'
+          : ''
+      ].filter(Boolean).join('');
       return adminLayout('home', `
         <style>
           .review-queue-item {
@@ -186,14 +209,14 @@
           </div>` : ''}
           <div class="grid-2" style="margin-top:var(--sp-6);align-items:start">
             ${UI.dashboardSectionCard({
-              title: 'Assessment workspace',
-              description: 'Start a new guided assessment from here instead of dropping straight into the wizard on login.',
+              title: 'Internal portal',
+              description: 'Open the internal GTR workspace from here instead of dropping straight into the legacy wizard flow.',
               className: 'dashboard-section-card--spotlight',
               body: `
-                <div class="form-help">Use the same guided workflow as end users when you want to model a scenario directly or review the working experience from the front door.</div>
+                <div class="form-help">Use the internal team portal when you want to review vendor cases, findings, clause recommendations, and approval paths from the PoC front door.</div>
                 <div class="flex items-center gap-3" style="flex-wrap:wrap">
                   <button type="button" class="btn btn--primary" id="btn-admin-home-start-assessment">Start Guided Assessment</button>
-                  <a class="btn btn--secondary" href="#/dashboard" id="btn-admin-home-open-workspace">Open User Workspace</a>
+                  <a class="btn btn--secondary" href="#/internal/home" id="btn-admin-home-open-workspace">Open Internal Portal</a>
                 </div>
               `
             })}
@@ -203,9 +226,7 @@
               body: `
                 <div class="flex items-center gap-3" style="flex-wrap:wrap">
                   <button type="button" class="btn btn--secondary" id="btn-admin-home-open-console">Open Admin Console</button>
-                  <button type="button" class="btn btn--ghost" id="btn-admin-home-users">User Accounts</button>
-                  <button type="button" class="btn btn--ghost" id="btn-admin-home-defaults">Platform Defaults</button>
-                  <button type="button" class="btn btn--ghost" id="btn-admin-home-docs">Document Library</button>
+                  ${adminQuickActions}
                 </div>
                 <div class="form-help">Structure, defaults, user access, and libraries stay grouped behind the console so the top-level experience remains calm.</div>
               `
@@ -257,13 +278,19 @@
         try {
           sessionStorage.setItem('rq_admin_workspace_preview', '1');
         } catch {}
-        Router.navigate('/dashboard');
+        Router.navigate('/internal/home');
       });
       document.getElementById('btn-admin-home-open-console')?.addEventListener('click', () => {
         Router.navigate(preferredAdminRoute);
       });
       document.getElementById('btn-admin-home-users')?.addEventListener('click', () => {
         Router.navigate('/admin/settings/users');
+      });
+      document.getElementById('btn-admin-home-audit')?.addEventListener('click', () => {
+        Router.navigate('/admin/settings/audit');
+      });
+      document.getElementById('btn-admin-home-bu')?.addEventListener('click', () => {
+        Router.navigate('/admin/bu');
       });
       document.getElementById('btn-admin-home-defaults')?.addEventListener('click', () => {
         Router.navigate('/admin/settings/defaults');

@@ -4,11 +4,18 @@ const { get: kvGet } = require('./_kvStore');
 
 const USERS_KEY = process.env.USER_STORE_KEY || 'risk_calculator_users';
 
+function normaliseRole(role, defaultRole = 'user') {
+  const safeRole = String(role || '').trim().toLowerCase();
+  const safeDefault = String(defaultRole || 'user').trim().toLowerCase() || 'user';
+  const allowedRoles = new Set(['admin', 'bu_admin', 'function_admin', 'user', 'gtr_analyst', 'reviewer', 'approver', 'privacy', 'legal', 'procurement', 'vendor_contact']);
+  return allowedRoles.has(safeRole) ? safeRole : (allowedRoles.has(safeDefault) ? safeDefault : 'user');
+}
+
 function normaliseAccount(account = {}) {
   return {
     username: String(account.username || '').trim().toLowerCase(),
     displayName: String(account.displayName || '').trim() || 'User',
-    role: account.role === 'admin' ? 'admin' : (account.role === 'bu_admin' ? 'bu_admin' : (account.role === 'function_admin' ? 'function_admin' : 'user')),
+    role: normaliseRole(account.role),
     businessUnitEntityId: String(account.businessUnitEntityId || '').trim(),
     departmentEntityId: String(account.departmentEntityId || '').trim(),
     sessionVersion: Math.max(1, Number(account.sessionVersion || 1))

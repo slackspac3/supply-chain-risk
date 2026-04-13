@@ -359,9 +359,9 @@ function renderUserOnboarding(existingSettings = getUserSettings(), startStep = 
         if (!AppState.draft.geography) AppState.draft.geography = draftSettings.geography || globalSettings.geography;
         saveDraft();
         UI.toast('Personal setup complete.', 'success');
-        Router.navigate('/dashboard');
+        Router.navigate(typeof getDefaultRouteForCurrentUser === 'function' ? getDefaultRouteForCurrentUser() : '/dashboard');
       } finally {
-        if (btn && !String(window.location.hash || '').endsWith('/dashboard')) {
+        if (btn && !String(window.location.hash || '').endsWith(String(typeof getDefaultRouteForCurrentUser === 'function' ? getDefaultRouteForCurrentUser() : '/dashboard'))) {
           btn.disabled = false;
           btn.textContent = originalText;
         }

@@ -1089,7 +1089,7 @@ const AppState = {
   reviewQueueStaleNotice: null,
   adminReviewQueueMeta: { lastLoadedAt: 0, lastInvalidatedAt: 0, lastResolvedAt: 0, stale: false, count: 0, error: '' },
   dashboardReviewInboxMeta: { lastLoadedAt: 0, lastInvalidatedAt: 0, lastResolvedAt: 0, stale: false, count: 0, error: '' },
-  auditLogCache: { loaded: false, loading: false, entries: [], summary: null, error: '', lastLoadedAt: 0 },
+  auditLogCache: { loaded: false, loading: false, entries: [], summary: null, scope: null, error: '', lastLoadedAt: 0 },
   clientRuntimeErrors: [],
   stateTransitionLog: [],
   draftLastSavedAt: 0,
@@ -3023,7 +3023,7 @@ async function requestAuditLog(method = 'GET', payload, { includeAdminSecret = f
 }
 
 async function loadAuditLog() {
-  const previousCache = AppState.auditLogCache || { loaded: false, loading: false, entries: [], summary: null, error: '', lastLoadedAt: 0 };
+  const previousCache = AppState.auditLogCache || { loaded: false, loading: false, entries: [], summary: null, scope: null, error: '', lastLoadedAt: 0 };
   AppState.auditLogCache.loading = true;
   try {
     const data = await requestAuditLog('GET', undefined, { includeAdminSecret: true });
@@ -3032,6 +3032,7 @@ async function loadAuditLog() {
       loading: false,
       entries: Array.isArray(data.entries) ? data.entries : [],
       summary: data.summary || null,
+      scope: data.scope || null,
       error: '',
       lastLoadedAt: Date.now()
     };
@@ -3042,6 +3043,7 @@ async function loadAuditLog() {
       loading: false,
       entries: Array.isArray(previousCache.entries) ? previousCache.entries : [],
       summary: previousCache.summary || null,
+      scope: previousCache.scope || null,
       lastLoadedAt: Number(previousCache.lastLoadedAt || 0),
       error: error instanceof Error ? error.message : String(error)
     };
@@ -10949,7 +10951,7 @@ function renderLogin() {
         <div class="banner banner--poc mb-6"><span class="banner-icon">⚠</span><span class="banner-text"><strong>PoC Notice:</strong> Pilot environment only. Use approved test credentials and dummy scenarios only.</span></div>
         <div class="card card--elevated">
           <h2 style="margin-bottom:var(--sp-2)">Sign In</h2>
-          <p style="margin-bottom:var(--sp-6);color:var(--text-muted)">Each user keeps their own draft state, saved assessments, and assigned BU/function context. Ask the global admin for your username and password.</p>
+          <p style="margin-bottom:var(--sp-6);color:var(--text-muted)">Internal users and invited vendor contacts land in different portal experiences after sign-in. Ask the platform admin for your username and password.</p>
           <form id="login-form">
             <div class="form-group mb-4">
               <label class="form-label" for="login-user">Username</label>
@@ -11047,25 +11049,58 @@ function renderLogin() {
 }
 
 function adminLayout(active, content, activeSettingsSection = 'org') {
+  const currentUser = AuthService.getCurrentUser();
+  const currentUserRole = currentUser?.role || '';
+  const canAccessAdminRoute = (route) => (
+    typeof PortalAccessService !== 'undefined'
+    && PortalAccessService
+    && typeof PortalAccessService.canAccessAdminRoute === 'function'
+  ) ? PortalAccessService.canAccessAdminRoute(currentUserRole, route) : true;
+  const adminNavGroups = [
+    {
+      label: '',
+      items: [
+        { href: '#/admin/home', route: '/admin/home', label: 'Overview', active: active === 'home' }
+      ]
+    },
+    {
+      label: 'Setup',
+      items: [
+        { href: '#/admin/settings/org', route: '/admin/settings/org', label: 'Organisation Setup', active: active === 'settings' && activeSettingsSection === 'org' },
+        { href: '#/admin/settings/company', route: '/admin/settings/company', label: 'AI Company Builder', active: active === 'settings' && activeSettingsSection === 'company' },
+        { href: '#/admin/settings/defaults', route: '/admin/settings/defaults', label: 'Platform Defaults', active: active === 'settings' && activeSettingsSection === 'defaults' },
+        { href: '#/admin/settings/governance', route: '/admin/settings/governance', label: 'Governance Inputs', active: active === 'settings' && activeSettingsSection === 'governance' },
+        { href: '#/admin/settings/feedback', route: '/admin/settings/feedback', label: 'AI Feedback &amp; Tuning', active: active === 'settings' && activeSettingsSection === 'feedback' },
+        { href: '#/admin/settings/access', route: '/admin/settings/access', label: 'System Access', active: active === 'settings' && activeSettingsSection === 'access' },
+        { href: '#/admin/settings/users', route: '/admin/settings/users', label: 'User Accounts', active: active === 'settings' && activeSettingsSection === 'users' },
+        { href: '#/admin/settings/audit', route: '/admin/settings/audit', label: 'Audit Log', active: active === 'settings' && activeSettingsSection === 'audit' }
+      ]
+    },
+    {
+      label: 'Libraries',
+      items: [
+        { href: '#/admin/bu', route: '/admin/bu', label: 'Org Customisation', active: active === 'bu' },
+        { href: '#/admin/docs', route: '/admin/docs', label: 'Document Library', active: active === 'docs' }
+      ]
+    }
+  ]
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => canAccessAdminRoute(item.route))
+    }))
+    .filter(group => group.items.length);
+  const adminKicker = currentUserRole === 'bu_admin' ? 'BU Admin' : 'Admin';
+  const adminTitle = currentUserRole === 'bu_admin' ? 'Business-unit control' : 'Platform control';
   return `<div class="admin-shell">
     <nav class="admin-sidebar">
       <div class="admin-sidebar-head">
-        <div class="admin-sidebar-kicker">Admin</div>
-        <div class="admin-sidebar-title">Platform control</div>
+        <div class="admin-sidebar-kicker">${escapeHtml(adminKicker)}</div>
+        <div class="admin-sidebar-title">${escapeHtml(adminTitle)}</div>
       </div>
-      <a href="#/admin/home" data-admin-route="/admin/home" class="admin-nav-link ${active==='home' ? 'active' : ''}">Overview</a>
-      <div class="admin-nav-group-label">Setup</div>
-      <a href="#/admin/settings/org" data-admin-route="/admin/settings/org" class="admin-nav-link ${active==='settings' && activeSettingsSection==='org' ? 'active' : ''}">Organisation Setup</a>
-      <a href="#/admin/settings/company" data-admin-route="/admin/settings/company" class="admin-nav-link ${active==='settings' && activeSettingsSection==='company' ? 'active' : ''}">AI Company Builder</a>
-      <a href="#/admin/settings/defaults" data-admin-route="/admin/settings/defaults" class="admin-nav-link ${active==='settings' && activeSettingsSection==='defaults' ? 'active' : ''}">Platform Defaults</a>
-      <a href="#/admin/settings/governance" data-admin-route="/admin/settings/governance" class="admin-nav-link ${active==='settings' && activeSettingsSection==='governance' ? 'active' : ''}">Governance Inputs</a>
-      <a href="#/admin/settings/feedback" data-admin-route="/admin/settings/feedback" class="admin-nav-link ${active==='settings' && activeSettingsSection==='feedback' ? 'active' : ''}">AI Feedback &amp; Tuning</a>
-      <a href="#/admin/settings/access" data-admin-route="/admin/settings/access" class="admin-nav-link ${active==='settings' && activeSettingsSection==='access' ? 'active' : ''}">System Access</a>
-      <a href="#/admin/settings/users" data-admin-route="/admin/settings/users" class="admin-nav-link ${active==='settings' && activeSettingsSection==='users' ? 'active' : ''}">User Accounts</a>
-      <a href="#/admin/settings/audit" data-admin-route="/admin/settings/audit" class="admin-nav-link ${active==='settings' && activeSettingsSection==='audit' ? 'active' : ''}">Audit Log</a>
-      <div class="admin-nav-group-label">Libraries</div>
-      <a href="#/admin/bu" data-admin-route="/admin/bu" class="admin-nav-link ${active==='bu'?'active':''}">Org Customisation</a>
-      <a href="#/admin/docs" data-admin-route="/admin/docs" class="admin-nav-link ${active==='docs'?'active':''}">Document Library</a>
+      ${adminNavGroups.map(group => `
+        ${group.label ? `<div class="admin-nav-group-label">${escapeHtml(group.label)}</div>` : ''}
+        ${group.items.map(item => `<a href="${item.href}" data-admin-route="${item.route}" class="admin-nav-link ${item.active ? 'active' : ''}">${item.label}</a>`).join('')}
+      `).join('')}
       <div class="admin-sidebar-spacer"></div>
       <div class="admin-sidebar-foot">
         <div class="banner banner--poc admin-sidebar-banner">⚠ PoC — replace with Entra ID</div>
@@ -11077,7 +11112,8 @@ function adminLayout(active, content, activeSettingsSection = 'org') {
 }
 
 function renderAdminHome() {
-  if (!requireAdmin()) return;
+  if (!requireAdmin('/admin/home')) return;
+  const currentUser = AuthService.getCurrentUser();
   const settings = getAdminSettings();
   const companyStructure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
   const assessments = getAssessments();
@@ -11089,7 +11125,12 @@ function renderAdminHome() {
   const companyEntities = companyStructure.filter(node => isCompanyEntityType(node.type));
   const departmentEntities = companyStructure.filter(node => isDepartmentEntityType(node.type));
   const managedAccounts = getManagedAccountsForAdmin(settings);
-  const preferredAdminRoute = `/admin/settings/${getPreferredAdminSection()}`;
+  const preferredAdminSection = typeof PortalAccessService !== 'undefined'
+    && PortalAccessService
+    && typeof PortalAccessService.getDefaultAdminSectionForRole === 'function'
+    ? PortalAccessService.getDefaultAdminSectionForRole(currentUser?.role, getPreferredAdminSection())
+    : getPreferredAdminSection();
+  const preferredAdminRoute = `/admin/settings/${preferredAdminSection}`;
   const docCount = getDocList().length;
   const valueSummary = typeof ValueQuantService !== 'undefined'
     ? ValueQuantService.buildWorkspaceValueSummary(completedAssessments, {
@@ -11107,6 +11148,7 @@ function renderAdminHome() {
     departmentEntities,
     managedAccounts,
     preferredAdminRoute,
+    currentUserRole: currentUser?.role || '',
     docCount,
     valueSummary
   }));
@@ -12373,7 +12415,14 @@ function bindAutosave(container, callback, { events = ['input', 'change'] } = {}
 let activeAdminSettingsRenderToken = 0;
 
 function renderAdminSettings(activeSection = 'org') {
-  if (!requireAdmin()) return;
+  const currentUser = AuthService.getCurrentUser();
+  const requestedSection = window.AdminSettingsSection.SETTINGS_SECTION_META[activeSection] ? activeSection : getPreferredAdminSection();
+  const accessibleSection = typeof PortalAccessService !== 'undefined'
+    && PortalAccessService
+    && typeof PortalAccessService.getDefaultAdminSectionForRole === 'function'
+    ? PortalAccessService.getDefaultAdminSectionForRole(currentUser?.role, requestedSection)
+    : requestedSection;
+  if (!requireAdmin(`/admin/settings/${accessibleSection}`)) return;
   const renderToken = ++activeAdminSettingsRenderToken;
   const settings = getAdminSettings();
   const companyStructure = Array.isArray(settings.companyStructure) ? [...settings.companyStructure] : [];
@@ -12399,7 +12448,7 @@ function renderAdminSettings(activeSection = 'org') {
   const companyEntities = companyStructure.filter(node => isCompanyEntityType(node.type));
   const departmentEntities = companyStructure.filter(node => isDepartmentEntityType(node.type));
   const settingsSectionMeta = window.AdminSettingsSection.SETTINGS_SECTION_META;
-  const currentSettingsSection = setPreferredAdminSection(settingsSectionMeta[activeSection] ? activeSection : getPreferredAdminSection());
+  const currentSettingsSection = setPreferredAdminSection(settingsSectionMeta[accessibleSection] ? accessibleSection : getPreferredAdminSection());
   const orgSetupSections = AdminOrgSetupSection.renderSections({
     companyEntities,
     departmentEntities,
@@ -12750,18 +12799,30 @@ function safeRenderAdminSettings(section = getPreferredAdminSection()) {
   } catch (error) {
     console.error('safeRenderAdminSettings fallback:', error);
     try {
-      setPreferredAdminSection('org');
-      renderAdminSettings('org');
+      const currentUser = AuthService.getCurrentUser();
+      const fallbackSection = typeof PortalAccessService !== 'undefined'
+        && PortalAccessService
+        && typeof PortalAccessService.getDefaultAdminSectionForRole === 'function'
+        ? PortalAccessService.getDefaultAdminSectionForRole(currentUser?.role, 'org')
+        : 'org';
+      setPreferredAdminSection(fallbackSection);
+      renderAdminSettings(fallbackSection);
       UI.toast('A problem affected the selected admin section, so the page reopened in Organisation Setup.', 'warning', 5000);
     } catch (fallbackError) {
       console.error('safeRenderAdminSettings hard failure:', fallbackError);
-      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="form-help mt-4">The platform logged the technical failure server-side or in the browser console for follow-up.</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/org">Open Organisation Setup</a><a class="btn btn--ghost" href="#/admin/home">Platform Home</a></div></div></div></main>`);
+      const currentUser = AuthService.getCurrentUser();
+      const fallbackSection = typeof PortalAccessService !== 'undefined'
+        && PortalAccessService
+        && typeof PortalAccessService.getDefaultAdminSectionForRole === 'function'
+        ? PortalAccessService.getDefaultAdminSectionForRole(currentUser?.role, 'org')
+        : 'org';
+      setPage(`<main class="page"><div class="container" style="padding:var(--sp-12)"><div class="card"><h2>Admin Screen Error</h2><p style="margin-top:8px;color:var(--text-muted)">The selected admin screen could not be opened. Return to Organisation Setup and try again.</p><div class="form-help mt-4">The platform logged the technical failure server-side or in the browser console for follow-up.</div><div class="flex items-center gap-3 mt-6"><a class="btn btn--primary" href="#/admin/settings/${fallbackSection}">Open Admin Console</a><a class="btn btn--ghost" href="#/admin/home">Platform Home</a></div></div></div></main>`);
     }
   }
 }
 
 function renderAdminBU() {
-  if (!requireAdmin()) return;
+  if (!requireAdmin('/admin/bu')) return;
   const settings = getAdminSettings();
   const companyStructure = Array.isArray(settings.companyStructure) ? settings.companyStructure : [];
   const structureMap = new Map(companyStructure.map(node => [node.id, node]));
