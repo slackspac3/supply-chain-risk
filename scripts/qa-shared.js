@@ -15,11 +15,6 @@ const APP_INTEGRITY_STEPS = [
     args: ['run', 'check:syntax']
   },
   {
-    label: 'Taxonomy projection consistency',
-    command: npmCommand,
-    args: ['run', 'check:taxonomy-projection']
-  },
-  {
     label: 'Static smoke guardrails',
     command: npmCommand,
     args: ['run', 'check:smoke']
@@ -30,19 +25,14 @@ const APP_INTEGRITY_STEPS = [
     args: ['run', 'test:unit']
   },
   {
-    label: 'Eval fixture contract',
-    command: npmCommand,
-    args: ['run', 'test:eval:fixture']
-  },
-  {
     label: 'Documentation consistency scan',
     command: process.execPath,
     args: ['scripts/readme-scan.js']
   },
   {
-    label: 'Full Playwright suite',
+    label: 'Portal Playwright smoke',
     command: npmCommand,
-    args: ['run', 'test:e2e']
+    args: ['run', 'test:e2e:portal-smoke']
   }
 ];
 

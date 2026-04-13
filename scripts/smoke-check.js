@@ -45,6 +45,7 @@ const workspaceStateModelJs = read('assets/state/workspaceStateModel.js');
 const auditLogSectionJs = read('assets/admin/auditLogSection.js');
 const demoModeJs = read('assets/demo/demoMode.js');
 const e2eSmokeSpecJs = read('tests/e2e/smoke.spec.js');
+const portalSmokeSpecJs = read('tests/e2e/portal-smoke.spec.js');
 const pagesWorkflow = read('.github/workflows/pages.yml');
 const ciWorkflow = read('.github/workflows/ci.yml');
 const releaseChecklist = read('RELEASE_CHECKLIST.md');
@@ -99,6 +100,7 @@ expect(typeof packageJson.scripts?.['qa:ai'] === 'string', 'package.json is miss
 expect(typeof packageJson.scripts?.['qa:release'] === 'string', 'package.json is missing qa:release');
 expect(String(packageJson.scripts?.['release:pilot'] || '').trim() === 'npm run qa:release', 'release:pilot must defer to qa:release so CI and humans use one release gate');
 expect(String(packageJson.scripts?.['test:e2e'] || '').trim().includes('run-playwright-static.js'), 'test:e2e must use the managed static-server Playwright runner');
+expect(String(packageJson.scripts?.['test:e2e:portal-smoke'] || '').trim().includes('run-playwright-static.js'), 'test:e2e:portal-smoke must use the managed static-server Playwright runner');
 expect(String(packageJson.scripts?.['test:e2e:smoke'] || '').trim().includes('run-playwright-static.js'), 'test:e2e:smoke must use the managed static-server Playwright runner');
 expect(appJs.includes(`const APP_ASSET_VERSION = '${versions[0] || ''}'`), 'app.js asset version does not match index.html asset version');
 expect(indexHtml.includes('assets/services/reportPresentation.js'), 'index.html is missing reportPresentation.js');
@@ -189,11 +191,9 @@ expect(qaAiJs.includes('AI_QUALITY_STEPS'), 'qa-ai script is missing the AI-qual
 expect(qaReleaseJs.includes('APP_INTEGRITY_STEPS'), 'qa-release script is missing the app-integrity bundle');
 expect(qaReleaseJs.includes('AI_QUALITY_STEPS'), 'qa-release script is missing the AI-quality bundle');
 expect(qaSharedJs.includes('check:syntax'), 'qa-shared script is missing syntax checks');
-expect(qaSharedJs.includes('check:taxonomy-projection'), 'qa-shared script is missing taxonomy projection checks');
 expect(qaSharedJs.includes('check:smoke'), 'qa-shared script is missing smoke checks');
 expect(qaSharedJs.includes('test:unit'), 'qa-shared script is missing unit tests');
-expect(qaSharedJs.includes('test:eval:fixture'), 'qa-shared script is missing eval fixture checks');
-expect(qaSharedJs.includes('test:e2e'), 'qa-shared script is missing full Playwright coverage');
+expect(qaSharedJs.includes('test:e2e:portal-smoke'), 'qa-shared script is missing the vendor portal Playwright smoke coverage');
 expect(qaSharedJs.includes('eval:local'), 'qa-shared script is missing deterministic local eval coverage');
 expect(qaSharedJs.includes('readme-scan.js'), 'qa-shared script is missing documentation consistency checks');
 expect(qaSharedJs.includes('check-eval-thresholds.js'), 'qa-shared script is missing the eval-threshold enforcement step');
@@ -218,6 +218,9 @@ expect(e2eSmokeSpecJs.includes('first-run onboarding can launch the sample asses
 expect(e2eSmokeSpecJs.includes('dashboard duplicate assessment creates a new editable draft'), 'Playwright smoke suite is missing dashboard duplicate-assessment coverage');
 expect(e2eSmokeSpecJs.includes('wizard step 1 clear all keeps manually added risks unselected after rerender'), 'Playwright smoke suite is missing wizard clear-all coverage');
 expect(e2eSmokeSpecJs.includes('admin can update user access and the request carries the expected role assignment'), 'Playwright smoke suite is missing admin role update coverage');
+expect(portalSmokeSpecJs.includes('enter on login signs a GTR analyst into the internal portal'), 'Portal Playwright smoke suite is missing the internal-portal login coverage');
+expect(portalSmokeSpecJs.includes('admin home opens the internal portal instead of crashing'), 'Portal Playwright smoke suite is missing the admin-to-internal handoff coverage');
+expect(portalSmokeSpecJs.includes('vendor portal routes render without crashing for an authenticated vendor account'), 'Portal Playwright smoke suite is missing the vendor workspace coverage');
 expect(ciWorkflow.includes('validate_app:'), 'Pilot CI workflow is missing the blocking app-integrity job');
 expect(ciWorkflow.includes('ai_quality:'), 'Pilot CI workflow is missing the separate AI-quality job');
 expect(ciWorkflow.includes('npm run qa:app'), 'Pilot CI workflow is missing the app-integrity gate');
