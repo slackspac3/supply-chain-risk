@@ -193,10 +193,10 @@
 
   function renderEmptyPortal(title, body) {
     globalScope.setPage(`
-      <main class="page">
+      <main class="page portal-shell portal-shell--neutral">
         <div class="container container--narrow" style="padding:var(--sp-16) var(--sp-6)">
-          <div class="card card--elevated">
-            <div class="landing-badge">Vendor Risk PoC</div>
+          <div class="card card--elevated portal-empty-card">
+            <div class="landing-badge landing-badge--review">Vendor assurance PoC</div>
             <h2 style="margin-top:var(--sp-4)">${escapeHtml(title)}</h2>
             <p class="form-help" style="margin-top:8px">${escapeHtml(body)}</p>
           </div>
@@ -269,14 +269,19 @@
     const nextCase = visibleCases.find((item) => item.status === 'awaiting_vendor_clarification' || item.status === 'internal_review') || visibleCases[0] || null;
 
     globalScope.setPage(`
-      <main class="dashboard-shell portal-shell">
+      <main class="dashboard-shell portal-shell portal-shell--internal">
         <section class="dashboard-primary-band">
-          <div class="dashboard-hero dashboard-hero--start">
-            <div class="landing-badge">Internal Team Portal</div>
+          <div class="dashboard-hero dashboard-hero--start portal-hero portal-hero--internal">
+            <div class="landing-badge landing-badge--internal">Internal GTR Console</div>
             <div class="dashboard-hero-grid dashboard-hero-grid--balanced">
               <div class="dashboard-hero-main">
-                <h2>GTR vendor risk workbench</h2>
-                <p class="dashboard-hero-copy">Review intake, vendor responses, evidence, findings, and approval paths in one internal queue. This PoC keeps the internal team portal separate from the vendor-facing case experience.</p>
+                <h2>Vendor assurance workbench</h2>
+                <p class="dashboard-hero-copy">Review intake, vendor responses, evidence, clause checks, and approval paths from a dedicated internal operating console rather than the older scenario-led calculator flow.</p>
+                <div class="portal-hero-pills">
+                  <span class="portal-hero-pill">Internal review lane</span>
+                  <span class="portal-hero-pill">AI-assisted assessment</span>
+                  <span class="portal-hero-pill">Separate vendor workspace</span>
+                </div>
                 <div class="dashboard-start-primary__actions">
                   <a class="btn btn--primary" href="#/internal/cases">Open case queue</a>
                   ${nextCase ? `<a class="btn btn--secondary" href="#/internal/review/${encodeURIComponent(nextCase.id)}">Open next case</a>` : ''}
@@ -348,13 +353,18 @@
   function renderInternalCaseQueue() {
     const visibleCases = getVisibleCases();
     globalScope.setPage(`
-      <main class="dashboard-shell portal-shell">
+      <main class="dashboard-shell portal-shell portal-shell--internal">
         <section class="dashboard-primary-band">
-          <div class="dashboard-hero dashboard-hero--start">
-            <div class="landing-badge">Internal Team Portal</div>
+          <div class="dashboard-hero dashboard-hero--start portal-hero portal-hero--internal">
+            <div class="landing-badge landing-badge--internal">Internal GTR Console</div>
             <div class="dashboard-hero-main">
               <h2>Case queue</h2>
-              <p class="dashboard-hero-copy">Every visible case shares the same PoC state model: intake, dynamic questionnaire, evidence, findings, approval path, and reassessment timing.</p>
+              <p class="dashboard-hero-copy">Every visible case runs through the vendor-assessment model: intake, dynamic questionnaire, evidence review, decisioning, and reassessment timing.</p>
+              <div class="portal-hero-pills">
+                <span class="portal-hero-pill">Queue-first</span>
+                <span class="portal-hero-pill">Review by case</span>
+                <span class="portal-hero-pill">BU-aware visibility</span>
+              </div>
             </div>
           </div>
         </section>
@@ -395,14 +405,19 @@
       : [];
 
     globalScope.setPage(`
-      <main class="dashboard-shell portal-shell">
+      <main class="dashboard-shell portal-shell portal-shell--review">
         <section class="dashboard-primary-band">
-          <div class="dashboard-hero dashboard-hero--start">
-            <div class="landing-badge">Internal Review</div>
+          <div class="dashboard-hero dashboard-hero--start portal-hero portal-hero--review">
+            <div class="landing-badge landing-badge--review">Assessment Review</div>
             <div class="dashboard-hero-grid dashboard-hero-grid--balanced">
               <div class="dashboard-hero-main">
                 <h2>${escapeHtml(caseRecord.id)} • ${escapeHtml(caseRecord.vendorName)}</h2>
                 <p class="dashboard-hero-copy">${escapeHtml(caseRecord.title)}</p>
+                <div class="portal-hero-pills">
+                  <span class="portal-hero-pill">Case evidence</span>
+                  <span class="portal-hero-pill">Clause recommendation</span>
+                  <span class="portal-hero-pill">Decision capture</span>
+                </div>
                 <div class="dashboard-start-primary__actions">
                   <a class="btn btn--ghost" href="#/internal/cases">Back to queue</a>
                   <a class="btn btn--secondary" href="#/internal/home">Return to portal</a>
@@ -602,14 +617,19 @@
     }
 
     globalScope.setPage(`
-      <main class="dashboard-shell portal-shell">
+      <main class="dashboard-shell portal-shell portal-shell--vendor">
         <section class="dashboard-primary-band">
-          <div class="dashboard-hero dashboard-hero--start">
-            <div class="landing-badge">Vendor Portal</div>
+          <div class="dashboard-hero dashboard-hero--start portal-hero portal-hero--vendor">
+            <div class="landing-badge landing-badge--vendor">External Vendor Workspace</div>
             <div class="dashboard-hero-grid dashboard-hero-grid--balanced">
               <div class="dashboard-hero-main">
                 <h2>${escapeHtml(primaryCase.vendorName)} case workspace</h2>
-                <p class="dashboard-hero-copy">Use this external portal to complete the questionnaire, upload evidence, and respond to GTR follow-ups for the invited case only.</p>
+                <p class="dashboard-hero-copy">Use this external workspace to complete the questionnaire, upload assurance artifacts, and respond to GTR follow-ups for the invited case only.</p>
+                <div class="portal-hero-pills">
+                  <span class="portal-hero-pill">Single-case access</span>
+                  <span class="portal-hero-pill">Evidence upload</span>
+                  <span class="portal-hero-pill">Clarification loop</span>
+                </div>
                 <div class="dashboard-start-primary__actions">
                   <a class="btn btn--primary" href="#/vendor/questionnaire/${encodeURIComponent(primaryCase.id)}">Open questionnaire</a>
                   <a class="btn btn--secondary" href="#/vendor/evidence/${encodeURIComponent(primaryCase.id)}">Upload evidence</a>
@@ -673,13 +693,18 @@
     const questions = getQuestionSet(caseRecord);
 
     globalScope.setPage(`
-      <main class="dashboard-shell portal-shell">
+      <main class="dashboard-shell portal-shell portal-shell--vendor">
         <section class="dashboard-primary-band">
-          <div class="dashboard-hero dashboard-hero--start">
-            <div class="landing-badge">Vendor Questionnaire</div>
+          <div class="dashboard-hero dashboard-hero--start portal-hero portal-hero--vendor">
+            <div class="landing-badge landing-badge--vendor">Vendor Questionnaire</div>
             <div class="dashboard-hero-main">
               <h2>${escapeHtml(caseRecord.vendorName)} • ${escapeHtml(caseRecord.id)}</h2>
-              <p class="dashboard-hero-copy">This questionnaire is dynamically framed from the service type and the intake context already captured for this case.</p>
+              <p class="dashboard-hero-copy">This questionnaire is dynamically framed from the service type and intake context already captured for this case.</p>
+              <div class="portal-hero-pills">
+                <span class="portal-hero-pill">Service-specific prompts</span>
+                <span class="portal-hero-pill">Draft or submit</span>
+                <span class="portal-hero-pill">Evidence-backed response</span>
+              </div>
             </div>
           </div>
         </section>
@@ -752,13 +777,18 @@
     }
 
     globalScope.setPage(`
-      <main class="dashboard-shell portal-shell">
+      <main class="dashboard-shell portal-shell portal-shell--vendor">
         <section class="dashboard-primary-band">
-          <div class="dashboard-hero dashboard-hero--start">
-            <div class="landing-badge">Vendor Evidence</div>
+          <div class="dashboard-hero dashboard-hero--start portal-hero portal-hero--vendor">
+            <div class="landing-badge landing-badge--vendor">Vendor Evidence</div>
             <div class="dashboard-hero-main">
               <h2>${escapeHtml(caseRecord.vendorName)} • evidence and follow-up</h2>
               <p class="dashboard-hero-copy">Upload assurance artifacts for the case and respond to any clarification requests from the internal team.</p>
+              <div class="portal-hero-pills">
+                <span class="portal-hero-pill">Artifact upload</span>
+                <span class="portal-hero-pill">Follow-up response</span>
+                <span class="portal-hero-pill">Shared case history</span>
+              </div>
             </div>
           </div>
         </section>

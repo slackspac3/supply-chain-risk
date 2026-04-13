@@ -160,23 +160,6 @@
     window.addEventListener('storage', refreshNotifications);
   }
 
-  function handleCurrencyChange(newCurrency) {
-    if (AppState.currency === newCurrency) return;
-    const hash = String(window.location.hash || '');
-    const onWizard = /^#\/wizard\/[1-4]/.test(hash);
-    if (onWizard) {
-      const narrativeEl = document.getElementById('narrative')
-        || document.getElementById('intake-risk-statement');
-      if (narrativeEl && narrativeEl.value.trim()) {
-        AppState.draft.enhancedNarrative = narrativeEl.value;
-        AppState.draft.narrative = AppState.draft.narrative || narrativeEl.value;
-      }
-    }
-    AppState.currency = newCurrency;
-    AppShellNavigation.renderAppBar();
-    Router.resolve();
-  }
-
   function isAdminHomeRoute(currentHash = '') {
     const hash = String(currentHash || '').trim();
     return hash === '#/admin/home' || hash === '#/admin/home/';
@@ -243,7 +226,7 @@
             <span class="bar-logo-mark" aria-hidden="true">
               <img src="assets/brand/g42-catalyst-symbol-logo-inverted-rgb.svg" alt="">
             </span>
-            <span class="bar-logo-text">GTR <span>Vendor Risk</span> Platform</span>
+            <span class="bar-logo-text">GTR <span>Vendor Assurance</span> Hub</span>
           </a>
           <nav class="bar-nav" aria-label="Primary">
             ${navModel.navLinks.map(link => `<a href="${link.href}" class="bar-nav-link${link.active ? ' active' : ''}"${link.active ? ' aria-current="page"' : ''}>${link.label}</a>`).join('')}
@@ -258,10 +241,6 @@
             <span class="bar-nav-link" style="pointer-events:none">${currentUser.displayName}</span>
             <button type="button" class="btn btn--ghost btn--sm" id="btn-sign-out">Sign Out</button>
           ` : `<a href="#/login" class="bar-nav-link bar-nav-link--admin">Sign In</a>`}
-          <div class="currency-toggle" role="group" aria-label="Currency">
-            <button id="cur-usd" class="${AppState.currency==='USD'?'active':''}">USD</button>
-            <button id="cur-aed" class="${AppState.currency==='AED'?'active':''}">AED</button>
-          </div>
           <span class="bar-poc-tag">PoC</span>
         </div>`;
       const pocTag = document.querySelector('.bar-poc-tag');
@@ -273,8 +252,6 @@
       }
       updateNotifBadge();
       bindNotifSync();
-      document.getElementById('cur-usd').addEventListener('click', () => handleCurrencyChange('USD'));
-      document.getElementById('cur-aed').addEventListener('click', () => handleCurrencyChange('AED'));
       document.getElementById('btn-notif-bell')?.addEventListener('click', event => {
         event.preventDefault();
         event.stopPropagation();
